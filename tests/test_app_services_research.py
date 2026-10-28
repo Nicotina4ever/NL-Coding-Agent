@@ -217,6 +217,92 @@ class AppResearchTests(unittest.TestCase):
         intake = facade.intake("url", "https://example.com/page", project_id=1)
         self.assertTrue(intake["ok"])
 
+    def test_attach_detach_mission_findings_audit_and_retention(self):
+        from unittest.mock import patch
+        service, _transport, _p, _r = self.fake_service()
+        self.services.configure_research(service=service)
+        finding = self.services.research_save_finding(
+            "Attach me?", "Evidence", project_id=None)
+        self.assertTrue(finding["ok"], finding)
+        finding_id = finding["id"]
+        mission_id = self.services.create_mission(None, "Mission", "goal")
+        attached = self.services.research_attach_finding(mission_id, finding_id)
+        self.assertTrue(attached["ok"], attached)
+        self.assertTrue(attached["link"]["created"])
+        again = self.services.research_attach_finding(mission_id, finding_id)
+        self.assertTrue(again["ok"])
+        self.assertTrue(again["link"]["idempotent"])
+        mission_findings = self.services.research_mission_findings(mission_id)
+        self.assertTrue(mission_findings["ok"])
+        self.assertEqual([item["id"] for item in mission_findings["findings"]],
+                         [finding_id])
+        detached = self.services.research_detach_finding(mission_id, finding_id)
+        self.assertTrue(detached["ok"])
+        self.assertTrue(detached["finding_preserved"])
+        self.assertEqual(self.services.research_mission_findings(mission_id)["findings"], [])
+        self.assertIsNotNone(service.store.get_finding(finding_id))
+        rows = self.services._db.execute(
+            "SELECT event_kind, payload FROM events WHERE source='research'").fetchall()
+        kinds = {row["event_kind"] for row in rows}
+        self.assertIn("finding_attached", kinds)
+        self.assertIn("finding_detached", kinds)
+        for row in rows:
+            self.assertNotIn("secret", str(row["payload"]).lower())
+
+        with patch.object(permissions, "check_capability",
+                          return_value=permissions.Denied("write", "denied by test")):
+            denied = self.services.research_attach_finding(mission_id, finding_id)
+        self.assertFalse(denied["ok"])
+        self.assertEqual(denied["outcome"], "denied")
+        self.assertEqual(service.store.list_mission_findings(mission_id), [])
+        with patch.object(permissions, "check_capability",
+                          return_value=permissions.NeedsApproval(
+                              "write", "approval required", approval_id=1)):
+            pending = self.services.research_attach_finding(mission_id, finding_id)
+        self.assertFalse(pending["ok"])
+        self.assertEqual(pending["outcome"], "needs_approval")
+        self.assertEqual(service.store.list_mission_findings(mission_id), [])
+
+        store = service.store
+        source = store.save_source("https://example.com/old", excerpt="old",
+                                   project_id=None,
+                                   retrieved_at="2020-01-01T00:00:00Z")
+        old_finding = store.save_finding("Old?", "Old evidence", project_id=None)
+        conn = store._connect()
+        try:
+            with conn:
+                conn.execute("UPDATE research_findings SET created_at=?, updated_at=? "
+                             "WHERE id=?", ("2020-01-01T00:00:00Z",
+                                            "2020-01-01T00:00:00Z", old_finding["id"]))
+        finally:
+            conn.close()
+        store.attach_finding_to_mission(old_finding["id"], mission_id)
+        applied = self.services.research_apply_retention(
+            now="2026-01-01T00:00:00Z", ttl_days=1, max_items=10)
+        self.assertTrue(applied["ok"], applied)
+        self.assertEqual(applied["deleted"], 0)
+        self.assertFalse(applied["hard_deleted"])
+        self.assertTrue(store.get_source(source["id"])["expired"])
+        self.assertTrue(store.get_finding(old_finding["id"])["expired"])
+        summary = self.services.research_retention_summary()
+        self.assertTrue(summary["ok"])
+        self.assertEqual(summary["summary"]["attachments_total"], 2)
+        self.assertEqual(summary["summary"]["attachments_active"], 1)
+        self.assertEqual(summary["summary"]["attachments_revoked"], 1)
+        self.assertFalse(summary["summary"]["hard_deleted"])
+
+    def test_attach_validates_missing_finding_and_mission_scope(self):
+        service, _transport, _p, _r = self.fake_service()
+        self.services.configure_research(service=service)
+        mission_id = self.services.create_mission(None, "Mission", "goal")
+        missing_finding = self.services.research_attach_finding(mission_id, 9999)
+        self.assertFalse(missing_finding["ok"])
+        self.assertEqual(missing_finding["outcome"], "validation")
+        finding = self.services.research_save_finding("Q", "A", project_id=None)
+        missing_mission = self.services.research_attach_finding(9999, finding["id"])
+        self.assertFalse(missing_mission["ok"])
+        self.assertEqual(missing_mission["outcome"], "validation")
+
     def test_static_no_default_research_network_in_services(self):
         source = (REPO_ROOT / "nl_coding_agent" / "app" / "services.py").read_text(
             encoding="utf-8")

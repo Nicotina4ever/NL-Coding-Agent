@@ -1481,6 +1481,174 @@ class AppServices:
             return self._research_failure("refresh_source", exc)
         return self._research_payload(result)
 
+    @staticmethod
+    def _research_permission_refusal(decision, operation: str) -> dict | None:
+        if getattr(decision, "allowed", False):
+            return None
+        outcome = str(getattr(decision, "outcome", "denied") or "denied")
+        return {
+            "ok": False,
+            "operation": operation,
+            "outcome": outcome,
+            "permission": (decision.to_dict() if hasattr(decision, "to_dict") else {}),
+            "reason": str(getattr(decision, "reason", "") or "permission refused"),
+            "status_mutated": False,
+            "untrusted": True,
+        }
+
+    def _research_scope_decision(self, mission: dict, operation: str) -> tuple:
+        from nl_coding_agent.core import permissions
+        project_id = mission.get("project_id")
+        mission_id = int(mission["id"])
+        scope = {"kind": permissions.SCOPE_MISSION, "value": str(mission_id),
+                 "project_id": project_id}
+        context = {"mission_id": mission_id, "project_id": project_id}
+        try:
+            decision = permissions.check_capability(
+                permissions.CAPABILITY_WRITE, scope=scope, context=context)
+        except Exception as exc:  # fail closed
+            return None, {
+                "ok": False, "operation": operation, "outcome": "denied",
+                "reason": "permission check failed closed: " + str(exc),
+                "status_mutated": False, "untrusted": True}
+        refusal = self._research_permission_refusal(decision, operation)
+        return decision, refusal
+
+    def research_attach_finding(self, mission_id: int, finding_id: int, *,
+                                source: str = "research",
+                                attached_by: str = "") -> dict:
+        try:
+            service = self._research_service()
+            store = service.store
+            mission = store.mission_scope(mission_id)
+            if mission is None:
+                return {"ok": False, "operation": "attach_finding",
+                        "outcome": "validation",
+                        "error": {"code": "mission_not_found",
+                                  "message": "mission does not exist"},
+                        "status_mutated": False, "untrusted": True}
+            finding = store.get_finding(finding_id)
+            if finding is None:
+                return {"ok": False, "operation": "attach_finding",
+                        "outcome": "validation",
+                        "error": {"code": "finding_not_found",
+                                  "message": "finding does not exist"},
+                        "status_mutated": False, "untrusted": True}
+            decision, refusal = self._research_scope_decision(mission, "attach_finding")
+            if refusal is not None:
+                return refusal
+            link = store.attach_finding_to_mission(
+                int(finding_id), int(mission_id), source=source,
+                attached_by=attached_by)
+        except Exception as exc:
+            return {"ok": False, "operation": "attach_finding", "outcome": "error",
+                    "error": type(exc).__name__ + ": " + str(exc),
+                    "status_mutated": False, "untrusted": True}
+        scope = {"finding_id": int(finding_id), "mission_id": int(mission_id),
+                 "project_id": mission.get("project_id")}
+        try:
+            log_event(self._db, "Research finding attached to mission",
+                      source="research", event_kind="finding_attached",
+                      project_id=mission.get("project_id"),
+                      mission_id=int(mission_id),
+                      payload=json.dumps(scope, sort_keys=True))
+        except Exception:
+            pass
+        return {"ok": True, "operation": "attach_finding", "outcome": "attached",
+                "link": link, "finding": finding, "mission": mission,
+                "permission": (decision.to_dict() if hasattr(decision, "to_dict") else {}),
+                "status_mutated": False, "untrusted": True}
+
+    def research_mission_findings(self, mission_id: int, *,
+                                  include_revoked: bool = False) -> dict:
+        try:
+            service = self._research_service()
+            store = service.store
+            mission = store.mission_scope(mission_id)
+            if mission is None:
+                return {"ok": False, "operation": "mission_findings",
+                        "outcome": "validation",
+                        "error": {"code": "mission_not_found",
+                                  "message": "mission does not exist"},
+                        "findings": [], "untrusted": True}
+            findings = store.list_mission_findings(
+                int(mission_id), include_revoked=include_revoked)
+        except Exception as exc:
+            return {"ok": False, "operation": "mission_findings",
+                    "outcome": "error", "error": type(exc).__name__ + ": " + str(exc),
+                    "findings": [], "untrusted": True}
+        return {"ok": True, "operation": "mission_findings",
+                "mission_id": int(mission_id), "mission": mission,
+                "findings": findings, "total": len(findings), "untrusted": True}
+
+    def research_detach_finding(self, mission_id: int, finding_id: int) -> dict:
+        try:
+            service = self._research_service()
+            store = service.store
+            mission = store.mission_scope(mission_id)
+            if mission is None:
+                return {"ok": False, "operation": "detach_finding",
+                        "outcome": "validation",
+                        "error": {"code": "mission_not_found",
+                                  "message": "mission does not exist"},
+                        "status_mutated": False, "untrusted": True}
+            decision, refusal = self._research_scope_decision(mission, "detach_finding")
+            if refusal is not None:
+                return refusal
+            result = store.detach_finding_from_mission(int(finding_id), int(mission_id))
+        except Exception as exc:
+            return {"ok": False, "operation": "detach_finding", "outcome": "error",
+                    "error": type(exc).__name__ + ": " + str(exc),
+                    "status_mutated": False, "untrusted": True}
+        if result.get("detached"):
+            try:
+                log_event(self._db, "Research finding detached from mission",
+                          source="research", event_kind="finding_detached",
+                          project_id=mission.get("project_id"),
+                          mission_id=int(mission_id),
+                          payload=json.dumps({"finding_id": int(finding_id),
+                                              "mission_id": int(mission_id)},
+                                             sort_keys=True))
+            except Exception:
+                pass
+        return {"ok": bool(result.get("detached")), "operation": "detach_finding",
+                "outcome": "detached" if result.get("detached") else "not_attached",
+                "link": result, "finding_preserved": True,
+                "status_mutated": False, "untrusted": True}
+
+    def research_apply_retention(self, *, now=None, ttl_days: float = 30.0,
+                                 max_items: int = 500) -> dict:
+        try:
+            service = self._research_service()
+            result = service.store.apply_retention(
+                now=now, ttl_days=ttl_days, max_items=max_items)
+        except Exception as exc:
+            return {"ok": False, "operation": "apply_retention", "outcome": "error",
+                    "error": type(exc).__name__ + ": " + str(exc),
+                    "deleted": 0, "hard_deleted": False, "untrusted": True}
+        try:
+            log_event(self._db, "Research retention applied (stale/expired only)",
+                      source="research", event_kind="retention_applied",
+                      payload=json.dumps({key: result.get(key) for key in (
+                          "now", "ttl_days", "max_items", "sources_expired",
+                          "findings_expired")}, sort_keys=True))
+        except Exception:
+            pass
+        return {"ok": True, "operation": "apply_retention", "outcome": "retention_applied",
+                **result, "untrusted": True}
+
+    def research_retention_summary(self) -> dict:
+        try:
+            service = self._research_service()
+            summary = service.store.retention_summary()
+            expired = service.store.list_expired()
+        except Exception as exc:
+            return {"ok": False, "operation": "retention_summary", "outcome": "error",
+                    "error": type(exc).__name__ + ": " + str(exc),
+                    "summary": {}, "expired": [], "untrusted": True}
+        return {"ok": True, "operation": "retention_summary",
+                "summary": summary, "expired": expired, "untrusted": True}
+
     def _research_failure(self, operation: str, exc: Exception) -> dict:
         return {"ok": False, "outcome": "error", "operation": operation,
                 "error": type(exc).__name__ + ": " + str(exc),

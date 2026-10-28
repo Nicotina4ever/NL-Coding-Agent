@@ -511,6 +511,25 @@ CREATE INDEX IF NOT EXISTS idx_goal_plan_versions_goal
     ON goal_plan_versions(goal_id, version DESC);
 CREATE INDEX IF NOT EXISTS idx_goal_plan_versions_current
     ON goal_plan_versions(goal_id, is_current);
+
+
+-- Stage-7 R8 saved research finding to existing mission links (additive only)
+-- Revoked links are preserved and there is no hard-delete research API.
+CREATE TABLE IF NOT EXISTS research_finding_attachments (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    finding_id   INTEGER NOT NULL,
+    mission_id   INTEGER NOT NULL,
+    source       TEXT NOT NULL DEFAULT 'research',
+    attached_by  TEXT NOT NULL DEFAULT '',
+    created_at   TEXT NOT NULL,
+    revoked_at   TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_research_finding_attachments_active
+    ON research_finding_attachments(finding_id, mission_id) WHERE revoked_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_research_finding_attachments_mission
+    ON research_finding_attachments(mission_id, revoked_at, id DESC);
+CREATE INDEX IF NOT EXISTS idx_research_finding_attachments_finding
+    ON research_finding_attachments(finding_id, revoked_at, id DESC);
 """
 
 

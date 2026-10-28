@@ -56,6 +56,7 @@ class SchemaTests(StoreTestCase):
     def test_additive_schema_is_idempotent_and_restart_persists(self):
         tables = self.store.ensure_schema()
         self.assertEqual(tables, ("research_citations", "research_conflicts",
+                                  "research_finding_attachments",
                                   "research_findings", "research_sources"))
         self.assertEqual(self.store.ensure_schema(), tables)
         saved = self.source()
@@ -223,6 +224,99 @@ class FindingCitationTests(StoreTestCase):
             self.finding(answer="x" * (MAX_ANSWER_CHARS + 1))
         self.assertEqual(self.store.counts()["research_sources"], 1)
 
+
+
+class AttachmentAndRetentionTests(StoreTestCase):
+    def _mission(self, *, project_id=None):
+        from nl_coding_agent.persistence import database
+        conn = database.init_db(self.store.path)
+        try:
+            with conn:
+                if project_id is not None:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO projects (id, name, root) VALUES (?,?,?)",
+                        (project_id, "Project " + str(project_id),
+                         "C:/tmp/project-" + str(project_id)))
+                cursor = conn.execute(
+                    "INSERT INTO missions (project_id, title, goal, status) "
+                    "VALUES (?,?,?,?)", (project_id, "Mission", "goal", "pending"))
+                return int(cursor.lastrowid)
+        finally:
+            conn.close()
+
+    def test_attach_is_idempotent_revocable_and_preserves_finding(self):
+        finding = self.finding(mission_id=None)
+        mission = self._mission()
+        first = self.store.attach_finding_to_mission(finding["id"], mission,
+                                                     source="test", attached_by="tester")
+        self.assertTrue(first["created"])
+        again = self.store.attach_finding_to_mission(finding["id"], mission)
+        self.assertFalse(again["created"])
+        self.assertTrue(again["idempotent"])
+        self.assertEqual(again["id"], first["id"])
+        self.assertEqual(len(self.store.list_mission_findings(mission)), 1)
+        self.assertEqual(len(self.store.list_finding_missions(finding["id"])), 1)
+        detach = self.store.detach_finding_from_mission(finding["id"], mission)
+        self.assertTrue(detach["detached"])
+        self.assertIsNotNone(self.store.get_finding(finding["id"]))
+        self.assertEqual(self.store.list_mission_findings(mission), [])
+        revoked = self.store.list_finding_missions(finding["id"], include_revoked=True)
+        self.assertEqual(len(revoked), 1)
+        self.assertFalse(revoked[0]["active"])
+        reattached = self.store.attach_finding_to_mission(finding["id"], mission)
+        self.assertTrue(reattached["created"])
+        self.assertNotEqual(reattached["id"], first["id"])
+        self.assertIsNotNone(self.store.get_finding(finding["id"]))
+        self.assertFalse(self.store.attachment_status(finding["id"], mission)["attached"] is False)
+
+    def test_attach_validates_finding_mission_and_scope_isolation(self):
+        finding = self.finding(project_id=1)
+        mission = self._mission(project_id=None)
+        with self.assertRaises(ResearchStoreError):
+            self.store.attach_finding_to_mission(9999, mission)
+        with self.assertRaises(ResearchStoreError):
+            self.store.attach_finding_to_mission(finding["id"], 9999)
+        other_mission = self._mission(project_id=2)
+        with self.assertRaises(ResearchStoreError):
+            self.store.attach_finding_to_mission(finding["id"], other_mission)
+
+    def test_attachment_survives_restart_and_retention_marks_but_never_deletes(self):
+        source = self.source(retrieved_at="2020-01-01T00:00:00Z")
+        finding = self.finding(mission_id=None)
+        mission = self._mission()
+        link = self.store.attach_finding_to_mission(finding["id"], mission)
+        citation = self.store.save_citation(source["id"], quote="quote", finding_id=finding["id"])
+        conn = self.store._connect()
+        try:
+            with conn:
+                conn.execute("UPDATE research_findings SET created_at=?, updated_at=? WHERE id=?",
+                             ("2020-01-01T00:00:00Z", "2020-01-01T00:00:00Z", finding["id"]))
+        finally:
+            conn.close()
+        reopened = ResearchStore()
+        self.assertEqual(len(reopened.list_mission_findings(mission)), 1)
+        before = reopened.counts()
+        result = reopened.apply_retention(now="2026-01-01T00:00:00Z", ttl_days=1)
+        self.assertGreaterEqual(result["sources_expired"], 1)
+        self.assertGreaterEqual(result["findings_expired"], 1)
+        self.assertEqual(result["deleted"], 0)
+        self.assertTrue(reopened.get_source(source["id"])["expired"])
+        self.assertTrue(reopened.get_finding(finding["id"])["expired"])
+        self.assertEqual(reopened.get_source(source["id"])["canonical_url"],
+                         "https://example.com/doc")
+        self.assertEqual(len(reopened.list_citations(finding_id=finding["id"])), 1)
+        self.assertEqual(len(reopened.list_mission_findings(mission)), 1)
+        self.assertEqual(reopened.counts()["research_sources"], before["research_sources"])
+        self.assertEqual(reopened.counts()["research_findings"], before["research_findings"])
+        self.assertEqual(reopened.counts()["research_citations"], before["research_citations"])
+        expired = reopened.list_expired()
+        self.assertTrue(any(item["kind"] == "source" for item in expired))
+        self.assertTrue(any(item["kind"] == "finding" for item in expired))
+        summary = reopened.retention_summary()
+        self.assertEqual(summary["attachments_total"], 1)
+        self.assertFalse(summary["hard_deleted"])
+        self.assertFalse(hasattr(reopened, "delete_finding"))
+        self.assertFalse(hasattr(reopened, "delete_source"))
 
 class StaticGuardTests(unittest.TestCase):
     def test_store_has_no_network_or_file_content_reads(self):

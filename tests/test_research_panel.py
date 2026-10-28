@@ -33,6 +33,19 @@ class FakeResearch:
         self.saved_calls = []
         self.intake_calls = []
         self.save_calls = []
+        self.attach_calls = []
+        self.detach_calls = []
+        self.mission_findings_calls = []
+        self.retention_calls = []
+        self.attach_result = {"ok": True, "outcome": "attached"}
+        self.detach_result = {"ok": True, "outcome": "detached"}
+        self.mission_findings_result = {"ok": True, "findings": [
+            {"id": 10, "title": "Attached finding", "question": "Q"}]}
+        self.retention_result = {"ok": True, "sources_expired": 2,
+                                 "findings_expired": 1, "deleted": 0}
+        self.retention_summary_result = {"ok": True, "summary": {
+            "sources_expired": 2, "findings_expired": 1,
+            "attachments_active": 1, "hard_deleted": False}, "expired": []}
         self.search_result = {
             "ok": True,
             "results": [
@@ -57,7 +70,7 @@ class FakeResearch:
         }
         self.history_items = [{"query": "alpha history"},
                               {"query": "beta history"}]
-        self.saved_items = [{"title": "Saved finding one"}]
+        self.saved_items = [{"id": 10, "title": "Saved finding one"}]
         self.intake_result = {"ok": True}
         self.save_result = {"ok": True, "id": 1}
 
@@ -89,6 +102,25 @@ class FakeResearch:
     def save_finding(self, finding, project_id=None, mission_id=None):
         self.save_calls.append((dict(finding), project_id, mission_id))
         return dict(self.save_result)
+
+    def research_attach_finding(self, mission_id, finding_id):
+        self.attach_calls.append((mission_id, finding_id))
+        return dict(self.attach_result)
+
+    def research_mission_findings(self, mission_id):
+        self.mission_findings_calls.append(mission_id)
+        return dict(self.mission_findings_result)
+
+    def research_detach_finding(self, mission_id, finding_id):
+        self.detach_calls.append((mission_id, finding_id))
+        return dict(self.detach_result)
+
+    def research_apply_retention(self, ttl_days=30, max_items=500):
+        self.retention_calls.append((ttl_days, max_items))
+        return dict(self.retention_result)
+
+    def research_retention_summary(self):
+        return dict(self.retention_summary_result)
 
     def intake(self, kind=None, value=None, project_id=None, mission_id=None):
         self.intake_calls.append((kind, value, project_id, mission_id))
@@ -239,6 +271,54 @@ def test_intake_validation_github_hf_url_attachment_and_states(tmp_path):
     assert "offline" in panel._intake_status.text().lower()
     panel.shutdown()
 
+
+
+
+def test_attach_to_mission_disabled_and_enabled_states():
+    _app()
+    panel, fake = make_panel()
+    panel.set_project({"id": 7, "name": "Demo"})
+    panel.set_mission(None)
+    panel._saved_list.setCurrentRow(0)
+    assert panel._attach_finding_btn.isEnabled() is False
+    assert "mission" in panel._attach_finding_btn.toolTip().lower()
+    panel.set_mission(11)
+    panel._saved_list.setCurrentRow(0)
+    assert panel._attach_finding_btn.isEnabled() is True
+    assert panel._attach_selected_finding() is True
+    assert fake.attach_calls == [(11, 10)]
+    assert panel._mission_findings_list.count() == 1
+    assert "Attached finding" in panel._mission_findings_list.item(0).text()
+    assert "attached" in panel._status_label.text().lower()
+
+    fake.attach_result = {"ok": False, "permission_needed": "Allow attach"}
+    panel._saved_list.setCurrentRow(0)
+    assert panel._attach_selected_finding() is False
+    assert "Permission needed" in panel._status_label.text()
+    panel.shutdown()
+
+
+def test_mission_findings_detach_and_retention_states():
+    _app()
+    panel, fake = make_panel()
+    panel.set_project({"id": 7, "name": "Demo"})
+    panel.set_mission(11)
+    panel._refresh_library()
+    assert fake.mission_findings_calls[-1] == 11
+    panel._mission_findings_list.setCurrentRow(0)
+    assert panel._detach_finding_btn.isEnabled() is True
+    assert panel._detach_selected_finding() is True
+    assert fake.detach_calls == [(11, 10)]
+    assert "preserved" in panel._status_label.text().lower()
+
+    assert panel._apply_retention(confirm=False) is True
+    assert fake.retention_calls
+    assert "never deleted" in panel._retention_label.text().lower() or \
+        "nothing is deleted" in panel._retention_label.text().lower()
+    assert "sources expired=2" in panel._retention_label.text()
+    assert "Stale/expired" in panel._retention_label.text() or \
+        "expired" in panel._retention_label.text().lower()
+    panel.shutdown()
 
 def test_copy_and_open_url_request_never_launch_browser():
     _app()

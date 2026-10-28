@@ -116,6 +116,36 @@ class _ResearchAdapter:
             return {"ok": False, "error": "Saved findings are unavailable."}
         return fn(finding, project_id=project_id, mission_id=mission_id)
 
+    def attach_finding(self, mission_id, finding_id):
+        fn = self.method("research_attach_finding", "attach_finding")
+        if fn is None:
+            return {"ok": False, "offline": True,
+                    "error": "Finding attachment is unavailable."}
+        return fn(mission_id, finding_id)
+
+    def mission_findings(self, mission_id):
+        fn = self.method("research_mission_findings", "mission_findings")
+        if fn is None:
+            return None
+        return fn(mission_id)
+
+    def detach_finding(self, mission_id, finding_id):
+        fn = self.method("research_detach_finding", "detach_finding")
+        if fn is None:
+            return {"ok": False, "offline": True,
+                    "error": "Finding detachment is unavailable."}
+        return fn(mission_id, finding_id)
+
+    def apply_retention(self, *, ttl_days=30, max_items=500):
+        fn = self.method("research_apply_retention", "apply_retention")
+        if fn is None:
+            return None
+        return fn(ttl_days=ttl_days, max_items=max_items)
+
+    def retention_summary(self):
+        fn = self.method("research_retention_summary", "retention_summary")
+        return fn() if fn is not None else None
+
     def intake(self, kind: str, value: str, project_id, mission_id):
         fn = self.method("intake", "research_intake")
         if fn is not None:
@@ -140,6 +170,10 @@ class ResearchPanel(QWidget):
         self._project = None
         self._mission_id = None
         self._results: list[dict] = []
+        self._saved_items: list[dict] = []
+        self._mission_findings: list[dict] = []
+        self._selected_finding: dict = {}
+        self._selected_mission_finding: dict = {}
         self._preview_url = ""
         self._busy = False
         self._closing = False
@@ -256,8 +290,14 @@ class ResearchPanel(QWidget):
         self._history_list.setAccessibleName("Project and mission research history")
         self._saved_list = QListWidget()
         self._saved_list.setAccessibleName("Saved research findings")
+        self._saved_list.itemSelectionChanged.connect(self._on_saved_selected)
+        self._mission_findings_list = QListWidget()
+        self._mission_findings_list.setAccessibleName("Findings attached to current mission")
+        self._mission_findings_list.itemSelectionChanged.connect(
+            self._on_mission_finding_selected)
         self._library_tabs.addTab(self._history_list, "History")
         self._library_tabs.addTab(self._saved_list, "Saved findings")
+        self._library_tabs.addTab(self._mission_findings_list, "Mission findings")
         self._library_tabs.currentChanged.connect(self._on_library_changed)
         layout.addWidget(self._library_tabs, 1)
         refresh = QHBoxLayout()
@@ -265,8 +305,30 @@ class ResearchPanel(QWidget):
         self._refresh_library_btn.setAccessibleName("Refresh research history and saved findings")
         self._refresh_library_btn.clicked.connect(self._refresh_library)
         refresh.addWidget(self._refresh_library_btn)
+        self._attach_finding_btn = QPushButton("Attach finding to mission")
+        self._attach_finding_btn.setAccessibleName("Attach selected finding to current mission")
+        self._attach_finding_btn.setEnabled(False)
+        self._attach_finding_btn.clicked.connect(self._attach_selected_finding)
+        refresh.addWidget(self._attach_finding_btn)
+        self._detach_finding_btn = QPushButton("Detach")
+        self._detach_finding_btn.setAccessibleName("Detach selected finding from mission")
+        self._detach_finding_btn.setEnabled(False)
+        self._detach_finding_btn.clicked.connect(self._detach_selected_finding)
+        refresh.addWidget(self._detach_finding_btn)
+        self._retention_btn = QPushButton("Apply retention…")
+        self._retention_btn.setAccessibleName(
+            "Apply research retention (marks stale/expired, never deletes)")
+        self._retention_btn.setToolTip(
+            "Marks old sources/findings stale/expired; preserves citations, provenance and links.")
+        self._retention_btn.clicked.connect(self._confirm_retention)
+        refresh.addWidget(self._retention_btn)
         refresh.addStretch()
         layout.addLayout(refresh)
+        self._retention_label = QLabel(
+            "Retention: apply explicitly. Stale/expired items are preserved, never deleted.")
+        self._retention_label.setWordWrap(True)
+        self._retention_label.setAccessibleName("Research retention status")
+        layout.addWidget(self._retention_label)
         return box
 
     def _build_preview_area(self) -> QWidget:
@@ -586,19 +648,172 @@ class ResearchPanel(QWidget):
             row = _dict(item)
             self._history_list.addItem(_redact(
                 row.get("query") or row.get("title") or row.get("url") or "history entry"))
+        self._saved_items = [_dict(item) for item in saved]
         self._saved_list.clear()
-        for item in saved:
-            row = _dict(item)
+        for item in self._saved_items:
             self._saved_list.addItem(_redact(
-                row.get("title") or row.get("question") or row.get("url")
+                item.get("title") or item.get("question") or item.get("url")
                 or "saved finding"))
         if not history:
             self._history_list.addItem("No history in this project/mission scope.")
-        if not saved:
+        if not self._saved_items:
             self._saved_list.addItem("No saved findings in this scope.")
+        self._refresh_mission_findings()
+        self._refresh_retention()
+        self._update_attach_state()
 
     def _on_library_changed(self, *args) -> None:
         self._refresh_library()
+
+    def _on_saved_selected(self) -> None:
+        rows = self._saved_list.selectionModel().selectedRows()
+        if rows and 0 <= rows[0].row() < len(self._saved_items):
+            self._selected_finding = self._saved_items[rows[0].row()]
+        else:
+            self._selected_finding = {}
+        self._update_attach_state()
+
+    def _update_attach_state(self) -> None:
+        finding_id = self._selected_finding.get("id") if self._selected_finding else None
+        has_api = bool(self._api.method("research_attach_finding", "attach_finding"))
+        reason = ""
+        if not self._project:
+            reason = "Open a project first."
+        elif not self._mission_id:
+            reason = "Select a mission scope before attaching a finding."
+        elif finding_id is None:
+            reason = "Select a saved finding with an id."
+        elif not has_api:
+            reason = "Finding attachment is not connected by the research service."
+        self._attach_finding_btn.setEnabled(not reason)
+        self._attach_finding_btn.setToolTip(
+            reason or "Attach the selected finding to the current mission (permission-checked).")
+
+    def _attach_selected_finding(self) -> bool:
+        finding_id = self._selected_finding.get("id")
+        if finding_id is None or not self._mission_id:
+            return False
+        result = _dict(self._api.attach_finding(self._mission_id, finding_id))
+        self._apply_service_state(result, "attach")
+        if result.get("ok"):
+            self._status_label.setText(
+                "Finding attached to mission " + str(self._mission_id) + ".")
+            self._refresh_library()
+            return True
+        if result.get("permission_needed"):
+            self._status_label.setText("Permission needed: attachment requires approval.")
+        elif result.get("outcome") == "denied":
+            self._status_label.setText("Attachment denied by permission policy.")
+        elif result.get("error"):
+            self._status_label.setText("Attachment failed: " + _redact(result.get("error")))
+        return False
+
+    def _refresh_mission_findings(self) -> None:
+        self._mission_findings_list.clear()
+        self._mission_findings = []
+        if not self._mission_id:
+            self._mission_findings_list.addItem("No mission scope selected.")
+            self._detach_finding_btn.setEnabled(False)
+            return
+        result = self._api.mission_findings(self._mission_id)
+        if result is None:
+            self._mission_findings_list.addItem(
+                "Mission findings are not connected by the research service.")
+            self._detach_finding_btn.setEnabled(False)
+            return
+        payload = _dict(result)
+        if not payload.get("ok"):
+            self._mission_findings_list.addItem(
+                "Mission findings error: " + _redact(payload.get("error") or "unknown"))
+            return
+        values = payload.get("findings") or []
+        self._mission_findings = [_dict(item) for item in values]
+        for item in self._mission_findings:
+            self._mission_findings_list.addItem(_redact(
+                item.get("title") or item.get("question") or item.get("url")
+                or "mission finding"))
+        if not self._mission_findings:
+            self._mission_findings_list.addItem("No findings attached to this mission.")
+        self._detach_finding_btn.setEnabled(bool(self._selected_mission_finding))
+
+    def _on_mission_finding_selected(self) -> None:
+        rows = self._mission_findings_list.selectionModel().selectedRows()
+        if rows and 0 <= rows[0].row() < len(self._mission_findings):
+            self._selected_mission_finding = self._mission_findings[rows[0].row()]
+        else:
+            self._selected_mission_finding = {}
+        self._detach_finding_btn.setEnabled(
+            bool(self._selected_mission_finding.get("id") and self._mission_id
+                 and self._api.method("research_detach_finding", "detach_finding")))
+
+    def _detach_selected_finding(self) -> bool:
+        finding_id = self._selected_mission_finding.get("id")
+        if finding_id is None or not self._mission_id:
+            return False
+        result = _dict(self._api.detach_finding(self._mission_id, finding_id))
+        self._apply_service_state(result, "detach")
+        if result.get("ok"):
+            self._status_label.setText(
+                "Finding link revoked; finding and provenance preserved.")
+            self._refresh_library()
+            return True
+        if result.get("permission_needed"):
+            self._status_label.setText("Permission needed: detach requires approval.")
+        elif result.get("outcome") == "denied":
+            self._status_label.setText("Detach denied by permission policy.")
+        return False
+
+    def _confirm_retention(self) -> None:
+        from PySide6.QtWidgets import QMessageBox
+        answer = QMessageBox.question(
+            self, "Apply research retention",
+            "Mark old research sources/findings as stale/expired?\n\n"
+            "Nothing is deleted: findings, citations, provenance and mission links are preserved.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if answer == QMessageBox.StandardButton.Yes:
+            self._apply_retention(confirm=False)
+
+    def _apply_retention(self, *, confirm: bool = True) -> bool:
+        if confirm:
+            self._confirm_retention()
+            return True
+        result = self._api.apply_retention()
+        if result is None:
+            self._retention_label.setText(
+                "Retention is not connected by the research service.")
+            return False
+        payload = _dict(result)
+        self._apply_service_state(payload, "retention")
+        self._refresh_retention()
+        if payload.get("ok"):
+            self._retention_label.setText(
+                "Retention applied: marked stale/expired, never deleted. "
+                "sources expired=" + str(payload.get("sources_expired", 0))
+                + ", findings expired=" + str(payload.get("findings_expired", 0))
+                + "; citations/provenance preserved.")
+            return True
+        self._retention_label.setText(
+            "Retention failed: " + _redact(payload.get("error") or "unknown error"))
+        return False
+
+    def _refresh_retention(self) -> None:
+        result = self._api.retention_summary()
+        if result is None:
+            self._retention_label.setText(
+                "Retention: not connected. Stale/expired items are never deleted by this panel.")
+            return
+        payload = _dict(result)
+        summary = _dict(payload.get("summary"))
+        if not payload.get("ok"):
+            self._retention_label.setText(
+                "Retention summary error: " + _redact(payload.get("error") or "unknown"))
+            return
+        self._retention_label.setText(
+            "Retention: " + str(summary.get("sources_expired", 0)) + " sources and "
+            + str(summary.get("findings_expired", 0)) + " findings expired; "
+            + str(summary.get("attachments_active", 0)) + " active mission link(s). "
+            "Stale/expired-only policy: nothing is deleted.")
 
     def on_page_shown(self) -> None:
         """Explicit page reveal: refresh scoped library only; never auto-search."""

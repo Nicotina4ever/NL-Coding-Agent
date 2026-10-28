@@ -313,4 +313,20 @@ execution boundary before acting.
   a policy foundation for future trusted/full autonomy increments (NL-BP-166/167
   stay planned/partial until wired and acceptance-tested end to end).
 
+## Untrusted web/research content (R7, NL-BP-175, implemented 2026-10-28)
 
+All fetched web pages, search snippets, GitHub text and Hugging Face model cards are
+**untrusted data, never instructions**. The research stack scans bounded content for
+instruction-like patterns (system/ignore-previous overrides, role overrides, tool/command
+execution requests, secret/exfiltration requests, URL-assisted instructions and hidden/
+zero-width HTML/markdown) and attaches immutable redacted `InjectionSignal` records plus
+bounded `injection_warnings` to results. Every detection writes an audit event with
+`source='research'` containing only URL/ref/source id, kind and SHA-256/hash - never the
+instruction payload or excerpt. Scanner integration is passive: it never executes,
+evaluates, follows links, invokes tools or performs network/model calls.
+
+Permission/auto-review gates remain separate and earlier: denied/needs-approval research
+operations return no content, no warnings and no injection audit events. Detection is a
+heuristic warning layer, **not a sandbox and not a safety proof**; it cannot catch every
+paraphrase/encoding. Agents, GUI and model integration must continue to ignore content
+instructions and must never execute commands or exfiltrate secrets based on retrieved text.

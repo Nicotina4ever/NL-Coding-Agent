@@ -1,8 +1,8 @@
-# Universal Web Research engine - R1 foundation, R2 providers/store, R3 investigators, R4 service/transport (stage 7 research)
+# Universal Web Research engine - R1 foundation, R2 providers/store, R3 investigators, R4 service/transport, R7 injection resistance, R8 mission attachments/retention (stage 7 research)
 
-**Status:** R1 FOUNDATION + R2 PROVIDERS/STORE + R3 READ-ONLY INVESTIGATORS + R4 SERVICE/TRANSPORT (fixtures/fake transports only). This is **not** a complete web-research engine. R4 adds an explicitly constructed, permission-gated stdlib HTTP transport, the ResearchService permission/auto-review boundary and typed read-only research tool descriptors. There is still no implicit/default network transport, no live provider adapter, no real-network acceptance, browser automation, PDF/Office extraction, GUI or full model/agent integration. Provider capabilities remain declarative; live provider/network acceptance remains **MANUAL-PENDING** (NL-BP-203/211), and fixture tests never count as real-network verification.
+**Status:** R1 FOUNDATION + R2 PROVIDERS/STORE + R3 READ-ONLY INVESTIGATORS + R4 SERVICE/TRANSPORT + R7 INJECTION RESISTANCE + R8 MISSION ATTACHMENTS/RETENTION (fixtures/fake transports only). This is **not** a complete web-research engine. R4 adds an explicitly constructed, permission-gated stdlib HTTP transport, the ResearchService permission/auto-review boundary and typed read-only research tool descriptors. There is still no implicit/default network transport, no live provider adapter, no real-network acceptance, browser automation, PDF/Office extraction, GUI or full model/agent integration. Provider capabilities remain declarative; live provider/network acceptance remains **MANUAL-PENDING** (NL-BP-203/211), and fixture tests never count as real-network verification.
 
-**Implemented requirements:** retrieval foundations for **NL-BP-170** (web page/document reader), **NL-BP-175** (untrusted-source handling) and **NL-BP-206** (retrieval safety policy); R2 provider registry/router and local knowledge store for **NL-BP-169/205/174**; R3 read-only GitHub/HF investigator contracts for **NL-BP-171/172/207**; R4 permission-bounded ResearchService, explicit stdlib HTTP transport path and typed read-only research tool descriptors for **NL-BP-170/174/175/205/207**. Remaining: live provider adapters/live network acceptance (NL-BP-203/211), research planning (NL-BP-176), research GUI (NL-BP-210), remaining ecosystem connectors (NL-BP-208/209), GUI/model wiring of the tool descriptors and the cache/embeddings extensions.
+**Implemented requirements:** retrieval foundations for **NL-BP-170** (web page/document reader), **NL-BP-175** (untrusted-source handling) and **NL-BP-206** (retrieval safety policy); R2 provider registry/router and local knowledge store for **NL-BP-169/205/174**; R3 read-only GitHub/HF investigator contracts for **NL-BP-171/172/207**; R4 permission-bounded ResearchService, explicit stdlib HTTP transport path and typed read-only research tool descriptors for **NL-BP-170/174/175/205/207**; R7 completion of **NL-BP-175** untrusted-source/prompt-injection detection, redacted warnings and audit on the same stack; R8 revocable finding-to-mission attachments, non-destructive stale/expired retention and the Research workspace attachment/retention UI for **NL-BP-210** (GUI slice with injected fake services). Remaining: live provider adapters/live network acceptance (NL-BP-203/211), research planning (NL-BP-176), remaining ecosystem connectors (NL-BP-208/209), GUI/model wiring of the tool descriptors, real-network GUI acceptance and the cache/embeddings extensions.
 
 **Package:** `nl_coding_agent/research/` (standard library only). It imports no GUI, CrewAI, model or network library; R2's store uses the existing application SQLite database additively (new `research_*` tables only).
 
@@ -17,7 +17,7 @@
 | `fetch.py` | Transport-injected HTTP fetcher: manual redirect following, policy checks before and after every redirect, optional permission-gate callback, rate limiting, timeout/size/content-type enforcement, sha256/size, provenance, untrusted tagging. **No default network transport exists**; callers must inject one. |
 | `reader.py` | Standard-library `HTMLParser` readable extraction: title, metadata, headings, paragraphs, lists, code/pre, links (resolved), basic tables, deterministic text + Markdown; plain text/markdown/JSON passthrough; PDF/Office/unknown formats return an explicit `UnsupportedDocument`. Scripts/iframes/styles are never executed and their content is dropped. |
 | `providers.py` | Declarative search-provider contract: validated `CapabilityMatrix` (search types, coverage/languages/recency, auth, cost, rate, latency, privacy, reliability, limitations), `SearchProvider`/`NoKeySearchAdapter` protocols, config+injected `ProviderRegistry`, offline known-URL provider, honest unavailability statuses, deterministic policy routing with explanations/refusals and multi-source corroboration/disagreement verification. No real network transport or provider SDK exists. |
-| `store.py` | Additive, idempotent SQLite research store through the application database: bounded `research_sources` (canonical URL/redirect chain/provider/title/excerpt/content sha256/metadata/retrieved timestamps/scope/confidence/stale state), `research_findings`, `research_citations` and `research_conflicts`. Dedupe by canonical URL/content hash, stale/expiry/refresh queries, bounded project/mission/text search. No secrets, credentials or wholesale project content. |
+| `store.py` | Additive, idempotent SQLite research store through the application database: bounded `research_sources` (canonical URL/redirect chain/provider/title/excerpt/content sha256/metadata/retrieved timestamps/scope/confidence/stale/expired state), `research_findings`, `research_citations`, `research_conflicts` and append-only `research_finding_attachments` (finding/mission link, source, attached_by, created_at, revoked_at; unique active pair). Dedupe by canonical URL/content hash, stale/expiry/refresh queries, bounded project/mission/text search, revocable mission attachments and non-destructive retention. No secrets, credentials or wholesale project content and no hard-delete API. |
 | `transport.py` | Explicit stdlib urllib transport implementing the injected HttpTransport contract: permission gate required at construction, GET/HEAD only, https default (http only if explicitly enabled), URL credentials rejected, no CR/LF headers, bounded timeout/bytes, redirects returned as 3xx (never followed) for the fetcher to re-evaluate. No module-level opener and no implicit network use. |
 | `service.py` | Permission-bounded ResearchService: provider routing, policy fetcher, reader, store, GitHub/HF investigators. Every network-capable operation calls permissions.check_capability and auto_review.evaluate_action first and returns explicit allowed/needs_approval/denied/error results (no exception leakage for normal policy decisions). Search/fetch/lookups store provenance + citations; save/list/search/mark-stale/refresh findings are exposed. No default transport, cloud call, secret logging or silent fallback. |
 | `tools.py` | Typed read-only descriptors for web_search/web_fetch/github_lookup/huggingface_lookup with capability/scope mapping, bounded input/output schemas, citation/provenance requirements and a register function. Explicitly no write/install/publish/upload/download tool; descriptors contain no execution or network implementation. |
@@ -70,7 +70,7 @@ The production URLLIB (or other) transport is deliberately **not** part of this 
 
 - `Provenance.untrusted`, `Source.untrusted`, `RetrievedDocument.untrusted`, `ReadablePage.untrusted` and `UnsupportedDocument.untrusted` are always `True`; constructing them with `False` raises `ResearchModelError`.
 - Retrieved text is data, not instructions. The reader structures it; it never executes it, follows its links, changes permissions or calls models/tools.
-- Prompt-injection resistance at the agent/model boundary (NL-BP-175 acceptance) and research decisions audit logging are **not** implemented here; this increment only provides the data marker and the retrieval-side enforcement.
+- R7 now adds content-side prompt-injection detection, redacted warnings and source='research' injection audit events on top of this trust marker (section 4f). Model/agent-level prompt isolation is still **not** implemented; content detection is heuristic, not a sandbox.
 
 
 ## 4b. Search-provider registry and routing (R2, NL-BP-169/205 foundation)
@@ -165,13 +165,55 @@ The production URLLIB (or other) transport is deliberately **not** part of this 
 - These tools are not yet wired to the GUI/model-facing tool surface; that
   integration remains future work and must preserve the same boundary.
 
+## 4f. Prompt-injection resistance (R7, NL-BP-175)
+
+The new `nl_coding_agent/research/injection.py` scanner treats all fetched/searched
+content as data, never as instructions. It is bounded, deterministic and passive:
+it never executes commands, evaluates HTML/JS, calls tools, follows links or touches
+the network. It scans text/markdown/HTML and recursively scans result payloads for:
+
+- instruction/system-prompt overrides ("ignore previous instructions", system/developer prompt);
+- role overrides ("you are now", pretend/act-as/developer role);
+- tool/command execution requests (shell, terminal, subprocess, eval/exec, powershell, curl, rm -rf);
+- secret/exfiltration requests (API keys, tokens, passwords, env vars, credentials, .env, SSH keys);
+- URL-assisted instructions and javascript:/data:/file: links;
+- hidden/zero-width HTML/markdown text (HTML comments, display:none/visibility:hidden/
+  font-size:0/opacity:0, hidden attributes, zero-width Unicode) including zero-width
+  obfuscation of instruction phrases.
+
+Each immutable `InjectionSignal` carries kind, severity, a redacted bounded excerpt
+(the matched span and surrounding instruction/URL content are replaced with [REDACTED]),
+a SHA-256 of the matched span, offset and source path. `InjectionScan` carries bounded
+signals, scanned size/truncation, content SHA-256 and untrusted=True. Warnings returned
+to callers are capped at 10 and never contain the raw instruction payload.
+
+Integration (ResearchService):
+- `fetch_read` scans the raw decoded document plus reader text/markdown/metadata before
+  returning; results include `untrusted=True`, `injection_warnings` and a bounded
+  `injection_scan` summary. The page payload also carries the warnings.
+- `search` scans result titles/snippets and returns the same warning fields.
+- `github_lookup` / `huggingface_lookup` scan investigator result payloads (README,
+  model card, metadata) before returning.
+- For every detected signal, an `events` row with `source='research'` and
+  `event_kind='research_injection'` records only operation, URL, ref/source id, kind,
+  SHA-256/hash; no instruction text, excerpt or arbitrary content is audited. Audit rows
+  survive restart and are bounded per result.
+- Permission/auto-review remains a separate, earlier gate: denied/needs-approval operations
+  return no content, no warnings and write no injection audit events. No content trust is
+  inferred from a successful permission check.
+
+Limits: this is heuristic detection, **not a sandbox or a guarantee**. It does not prove
+content safe, cannot catch every paraphrase/encoding, and never sanitizes or executes
+anything. Instructions found in content must continue to be ignored by callers; no model
+is called by the scanner or service integration.
+
 ## 5. Tests and evidence
 
 Targeted tests (fixtures/fake transports only):
 
 ```
-python -m pytest -q tests/test_research_policy.py tests/test_research_fetch.py tests/test_research_reader.py tests/test_research_github.py tests/test_research_huggingface.py tests/test_research_providers.py tests/test_research_store.py tests/test_research_transport.py tests/test_research_service.py tests/test_research_tools.py
-# 136 passed (69 foundation + 15 R3 + 26 R2 + 26 R4 transport/service/tools)
+python -m pytest -q tests/test_research_policy.py tests/test_research_fetch.py tests/test_research_reader.py tests/test_research_github.py tests/test_research_huggingface.py tests/test_research_providers.py tests/test_research_store.py tests/test_research_transport.py tests/test_research_service.py tests/test_research_tools.py tests/test_research_injection.py
+# R7 adds tests/test_research_injection.py (scanner + integration); see the file table below
 ```
 
 Coverage:
@@ -212,11 +254,16 @@ Any future evidence must label cases fixture-verified vs real-network-verified v
 
 ## 7. Security limitations (foundation honesty)
 
+- **Prompt-injection detection is heuristic, not a sandbox.** R7 flags instruction-like
+  content and redacts warnings/audit, but cannot prove a page safe, cannot catch every
+  paraphrase/encoding and does not sanitize or follow content. Callers must still treat all
+  retrieved content as data and never execute instructions found in it.
+
 - DNS rebinding/TOCTOU: the policy can check injected resolver results, but a real transport must re-check the connected peer IP or use a pinned-IP/socket strategy; this increment cannot enforce that without a network transport.
 - Policy URL checks are pre-request; redirects are re-checked manually, but no caching or TLS pinning exists.
 - Content-type is header-derived; the reader refuses unknown/binary formats, but MIME spoofing remains possible (treated as untrusted anyway).
 - No robots.txt/terms-of-service automation, no auth/cookie handling, no compression, no resume/range, no cache expiry (deferred to NL-BP-174/206 caching work).
-- No prompt-injection model-level defence, no agent integration, no research audit log.
+- No model/agent-level prompt-injection defence or agent integration; R7 only provides content-side detection/redacted warnings and an injection-signal audit log (not a full research-decision audit).
 - Provider capability matrices are declarations, not verified contracts; routing is
   deterministic over those declarations, not evidence of provider quality.
 - The research store is local SQLite only: no encryption at rest, retention policy,
@@ -263,3 +310,5 @@ Any future evidence must label cases fixture-verified vs real-network-verified v
 | `tests/test_research_transport.py` | fake-opener transport/scheme/credential/limit/redirect/static tests (8) |
 | `tests/test_research_service.py` | boundary/allowed/approval/denied/fetch/store/investigator/static tests (11) |
 | `tests/test_research_tools.py` | descriptor/capability/schema/registry/static tests (7) |
+| `nl_coding_agent/research/injection.py` | bounded deterministic prompt-injection scanner, immutable redacted signals/warnings (no execution) |
+| `tests/test_research_injection.py` | injection scanner/HTML/GitHub/HF/service integration/audit/redaction/no-execution tests (R7) |

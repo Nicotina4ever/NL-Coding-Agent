@@ -208,6 +208,8 @@ CREATE TABLE IF NOT EXISTS research_sources (
     confidence REAL NOT NULL DEFAULT 0.5,
     stale INTEGER NOT NULL DEFAULT 0,
     stale_reason TEXT,
+    expired INTEGER NOT NULL DEFAULT 0,
+    expired_at TEXT,
     refreshed_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -225,6 +227,8 @@ CREATE TABLE IF NOT EXISTS research_findings (
     metadata_json TEXT NOT NULL DEFAULT '{}',
     stale INTEGER NOT NULL DEFAULT 0,
     stale_reason TEXT,
+    expired INTEGER NOT NULL DEFAULT 0,
+    expired_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -263,7 +267,29 @@ CREATE INDEX IF NOT EXISTS idx_research_citations_finding
     ON research_citations(finding_id, id DESC);
 CREATE INDEX IF NOT EXISTS idx_research_conflicts_finding
     ON research_conflicts(finding_id, id DESC);
+CREATE TABLE IF NOT EXISTS research_finding_attachments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    finding_id INTEGER NOT NULL REFERENCES research_findings(id) ON DELETE CASCADE,
+    mission_id INTEGER NOT NULL,
+    source TEXT NOT NULL DEFAULT 'research',
+    attached_by TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    revoked_at TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_research_finding_attachments_active
+    ON research_finding_attachments(finding_id, mission_id) WHERE revoked_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_research_finding_attachments_mission
+    ON research_finding_attachments(mission_id, revoked_at, id DESC);
+CREATE INDEX IF NOT EXISTS idx_research_finding_attachments_finding
+    ON research_finding_attachments(finding_id, revoked_at, id DESC);
 """
+
+_RETENTION_MIGRATIONS = (
+    ("research_sources", "expired", "INTEGER NOT NULL DEFAULT 0"),
+    ("research_sources", "expired_at", "TEXT"),
+    ("research_findings", "expired", "INTEGER NOT NULL DEFAULT 0"),
+    ("research_findings", "expired_at", "TEXT"),
+)
 
 
 def _statements(script: str) -> Iterable[str]:
@@ -293,6 +319,12 @@ class ResearchStore:
             with conn:
                 for statement in _statements(_SCHEMA):
                     conn.execute(statement)
+                for table, column, declaration in _RETENTION_MIGRATIONS:
+                    existing = {row[1] for row in conn.execute(
+                        "PRAGMA table_info(" + table + ")")}
+                    if column not in existing:
+                        conn.execute("ALTER TABLE " + table + " ADD COLUMN "
+                                     + column + " " + declaration)
             tables = tuple(sorted(
                 row["name"] for row in conn.execute(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'research_%'")
@@ -392,7 +424,8 @@ class ResearchStore:
             "retrieved_at": row["retrieved_at"], "project_id": row["project_id"],
             "mission_id": row["mission_id"], "task_id": row["task_id"],
             "confidence": float(row["confidence"]), "stale": bool(row["stale"]),
-            "stale_reason": row["stale_reason"], "refreshed_at": row["refreshed_at"],
+            "stale_reason": row["stale_reason"], "expired": bool(row["expired"]),
+            "expired_at": row["expired_at"], "refreshed_at": row["refreshed_at"],
             "created_at": row["created_at"], "updated_at": row["updated_at"],
         }
 
@@ -585,6 +618,7 @@ class ResearchStore:
             "source_ids": json.loads(row["source_ids_json"] or "[]"),
             "metadata": json.loads(row["metadata_json"] or "{}"),
             "stale": bool(row["stale"]), "stale_reason": row["stale_reason"],
+            "expired": bool(row["expired"]), "expired_at": row["expired_at"],
             "created_at": row["created_at"], "updated_at": row["updated_at"],
         }
 
@@ -631,6 +665,273 @@ class ResearchStore:
                     (_text(reason, "reason", max_len=300), _utc(),
                      _int_or_none(finding_id, "finding_id")))
             return cursor.rowcount > 0
+        finally:
+            conn.close()
+
+    # ------------------------------------------------- mission attachments
+    def mission_scope(self, mission_id: int) -> dict | None:
+        mission = _int_or_none(mission_id, "mission_id")
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT id, project_id, title, status FROM missions WHERE id=?",
+                (mission,)).fetchone()
+            return dict(row) if row is not None else None
+        finally:
+            conn.close()
+
+    def _link_row(self, row: sqlite3.Row) -> dict:
+        return {"id": int(row["id"]), "finding_id": int(row["finding_id"]),
+                "mission_id": int(row["mission_id"]), "source": row["source"],
+                "attached_by": row["attached_by"], "created_at": row["created_at"],
+                "revoked_at": row["revoked_at"],
+                "active": row["revoked_at"] is None}
+
+    def attach_finding_to_mission(self, finding_id: int, mission_id: int, *,
+                                  source: str = "research",
+                                  attached_by: str = "") -> dict:
+        finding_value = _int_or_none(finding_id, "finding_id")
+        mission_value = _int_or_none(mission_id, "mission_id")
+        finding = self.get_finding(finding_value)
+        if finding is None:
+            raise ResearchStoreError("finding does not exist: " + str(finding_value))
+        mission = self.mission_scope(mission_value)
+        if mission is None:
+            raise ResearchStoreError("mission does not exist: " + str(mission_value))
+        finding_project = finding.get("project_id")
+        mission_project = mission.get("project_id")
+        if (finding_project is not None and mission_project is not None
+                and int(finding_project) != int(mission_project)):
+            raise ResearchStoreError("finding and mission belong to different projects")
+        finding_mission = finding.get("mission_id")
+        if finding_mission is not None and int(finding_mission) != mission_value:
+            raise ResearchStoreError("finding belongs to a different mission scope")
+        source_text = _text(source, "source", max_len=100) or "research"
+        actor = _text(attached_by, "attached_by", max_len=200)
+        now = _utc()
+        conn = self._connect()
+        try:
+            with conn:
+                existing = conn.execute(
+                    "SELECT * FROM research_finding_attachments WHERE finding_id=? "
+                    "AND mission_id=? AND revoked_at IS NULL ORDER BY id DESC LIMIT 1",
+                    (finding_value, mission_value)).fetchone()
+                if existing is not None:
+                    result = self._link_row(existing)
+                    result.update({"created": False, "idempotent": True,
+                                   "finding": finding, "mission": mission})
+                    return result
+                cursor = conn.execute(
+                    "INSERT INTO research_finding_attachments "
+                    "(finding_id, mission_id, source, attached_by, created_at) "
+                    "VALUES (?,?,?,?,?)",
+                    (finding_value, mission_value, source_text, actor, now))
+                result = {"id": int(cursor.lastrowid), "finding_id": finding_value,
+                          "mission_id": mission_value, "source": source_text,
+                          "attached_by": actor, "created_at": now,
+                          "revoked_at": None, "active": True,
+                          "created": True, "idempotent": False,
+                          "finding": finding, "mission": mission}
+                return result
+        finally:
+            conn.close()
+
+    def detach_finding_from_mission(self, finding_id: int, mission_id: int) -> dict:
+        finding_value = _int_or_none(finding_id, "finding_id")
+        mission_value = _int_or_none(mission_id, "mission_id")
+        now = _utc()
+        conn = self._connect()
+        try:
+            with conn:
+                row = conn.execute(
+                    "SELECT * FROM research_finding_attachments WHERE finding_id=? "
+                    "AND mission_id=? AND revoked_at IS NULL ORDER BY id DESC LIMIT 1",
+                    (finding_value, mission_value)).fetchone()
+                if row is None:
+                    return {"detached": False, "link_id": None,
+                            "finding_id": finding_value, "mission_id": mission_value}
+                conn.execute(
+                    "UPDATE research_finding_attachments SET revoked_at=? WHERE id=?",
+                    (now, int(row["id"])))
+                return {"detached": True, "link_id": int(row["id"]),
+                        "finding_id": finding_value, "mission_id": mission_value,
+                        "revoked_at": now, "finding_preserved": True}
+        finally:
+            conn.close()
+
+    def list_mission_findings(self, mission_id: int, *,
+                              include_revoked: bool = False) -> list[dict]:
+        mission_value = _int_or_none(mission_id, "mission_id")
+        clauses = ["a.mission_id=?"]
+        if not include_revoked:
+            clauses.append("a.revoked_at IS NULL")
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                "SELECT f.*, a.id AS attachment_id, a.source AS attachment_source, "
+                "a.attached_by AS attachment_attached_by, a.created_at AS attached_at, "
+                "a.revoked_at AS attachment_revoked_at "
+                "FROM research_finding_attachments a "
+                "JOIN research_findings f ON f.id = a.finding_id "
+                "WHERE " + " AND ".join(clauses)
+                + " ORDER BY a.created_at DESC, a.id DESC", (mission_value,)).fetchall()
+            output = []
+            for row in rows:
+                finding = self._finding_row(row)
+                finding.update({
+                    "attachment_id": int(row["attachment_id"]),
+                    "attachment_source": row["attachment_source"],
+                    "attached_by": row["attachment_attached_by"],
+                    "attached_at": row["attached_at"],
+                    "revoked_at": row["attachment_revoked_at"],
+                    "active": row["attachment_revoked_at"] is None,
+                })
+                output.append(finding)
+            return output
+        finally:
+            conn.close()
+
+    def list_finding_missions(self, finding_id: int, *,
+                              include_revoked: bool = False) -> list[dict]:
+        finding_value = _int_or_none(finding_id, "finding_id")
+        clauses = ["a.finding_id=?"]
+        if not include_revoked:
+            clauses.append("a.revoked_at IS NULL")
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                "SELECT a.* FROM research_finding_attachments a WHERE "
+                + " AND ".join(clauses) + " ORDER BY a.id DESC", (finding_value,)).fetchall()
+            return [self._link_row(row) for row in rows]
+        finally:
+            conn.close()
+
+    def attachment_status(self, finding_id: int, mission_id: int) -> dict:
+        finding_value = _int_or_none(finding_id, "finding_id")
+        mission_value = _int_or_none(mission_id, "mission_id")
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT * FROM research_finding_attachments WHERE finding_id=? "
+                "AND mission_id=? AND revoked_at IS NULL ORDER BY id DESC LIMIT 1",
+                (finding_value, mission_value)).fetchone()
+            if row is None:
+                return {"attached": False, "finding_id": finding_value,
+                        "mission_id": mission_value, "link": None}
+            return {"attached": True, "finding_id": finding_value,
+                    "mission_id": mission_value, "link": self._link_row(row)}
+        finally:
+            conn.close()
+
+    # -------------------------------------------------------------- retention
+    @staticmethod
+    def _older_than(value: str, cutoff: datetime) -> bool:
+        try:
+            moment = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            return False
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=timezone.utc)
+        return moment < cutoff
+
+    def apply_retention(self, now: datetime | str | None = None,
+                        ttl_days: float = 30.0,
+                        max_items: int = 500) -> dict:
+        """Mark old sources/findings stale+expired. Never deletes rows or evidence."""
+        try:
+            ttl = float(ttl_days)
+        except (TypeError, ValueError) as exc:
+            raise ResearchStoreError("ttl_days must be a number") from exc
+        if ttl <= 0:
+            raise ResearchStoreError("ttl_days must be positive")
+        try:
+            limit = int(max_items)
+        except (TypeError, ValueError) as exc:
+            raise ResearchStoreError("max_items must be an integer") from exc
+        if limit <= 0:
+            raise ResearchStoreError("max_items must be positive")
+        now_value = _utc(now, "now")
+        cutoff = datetime.fromisoformat(now_value.replace("Z", "+00:00")) - timedelta(days=ttl)
+        conn = self._connect()
+        sources_expired = findings_expired = 0
+        try:
+            with conn:
+                source_rows = conn.execute(
+                    "SELECT id, retrieved_at FROM research_sources "
+                    "WHERE expired=0 ORDER BY retrieved_at ASC LIMIT ?", (limit,)).fetchall()
+                for row in source_rows:
+                    if not self._older_than(row["retrieved_at"], cutoff):
+                        continue
+                    conn.execute(
+                        "UPDATE research_sources SET stale=1, expired=1, expired_at=?, "
+                        "stale_reason=?, updated_at=? WHERE id=?",
+                        (now_value, "expired: retention ttl_days=" + str(ttl),
+                         now_value, int(row["id"])))
+                    sources_expired += 1
+                finding_rows = conn.execute(
+                    "SELECT id, updated_at FROM research_findings "
+                    "WHERE expired=0 ORDER BY updated_at ASC LIMIT ?", (limit,)).fetchall()
+                for row in finding_rows:
+                    if not self._older_than(row["updated_at"], cutoff):
+                        continue
+                    conn.execute(
+                        "UPDATE research_findings SET stale=1, expired=1, expired_at=?, "
+                        "stale_reason=?, updated_at=? WHERE id=?",
+                        (now_value, "expired: retention ttl_days=" + str(ttl),
+                         now_value, int(row["id"])))
+                    findings_expired += 1
+            return {"now": now_value, "ttl_days": ttl, "max_items": limit,
+                    "sources_expired": sources_expired,
+                    "findings_expired": findings_expired,
+                    "citations_preserved": int(conn.execute(
+                        "SELECT COUNT(1) FROM research_citations").fetchone()[0]),
+                    "findings_preserved": int(conn.execute(
+                        "SELECT COUNT(1) FROM research_findings").fetchone()[0]),
+                    "sources_preserved": int(conn.execute(
+                        "SELECT COUNT(1) FROM research_sources").fetchone()[0]),
+                    "deleted": 0, "hard_deleted": False}
+        finally:
+            conn.close()
+
+    def list_expired(self) -> list[dict]:
+        conn = self._connect()
+        try:
+            output = []
+            for row in conn.execute(
+                    "SELECT * FROM research_sources WHERE expired=1 ORDER BY id").fetchall():
+                item = self._source_row(row)
+                item["kind"] = "source"
+                output.append(item)
+            for row in conn.execute(
+                    "SELECT * FROM research_findings WHERE expired=1 ORDER BY id").fetchall():
+                item = self._finding_row(row)
+                item["kind"] = "finding"
+                output.append(item)
+            return output
+        finally:
+            conn.close()
+
+    def retention_summary(self) -> dict:
+        conn = self._connect()
+        try:
+            def count(sql, params=()):
+                return int(conn.execute(sql, params).fetchone()[0])
+            return {
+                "sources_total": count("SELECT COUNT(1) FROM research_sources"),
+                "sources_stale": count("SELECT COUNT(1) FROM research_sources WHERE stale=1"),
+                "sources_expired": count("SELECT COUNT(1) FROM research_sources WHERE expired=1"),
+                "findings_total": count("SELECT COUNT(1) FROM research_findings"),
+                "findings_stale": count("SELECT COUNT(1) FROM research_findings WHERE stale=1"),
+                "findings_expired": count("SELECT COUNT(1) FROM research_findings WHERE expired=1"),
+                "citations_total": count("SELECT COUNT(1) FROM research_citations"),
+                "attachments_total": count(
+                    "SELECT COUNT(1) FROM research_finding_attachments"),
+                "attachments_active": count(
+                    "SELECT COUNT(1) FROM research_finding_attachments WHERE revoked_at IS NULL"),
+                "attachments_revoked": count(
+                    "SELECT COUNT(1) FROM research_finding_attachments WHERE revoked_at IS NOT NULL"),
+                "hard_deleted": False, "delete_api": False,
+            }
         finally:
             conn.close()
 
