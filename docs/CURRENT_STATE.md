@@ -620,3 +620,20 @@ AppServices research facade, no model/tool-execution wiring for the new tools, n
 browser/PDF/Office support. Real-network research acceptance (NL-BP-203/211) and end-to-end
 Trusted Auto Review/Full Autonomy are MANUAL-PENDING; no research reliability or platform-support
 claim is made.
+
+Research facade wiring and pre-push guard (2026-10-28)
+
+- Research R6: AppServices now exposes a real, thin research facade used by the Studio Research
+  workspace. It is lazy and injection-only: no research service/store scan/network transport is
+  created at import or construction, the default status is explicitly offline/no-network, configured
+  fake services persist provenance/citations and surface permission-needed/denied results, and no
+  auto-search occurs on page construction. Live provider/network acceptance remains MANUAL-PENDING.
+- Stage-10 R1: the mandatory blocking pre-push secrets/content guard is implemented
+  (scripts/prepush_guard.py: scan-staged/head/history/all, hook mode, install-hook
+  dry-print/force/backup, reused audit rules/redaction/classification, bound-fail-closed scans,
+  redacted JSON/Markdown evidence) with a blocking CI secrets-scan job and 9 temporary-Git-repo
+  tests. No hook was installed in the canonical repository, no push was attempted, no network/model
+  run occurred; full unbounded history/binary/hostile-file scanning and real external acceptance
+  remain MANUAL-PENDING. The guard is not a substitute for owner publication authorization.
+
+Full suite 929 passed; relocation/supervisor gates green; working tree clean.

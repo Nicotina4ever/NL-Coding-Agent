@@ -5591,7 +5591,8 @@
       "evidence": [
         "not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md; no code, mission or network run started",
         "capability-gap evidence: docs/WEB_RESEARCH_CAPABILITY_AUDIT.md sections 3 and 5 (only local urllib Ollama/model probes, gated local-stdio MCP, unused web-research permissions, local-only attachments)",
-        "Studio Research workspace implemented as the 10th page: query/provider-route selection with availability/permission/auth/offline status, results with untrusted markers, read-only source preview with metadata/citation/provenance/redirects/stale/conflict indicators, project/mission-scoped history and saved findings, URL/GitHub/HF/local-attachment intake with permission-needed/denied/offline states, copy-URL only (no browser), non-blocking workers/accessibility and credential redaction. All actions go through an injected research-service adapter; the real AppServices research facade/live backend and real permission/persistence wiring remain pending (8 GUI tests)."
+        "Studio Research workspace implemented as the 10th page: query/provider-route selection with availability/permission/auth/offline status, results with untrusted markers, read-only source preview with metadata/citation/provenance/redirects/stale/conflict indicators, project/mission-scoped history and saved findings, URL/GitHub/HF/local-attachment intake with permission-needed/denied/offline states, copy-URL only (no browser), non-blocking workers/accessibility and credential redaction. All actions go through an injected research-service adapter; the real AppServices research facade/live backend and real permission/persistence wiring remain pending (8 GUI tests).",
+        "Studio Research workspace is now wired to a real AppServices research facade: provider/route status with offline/network-configured/permission state, search/fetch/preview/history/saved-findings/save-finding/intake all delegate through the facade, default AppServices exposes an honest offline state with no network transport, configured fake transports persist provenance/citations and surface permission-needed/denied results, and no auto-search occurs on construction (18 targeted tests). Live provider configuration, real permission grants and real-network acceptance remain MANUAL-PENDING."
       ],
       "source_refs": [
         "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
@@ -5606,7 +5607,7 @@
         "NL-BP-176"
       ],
       "primary_source": "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
-      "note": "Studio Research workspace implemented as the 10th page: query/provider-route selection with availability/permission/auth/offline status, results with untrusted markers, read-only source preview with metadata/citation/provenance/redirects/stale/conflict indicators, project/mission-scoped history and saved findings, URL/GitHub/HF/local-attachment intake with permission-needed/denied/offline states, copy-URL only (no browser), non-blocking workers/accessibility and credential redaction. All actions go through an injected research-service adapter; the real AppServices research facade/live backend and real permission/persistence wiring remain pending (8 GUI tests).",
+      "note": "Studio Research workspace is now wired to a real AppServices research facade: provider/route status with offline/network-configured/permission state, search/fetch/preview/history/saved-findings/save-finding/intake all delegate through the facade, default AppServices exposes an honest offline state with no network transport, configured fake transports persist provenance/citations and surface permission-needed/denied results, and no auto-search occurs on construction (18 targeted tests). Live provider configuration, real permission grants and real-network acceptance remain MANUAL-PENDING.",
       "backlog_anchor": "nl-bp-210",
       "program_stage": 7,
       "program_stage_name": "Universal autonomy, research intelligence and Mega Suite",
@@ -6599,7 +6600,7 @@
       "area": "release",
       "priority": "P0",
       "bp_priority": "new (user directive 2026-10-28: final release hygiene and GitHub publication gate)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-162",
         "NL-BP-163"
@@ -6612,7 +6613,8 @@
       ],
       "evidence": [
         "not started - queued only by task-70 from the user directive; read-only capability audit in docs/RELEASE_PUBLICATION_GATE_AUDIT.md; no code, model, network, push or publish run started",
-        "capability evidence: audit sections 3-4 (read-only hygiene/audits and acceptance tooling exist; secrets scanner NL-BP-162 verified but not wired to CI/hooks; owner gates/manual-pending external acceptance; no publication verdict artifact)"
+        "capability evidence: audit sections 3-4 (read-only hygiene/audits and acceptance tooling exist; secrets scanner NL-BP-162 verified but not wired to CI/hooks; owner gates/manual-pending external acceptance; no publication verdict artifact)",
+        "Mandatory blocking pre-push secrets/content guard implemented: scripts/prepush_guard.py scan-staged/scan-head/scan-history/scan-all plus blocking hook mode and install-hook dry-print/force/backup semantics, reusing the verified secrets-audit patterns/redaction/classification; staged/tracked/history checks for secrets, private data, personal paths/sensitive config, embedded runtimes/vendor/large blobs/DB/log/build artifacts with bounded fail-closed scans and redacted JSON/Markdown evidence; CI gains a blocking secrets-scan job and 9 temp-Git-repo tests pass. No hook was installed in the canonical repository and no push was attempted; unbounded history/binary/hostile content remains MANUAL-PENDING and this guard is not a substitute for external acceptance or owner publication authorization."
       ],
       "source_refs": [
         "user directive 2026-10-28: Final Release Hygiene & GitHub Publication Gate + mandatory pre-push secrets/content scan (task-70; audited in docs/RELEASE_PUBLICATION_GATE_AUDIT.md)",
@@ -6621,7 +6623,7 @@
         "NL-BP-163"
       ],
       "primary_source": "user directive 2026-10-28: Final Release Hygiene & GitHub Publication Gate + mandatory pre-push secrets/content scan (task-70; audited in docs/RELEASE_PUBLICATION_GATE_AUDIT.md)",
-      "note": "NL-BP-162 provides the verified scanner and exit-code upload gate but is manual (no hooks/CI wiring); 235 adds mandatory blocking enforcement without rewriting 162.",
+      "note": "Mandatory blocking pre-push secrets/content guard implemented: scripts/prepush_guard.py scan-staged/scan-head/scan-history/scan-all plus blocking hook mode and install-hook dry-print/force/backup semantics, reusing the verified secrets-audit patterns/redaction/classification; staged/tracked/history checks for secrets, private data, personal paths/sensitive config, embedded runtimes/vendor/large blobs/DB/log/build artifacts with bounded fail-closed scans and redacted JSON/Markdown evidence; CI gains a blocking secrets-scan job and 9 temp-Git-repo tests pass. No hook was installed in the canonical repository and no push was attempted; unbounded history/binary/hostile content remains MANUAL-PENDING and this guard is not a substitute for external acceptance or owner publication authorization.",
       "backlog_anchor": "nl-bp-235",
       "program_stage": 10,
       "program_stage_name": "Final release hygiene and GitHub publication gate",
@@ -6685,8 +6687,8 @@
     "total": 188,
     "by_status": {
       "verified": 33,
-      "partial": 77,
-      "planned": 75,
+      "partial": 78,
+      "planned": 74,
       "blocked": 3
     },
     "by_priority": {
@@ -6715,10 +6717,10 @@
         "planned": 8
       },
       "autonomy": {
-        "partial": 18,
         "verified": 16,
-        "blocked": 1,
-        "planned": 25
+        "partial": 18,
+        "planned": 25,
+        "blocked": 1
       },
       "hygiene": {
         "verified": 3,
@@ -6732,21 +6734,21 @@
       },
       "release": {
         "verified": 3,
-        "partial": 11,
-        "planned": 17,
+        "partial": 12,
+        "planned": 16,
         "blocked": 2
       }
     },
     "by_priority_status": {
       "P0": {
         "verified": 20,
-        "partial": 37,
-        "blocked": 3,
-        "planned": 46
+        "partial": 38,
+        "planned": 45,
+        "blocked": 3
       },
       "P1": {
-        "partial": 28,
         "verified": 13,
+        "partial": 28,
         "planned": 19
       },
       "P2": {
@@ -8541,7 +8543,8 @@
     "v4.1_2026-10-28_stage7_research_gui_service": "Stage-7 R4/R5: ResearchService permission+auto-review boundary, explicit permission-gated stdlib transport, provenance/citation persistence and typed read-only research tools; Studio Research workspace (10th page) with previews/history/saved findings/intake; CI headless smoke updated for 10 pages. 34 new tests; full suite 910 passed. Live network/providers/real facade/model wiring and real-network acceptance remain MANUAL-PENDING.",
     "v4.2_2026-10-28_goal_mode_directive": "Queue-only registration of the user's Universal Goal Mode + Document-Driven Goal Bootstrap & Planning directives. Read-only audit (docs/GOAL_MODE_CAPABILITY_AUDIT.md) confirmed the SQLite schema has missions/tasks/task_attempts/handoffs/verification_runs/mission_queue/supervisor_runs/leases/approvals/Flow tables but NO goals or milestones; the supervisor/queue/lease/Flow substrate and CLI supervisor commands exist; the GUI has Task Board/Autonomy/Research but no Goals page; document ingestion is local attachment extraction plus scanner filename summaries; GOAL_TEMPLATE.md is advisory only. Directives deduplicated against NL-BP-050/051/052/061/062/063/064/066-070/166-168/169-176/177-181/203/205-211; twelve genuine gaps were added as planned NL-BP-212..223 in a new pending program stage 8 'Universal Goal Mode and document-driven planning' (depends on stages 3 and 7). No existing ID/acceptance/status or stage 1-7 status was rewritten; addenda preserved; no code/model/network/mission run started. Totals: 175 requirements; 33 verified / 77 partial / 62 planned / 3 blocked.",
     "v4.3_2026-10-28_open_model_ecosystem": "Queue-only registration of the user's Open Model & Provider Ecosystem directive. Read-only audit (docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md) found: Ollama + generic OpenAI-compatible providers with config-driven discovery, api_key_env Bearer headers, health/loaded/unload; dynamic Ollama tags/namespaces via /api/tags; a tested ModelRouter (override/project/role/fallback, capability filters, permission/resource gates, mission snapshots) that is NOT instantiated in product code; capability evidence states measured/declared/unknown/unavailable with measured-wins gating; and a read-only Model Hub GUI/Settings. Presets exist only as hand-edited config/models.yaml entries; the provider 'kind' branch is closed; params pass only temperature; per-model/per-role profiles, custom profiles/adapters, manual entry, capability warnings and provider/profile management are missing. Requirements 008/009/010/036/068/069/183/208 are retained unchanged; ten extension gaps were added as planned NL-BP-224..233 in new pending program stage 9 'Open model and provider ecosystem' (depends_on_stages [4,7]). No existing ID/acceptance/status or stage 1-8 status was rewritten; addenda preserved; no code/model/network/mission run started. Totals: 185 requirements; 33 verified / 77 partial / 72 planned / 3 blocked.",
-    "v4.4_2026-10-28_release_publication_gate": "Queue-only registration of the user's Final Release Hygiene & GitHub Publication Gate directive plus the mandatory pre-push secrets/content scan. Read-only audit (docs/RELEASE_PUBLICATION_GATE_AUDIT.md) found: read-only distribution/repository-hygiene audits (090/091/095 verified; 092/093/094/096/097 partial), root-reorg/retention policy, packaging/beta/rehearsal/acceptance tooling (110-124/140/149/195-197), a VERIFIED secrets/history scanner NL-BP-162 with redacted evidence and exit-code gate but NOT wired into CI and no Git hooks (core.hooksPath unset), owner gates/no-remote/private repo (163), and MANUAL-PENDING real-hardware/CI/beta acceptance (152-165/164/165). No integrated final readiness milestone, no blocking pre-push gate and no publication-readiness verdict artifact existed. Three gaps added as planned NL-BP-234 (P0 hygiene final readiness milestone/refactor), NL-BP-235 (P0 mandatory blocking pre-push gate) and NL-BP-236 (P1 publication verdict + external-acceptance/sign-off gate) in new pending stage 10 'Final release hygiene and GitHub publication gate' (depends_on_stages [6,7,8,9]). No existing ID/acceptance/status or stage 1-9 status rewritten; addenda preserved; no code/model/network/push/publish run started. Totals: 188 requirements; 33 verified / 77 partial / 75 planned / 3 blocked."
+    "v4.4_2026-10-28_release_publication_gate": "Queue-only registration of the user's Final Release Hygiene & GitHub Publication Gate directive plus the mandatory pre-push secrets/content scan. Read-only audit (docs/RELEASE_PUBLICATION_GATE_AUDIT.md) found: read-only distribution/repository-hygiene audits (090/091/095 verified; 092/093/094/096/097 partial), root-reorg/retention policy, packaging/beta/rehearsal/acceptance tooling (110-124/140/149/195-197), a VERIFIED secrets/history scanner NL-BP-162 with redacted evidence and exit-code gate but NOT wired into CI and no Git hooks (core.hooksPath unset), owner gates/no-remote/private repo (163), and MANUAL-PENDING real-hardware/CI/beta acceptance (152-165/164/165). No integrated final readiness milestone, no blocking pre-push gate and no publication-readiness verdict artifact existed. Three gaps added as planned NL-BP-234 (P0 hygiene final readiness milestone/refactor), NL-BP-235 (P0 mandatory blocking pre-push gate) and NL-BP-236 (P1 publication verdict + external-acceptance/sign-off gate) in new pending stage 10 'Final release hygiene and GitHub publication gate' (depends_on_stages [6,7,8,9]). No existing ID/acceptance/status or stage 1-9 status rewritten; addenda preserved; no code/model/network/push/publish run started. Totals: 188 requirements; 33 verified / 77 partial / 75 planned / 3 blocked.",
+    "v4.5_2026-10-28_research_facade_prepush_guard": "Stage-7 R6: real AppServices research facade wired to the Studio Research workspace (offline by default, explicit opt-in transports, provenance/permission evidence; 18 tests). Stage-10 R1: mandatory blocking pre-push secrets/content guard with CI secrets-scan job and 9 temp-repo tests (no canonical hook installed, no push, bounded history). Full suite 929 passed; no network/model/publish run."
   },
   "program_order": {
     "schema_version": 1,
@@ -8839,7 +8842,7 @@
           "NL-BP-210",
           "NL-BP-211"
         ],
-        "note": "Queued by task-59. Execute after stage 6 gates pass or when the Lead records an explicit evidence-backed exception for independent low-risk work. Stages 1-6 statuses and existing requirements are untouched. The addendum grants no deletion/publication/cloud authorization and does not relax SH-07 Tier B or the staged-candidate gates. v3.8 extension (task-60): registered the Universal Web Research & Intelligence Engine gaps as NL-BP-205..211; queue-only, no implementation started. First implementation increments landed: autonomy A1 (NL-BP-168 capability taxonomy + durable scoped approvals, fail-closed, 23 tests) and research R1 (NL-BP-170/175/206 foundation: stdlib retrieval policy/SSRF/rate/size enforcement, injectable-transport fetcher with redirects/provenance/untrusted tagging, HTML reader, 69 tests). Both are foundations only: no GUI/tool wiring, search providers, browser, real transport, research store or real-network acceptance yet; real-network research and Trusted Auto Review/Full Autonomy remain MANUAL-PENDING/planned. Second increments landed: autonomy A2 (independent auto-review policy engine/profiles/control matrix/audit, 22 tests) and research R2/R3 (provider capability registry + explainable routing + multi-source checks, local SQLite research store, read-only GitHub and Hugging Face investigators over injected transports; 41 tests; full targeted research suite 110). These are fixture/foundation implementations only: no real provider/network transports, GUI/tool-registry/execution-boundary wiring, embeddings/retrieval, live GitHub/HF requests, research GUI or real-network acceptance; real-network research and end-to-end Trusted Auto Review/Full Autonomy remain pending/MANUAL-PENDING. Third increments: research R4 (ResearchService capability+auto-review boundary before network work, explicit permission-gated stdlib transport, provenance/citation store integration, typed read-only research tools; 26 tests) and R5 (Studio Research workspace as the 10th page with provider/permission/offline status, previews, history/saved findings and URL/GitHub/HF/attachment intake; 8 tests). CI headless smoke updated for the 10-page shell and fixed. Full suite 910 passed. Live network/providers, real AppServices research facade, tool-execution/model wiring and real-network acceptance remain MANUAL-PENDING; no platform or research reliability claim."
+        "note": "Queued by task-59. Execute after stage 6 gates pass or when the Lead records an explicit evidence-backed exception for independent low-risk work. Stages 1-6 statuses and existing requirements are untouched. The addendum grants no deletion/publication/cloud authorization and does not relax SH-07 Tier B or the staged-candidate gates. v3.8 extension (task-60): registered the Universal Web Research & Intelligence Engine gaps as NL-BP-205..211; queue-only, no implementation started. First implementation increments landed: autonomy A1 (NL-BP-168 capability taxonomy + durable scoped approvals, fail-closed, 23 tests) and research R1 (NL-BP-170/175/206 foundation: stdlib retrieval policy/SSRF/rate/size enforcement, injectable-transport fetcher with redirects/provenance/untrusted tagging, HTML reader, 69 tests). Both are foundations only: no GUI/tool wiring, search providers, browser, real transport, research store or real-network acceptance yet; real-network research and Trusted Auto Review/Full Autonomy remain MANUAL-PENDING/planned. Second increments landed: autonomy A2 (independent auto-review policy engine/profiles/control matrix/audit, 22 tests) and research R2/R3 (provider capability registry + explainable routing + multi-source checks, local SQLite research store, read-only GitHub and Hugging Face investigators over injected transports; 41 tests; full targeted research suite 110). These are fixture/foundation implementations only: no real provider/network transports, GUI/tool-registry/execution-boundary wiring, embeddings/retrieval, live GitHub/HF requests, research GUI or real-network acceptance; real-network research and end-to-end Trusted Auto Review/Full Autonomy remain pending/MANUAL-PENDING. Third increments: research R4 (ResearchService capability+auto-review boundary before network work, explicit permission-gated stdlib transport, provenance/citation store integration, typed read-only research tools; 26 tests) and R5 (Studio Research workspace as the 10th page with provider/permission/offline status, previews, history/saved findings and URL/GitHub/HF/attachment intake; 8 tests). CI headless smoke updated for the 10-page shell and fixed. Full suite 910 passed. Live network/providers, real AppServices research facade, tool-execution/model wiring and real-network acceptance remain MANUAL-PENDING; no platform or research reliability claim. Fourth increment: research R6 wired the real AppServices research facade into the Studio Research workspace with a lazy, injection-only network transport; default is an honest offline state, configured services persist provenance/citations and surface permission-needed/denied results (18 tests). Live provider/network acceptance remains MANUAL-PENDING."
       },
       {
         "stage": 8,
@@ -8914,11 +8917,11 @@
           "NL-BP-235",
           "NL-BP-236"
         ],
-        "note": "Queued by task-70. Execute after stages 6-9 gates pass or when the Lead records an explicit evidence-backed exception. Publication/push remains forbidden without explicit owner authorization; real external acceptance stays MANUAL-PENDING and blocks any ready verdict; SH-07 Tier B remains blocked. Nothing in this stage authorizes deletion, publication or cloud use."
+        "note": "Queued by task-70. Execute after stages 6-9 gates pass or when the Lead records an explicit evidence-backed exception. Publication/push remains forbidden without explicit owner authorization; real external acceptance stays MANUAL-PENDING and blocks any ready verdict; SH-07 Tier B remains blocked. Nothing in this stage authorizes deletion, publication or cloud use. R1 implemented the mandatory blocking pre-push secrets/content guard (scripts/prepush_guard.py with staged/head/history/all scans, hook mode, install-hook dry-print/force/backup and redacted evidence) plus a blocking CI secrets-scan job and 9 temp-repo tests; no hook installed in the canonical repo, no push attempted, bounded history and external acceptance still MANUAL-PENDING."
       }
     ]
   },
-  "updated_at": "2026-10-28T22:17:22+01:00",
+  "updated_at": "2026-10-28T22:35:00+01:00",
   "addendum_import": {
     "imported_at": "2026-10-28T21:08:26+01:00",
     "task": "shared task-59 (queue-only backlog import; no implementation)",

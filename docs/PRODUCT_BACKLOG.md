@@ -73,10 +73,10 @@ forbidden without explicit owner authorization.
 | Status | P0 | P1 | P2 | P3 | Total |
 |---|---|---|---|---|---|
 | verified | 20 | 13 | 0 | 0 | 33 |
-| partial | 37 | 28 | 11 | 1 | 77 |
-| planned | 46 | 19 | 9 | 1 | 75 |
+| partial | 38 | 28 | 11 | 1 | 78 |
+| planned | 45 | 19 | 9 | 1 | 74 |
 | blocked | 3 | 0 | 0 | 0 | 3 |
-| **Total** | **106** | **60** | **20** | **2** | **188** |
+| **Total** | 106 | 60 | 20 | 2 | 188 |
 
 | Area | Requirements | verified | partial | planned | blocked |
 |---|---|---|---|---|---|
@@ -99,6 +99,8 @@ forbidden without explicit owner authorization.
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v4.5 (2026-10-28)** - Stage-7 R6: real AppServices research facade wired into the Studio Research workspace (lazy, injection-only network; offline by default; configured fake services persist provenance/citations and expose permission-needed/denied; 18 tests). Stage-10 R1: mandatory blocking pre-push secrets/content guard (scan-staged/head/history/all, hook mode, install-hook with backup, redacted evidence, blocking CI secrets-scan job, 9 temp-repo tests; no canonical hook installed, no push attempted, bounded history). Full suite 929 passed; live provider/network acceptance and real external publication acceptance remain MANUAL-PENDING.
 
 **v4.4 (2026-10-28)** - Queue-only Final Release Hygiene & GitHub Publication Gate directive and mandatory pre-push secrets/content scan. Read-only audit (docs/RELEASE_PUBLICATION_GATE_AUDIT.md) confirmed: read-only distribution/repository-hygiene audits (090/091/095 verified; others partial), root-reorg/retention policy, packaging/beta/rehearsal/acceptance tooling (110-124/140/149/195-197), VERIFIED secrets/history scanner NL-BP-162 with redacted evidence and exit-code gate but NO CI wiring or Git hooks (core.hooksPath unset), owner gates/no-remote/private repo (163), and MANUAL-PENDING real-hardware/CI/beta acceptance. No integrated readiness milestone, blocking pre-push gate or publication verdict existed. Added planned NL-BP-234 (P0 final repository/distribution readiness milestone/refactor), NL-BP-235 (P0 mandatory blocking pre-push gate) and NL-BP-236 (P1 publication verdict + external-acceptance/sign-off gate) in new pending stage 10 (depends_on_stages [6,7,8,9]). Existing requirement IDs/acceptance and stages 1-9 untouched; addenda preserved; no code/model/network/push/publish run started. Totals: 188 requirements; 33 verified / 77 partial / 75 planned / 3 blocked.
 
