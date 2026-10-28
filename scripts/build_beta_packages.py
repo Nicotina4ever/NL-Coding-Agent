@@ -274,6 +274,9 @@ def _checksum_lines(root: Path) -> list[tuple[str, str, int]]:
         if rel == SHA256SUMS_NAME:
             continue
         entries.append((rel, sha256_file(path), path.stat().st_size))
+    # Sort by POSIX relative path so Windows (case-insensitive) and POSIX produce
+    # the same deterministic order in beta-manifest.json and SHA256SUMS.
+    entries.sort(key=lambda item: item[0])
     return entries
 
 

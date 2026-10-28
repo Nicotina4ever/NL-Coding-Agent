@@ -1,0 +1,34 @@
+{
+  "note": "Uncommitted task-58 fix set overlaid into the clean clone for cross-OS evidence.",
+  "base_head": "bf678ce27e8bef897f808eb4ef586ae65e962764",
+  "files": {
+    "scripts/launchers/Self-Build Mode.sh": {
+      "sha256": "474a76f6b7d258f94a06299d400ffb743e9f9b90c107eeaf240dec2362aba4a1",
+      "size": 2928
+    },
+    "scripts/build_release.py": {
+      "sha256": "c24b587620619bd4662567f71417122fc6fb5572a651239c920ba7d4dece96da",
+      "size": 29758
+    },
+    "scripts/build_beta_packages.py": {
+      "sha256": "a4869ab7fc26fe470c0089d749cbc1274d7db5e0ea3ad7013990883c85e42f89",
+      "size": 30529
+    },
+    "scripts/stage_portable.py": {
+      "sha256": "5b95a9f6d040bbb9f12452772f3128ef8a0181cbee73ef88bce1be0c5fbd3706",
+      "size": 14333
+    },
+    "tests/test_stage_portable.py": {
+      "sha256": "efa5a295b829973b0785a5de0b2908d5d3db877b7cc597aed4cff6a917652c6d",
+      "size": 19067
+    },
+    "tests/test_build_release.py": {
+      "sha256": "4e648f08b3a0f45e8d7da19d1b1b5220812edfba766d54b14872e37bdd7143b2",
+      "size": 24529
+    },
+    "tests/test_build_beta_packages.py": {
+      "sha256": "f06482f5be1c60ed4b13b554436798d2ae3eeae4a8b6884d57c1c72bd1c1213f",
+      "size": 17240
+    }
+  }
+}

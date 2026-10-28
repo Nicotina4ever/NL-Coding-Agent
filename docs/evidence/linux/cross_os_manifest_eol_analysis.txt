@@ -1,0 +1,17 @@
+archive_equal True
+archive_sha 93c2bb16a008fcb7d90f0d28f1621a2d2dca616c3b6a09f7e2a68ffd7ed813bd
+release-manifest.json
+  bytes_equal True
+  sha_win 012e8e64688a91ee5c2bce2c3859c032b56f9b4f2d63975cd0fd099c24a35268
+  sha_lin 012e8e64688a91ee5c2bce2c3859c032b56f9b4f2d63975cd0fd099c24a35268
+  crlf_win 0 crlf_lin 0
+platform-manifest.json
+  bytes_equal True
+  sha_win 3a8d2077c1ba3267ded942b2d90408a5ea966ad3a0f6b64c5780d6ff7c89c28d
+  sha_lin 3a8d2077c1ba3267ded942b2d90408a5ea966ad3a0f6b64c5780d6ff7c89c28d
+  crlf_win 0 crlf_lin 0
+runtime-manifest.json
+  bytes_equal True
+  sha_win 747b8f005fc46bbed3cfc7f87c0562576476a56c492079dbab16dd9f90f657ee
+  sha_lin 747b8f005fc46bbed3cfc7f87c0562576476a56c492079dbab16dd9f90f657ee
+  crlf_win 0 crlf_lin 0

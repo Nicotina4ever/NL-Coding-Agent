@@ -1,0 +1,66 @@
+{
+  "launchers": [
+    {
+      "root": "<live-repo>",
+      "launcher": "scripts/launchers/NL Coding Agent.sh",
+      "bash_n": 0,
+      "sh_n": 0
+    },
+    {
+      "root": "<live-repo>",
+      "launcher": "scripts/launchers/Self-Build Mode.sh",
+      "bash_n": 0,
+      "sh_n": 0
+    },
+    {
+      "root": "<live-repo>",
+      "launcher": "scripts/launchers/doctor.sh",
+      "bash_n": 0,
+      "sh_n": 0
+    },
+    {
+      "root": "<live-repo>",
+      "launcher": "scripts/launchers/status.sh",
+      "bash_n": 0,
+      "sh_n": 0
+    },
+    {
+      "root": "<live-repo>",
+      "launcher": "scripts/launchers/NL Coding Agent.command",
+      "bash_n": 0,
+      "sh_n": 0
+    },
+    {
+      "root": "<evidence-dir>/clean-clone",
+      "launcher": "scripts/launchers/NL Coding Agent.sh",
+      "bash_n": 0,
+      "sh_n": 0
+    },
+    {
+      "root": "<evidence-dir>/clean-clone",
+      "launcher": "scripts/launchers/Self-Build Mode.sh",
+      "bash_n": 0,
+      "sh_n": 0
+    },
+    {
+      "root": "<evidence-dir>/clean-clone",
+      "launcher": "scripts/launchers/doctor.sh",
+      "bash_n": 0,
+      "sh_n": 0
+    },
+    {
+      "root": "<evidence-dir>/clean-clone",
+      "launcher": "scripts/launchers/status.sh",
+      "bash_n": 0,
+      "sh_n": 0
+    },
+    {
+      "root": "<evidence-dir>/clean-clone",
+      "launcher": "scripts/launchers/NL Coding Agent.command",
+      "bash_n": 0,
+      "sh_n": 0
+    }
+  ],
+  "failures": 0,
+  "note": "bash -n/sh -n are syntax-only; execution is covered by tests/test_stage_portable.py::TestPosixLaunchers."
+}

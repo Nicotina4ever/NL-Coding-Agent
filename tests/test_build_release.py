@@ -112,6 +112,13 @@ class ReproducibilityTests(ReleaseFixture):
         for name in files_a:
             self.assertEqual(files_a[name], files_b[name], "non-deterministic file: " + name)
 
+    def test_generated_files_use_lf_only(self):
+        result = self.build()
+        for name, data in self.candidate_files(result["candidate"]).items():
+            if name.endswith(".zip"):
+                continue
+            self.assertNotIn(b"\r", data, "CRLF in generated file: " + name)
+
     def test_plan_writes_nothing(self):
         before = sorted(path.as_posix() for path in self.source.rglob("*"))
         out = self.root / "plan-out"

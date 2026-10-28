@@ -376,9 +376,8 @@ def main(argv: list[str] | None = None) -> int:
         manifest = _manifest(source, output, files, args.dry_run, tree_sha256, checks)
         if not args.dry_run:
             _stage(source, output, files)
-            (output / "payload_manifest.json").write_text(
-                json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
-                encoding="utf-8",
+            (output / "payload_manifest.json").write_bytes(
+                (json.dumps(manifest, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
             )
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)

@@ -211,6 +211,11 @@ def is_excluded(rel: str) -> bool:
     return False
 
 
+def _write_lf(path: Path, text: str) -> None:
+    """Write generated JSON/text with explicit LF bytes (Windows == Linux output)."""
+    path.write_bytes(text.encode("utf-8"))
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -586,10 +591,8 @@ def build_release(
         ],
     }
     release_manifest_path = candidate / "release-manifest.json"
-    release_manifest_path.write_text(
-        json.dumps(release_manifest, indent=2, ensure_ascii=False, sort_keys=True) + NL,
-        encoding="utf-8",
-    )
+    _write_lf(release_manifest_path,
+              json.dumps(release_manifest, indent=2, ensure_ascii=False, sort_keys=True) + NL)
     platform_manifest = build_platform_manifest(
         version=release_version,
         zip_name=zip_name,
@@ -603,16 +606,12 @@ def build_release(
         runtime_version=runtime_version,
     )
     platform_manifest_path = candidate / "platform-manifest.json"
-    platform_manifest_path.write_text(
-        json.dumps(platform_manifest, indent=2, ensure_ascii=False, sort_keys=True) + NL,
-        encoding="utf-8",
-    )
+    _write_lf(platform_manifest_path,
+              json.dumps(platform_manifest, indent=2, ensure_ascii=False, sort_keys=True) + NL)
     runtime_manifest = build_runtime_manifest(release_version, measured_archives, base_url=base_url)
     runtime_manifest_path = candidate / "runtime-manifest.json"
-    runtime_manifest_path.write_text(
-        json.dumps(runtime_manifest, indent=2, ensure_ascii=False, sort_keys=True) + NL,
-        encoding="utf-8",
-    )
+    _write_lf(runtime_manifest_path,
+              json.dumps(runtime_manifest, indent=2, ensure_ascii=False, sort_keys=True) + NL)
     for platform_id, info in sorted(measured_archives.items()):
         archive_source = Path((runtime_archives or {}).get(platform_id, runtime_archive)).resolve()
         runtime_target = candidate / "runtime" / info["name"]

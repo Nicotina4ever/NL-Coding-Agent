@@ -1,0 +1,16 @@
+=== NL Coding Agent.sh exit=0
+FAKE_PY cwd=<tmp-workspace>/src args=<tmp-workspace>/src/nl_agent.py gui
+=== Self-Build Mode.sh exit=0
+FAKE_PY cwd=<tmp-workspace>/src args=<tmp-workspace>/src/nl_agent.py selfbuild --autonomous --project <tmp-workspace>/src/. --max-missions 1 --reviewer-model ollama/qwen3.5:9b
+=== doctor.sh exit=0
+FAKE_PY cwd=<tmp-workspace>/src args=<tmp-workspace>/src/nl_agent.py doctor
+=== status.sh exit=0
+FAKE_PY cwd=<tmp-workspace>/src args=<tmp-workspace>/src/nl_agent.py status
+=== payload-no-runtime exit=2
+ERROR: no provisioned POSIX Python runtime found.
+Expected python/bin/python3 next to the payload root (runtime is still unmeasured/MANUAL-PENDING).
+Install/build the beta payload with the bootstrapper, or run the developer launcher from a source checkout with python3.
+Packaged beta must not use a global Python; see docs/BOOTSTRAPPER.md and docs/PLATFORM_COMPATIBILITY_MATRIX.md.
+=== payload-no-nl-agent exit=2
+ERROR: nl_agent.py not found under the resolved root: <tmp-workspace>/nonl
+Run this launcher from the repository checkout or from the beta payload root.

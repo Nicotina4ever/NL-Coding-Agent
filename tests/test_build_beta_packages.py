@@ -94,6 +94,22 @@ class BetaPackageTests(unittest.TestCase):
                                          output_parent=parent, **kwargs)
         return result, Path(result["output"])
 
+    def test_generated_text_files_use_lf_only(self):
+        _result, output = self.build()
+        for name, data in package_files(output).items():
+            if name.endswith(".zip"):
+                continue
+            self.assertNotIn(b"\r", data, "CRLF in generated file: " + name)
+
+    def test_inventory_and_checksums_use_posix_sorted_order(self):
+        _result, output = self.build()
+        manifest = json.loads((output / "beta-manifest.json").read_text(encoding="utf-8"))
+        paths = [item["path"] for item in manifest["payload"]["inventory"]]
+        self.assertEqual(paths, sorted(paths))
+        sums_paths = [line.split("  ", 1)[1] for line in
+                      (output / "SHA256SUMS").read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(sums_paths, sorted(sums_paths))
+
     def test_layout_checksums_and_inventory(self):
         result, output = self.build()
         self.assertEqual(result["status"], "packaged")

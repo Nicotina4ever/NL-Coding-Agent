@@ -1,0 +1,35 @@
+{
+  "status": "plan",
+  "candidate": "<evidence-dir>/lin-cand/candidate",
+  "output_parent": "<evidence-dir>/beta-plan-output",
+  "output": "<evidence-dir>/beta-plan-output/linux-wsl-1793217448",
+  "product": {
+    "id": "nl-coding-agent",
+    "version": "0.2.0"
+  },
+  "git_head": "bf678ce27e8bef897f808eb4ef586ae65e962764",
+  "source_archive": {
+    "name": "nl-coding-agent-0.2.0-source.zip",
+    "sha256": "93c2bb16a008fcb7d90f0d28f1621a2d2dca616c3b6a09f7e2a68ffd7ed813bd",
+    "size": 1438099,
+    "file_count": 340
+  },
+  "files": [
+    "SHA256SUMS",
+    "beta-manifest.json",
+    "installer/platform-manifest.json",
+    "installer/runtime-manifest.json",
+    "INSTALL.md",
+    "BETA_README.md",
+    "VERSION",
+    "source/nl-coding-agent-0.2.0-source.zip",
+    "install/INSTALL-windows-x86_64.md",
+    "install/INSTALL-windows-arm64.md",
+    "install/INSTALL-linux-x86_64.md",
+    "install/INSTALL-linux-aarch64.md",
+    "install/INSTALL-macos-x86_64.md",
+    "install/INSTALL-macos-arm64.md"
+  ],
+  "writes": [],
+  "name": "linux-wsl-1793217448"
+}

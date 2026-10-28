@@ -1,0 +1,51 @@
+{
+  "tool": {
+    "name": "rehearse_release.py",
+    "version": "1.0"
+  },
+  "status": "PASS",
+  "synthetic_rehearsal": true,
+  "stages": [
+    {
+      "name": "synthetic_runtime_fixtures",
+      "status": "PASS"
+    },
+    {
+      "name": "fetch_native_runtimes_offline_measure",
+      "status": "PASS"
+    },
+    {
+      "name": "measured_draft_validation",
+      "status": "PASS"
+    },
+    {
+      "name": "native_candidate_build",
+      "status": "PASS"
+    },
+    {
+      "name": "native_candidate_manifest_validation",
+      "status": "PASS"
+    },
+    {
+      "name": "beta_package_build",
+      "status": "PASS"
+    },
+    {
+      "name": "offline_provision_install_verify",
+      "status": "PASS"
+    },
+    {
+      "name": "release_acceptance_matrix_synthetic_record",
+      "status": "PASS"
+    }
+  ],
+  "workspace": {
+    "managed": true,
+    "cleaned": true
+  },
+  "failures": [],
+  "notes": [
+    "synthetic fixtures only; no real runtime download",
+    "NOT A RELEASE"
+  ]
+}
