@@ -24,6 +24,16 @@ superseded and remain audit-only until the user approves deletion. The installer
 full agent-execution acceptance tests remain deferred. Implement this goal through NL Coding
 Agent's Self-Build Mode where practical, not by ad-hoc manual changes.
 
+## Stage 6a - Bootstrapper and reproducible release foundation (implemented 2026-10-28)
+
+A first, tested distribution foundation now exists (see `docs/BOOTSTRAPPER.md`):
+
+- `installer/`: per-user, manifest-driven bootstrapper CLI (`plan` is the default dry-run mode; `install`/`update`/`repair`/`verify`; cache list/verify/prune/clear; offline-bundle mode). Downloads use urllib with streaming sha256+size verification and atomic publish; installs are isolated copies into a user-selected target while sharing a content-addressed cache. It never installs system-wide and never needs a global Python/pip/uv/conda.
+- `scripts/build_release.py`: reproducible source-only release candidate from git-tracked files (deterministic zip with fixed metadata, `release-manifest.json` and installer-compatible `platform-manifest.json`). Two builds from identical inputs are byte-identical (measured: zip sha256 `55ea8674...eaa06`, 1,053,218 B). It writes only a NEW candidate directory and never copies `python/` or `crewAI/` by default.
+- 40 targeted tests (fake/local artifacts, no network) and measured local offline install/verify evidence are documented in `docs/BOOTSTRAPPER.md`.
+
+Still manual-pending: clean Windows machine acceptance, a published/signed download channel, a bundled clean runtime archive, code signing/uninstaller, user-data migration/`NL_DATA_DIR` launcher wiring, and license notices in the payload. The existing stale `dist\portable-release` was left untouched; the measured source-only smoke candidate `dist/stage6a-source-candidate` (zip 1,053,218 B + manifests, no runtime) is retained for Lead review only and is not a verified full release candidate.
+
 ## Priority gate
 
 Start only when all of the following are true:
@@ -83,8 +93,11 @@ The staged candidate was copied to a managed temporary directory and passed `doc
 GUI startup, project opening, and restart persistence with `NL_DATA_DIR` outside the payload.
 Mission #39 added `NL_DATA_DIR`, so user data can be moved outside the installation; the
 launchers do not set it automatically yet and no migration exists. Both launchers now set
-`PYTHONDONTWRITEBYTECODE=1` to stop payload runs from regenerating caches. No installer or
-packaging claim exists yet; the full acceptance flow remains open.
+`PYTHONDONTWRITEBYTECODE=1` to stop payload runs from regenerating caches. No signed installer or
+packaging claim exists yet; the full acceptance flow remains open. Stage 6a (2026-10-28) added the
+per-user bootstrapper foundation and the reproducible source release builder (`installer/`,
+`scripts/build_release.py`, `docs/BOOTSTRAPPER.md`); clean-machine acceptance and runtime
+packaging remain manual-pending.
 
 Build outputs are now governed by the workspace-containment policy: permanent build artifacts
 belong under `dist\`, temporary build files under `build\`, and no new sibling directories under
@@ -104,6 +117,13 @@ After validating the portable build, prepare a Windows installer with:
 
 Keep the architecture portable enough for future Linux/macOS support, but do not make
 cross-platform packaging a prerequisite for the Windows release.
+
+Stage 6a (2026-10-28) implemented the first half of this goal: a per-user bootstrapper foundation
+with manifest-driven online/offline install, update, repair, verify and cache management, plus a
+reproducible source-only release builder and platform manifests. It is documented in
+`docs/BOOTSTRAPPER.md` and covered by 40 targeted tests. The remaining installer work (signed
+artifacts, clean runtime bundle, uninstaller/OS integration, clean-Windows acceptance) is still
+open.
 
 ## 5. Distribution and licensing
 

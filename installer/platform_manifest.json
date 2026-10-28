@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "status": "template",
+  "release_ready": false,
+  "product": {
+    "id": "nl-coding-agent",
+    "name": "NL Coding Agent",
+    "version": "0.2.0",
+    "channel": "stable"
+  },
+  "base_urls": {
+    "primary": "https://downloads.example.invalid/nl-coding-agent/0.2.0",
+    "mirrors": []
+  },
+  "platforms": {
+    "windows-x86_64": {
+      "display_name": "Windows 11 x64",
+      "launcher": "NL Coding Agent.bat",
+      "runtime_component": "python-runtime-windows-x86_64",
+      "components": [
+        "app-source"
+      ]
+    },
+    "linux-x86_64": {
+      "display_name": "Linux x86_64",
+      "launcher": "NL Coding Agent.sh",
+      "runtime_component": "python-runtime-linux-x86_64",
+      "components": [
+        "app-source"
+      ]
+    }
+  },
+  "components": [
+    {
+      "id": "app-source",
+      "kind": "app",
+      "version": "0.2.0",
+      "archive": "zip",
+      "destination": ".",
+      "sha256": "",
+      "size": 0,
+      "url": "components/nl-coding-agent-0.2.0-source.zip",
+      "platforms": [
+        "windows-x86_64",
+        "linux-x86_64"
+      ],
+      "placeholder": true
+    },
+    {
+      "id": "python-runtime-windows-x86_64",
+      "kind": "runtime",
+      "version": "3.12.10",
+      "archive": "zip",
+      "destination": "python",
+      "sha256": "",
+      "size": 0,
+      "url": "components/python-3.12.10-windows-x86_64.zip",
+      "platforms": [
+        "windows-x86_64"
+      ],
+      "optional": true,
+      "placeholder": true
+    },
+    {
+      "id": "python-runtime-linux-x86_64",
+      "kind": "runtime",
+      "version": "3.12.10",
+      "archive": "zip",
+      "destination": "python",
+      "sha256": "",
+      "size": 0,
+      "url": "components/python-3.12.10-linux-x86_64.zip",
+      "platforms": [
+        "linux-x86_64"
+      ],
+      "optional": true,
+      "placeholder": true
+    }
+  ]
+}
