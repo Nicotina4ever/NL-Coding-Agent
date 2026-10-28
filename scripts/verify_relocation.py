@@ -263,11 +263,14 @@ def check_database(repo_root: Path) -> None:
         )
     except Exception:  # noqa: BLE001
         migration_events = 0
+    metadata_provenance = bool(project_metadata.get("relocated_from"))
+    event_fallback = (not metadata_provenance) and migration_events > 0
     record(
         "sqlite.relocation_provenance",
-        bool(project_metadata.get("relocated_from")) or migration_events > 0,
+        metadata_provenance or event_fallback,
         "projects.metadata.relocated_from=" + repr(project_metadata.get("relocated_from"))
         + " migration_events=" + str(migration_events),
+        warning=event_fallback,
     )
 
     projects = read_only_query(db, "SELECT id, name, root FROM projects ORDER BY id")

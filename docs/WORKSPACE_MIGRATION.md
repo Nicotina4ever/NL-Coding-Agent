@@ -294,6 +294,10 @@ and `build/relocation/verification_report.json`.
     procedure (copy the database only, remove stale `-wal`/`-shm`), scopes the "untouched by
     design" claim to the rename/data steps and lists the relocation tooling added afterwards, and
     points at the migration event/state file for the previous root.
+- **O6 (addressed):** the new provenance gate check originally accepted the migration event as a
+  fallback. It now requires `projects.metadata.relocated_from` on the canonical project row and
+  only warns when a legacy database has to fall back to the migration event (id 75). After this
+  hardening the gate reports 30 passed, 0 failed, 0 warnings.
 - **Remaining historical references:** unchanged and intentional (see "Known remaining historical
   references"); the gate's operational-document scan is clean.
 
