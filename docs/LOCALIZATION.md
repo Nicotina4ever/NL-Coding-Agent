@@ -104,20 +104,51 @@ buttons, table headers and status labels):
 | Terminal | title, no-project/placeholder/run/clear/status labels | command/policy output and dynamic execution diagnostics |
 | Git | title, no-repository/refresh/status labels, diff/log tabs | branch/commit/diff/log payloads |
 | Problems | title, refresh, no-problems status, table headers | dynamic severity/source/message payloads |
-| Command palette | title/window title, filter placeholder, safety hint | command labels/categories supplied by MainWindow (principal surface owned by U1) |
+| Command palette | title/window title, filter placeholder, safety hint, MainWindow action labels/descriptions/disabled reasons | dynamic action payloads (none expected) |
 
 Tests `tests/test_i18n_coverage.py` verify catalog-key completeness, representative
 Italian and English strings and live retranslation for these panels, plus English/source
 fallback when no application translator is active.
 
+
+
+## U5 static UI completion (task-92, NL-BP-237 QA)
+
+The remaining GUI-owned static strings are now catalogued and live-switchable:
+
+- MainWindow: activity badge states/details, header no-project/project-opened text,
+  command-palette action labels (including page navigation, open project, refresh IDE,
+  read-only doctor, debug/LSP disabled reasons), command log, emergency Pause/STOP
+  controls, tooltips, confirmation title/body, status/error notifications, status-bar
+  doctor/audit/mission messages, Ollama/VRAM/RAM/task labels and static open-project errors.
+- Advanced Settings: self-build heading, autonomy mode and limit labels, mode options,
+  preview/history captions, Save/Apply/Pause/Stop/Refresh buttons and tooltips,
+  no-project/preview/notice strings, save/pause/stop notifications and the stop
+  confirmation title/body/cancel text.
+- Open Project dialog: title, prompt, placeholder, browse/cancel/open buttons, validation
+  and error strings (already covered in U1; retained).
+- No separate About dialog exists in the current Studio; no self-build confirmation dialog
+  exists (self-build entry-point placement only), so there is no copy to translate there.
+
+Tests \`tests/test_i18n_coverage.py\` now also verify: every literal static key used by
+MainWindow/Settings/OpenProject exists in both catalogs; Italian and English have
+identical key sets and identical placeholder sets; representative command-palette labels,
+activity/status/emergency strings, advanced-Settings labels and dialog titles render in
+Italian and switch live to English; agent/code/model runtime settings remain untouched;
+targeted GUI files use the i18n helper. Catalogs currently contain 409 keys in each
+language. **NL-BP-237 is acceptance-ready for static UI localization** subject to the
+documented dynamic-data boundary and human Italian copy review.
+
 ## Coverage limits and remaining work
 
-- Not every secondary string is translated. Remaining: dynamic agent/model/mission/
-  research/audit payloads and backend diagnostics; secondary dialogs/body copy; advanced
-  Settings labels/notices; command labels built by the main window; some dynamic status
-  notices and error descriptions. Untranslated text falls back to English/source.
+- Dynamic data is intentionally not translated: backend/agent/model/mission/research/audit
+  payloads, provider diagnostics, command output and backend error text remain data and
+  fall back to source language. Some secondary dialog body copy and dynamic notices may
+  also remain source/English. Static GUI-owned strings covered by U1/U3/U5 are translated.
 - No pluralization rules, locale-specific date/number formatting, right-to-left layout,
   rich-text markup in catalogs, translator tooling or machine translation at runtime.
+- Human Italian copy/UX review remains a separate manual sign-off (NL-BP-237); automated
+  tests prove coverage, key/placeholder parity and live switching, not stylistic quality.
 - Language changes do not alter running mission logs, already-generated responses,
   source code or documentation; those are intentionally separate.
 - OS detection uses the Qt system locale mapping; headless/embedded environments may

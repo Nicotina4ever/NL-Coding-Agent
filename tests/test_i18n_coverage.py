@@ -51,7 +51,7 @@ def test_all_secondary_panel_keys_exist_in_both_catalogs():
                   name).read_text(encoding="utf-8")
         for match in re.finditer(r'_tr\(\s*"([^"]+)"', source):
             key = match.group(1)
-            if key.endswith("_"):
+            if key.endswith("_") or key.endswith("."):
                 continue
             keys.add(key)
     assert keys
@@ -191,6 +191,132 @@ def test_secondary_panels_fallback_without_active_translator(services):
         board.deleteLater()
         log_panel.deleteLater()
 
+
+
+def _static_keys(path):
+    import re as _re
+    source = (REPO_ROOT / path).read_text(encoding="utf-8")
+    keys = set()
+    for pattern in (
+            r'tr_for\(\s*self\._i18n\s*,\s*"([^"]+)"',
+            r'_tr\(\s*"([^"]+)"',
+            r'tr_for\(\s*self\._i18n\s*,\s*"([^"]+)"\s*\)'):
+        for match in _re.finditer(pattern, source):
+            key = match.group(1)
+            if key.endswith("_") or key.endswith("."):
+                continue
+            keys.add(key)
+    return keys
+
+
+def _placeholders(value):
+    import re as _re
+    return set(_re.findall(r"\{([A-Za-z_][A-Za-z0-9_]*)\}", str(value)))
+
+
+def test_catalogs_have_identical_keys_and_placeholders():
+    import json
+    it_catalog = json.loads((REPO_ROOT / "nl_coding_agent" / "gui" /
+                             "locales" / "it.json").read_text(encoding="utf-8"))
+    en_catalog = json.loads((REPO_ROOT / "nl_coding_agent" / "gui" /
+                             "locales" / "en.json").read_text(encoding="utf-8"))
+    it_strings = it_catalog["strings"]
+    en_strings = en_catalog["strings"]
+    assert set(it_strings) == set(en_strings)
+    for key in it_strings:
+        assert _placeholders(it_strings[key]) == _placeholders(en_strings[key]), key
+
+
+def test_main_window_static_keys_exist_in_both_catalogs():
+    import json
+    keys = set()
+    for path in ("nl_coding_agent/gui/main_window.py",
+                 "nl_coding_agent/gui/widgets/settings_panel.py",
+                 "nl_coding_agent/gui/dialogs/open_project.py"):
+        keys.update(_static_keys(path))
+    assert keys
+    for catalog_name in ("it.json", "en.json"):
+        catalog = json.loads((REPO_ROOT / "nl_coding_agent" / "gui" /
+                              "locales" / catalog_name).read_text(encoding="utf-8"))
+        missing = sorted(keys - set(catalog["strings"]))
+        assert not missing, (catalog_name, missing[:20])
+
+
+def test_main_window_command_palette_dialog_activity_and_advanced_live_switch(services):
+    app = _app()
+    from nl_coding_agent.app.services import AppServices
+    from nl_coding_agent.gui.dialogs.open_project import OpenProjectDialog
+    from nl_coding_agent.gui.i18n import get_i18n, reset_i18n
+    from nl_coding_agent.gui.main_window import MainWindow
+
+    services.check_ollama = lambda: False
+    translator = get_i18n(services)
+    assert translator.current_language == "it"
+    window = MainWindow(services)
+    dialog = OpenProjectDialog(services, translator=translator)
+    try:
+        assert "INATTIVO" in window._activity_label.text().upper()
+        assert "Supervisore" in window._emergency_controls._status_label.text()
+        assert window._emergency_controls._pause_btn.text() == "Pausa"
+        assert "Pausa" in window._emergency_controls._pause_btn.toolTip()
+        labels = {action.action_id: action.label
+                  for action in window._command_palette_actions()}
+        assert labels["page-projects"] == "Passa a Progetti"
+        assert labels["open-project"] == "Apri progetto…"
+        assert labels["doctor"] == "Esegui doctor in sola lettura"
+        assert labels["debug-start"] == "Avvia sessione di debug"
+        assert window._settings_panel._self_build_heading.text().startswith(
+            "Self-Build (questo agente)")
+        assert window._settings_panel._preview_caption.text().startswith(
+            "Anteprima esecuzione")
+        assert window._settings_panel._save_advanced_btn.text() == "Salva / Applica"
+        assert dialog.windowTitle() == "Apri progetto"
+        assert window._tasks_label.text() == "Attività: 0"
+
+        # Live switch updates MainWindow/emergency/activity/advanced settings/dialog.
+        translator.set_language("en")
+        app.processEvents()
+        assert "IDLE" in window._activity_label.text().upper()
+        assert window._emergency_controls._pause_btn.text() == "Pause"
+        assert "Supervisor" in window._emergency_controls._status_label.text()
+        labels = {action.action_id: action.label
+                  for action in window._command_palette_actions()}
+        assert labels["page-projects"] == "Switch to Projects"
+        assert labels["open-project"] == "Open project…"
+        assert window._settings_panel._self_build_heading.text().startswith(
+            "Self-Build (This Agent)")
+        assert window._settings_panel._save_advanced_btn.text() == "Save / Apply"
+        dialog.retranslate()
+        assert dialog.windowTitle() == "Open Project"
+        assert services.ui_language_preference() == "en"
+
+        # UI presentation preference must not alter agent/code/model settings.
+        runtime = services.get_runtime_settings()
+        assert runtime.get("model_config_path")
+        assert "agent_language" not in runtime
+        assert "response_language" not in runtime
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+        window.close()
+        app.processEvents()
+        reset_i18n()
+
+
+def test_targeted_gui_files_use_i18n_helpers_not_raw_targeted_copy():
+    for path in ("nl_coding_agent/gui/main_window.py",
+                 "nl_coding_agent/gui/widgets/settings_panel.py",
+                 "nl_coding_agent/gui/dialogs/open_project.py"):
+        source = (REPO_ROOT / path).read_text(encoding="utf-8")
+        assert ("tr_for(" in source or "_tr(" in source), path
+    # Key command-palette action labels are built through the translator.
+    source = (REPO_ROOT / "nl_coding_agent" / "gui" /
+              "main_window.py").read_text(encoding="utf-8")
+    assert "command_palette.switch_to" in source
+    assert "command_palette.open_project" in source
+    assert "settings.self_build_heading" in (
+        REPO_ROOT / "nl_coding_agent" / "gui" / "widgets" /
+        "settings_panel.py").read_text(encoding="utf-8")
 
 def test_secondary_panels_static_no_network_or_model_imports():
     for name in PANEL_FILES:

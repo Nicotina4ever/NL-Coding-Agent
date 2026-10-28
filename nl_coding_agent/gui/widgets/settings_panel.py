@@ -137,7 +137,9 @@ class SettingsPanel(QWidget):
         group.setAccessibleName("Advanced self-build and autonomy controls")
         outer = QVBoxLayout(group)
         outer.setSpacing(8)
-        self._self_build_heading = QLabel("Self-Build (This Agent) — Advanced controls")
+        self._self_build_heading = QLabel(tr_for(
+            self._i18n, "settings.self_build_heading",
+            "Self-Build (This Agent) — Advanced controls"))
         self._self_build_heading.setObjectName("advancedSelfBuildHeading")
         self._self_build_heading.setAccessibleName(
             "Self-Build (This Agent) activation and configuration")
@@ -162,23 +164,33 @@ class SettingsPanel(QWidget):
         self._advanced_mode_combo.setToolTip(
             "Off is the default. Assisted/Automatic apply only to explicitly started runs."
         )
+        self._advanced_mode_labels = []
         for label, value in _AUTONOMY_MODES:
-            self._advanced_mode_combo.addItem(label, value)
-        form.addRow("Autonomy mode", self._advanced_mode_combo)
+            display = tr_for(self._i18n, "settings.mode_" + value, label)
+            self._advanced_mode_combo.addItem(display, value)
+            self._advanced_mode_labels.append((display, value))
+        self._advanced_form_labels = []
+        mode_label = QLabel(tr_for(self._i18n, "settings.autonomy_mode", "Autonomy mode"))
+        self._advanced_form_labels.append((mode_label, "settings.autonomy_mode", "Autonomy mode"))
+        form.addRow(mode_label, self._advanced_mode_combo)
 
         self._advanced_missions_spin = QSpinBox()
         self._advanced_missions_spin.setObjectName("advancedMissionsSpin")
         self._advanced_missions_spin.setAccessibleName("Maximum missions per supervisor run")
         self._advanced_missions_spin.setRange(1, 5)
         self._advanced_missions_spin.setValue(1)
-        form.addRow("Missions per run", self._advanced_missions_spin)
+        missions_label = QLabel(tr_for(self._i18n, "settings.missions_per_run", "Missions per run"))
+        self._advanced_form_labels.append((missions_label, "settings.missions_per_run", "Missions per run"))
+        form.addRow(missions_label, self._advanced_missions_spin)
 
         self._advanced_attempts_spin = QSpinBox()
         self._advanced_attempts_spin.setObjectName("advancedAttemptsSpin")
         self._advanced_attempts_spin.setAccessibleName("Maximum repair attempts per requirement")
         self._advanced_attempts_spin.setRange(1, 5)
         self._advanced_attempts_spin.setValue(2)
-        form.addRow("Attempts per requirement", self._advanced_attempts_spin)
+        attempts_label = QLabel(tr_for(self._i18n, "settings.attempts_per_requirement", "Attempts per requirement"))
+        self._advanced_form_labels.append((attempts_label, "settings.attempts_per_requirement", "Attempts per requirement"))
+        form.addRow(attempts_label, self._advanced_attempts_spin)
 
         self._advanced_wall_spin = QSpinBox()
         self._advanced_wall_spin.setObjectName("advancedWallSpin")
@@ -186,10 +198,15 @@ class SettingsPanel(QWidget):
         self._advanced_wall_spin.setRange(5, 480)
         self._advanced_wall_spin.setValue(60)
         self._advanced_wall_spin.setSuffix(" min")
-        form.addRow("Run wall-clock limit", self._advanced_wall_spin)
+        wall_label = QLabel(tr_for(self._i18n, "settings.wall_clock", "Run wall-clock limit"))
+        self._advanced_form_labels.append((wall_label, "settings.wall_clock", "Run wall-clock limit"))
+        form.addRow(wall_label, self._advanced_wall_spin)
         outer.addLayout(form)
 
-        preview_caption = QLabel("Execution preview (read-only; no run starts)")
+        self._preview_caption = QLabel(tr_for(
+            self._i18n, "settings.preview_caption",
+            "Execution preview (read-only; no run starts)"))
+        preview_caption = self._preview_caption
         preview_caption.setStyleSheet("font-size: 12px; font-weight: 600;")
         outer.addWidget(preview_caption)
         self._advanced_plan_preview = QPlainTextEdit()
@@ -197,18 +214,24 @@ class SettingsPanel(QWidget):
         self._advanced_plan_preview.setAccessibleName("Read-only autonomous execution preview")
         self._advanced_plan_preview.setReadOnly(True)
         self._advanced_plan_preview.setMinimumHeight(110)
-        self._advanced_plan_preview.setPlaceholderText(
+        self._advanced_plan_preview.setPlaceholderText(tr_for(
+            self._i18n, "settings.preview_placeholder",
             "Open a project to preview the next supervised work."
-        )
+        ))
         outer.addWidget(self._advanced_plan_preview)
 
-        history_caption = QLabel("Autonomy history (read-only, from SQLite)")
+        self._history_caption = QLabel(tr_for(
+            self._i18n, "settings.history_caption",
+            "Autonomy history (read-only, from SQLite)"))
+        history_caption = self._history_caption
         history_caption.setStyleSheet("font-size: 12px; font-weight: 600;")
         outer.addWidget(history_caption)
         self._advanced_history_table = QTableWidget(0, len(_HISTORY_COLUMNS))
         self._advanced_history_table.setObjectName("advancedHistoryTable")
         self._advanced_history_table.setAccessibleName("Read-only autonomy run history")
-        self._advanced_history_table.setHorizontalHeaderLabels(_HISTORY_COLUMNS)
+        self._advanced_history_table.setHorizontalHeaderLabels([
+            tr_for(self._i18n, "settings.history_" + column.lower().replace(" ", "_"), column)
+            for column in _HISTORY_COLUMNS])
         self._advanced_history_table.verticalHeader().setVisible(False)
         self._advanced_history_table.setEditTriggers(
             QTableWidget.EditTrigger.NoEditTriggers
@@ -225,38 +248,45 @@ class SettingsPanel(QWidget):
         outer.addWidget(self._advanced_notice)
 
         buttons = QHBoxLayout()
-        self._save_advanced_btn = QPushButton("Save / Apply")
+        self._save_advanced_btn = QPushButton(tr_for(
+            self._i18n, "settings.save_apply", "Save / Apply"))
         self._save_advanced_btn.setObjectName("primaryButton")
         self._save_advanced_btn.setAccessibleName(
             "Save autonomy mode and limits (does not start a run)"
         )
-        self._save_advanced_btn.setToolTip(
+        self._save_advanced_btn.setToolTip(tr_for(
+            self._i18n, "settings.save_apply_tooltip",
             "Persist the mode and limits for this project. Does not start a run."
-        )
+        ))
         self._save_advanced_btn.clicked.connect(self._save_advanced)
 
-        self._pause_advanced_btn = QPushButton("Pause")
+        self._pause_advanced_btn = QPushButton(tr_for(
+            self._i18n, "settings.advanced_pause", "Pause"))
         self._pause_advanced_btn.setObjectName("secondaryButton")
         self._pause_advanced_btn.setAccessibleName("Pause the active supervisor run")
-        self._pause_advanced_btn.setToolTip(
+        self._pause_advanced_btn.setToolTip(tr_for(
+            self._i18n, "settings.advanced_pause_tooltip",
             "Cooperative pause at the next safe mission boundary (Ctrl+Alt+P)."
-        )
+        ))
         self._pause_advanced_btn.setEnabled(False)
         self._pause_advanced_btn.clicked.connect(self._pause_advanced)
 
-        self._stop_advanced_btn = QPushButton("Stop…")
+        self._stop_advanced_btn = QPushButton(tr_for(
+            self._i18n, "settings.advanced_stop", "Stop…"))
         self._stop_advanced_btn.setObjectName("dangerButton")
         self._stop_advanced_btn.setAccessibleName(
             "Stop the active supervisor run after confirmation"
         )
-        self._stop_advanced_btn.setToolTip(
+        self._stop_advanced_btn.setToolTip(tr_for(
+            self._i18n, "settings.advanced_stop_tooltip",
             "Request a cooperative stop; asks for confirmation and never kills "
             "external processes (Ctrl+Alt+S)."
-        )
+        ))
         self._stop_advanced_btn.setEnabled(False)
         self._stop_advanced_btn.clicked.connect(self._stop_advanced)
 
-        self._refresh_advanced_btn = QPushButton("Refresh preview")
+        self._refresh_advanced_btn = QPushButton(tr_for(
+            self._i18n, "settings.refresh_preview", "Refresh preview"))
         self._refresh_advanced_btn.setAccessibleName(
             "Refresh the read-only autonomy preview and history"
         )
@@ -340,6 +370,35 @@ class SettingsPanel(QWidget):
         self._autonomy_btn.setText(tr_for(
             self._i18n, "settings.open_autonomy",
             "Open autonomy status page…"))
+        self._self_build_heading.setText(tr_for(
+            self._i18n, "settings.self_build_heading",
+            "Self-Build (This Agent) — Advanced controls"))
+        self._preview_caption.setText(tr_for(
+            self._i18n, "settings.preview_caption",
+            "Execution preview (read-only; no run starts)"))
+        self._history_caption.setText(tr_for(
+            self._i18n, "settings.history_caption",
+            "Autonomy history (read-only, from SQLite)"))
+        self._save_advanced_btn.setText(tr_for(
+            self._i18n, "settings.save_apply", "Save / Apply"))
+        self._pause_advanced_btn.setText(tr_for(
+            self._i18n, "settings.advanced_pause", "Pause"))
+        self._stop_advanced_btn.setText(tr_for(
+            self._i18n, "settings.advanced_stop", "Stop…"))
+        self._refresh_advanced_btn.setText(tr_for(
+            self._i18n, "settings.refresh_preview", "Refresh preview"))
+        for label, key, default in getattr(self, "_advanced_form_labels", []):
+            label.setText(tr_for(self._i18n, key, default))
+        for index, (label, value) in enumerate(
+                getattr(self, "_advanced_mode_labels", [])):
+            if index < self._advanced_mode_combo.count():
+                self._advanced_mode_combo.setItemText(
+                    index, tr_for(self._i18n, "settings.mode_" + value, label))
+        self._advanced_history_table.setHorizontalHeaderLabels([
+            tr_for(self._i18n,
+                   "settings.history_" + column.lower().replace(" ", "_"),
+                   column)
+            for column in _HISTORY_COLUMNS])
         self._sync_language_combo()
         self.refresh()
 
@@ -398,15 +457,18 @@ class SettingsPanel(QWidget):
         project_id = self._project_id
         if project_id is None:
             self._advanced_mode_combo.setCurrentIndex(0)
-            self._advanced_plan_preview.setPlainText(
+            self._advanced_plan_preview.setPlainText(tr_for(
+                self._i18n, "settings.open_project_preview",
                 "Open a project to preview the supervised execution plan."
-            )
+            ))
             self._advanced_history_table.setRowCount(0)
             self._save_advanced_btn.setEnabled(False)
             self._pause_advanced_btn.setEnabled(False)
             self._stop_advanced_btn.setEnabled(False)
             self._refresh_advanced_btn.setEnabled(False)
-            self._advanced_notice.setText("No project open.")
+            self._advanced_notice.setText(tr_for(
+                self._i18n, "settings.no_project_notice",
+                "No project open."))
             return
         self._save_advanced_btn.setEnabled(True)
         self._refresh_advanced_btn.setEnabled(True)
@@ -418,7 +480,10 @@ class SettingsPanel(QWidget):
             self._apply_settings_to_controls(settings)
         else:
             self._advanced_notice.setText(
-                "Settings unavailable: " + str(settings.get("error") or "unknown error")
+                tr_for(self._i18n, "settings.unavailable_prefix",
+                       "Settings unavailable: ")
+                + str(settings.get("error") or tr_for(
+                    self._i18n, "common.unknown_error", "unknown error"))
             )
         try:
             plan = self._services.autonomy_plan(project_id) or {}
@@ -441,7 +506,8 @@ class SettingsPanel(QWidget):
         self._stop_advanced_btn.setEnabled(active)
         if not self._advanced_notice.text():
             self._set_advanced_notice(
-                "Read-only preview. Nothing starts automatically.", ok=True
+                tr_for(self._i18n, "settings.read_only_preview",
+                       "Read-only preview. Nothing starts automatically."), ok=True
             )
 
     @staticmethod
@@ -545,7 +611,9 @@ class SettingsPanel(QWidget):
     def _save_advanced(self) -> None:
         project_id = self._project_id
         if project_id is None:
-            self._set_advanced_notice("Open a project before saving settings.", ok=False)
+            self._set_advanced_notice(tr_for(
+                self._i18n, "settings.open_project_save",
+                "Open a project before saving settings."), ok=False)
             return
         mode = str(self._advanced_mode_combo.currentData() or "off")
         try:
@@ -560,12 +628,15 @@ class SettingsPanel(QWidget):
             result = {"ok": False, "error": str(exc)}
         if result.get("ok"):
             self._set_advanced_notice(
-                "Saved. Mode/limits apply at the next safe mission boundary; "
-                "no run was started.", ok=True
+                tr_for(self._i18n, "settings.saved_notice",
+                       "Saved. Mode/limits apply at the next safe mission boundary; "
+                       "no run was started."), ok=True
             )
         else:
             self._set_advanced_notice(
-                "Save failed: " + str(result.get("error") or "unknown error"), ok=False
+                tr_for(self._i18n, "settings.save_failed", "Save failed: ")
+                + str(result.get("error") or tr_for(
+                    self._i18n, "common.unknown_error", "unknown error")), ok=False
             )
         self._load_advanced()
 
@@ -579,11 +650,14 @@ class SettingsPanel(QWidget):
             result = {"ok": False, "error": str(exc)}
         if result.get("ok", True):
             self._set_advanced_notice(
-                "Pause requested - honoured at the next safe mission boundary.", ok=True
+                tr_for(self._i18n, "settings.pause_requested",
+                       "Pause requested - honoured at the next safe mission boundary."), ok=True
             )
         else:
             self._set_advanced_notice(
-                "Pause failed: " + str(result.get("error") or "unknown error"), ok=False
+                tr_for(self._i18n, "settings.pause_failed", "Pause failed: ")
+                + str(result.get("error") or tr_for(
+                    self._i18n, "common.unknown_error", "unknown error")), ok=False
             )
         self._load_advanced()
 
@@ -593,13 +667,15 @@ class SettingsPanel(QWidget):
             return
         answer = QMessageBox.question(
             self,
-            "Stop autonomous run",
-            "Request a cooperative stop of the active supervisor run?",
+            tr_for(self._i18n, "settings.stop_title", "Stop autonomous run"),
+            tr_for(self._i18n, "settings.stop_body",
+                   "Request a cooperative stop of the active supervisor run?"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
         if answer != QMessageBox.StandardButton.Yes:
-            self._set_advanced_notice("Stop cancelled.", ok=True)
+            self._set_advanced_notice(tr_for(
+                self._i18n, "settings.stop_cancelled", "Stop cancelled."), ok=True)
             return
         try:
             result = self._services.supervisor_stop(
@@ -609,11 +685,14 @@ class SettingsPanel(QWidget):
             result = {"ok": False, "error": str(exc)}
         if result.get("ok", True):
             self._set_advanced_notice(
-                "Stop requested - the current mission reaches a safe state first; "
-                "external processes are not killed.", ok=True
+                tr_for(self._i18n, "settings.stop_requested",
+                       "Stop requested - the current mission reaches a safe state first; "
+                       "external processes are not killed."), ok=True
             )
         else:
             self._set_advanced_notice(
-                "Stop failed: " + str(result.get("error") or "unknown error"), ok=False
+                tr_for(self._i18n, "settings.stop_failed", "Stop failed: ")
+                + str(result.get("error") or tr_for(
+                    self._i18n, "common.unknown_error", "unknown error")), ok=False
             )
         self._load_advanced()

@@ -35,7 +35,9 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
     assert window._stack.count() == 11
     assert window._project_label.accessibleName() == "Opened project"
     assert window._activity_label.accessibleName() == "Studio activity and current mission"
-    assert "IDLE" in window._activity_label.text().upper()
+    assert "INATTIVO" in window._activity_label.text().upper()
+    assert window._emergency_controls._pause_btn.text() == "Pausa"
+    assert "Supervisore" in window._emergency_controls._status_label.text()
     assert window._projects_panel._self_build_btn.objectName() == "subtleLinkButton"
     assert "Advanced self-build" in window._projects_panel._self_build_btn.text()
     assert window._inspector._cards and window._inspector._diagnostics
@@ -46,7 +48,8 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
             == Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
     assert window._project_label.maximumWidth() == 310
     assert window._activity_label.maximumWidth() == 250
-    assert "Self-Build (This Agent)" in window._settings_panel._self_build_heading.text()
+    assert "Self-Build" in window._settings_panel._self_build_heading.text()
+    assert "avanzati" in window._settings_panel._self_build_heading.text().lower()
     assert window._page_index == {
         "projects": 0,
         "files": 1,
@@ -135,7 +138,8 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
     assert settings._advanced_plan_preview.isReadOnly() is True
     assert settings._advanced_history_table.editTriggers() == (
         QTableWidget.EditTrigger.NoEditTriggers)
-    assert settings._advanced_plan_preview.toPlainText().startswith("Open a project")
+    assert settings._advanced_plan_preview.toPlainText().startswith(
+        "Apri un progetto")
     for button in (settings._save_advanced_btn, settings._pause_advanced_btn,
                    settings._stop_advanced_btn, settings._refresh_advanced_btn):
         assert button.accessibleName()

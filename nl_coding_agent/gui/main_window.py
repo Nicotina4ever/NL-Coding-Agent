@@ -83,11 +83,13 @@ class EmergencyControls(QWidget):
 
     message = Signal(str, str)  # (level, text)
 
-    def __init__(self, services, parent=None):
+    def __init__(self, services, parent=None, *, translator=None):
         super().__init__(parent)
         self._services = services
+        self._i18n = translator
         self._project: dict | None = None
         self._active = False
+        self._last_status = None
 
         self.setObjectName("emergencyControls")
         self.setAccessibleName("Active mission emergency pause and stop controls")
@@ -95,28 +97,31 @@ class EmergencyControls(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
 
-        self._status_label = QLabel("Supervisor: idle")
+        self._status_label = QLabel(tr_for(
+            self._i18n, "emergency.idle", "Supervisor: idle"))
         self._status_label.setObjectName("supervisorLabel")
         self._status_label.setAccessibleName("Active supervisor status")
 
-        self._pause_btn = QPushButton("Pause")
+        self._pause_btn = QPushButton(tr_for(
+            self._i18n, "emergency.pause", "Pause"))
         self._pause_btn.setObjectName("secondaryButton")
         self._pause_btn.setAccessibleName("Emergency pause of the active mission")
-        self._pause_btn.setToolTip(
+        self._pause_btn.setToolTip(tr_for(
+            self._i18n, "emergency.pause_tooltip",
             "Cooperative pause at the next safe mission boundary; external processes "
-            "are never killed (Ctrl+Alt+P)."
-        )
+            "are never killed (Ctrl+Alt+P)."))
         self._pause_btn.setEnabled(False)
         self._pause_btn.clicked.connect(self.request_pause)
 
-        self._stop_btn = QPushButton("STOP")
+        self._stop_btn = QPushButton(tr_for(
+            self._i18n, "emergency.stop", "STOP"))
         self._stop_btn.setObjectName("dangerButton")
         self._stop_btn.setAccessibleName("Emergency stop of the active mission")
-        self._stop_btn.setToolTip(
+        self._stop_btn.setToolTip(tr_for(
+            self._i18n, "emergency.stop_tooltip",
             "Request a cooperative stop; confirmation required; the current mission "
             "reaches a safe state first and external processes are never killed "
-            "(Ctrl+Alt+S)."
-        )
+            "(Ctrl+Alt+S)."))
         self._stop_btn.setEnabled(False)
         self._stop_btn.clicked.connect(self.request_stop)
 
@@ -144,7 +149,8 @@ class EmergencyControls(QWidget):
         """Apply one supervisor status snapshot; returns True when a run is active."""
         if not self._project or not status:
             self._active = False
-            self._status_label.setText("Supervisor: idle")
+            self._status_label.setText(tr_for(
+                self._i18n, "emergency.idle", "Supervisor: idle"))
             self._pause_btn.setEnabled(False)
             self._stop_btn.setEnabled(False)
             self.setVisible(False)
@@ -154,12 +160,34 @@ class EmergencyControls(QWidget):
         label = str(run.get("status") or status.get("status") or "idle").strip() or "idle"
         active = bool(service.get("thread_running")) or label.lower() in _ACTIVE_SUPERVISOR_STATUSES
         self._active = bool(active)
-        self._status_label.setText("Supervisor: " + label)
+        self._last_status = status
+        self._status_label.setText(tr_for(
+            self._i18n, "emergency.supervisor_prefix", "Supervisor: ") + label)
         self._status_label.setToolTip(str(status.get("resume_command") or ""))
         self._pause_btn.setEnabled(active)
         self._stop_btn.setEnabled(active)
         self.setVisible(active)
         return self._active
+
+    def retranslate(self) -> None:
+        self._pause_btn.setText(tr_for(
+            self._i18n, "emergency.pause", "Pause"))
+        self._stop_btn.setText(tr_for(
+            self._i18n, "emergency.stop", "STOP"))
+        self._pause_btn.setToolTip(tr_for(
+            self._i18n, "emergency.pause_tooltip",
+            "Cooperative pause at the next safe mission boundary; external processes "
+            "are never killed (Ctrl+Alt+P)."))
+        self._stop_btn.setToolTip(tr_for(
+            self._i18n, "emergency.stop_tooltip",
+            "Request a cooperative stop; confirmation required; the current mission "
+            "reaches a safe state first and external processes are never killed "
+            "(Ctrl+Alt+S)."))
+        if self._last_status is not None:
+            self.update_status(self._last_status)
+        else:
+            self._status_label.setText(tr_for(
+                self._i18n, "emergency.idle", "Supervisor: idle"))
 
     # -------------------------------------------------------------- commands
 
@@ -169,7 +197,9 @@ class EmergencyControls(QWidget):
     def request_pause(self) -> dict:
         project_id = self._active_project_id()
         if project_id is None:
-            result = {"ok": False, "error": "No active mission or supervisor run to pause."}
+            result = {"ok": False, "error": tr_for(
+                self._i18n, "emergency.no_active_pause",
+                "No active mission or supervisor run to pause.")}
             self.message.emit("info", result["error"])
             return result
         try:
@@ -177,38 +207,46 @@ class EmergencyControls(QWidget):
         except Exception as exc:  # noqa: BLE001 - GUI boundary
             result = {"ok": False, "error": str(exc)}
         if result.get("ok", True):
-            self._status_label.setText("Supervisor: pausing…")
+            self._status_label.setText(tr_for(
+                self._i18n, "emergency.pausing", "Supervisor: pausing…"))
             self.message.emit(
                 "info",
-                "Pause requested - honoured at the next safe mission boundary.",
+                tr_for(self._i18n, "emergency.pause_requested",
+                       "Pause requested - honoured at the next safe mission boundary."),
             )
         else:
             self.message.emit(
                 "warning",
-                "Pause failed: " + str(result.get("error") or result.get("reason")
-                                       or "unknown error"),
+                tr_for(self._i18n, "emergency.pause_failed", "Pause failed: ")
+                + str(result.get("error") or result.get("reason")
+                      or tr_for(self._i18n, "common.unknown_error", "unknown error")),
             )
         return result
 
     def request_stop(self, *, confirm: bool | None = None) -> dict:
         project_id = self._active_project_id()
         if project_id is None:
-            result = {"ok": False, "error": "No active mission or supervisor run to stop."}
+            result = {"ok": False, "error": tr_for(
+                self._i18n, "emergency.no_active_stop",
+                "No active mission or supervisor run to stop.")}
             self.message.emit("info", result["error"])
             return result
         if confirm is None:
             answer = QMessageBox.question(
                 self,
-                "Emergency stop",
-                "Stop the active supervisor run?\n\n"
-                "The command is cooperative: the current mission reaches a safe state "
-                "first, state is persisted, and external processes are never killed.",
+                tr_for(self._i18n, "emergency.stop_title", "Emergency stop"),
+                tr_for(self._i18n, "emergency.stop_body",
+                       "Stop the active supervisor run?\n\n"
+                       "The command is cooperative: the current mission reaches a safe state "
+                       "first, state is persisted, and external processes are never killed."),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
             confirm = answer == QMessageBox.StandardButton.Yes
         if not confirm:
-            self.message.emit("info", "Emergency stop cancelled.")
+            self.message.emit("info", tr_for(
+                self._i18n, "emergency.stop_cancelled",
+                "Emergency stop cancelled."))
             return {"ok": False, "cancelled": True}
         try:
             result = self._services.supervisor_stop(
@@ -217,16 +255,22 @@ class EmergencyControls(QWidget):
         except Exception as exc:  # noqa: BLE001 - GUI boundary
             result = {"ok": False, "error": str(exc)}
         if result.get("ok", True):
-            self._status_label.setText("Supervisor: stopping…")
+            self._status_label.setText(tr_for(
+                self._i18n, "emergency.stopping", "Supervisor: stopping…"))
             self.message.emit(
                 "warning",
-                "Emergency stop requested - the current mission reaches a safe state "
-                "first; external processes are not killed.",
+                tr_for(self._i18n, "emergency.stop_requested",
+                       "Emergency stop requested - the current mission reaches a safe state "
+                       "first; external processes are not killed."),
             )
         else:
             self.message.emit(
                 "warning",
-                "Emergency stop failed: " + str(result.get("error") or "unknown error"),
+                tr_for(self._i18n, "emergency.stop_failed",
+                       "Emergency stop failed: ")
+                + str(result.get("error")
+                      or tr_for(self._i18n, "common.unknown_error",
+                                "unknown error")),
             )
         return result
 
@@ -308,7 +352,13 @@ class MainWindow(QMainWindow):
         self._project_label.setAccessibleName("Opened project")
         self._project_label.setMaximumWidth(310)
         header_layout.addWidget(self._project_label)
-        self._activity_label = QLabel("IDLE · no active mission")
+        self._activity_state = "idle"
+        self._activity_detail = tr_for(
+            self._i18n, "activity.no_active", "No active mission")
+        self._activity_mission_title = ""
+        self._activity_label = QLabel(
+            tr_for(self._i18n, "activity.idle", "IDLE") + " · "
+            + self._activity_detail)
         self._activity_label.setMaximumWidth(250)
         self._activity_label.setObjectName("nlActivityBadge")
         self._activity_label.setProperty("state", "idle")
@@ -440,7 +490,8 @@ class MainWindow(QMainWindow):
         self._ram_label.setObjectName("ramLabel")
         self._tasks_label = QLabel(tr_for(self._i18n, "status.tasks", "Tasks: 0"))
         self._tasks_label.setObjectName("tasksLabel")
-        self._emergency_controls = EmergencyControls(self._services)
+        self._emergency_controls = EmergencyControls(
+            self._services, translator=self._i18n)
         self._emergency_controls.message.connect(self._on_emergency_message)
         self._emergency_widget = self._emergency_controls
         # Compatibility aliases: the label/buttons now live inside the
@@ -511,6 +562,18 @@ class MainWindow(QMainWindow):
             "Read-only autonomy status; self-build controls live under Settings > Advanced"))
         self._ollama_label.setToolTip(tr_for(
             self._i18n, "app.ollama_status", "Ollama status"))
+        if hasattr(self, "_emergency_controls"):
+            self._emergency_controls.retranslate()
+        if hasattr(self, "_activity_label"):
+            if self._activity_state == "idle":
+                detail = tr_for(
+                    self._i18n, "activity.no_active", "No active mission")
+            else:
+                detail = tr_for(
+                    self._i18n, "activity.current_mission",
+                    "Current mission: {title}",
+                    title=(self._activity_mission_title or "—"))
+            self._set_activity(self._activity_state, detail)
         self._sidebar.retranslate()
         self._projects_panel.retranslate()
         self._settings_panel.retranslate()
@@ -540,17 +603,28 @@ class MainWindow(QMainWindow):
                  ("research", "Research"), ("goals", "Goals"),
                  ("settings", "Settings"), ("autonomy", "Autonomy")]
         for key, label in pages:
-            actions.append(CommandAction("page-" + key, "Switch to " + label,
-                                         (lambda k=key: self._switch_page(k)),
-                                         category="navigation"))
+            target = tr_for(self._i18n, "sidebar." + key, label)
+            actions.append(CommandAction(
+                "page-" + key,
+                tr_for(self._i18n, "command_palette.switch_to",
+                       "Switch to {target}", target=target),
+                (lambda k=key: self._switch_page(k)),
+                category="navigation"))
         actions.append(CommandAction(
-            "open-project", "Open project…",
+            "open-project",
+            tr_for(self._i18n, "command_palette.open_project",
+                   "Open project…"),
             lambda: self._switch_page("projects"), shortcut="", category="project"))
         actions.append(CommandAction(
-            "refresh-ide", "Refresh IDE panels",
+            "refresh-ide",
+            tr_for(self._i18n, "command_palette.refresh_ide",
+                   "Refresh IDE panels"),
             self._refresh_ide_panels, category="refresh"))
         actions.append(CommandAction(
-            "doctor", "Run read-only doctor", self._run_readonly_doctor,
+            "doctor",
+            tr_for(self._i18n, "command_palette.doctor",
+                   "Run read-only doctor"),
+            self._run_readonly_doctor,
             category="diagnostics"))
         try:
             debug = self._services.debug_status()
@@ -558,11 +632,16 @@ class MainWindow(QMainWindow):
         except Exception:
             available = False
         actions.append(CommandAction(
-            "debug-start", "Start debug session",
+            "debug-start",
+            tr_for(self._i18n, "command_palette.debug_start",
+                   "Start debug session"),
             None, enabled=False,
-            disabled_reason=("no local debugger detected (F3b adapter interface only)"
-                             if not available else
-                             "explicit debug adapter not configured"),
+            disabled_reason=(
+                tr_for(self._i18n, "command_palette.no_debugger",
+                       "no local debugger detected (F3b adapter interface only)")
+                if not available else
+                tr_for(self._i18n, "command_palette.no_debug_adapter",
+                       "explicit debug adapter not configured")),
             category="debug"))
         try:
             servers = self._services.lsp_catalog()
@@ -570,17 +649,24 @@ class MainWindow(QMainWindow):
         except Exception:
             lsp_available = False
         actions.append(CommandAction(
-            "lsp-diagnostics", "Refresh LSP diagnostics",
-            lambda: self.statusBar().showMessage(
-                "LSP diagnostics require an installed local server; none started silently.", 6000),
+            "lsp-diagnostics",
+            tr_for(self._i18n, "command_palette.lsp",
+                   "Refresh LSP diagnostics"),
+            lambda: self.statusBar().showMessage(tr_for(
+                self._i18n, "status.lsp_unavailable",
+                "LSP diagnostics require an installed local server; none started silently."), 6000),
             enabled=lsp_available,
-            disabled_reason="no local language server detected",
+            disabled_reason=tr_for(
+                self._i18n, "command_palette.no_lsp",
+                "no local language server detected"),
             category="diagnostics"))
         return actions
 
     def _refresh_ide_panels(self):
         if not self._current_project:
-            self.statusBar().showMessage("Open a project first.", 4000)
+            self.statusBar().showMessage(tr_for(
+                self._i18n, "status.open_project_first",
+                "Open a project first."), 4000)
             return
         self._git_panel.refresh()
         self._problems_panel.refresh()
@@ -588,16 +674,27 @@ class MainWindow(QMainWindow):
     def _run_readonly_doctor(self):
         try:
             settings = self._services.get_runtime_settings()
-            summary = "doctor: database=" + str(settings.get("database_path"))
+            summary = tr_for(
+                self._i18n, "status.doctor_summary",
+                "doctor: database={path}",
+                path=str(settings.get("database_path")))
         except Exception as exc:
-            summary = "doctor: unavailable (" + str(exc) + ")"
-        self.statusBar().showMessage("Read-only " + summary, 8000)
-        self._log_panel.append_log("doctor", "info", "Read-only doctor: " + summary)
+            summary = tr_for(
+                self._i18n, "status.doctor_unavailable",
+                "doctor: unavailable ({error})", error=str(exc))
+        read_only = tr_for(self._i18n, "status.read_only_prefix", "Read-only ")
+        self.statusBar().showMessage(read_only + summary, 8000)
+        self._log_panel.append_log(
+            "doctor", "info",
+            tr_for(self._i18n, "status.doctor_log",
+                   "Read-only doctor: {summary}", summary=summary))
 
     def _show_command_palette(self):
         palette = CommandPalette(self._command_palette_actions(), self)
         palette.triggered.connect(lambda action_id: self._log_panel.append_log(
-            "palette", "info", "Command: " + str(action_id)))
+            "palette", "info", tr_for(
+                self._i18n, "status.command_log", "Command: {id}",
+                id=str(action_id))))
         palette.exec()
 
     def _connect_event_bus(self):
@@ -631,9 +728,12 @@ class MainWindow(QMainWindow):
     @Slot(dict)
     def _on_project_opened(self, project: dict):
         self._current_project = project
-        self._project_label.setText("Opened: " + str(project["name"]))
+        self._project_label.setText(tr_for(
+            self._i18n, "activity.opened", "Opened: {name}",
+            name=str(project["name"])))
         self._projects_panel.set_opened_project(project)
-        self._set_activity("idle", "No active mission")
+        self._set_activity("idle", tr_for(
+            self._i18n, "activity.no_active", "No active mission"))
         facts = self._services.get_project_facts(project["id"])
         self._inspector.show_project(project, facts)
         self._files_panel.set_project(project)
@@ -648,7 +748,10 @@ class MainWindow(QMainWindow):
         self._research_panel.set_project(project)
         self._goals_panel.set_project(project)
         self._update_supervisor_status()
-        self._log_panel.append_log("projects", "info", f"Project opened: {project['name']}")
+        self._log_panel.append_log(
+            "projects", "info",
+            tr_for(self._i18n, "status.project_opened_log",
+                   "Project opened: {name}", name=str(project["name"])))
 
     @Slot(str)
     def _on_file_opened(self, rel_path: str):
@@ -664,14 +767,19 @@ class MainWindow(QMainWindow):
         if self._current_project:
             self._editor_panel.set_project(self._current_project)
             self._editor_panel.open_file(rel_path)
-        self._log_panel.append_log("files", "info", f"Opened file: {rel_path}")
+        self._log_panel.append_log(
+            "files", "info",
+            tr_for(self._i18n, "status.file_opened_log",
+                   "Opened file: {path}", path=rel_path))
 
     @Slot(dict)
     def _on_chat_submitted(self, payload: dict):
         """Persist a chat mission + attachment provenance; never starts a model run."""
         if not self._current_project:
             self._log_panel.append_log(
-                "chat", "warning", "Open a project before submitting a mission.")
+                "chat", "warning",
+                tr_for(self._i18n, "status.open_project_mission",
+                       "Open a project before submitting a mission."))
             return
         text = str(payload.get("text") or "").strip()
         attachment_ids = [int(item) for item in payload.get("attachment_ids") or []
@@ -685,18 +793,23 @@ class MainWindow(QMainWindow):
                 self._services.attach_attachments_to_mission(
                     mission_id, attachment_ids)
         except Exception as exc:  # noqa: BLE001 - GUI boundary
-            self._log_panel.append_log("chat", "error",
-                                       "Mission submit failed: " + str(exc))
+            self._log_panel.append_log(
+                "chat", "error",
+                tr_for(self._i18n, "status.mission_submit_failed",
+                       "Mission submit failed: ") + str(exc))
             return
         self._tasks_panel.refresh()
         self._switch_page("tasks")
-        self.statusBar().showMessage(
-            "Mission #" + str(mission_id) + " created with "
-            + str(len(attachment_ids)) + " attachment(s)", 6000)
+        self.statusBar().showMessage(tr_for(
+            self._i18n, "status.mission_created",
+            "Mission #{mission_id} created with {count} attachment(s)",
+            mission_id=str(mission_id), count=str(len(attachment_ids))), 6000)
         self._log_panel.append_log(
             "chat", "info",
-            "Mission #" + str(mission_id) + " created from chat with "
-            + str(len(attachment_ids)) + " attachment(s) (no model run).")
+            tr_for(self._i18n, "status.mission_created_log",
+                   "Mission #{mission_id} created from chat with {count} "
+                   "attachment(s) (no model run).",
+                   mission_id=str(mission_id), count=str(len(attachment_ids))))
 
     @Slot(int)
     def _on_mission_selected(self, mission_id: int):
@@ -710,7 +823,9 @@ class MainWindow(QMainWindow):
         status = result.get("status", "unknown")
         self._log_panel.append_log(
             "orchestrator", "info" if status == "completed" else "warning",
-            f"Mission #{mission_id} finished: {status}",
+            tr_for(self._i18n, "status.mission_finished_log",
+                   "Mission #{mission_id} finished: {status}",
+                   mission_id=str(mission_id), status=str(status)),
         )
         self._tasks_panel.refresh()
         if mission_id:
@@ -721,9 +836,16 @@ class MainWindow(QMainWindow):
     @Slot(int)
     def _on_audit_requested(self, project_id: int):
         if self._audit_thread and self._audit_thread.isRunning():
-            self._log_panel.append_log("audit", "warning", "Audit already running, please wait.")
+            self._log_panel.append_log(
+                "audit", "warning",
+                tr_for(self._i18n, "status.audit_running",
+                       "Audit already running, please wait."))
             return
-        self._log_panel.append_log("audit", "info", f"Starting audit for project id={project_id}…")
+        self._log_panel.append_log(
+            "audit", "info",
+            tr_for(self._i18n, "status.audit_starting",
+                   "Starting audit for project id={project_id}…",
+                   project_id=str(project_id)))
         self._services.run_audit(project_id)
 
     def _check_ollama(self):
@@ -738,7 +860,10 @@ class MainWindow(QMainWindow):
     @Slot(bool)
     def _on_ollama_result(self, reachable: bool):
         self._ollama_label.setProperty("reachable", "true" if reachable else "false")
-        self._ollama_label.setText("Ollama ●" if reachable else "Ollama ○")
+        self._ollama_label.setText(tr_for(
+            self._i18n, "status.ollama_reachable" if reachable
+            else "status.ollama_unreachable",
+            "Ollama ●" if reachable else "Ollama ○"))
         # Force style refresh (Qt property-based styling needs this)
         self._ollama_label.style().unpolish(self._ollama_label)
         self._ollama_label.style().polish(self._ollama_label)
@@ -753,9 +878,12 @@ class MainWindow(QMainWindow):
             ram = psutil.virtual_memory()
             used_gb = ram.used / 1e9
             total_gb = ram.total / 1e9
-            self._ram_label.setText(f"RAM: {used_gb:.1f}/{total_gb:.0f} GB")
+            self._ram_label.setText(tr_for(
+                self._i18n, "status.ram_usage", "RAM: {used}/{total} GB",
+                used=f"{used_gb:.1f}", total=f"{total_gb:.0f}"))
         except Exception:
-            self._ram_label.setText("RAM: —")
+            self._ram_label.setText(tr_for(
+                self._i18n, "status.ram", "RAM: —"))
 
         try:
             import subprocess
@@ -768,18 +896,26 @@ class MainWindow(QMainWindow):
                 used, total = r.stdout.strip().split(",")
                 used_gb = int(used.strip()) / 1024
                 total_gb = int(total.strip()) / 1024
-                self._vram_label.setText(f"VRAM: {used_gb:.1f}/{total_gb:.0f} GB")
+                self._vram_label.setText(tr_for(
+                    self._i18n, "status.vram_usage",
+                    "VRAM: {used}/{total} GB",
+                    used=f"{used_gb:.1f}", total=f"{total_gb:.0f}"))
             else:
-                self._vram_label.setText("VRAM: —")
+                self._vram_label.setText(tr_for(
+                    self._i18n, "status.vram", "VRAM: —"))
         except Exception:
-            self._vram_label.setText("VRAM: —")
+            self._vram_label.setText(tr_for(
+                self._i18n, "status.vram", "VRAM: —"))
 
         # Tasks count
         from nl_coding_agent.resources.scheduler import get_scheduler
         scheduler = get_scheduler()
         running = sum(1 for t in scheduler.list_tasks() if t.status == "running")
         pending = sum(1 for t in scheduler.list_tasks() if t.status == "pending")
-        self._tasks_label.setText(f"Tasks: {running} running, {pending} pending")
+        self._tasks_label.setText(tr_for(
+            self._i18n, "status.tasks_count",
+            "Tasks: {running} running, {pending} pending",
+            running=str(running), pending=str(pending)))
 
     def _update_supervisor_status(self):
         if self._closing:
@@ -800,20 +936,39 @@ class MainWindow(QMainWindow):
         mission_title = str(mission.get("title") or run.get("mission_title")
                             or status.get("mission_title") or "")
         if run_status in ("running", "active", "starting"):
-            self._set_activity("running", "Current mission: " + (mission_title or "—"))
+            self._activity_mission_title = mission_title
+            self._set_activity("running", tr_for(
+                self._i18n, "activity.current_mission",
+                "Current mission: {title}", title=(mission_title or "—")))
         elif run_status in ("blocked", "failed", "interrupted", "error"):
-            self._set_activity("blocked", "Current mission: " + (mission_title or "—"))
+            self._activity_mission_title = mission_title
+            self._set_activity("blocked", tr_for(
+                self._i18n, "activity.current_mission",
+                "Current mission: {title}", title=(mission_title or "—")))
         elif run_status in ("paused", "pausing"):
-            self._set_activity("paused", "Current mission: " + (mission_title or "—"))
+            self._activity_mission_title = mission_title
+            self._set_activity("paused", tr_for(
+                self._i18n, "activity.current_mission",
+                "Current mission: {title}", title=(mission_title or "—")))
         else:
-            self._set_activity("idle", "No active mission")
+            self._activity_mission_title = ""
+            self._set_activity("idle", tr_for(
+                self._i18n, "activity.no_active", "No active mission"))
 
     def _set_activity(self, state: str, detail: str = "") -> None:
         """Unambiguous selected/opened activity label in the Studio header."""
         if not hasattr(self, "_activity_label"):
             return
         state = str(state or "idle").lower()
-        label = state.upper() + (" · " + detail if detail else "")
+        self._activity_state = state
+        self._activity_detail = str(detail or "")
+        state_key = {"running": "activity.running",
+                     "blocked": "activity.blocked",
+                     "paused": "activity.paused",
+                     "idle": "activity.idle"}.get(state, "activity.idle")
+        state_label = tr_for(self._i18n, state_key, state.upper())
+        label = state_label + (" · " + self._activity_detail
+                               if self._activity_detail else "")
         self._activity_label.setText(label)
         self._activity_label.setProperty("state", state)
         self._activity_label.setToolTip(detail)
