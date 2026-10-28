@@ -428,6 +428,7 @@ class GoalsPanel(QWidget):
         self._tabs.addTab(self._build_milestones_tab(), "Milestones")
         self._tabs.addTab(self._build_missions_tab(), "Missions & Queue")
         self._tabs.addTab(self._build_activity_tab(), "Activity & Decisions")
+        self._tabs.addTab(self._build_tasks_tab(), "Tasks & Active Workers")
         self._tabs.addTab(self._build_versions_tab(), "Plan Versions")
         self._tabs.addTab(self._build_evidence_tab(), "Evidence & Verification")
         self._tabs.addTab(self._build_next_work_tab(), "Next Work")
@@ -506,6 +507,41 @@ class GoalsPanel(QWidget):
         layout.addWidget(self._decisions_view, 1)
         return box
 
+
+
+    def _build_tasks_tab(self) -> QWidget:
+        box = QWidget()
+        box.setAccessibleName("Goal tasks, queue and active workers")
+        layout = QVBoxLayout(box)
+        layout.addWidget(QLabel("Linked mission tasks (read-only; no task is created/started here)"))
+        self._task_table = QTableWidget(0, 5)
+        self._task_table.setHorizontalHeaderLabels(
+            ["ID", "Title", "Status", "Agent role", "Depends on"])
+        self._task_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._task_table.setAccessibleName("Linked mission tasks")
+        layout.addWidget(self._task_table, 1)
+        layout.addWidget(QLabel("Mission queue (read-only state/priority/attempts/lease)"))
+        self._queue_table = QTableWidget(0, 8)
+        self._queue_table.setHorizontalHeaderLabels(
+            ["Mission", "Queue ID", "State", "Priority", "Attempts",
+             "Lease owner", "Created", "Updated"])
+        self._queue_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._queue_table.setAccessibleName("Mission queue entries")
+        layout.addWidget(self._queue_table, 1)
+        layout.addWidget(QLabel("Active supervisor runs/work (read-only)"))
+        self._workers_table = QTableWidget(0, 5)
+        self._workers_table.setHorizontalHeaderLabels(
+            ["ID", "Mode", "Status", "Owner", "Heartbeat"])
+        self._workers_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._workers_table.setAccessibleName("Active supervisor runs and work")
+        layout.addWidget(self._workers_table, 1)
+        refresh = QPushButton("Refresh tasks/queue/workers")
+        refresh.setAccessibleName("Refresh tasks, queue and active workers (read-only)")
+        refresh.setToolTip("Read-only facade refresh; never starts a mission or worker.")
+        refresh.clicked.connect(self._refresh_tasks_workers)
+        layout.addWidget(refresh)
+        return box
+
     def _build_versions_tab(self) -> QWidget:
         box = QWidget()
         layout = QVBoxLayout(box)
@@ -514,7 +550,22 @@ class GoalsPanel(QWidget):
             ["Version", "Current", "Trigger", "Rationale", "Milestone diff"])
         self._versions_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._versions_table.setAccessibleName("Goal plan versions")
+        self._versions_table.itemSelectionChanged.connect(self._on_version_selected)
         layout.addWidget(self._versions_table, 1)
+        approval = QHBoxLayout()
+        self._approval_label = QLabel("Plan approval: no version selected")
+        self._approval_label.setWordWrap(True)
+        self._approval_label.setAccessibleName("Current plan approval state")
+        approval.addWidget(self._approval_label, 1)
+        self._approve_plan_btn = QPushButton("Approve plan…")
+        self._approve_plan_btn.setEnabled(False)
+        self._approve_plan_btn.setAccessibleName("Approve selected goal plan version")
+        self._approve_plan_btn.setToolTip(
+            "Approves the selected/current plan version through the goal facade; "
+            "never executes or creates a mission.")
+        self._approve_plan_btn.clicked.connect(self._confirm_approve_plan)
+        approval.addWidget(self._approve_plan_btn)
+        layout.addLayout(approval)
         self._version_detail = QPlainTextEdit()
         self._version_detail.setReadOnly(True)
         self._version_detail.setAccessibleName("Selected plan version rationale and diff")
@@ -600,14 +651,49 @@ class GoalsPanel(QWidget):
             values = missions.get("missions") or missions.get("links") or []
             self._missions = [dict(item) for item in values if isinstance(item, Mapping)]
             self._missions_state = "loaded"
-        queue = self._adapter_call(("goal_queue", "goal_mission_queue"),
-                                   project_id=project_id, limit=50)
+        queue = self._adapter_call(("goal_queue", "goal_queue_entries",
+                                   "goal_mission_queue"), goal_id=goal_id)
+        if queue is not None and not queue.get("ok"):
+            queue = None
         self._queue = []
         self._queue_state = "not-connected"
         if queue is not None and queue.get("ok"):
-            values = queue.get("queue") or queue.get("items") or queue.get("missions") or []
+            values = queue.get("queue") or queue.get("items") or []
             self._queue = [dict(item) for item in values if isinstance(item, Mapping)]
             self._queue_state = "loaded"
+        tasks = self._adapter_call(("goal_tasks", "goal_mission_tasks"),
+                                   goal_id=goal_id)
+        self._tasks = []
+        self._tasks_state = "not-connected"
+        if tasks is not None and tasks.get("ok"):
+            values = tasks.get("tasks") or tasks.get("items") or []
+            self._tasks = [dict(item) for item in values if isinstance(item, Mapping)]
+            self._tasks_state = "loaded"
+        workers = self._adapter_call(("goal_active_work", "goal_active_workers",
+                                      "goal_workers", "goal_work"), goal_id=goal_id)
+        self._workers = []
+        self._workers_state = "not-connected"
+        if workers is not None and workers.get("ok"):
+            if workers.get("assigned_tasks") or workers.get("supervisor_runs"):
+                merged = []
+                for task in workers.get("assigned_tasks") or []:
+                    if isinstance(task, Mapping):
+                        item = dict(task)
+                        item.setdefault("kind", "task")
+                        item.setdefault("owner", task.get("agent_role"))
+                        merged.append(item)
+                for run in workers.get("supervisor_runs") or []:
+                    if isinstance(run, Mapping):
+                        item = dict(run)
+                        item.setdefault("kind", run.get("mode") or "supervisor")
+                        merged.append(item)
+                self._workers = merged
+            else:
+                values = (workers.get("workers") or workers.get("work")
+                          or workers.get("runs") or workers.get("items") or [])
+                self._workers = [dict(item) for item in values
+                                 if isinstance(item, Mapping)]
+            self._workers_state = "loaded"
         activity = self._adapter_call(("goal_activity",), goal_id=goal_id, limit=50)
         self._activity = []
         self._activity_state = "not-connected"
@@ -638,6 +724,7 @@ class GoalsPanel(QWidget):
         self._outstanding = _as_dict((outstanding or {}).get("outstanding"))
         self._render_missions()
         self._render_activity()
+        self._render_tasks_workers()
         self._render_versions()
         self._render_verifications()
 
@@ -676,6 +763,164 @@ class GoalsPanel(QWidget):
                 + "  " + _text(item.get("event_kind") or item.get("kind") or "activity")
                 + " — " + _text(item.get("message") or item.get("summary") or ""))
 
+    def _render_tasks_workers(self):
+        self._task_table.setRowCount(len(self._tasks))
+        for row, item in enumerate(self._tasks):
+            dependencies = item.get("depends_on") or item.get("dependencies") or []
+            values = [_text(item.get("id") or item.get("task_id")),
+                      _text(item.get("title")), _text(item.get("status")),
+                      _text(item.get("agent_role") or item.get("role")),
+                      ", ".join(str(dep) for dep in dependencies) or "—"]
+            for column, value in enumerate(values):
+                self._task_table.setItem(row, column, QTableWidgetItem(str(value)))
+        if self._tasks_state == "not-connected":
+            self._task_table.setRowCount(1)
+            self._task_table.setSpan(0, 0, 1, 5)
+            self._task_table.setItem(0, 0, QTableWidgetItem(
+                "Tasks are not connected by the goal service."))
+        elif not self._tasks:
+            self._task_table.setRowCount(1)
+            self._task_table.setSpan(0, 0, 1, 5)
+            self._task_table.setItem(0, 0, QTableWidgetItem(
+                "No linked mission tasks in this goal scope."))
+
+        queue = self._queue
+        self._queue_table.setRowCount(len(queue))
+        for row, item in enumerate(queue):
+            mission_id = item.get("mission_id") or item.get("id")
+            values = [_text(mission_id), _text(item.get("queue_id") or "—"),
+                      _text(item.get("queue_state") or item.get("state") or "not_queued"),
+                      _text(item.get("priority") or "—"),
+                      _text(item.get("attempts") or 0)
+                      + ("/" + _text(item.get("max_attempts"))
+                         if item.get("max_attempts") is not None else ""),
+                      _text(item.get("lease_owner") or item.get("owner") or "—"),
+                      _text(item.get("created_at") or "—"),
+                      _text(item.get("updated_at") or "—")]
+            for column, value in enumerate(values):
+                self._queue_table.setItem(row, column, QTableWidgetItem(str(value)))
+        if self._queue_state == "not-connected":
+            self._queue_table.setRowCount(1)
+            self._queue_table.setSpan(0, 0, 1, 8)
+            self._queue_table.setItem(0, 0, QTableWidgetItem(
+                "Mission queue is not connected (read-only)."))
+        elif not queue:
+            self._queue_table.setRowCount(1)
+            self._queue_table.setSpan(0, 0, 1, 8)
+            self._queue_table.setItem(0, 0, QTableWidgetItem(
+                "Queue is empty (nothing is queued/created by this page)."))
+
+        self._workers_table.setRowCount(len(self._workers))
+        for row, item in enumerate(self._workers):
+            values = [_text(item.get("id") or item.get("run_id")
+                            or item.get("worker_id")),
+                      _text(item.get("mode") or item.get("kind") or "—"),
+                      _text(item.get("status") or "unknown"),
+                      _text(item.get("owner") or item.get("owner_id") or "—"),
+                      _text(item.get("heartbeat") or item.get("heartbeat_at")
+                            or item.get("updated_at") or "—")]
+            for column, value in enumerate(values):
+                self._workers_table.setItem(row, column, QTableWidgetItem(str(value)))
+        if self._workers_state == "not-connected":
+            self._workers_table.setRowCount(1)
+            self._workers_table.setSpan(0, 0, 1, 5)
+            self._workers_table.setItem(0, 0, QTableWidgetItem(
+                "Active workers are not connected by the goal service."))
+        elif not self._workers:
+            self._workers_table.setRowCount(1)
+            self._workers_table.setSpan(0, 0, 1, 5)
+            self._workers_table.setItem(0, 0, QTableWidgetItem(
+                "No active supervisor runs/work for this goal."))
+        self._refresh_tasks_workers_controls()
+
+    def _refresh_tasks_workers_controls(self):
+        if not hasattr(self, "_approve_plan_btn"):
+            return
+        has_goal = bool((self._current or {}).get("id"))
+        approve = callable(getattr(self._services, "goal_approve_plan", None))
+        reason = ""
+        if not has_goal:
+            reason = "Select a goal first."
+        elif not approve:
+            reason = "Plan approval is not connected by the goal service."
+        self._approve_plan_btn.setEnabled(
+            not reason or (has_goal and approve))
+        if has_goal and approve and not self._selected_version:
+            self._selected_version = self._versions_current
+        self._approve_plan_btn.setToolTip(
+            "No version selected." if not self._selected_version and not reason
+            else (reason or "Approve the selected/current plan version (confirmation + "
+                            "optional rationale); never executes a mission."))
+
+    def _on_version_selected(self):
+        rows = self._versions_table.selectionModel().selectedRows()
+        if not rows or not (0 <= rows[0].row() < len(self._versions)):
+            self._selected_version = None
+            return
+        item = self._versions[rows[0].row()]
+        self._selected_version = (item.get("version") or item.get("version_id")
+                                  or item.get("id"))
+        self._refresh_tasks_workers_controls()
+
+    def _confirm_approve_plan(self):
+        from PySide6.QtWidgets import QInputDialog, QMessageBox
+        version = self._selected_version or self._versions_current
+        answer = QMessageBox.question(
+            self, "Approve goal plan",
+            "Approve plan version " + _text(version) + "?\n\n"
+            "This records approval only; it never executes work or creates a mission.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        rationale, ok = QInputDialog.getText(
+            self, "Plan approval rationale", "Optional rationale:")
+        self._approve_plan(version, rationale if ok else "")
+
+    def _approve_plan(self, version=None, rationale: str = "") -> bool:
+        goal = self._current or {}
+        goal_id = goal.get("id")
+        method = None
+        for name in ("goal_approve_plan", "approve_plan"):
+            fn = getattr(self._services, name, None)
+            if callable(fn):
+                method = fn
+                break
+        if goal_id is None:
+            self._status_label.setText("Approve unavailable: select a goal first.")
+            return False
+        if method is None:
+            self._status_label.setText(
+                "Approve unavailable: plan approval is not connected.")
+            return False
+        version = version if version is not None else self._selected_version
+        try:
+            result = _as_dict(method(int(goal_id), version=version,
+                                     rationale=str(rationale or "").strip()))
+        except TypeError:
+            try:
+                result = _as_dict(method(int(goal_id), version=version))
+            except Exception as exc:  # noqa: BLE001
+                self._status_label.setText("Approve failed: " + _text(exc))
+                return False
+        except Exception as exc:  # noqa: BLE001
+            self._status_label.setText("Approve failed: " + _text(exc))
+            return False
+        if not result.get("ok"):
+            self._approval_label.setText(
+                "Plan approval refused: " + _text(result.get("error") or "unknown error"))
+            return False
+        approved = result.get("approved_version") or result.get("version") or version
+        idempotent = bool(result.get("idempotent"))
+        self._load_goal(goal)
+        self._approval_label.setText(
+            "Plan approval: version " + _text(approved) + " approved"
+            + (" (already approved)" if idempotent else "")
+            + ((" — " + _text(rationale).strip()) if str(rationale or "").strip() else ""))
+        self._status_label.setText(
+            "Plan approved through the goal facade; no mission was created or executed.")
+        return True
+
     def _render_versions(self):
         versions = self._versions
         self._versions_table.setRowCount(len(versions))
@@ -693,7 +938,26 @@ class GoalsPanel(QWidget):
                       _text(item.get("trigger") or "—"),
                       _text(item.get("rationale") or "—"), diff_text or "—"]
             for column, value in enumerate(values):
-                self._versions_table.setItem(row, column, QTableWidgetItem(str(value)))
+                cell = QTableWidgetItem(str(value))
+                if column == 0:
+                    cell.setData(Qt.ItemDataRole.UserRole, number)
+                self._versions_table.setItem(row, column, cell)
+        approved_version = None
+        for item in versions:
+            if item.get("approved") or item.get("is_approved"):
+                approved_version = (item.get("version") or item.get("version_id")
+                                    or item.get("id"))
+                break
+        if approved_version is not None:
+            self._approval_label.setText(
+                "Plan approval: version " + _text(approved_version) + " approved.")
+        elif versions:
+            self._approval_label.setText("Plan approval: no approved version yet.")
+        else:
+            self._approval_label.setText("Plan approval: no plan version available.")
+        if not self._selected_version:
+            self._selected_version = self._versions_current
+        self._refresh_tasks_workers_controls()
         if self._versions_state == "not-connected":
             self._version_detail.setPlainText(
                 "Plan versions are not connected by the goal service.")
@@ -704,6 +968,13 @@ class GoalsPanel(QWidget):
                 "Current version: " + _text(self._versions_current)
                 + "\nSelect/replan to review rationale, trigger and milestone diffs. "
                   "This view is read-only; replanning is explicit.")
+
+    def _refresh_tasks_workers(self):
+        """Read-only facade refresh for tasks/queue/workers; never starts work."""
+        if self._current and self._project:
+            self._load_goal(self._current)
+        else:
+            self._status_label.setText("Select a goal to refresh tasks and workers.")
 
     def _render_verifications(self):
         self._criteria_table.setRowCount(0)
@@ -757,6 +1028,11 @@ class GoalsPanel(QWidget):
         self._activity = []
         self._versions = []
         self._versions_current = None
+        self._selected_version = None
+        self._tasks: list[dict] = []
+        self._workers: list[dict] = []
+        self._tasks_state = "not-connected"
+        self._workers_state = "not-connected"
         self._verifications = []
         self._outstanding = {}
         self._missions_state = "not-connected"
@@ -790,6 +1066,11 @@ class GoalsPanel(QWidget):
         self._activity_list.clear()
         self._versions_table.setRowCount(0)
         self._version_detail.setPlainText("No plan versions.")
+        self._task_table.setRowCount(0)
+        self._queue_table.setRowCount(0)
+        self._workers_table.setRowCount(0)
+        self._approval_label.setText("Plan approval: no version selected")
+        self._approve_plan_btn.setEnabled(False)
         self._criteria_table.setRowCount(0)
         self._verification_status.setText("No verification report loaded.")
         self._verification_blockers.setPlainText("")

@@ -99,7 +99,7 @@ def test_goals_panel_exposes_all_sections_without_project():
     panel = GoalsPanel(SimpleNamespace())
     assert [panel._tabs.tabText(i) for i in range(panel._tabs.count())] == [
         "Overview", "Milestones", "Missions & Queue", "Activity & Decisions",
-        "Plan Versions", "Evidence & Verification", "Next Work"]
+        "Tasks & Active Workers", "Plan Versions", "Evidence & Verification", "Next Work"]
     assert panel._create_btn.isEnabled() is False
     assert panel._verify_btn.isEnabled() is False
     assert panel._replan_btn.isEnabled() is False

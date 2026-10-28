@@ -82,6 +82,15 @@ class FakeGoalServices:
         self.mission_items = [{"mission_id": 5, "title": "Existing mission",
                                "status": "completed", "role": "primary"}]
         self.queue_items = []
+        self.task_items = [{"id": 41, "title": "Task one", "status": "active",
+                            "agent_role": "developer", "depends_on": [40]}]
+        self.worker_items = [{"id": 9, "mode": "flow", "status": "running",
+                              "owner": "supervisor-1", "heartbeat": "2026-01-03"}]
+        self.approve_calls = []
+        self.approve_result = {"ok": True, "version": 2, "approved_version": 2,
+                               "idempotent": False}
+        self.tasks_result = {"ok": True, "tasks": self.task_items}
+        self.workers_result = {"ok": True, "workers": self.worker_items}
         self.verification_records = [{"id": 7, "verdict": "verified",
                                       "created_at": "2026-01-02",
                                       "criteria": [{"criterion_id": "AC-1",
@@ -136,8 +145,19 @@ class FakeGoalServices:
     def goal_missions(self, goal_id):
         return {"ok": True, "missions": [dict(item) for item in self.mission_items]}
 
-    def goal_queue(self, project_id=None, limit=50):
-        return {"ok": True, "queue": [dict(item) for item in self.queue_items]}
+    def goal_queue(self, goal_id=None, project_id=None, limit=50):
+        return {"ok": True, "queue": [dict(item) for item in self.queue_items],
+                "missions": [dict(item) for item in self.mission_items]}
+
+    def goal_tasks(self, goal_id):
+        return dict(self.tasks_result)
+
+    def goal_active_workers(self, goal_id):
+        return dict(self.workers_result)
+
+    def goal_approve_plan(self, goal_id, version=None, rationale=""):
+        self.approve_calls.append((goal_id, version, rationale))
+        return dict(self.approve_result)
 
     def goal_activity(self, goal_id, limit=50):
         return {"ok": True, "activity": [dict(item) for item in self.activity_items]}
@@ -372,7 +392,7 @@ def test_missions_queue_activity_versions_and_evidence_sections():
     _app()
     panel, fake = make_panel()
     select_goal(panel, 1)
-    assert panel._tabs.count() == 7
+    assert panel._tabs.count() == 8
     assert panel._missions_list.count() == 1
     assert "Mission 5" in panel._missions_list.item(0).text()
     assert "role: primary" in panel._missions_list.item(0).text()
@@ -387,6 +407,84 @@ def test_missions_queue_activity_versions_and_evidence_sections():
     assert "verified" in panel._verification_status.text()
     assert fake.verify_calls == []
 
+
+
+
+def test_tasks_queue_workers_and_approval_sections():
+    _app()
+    panel, fake = make_panel()
+    select_goal(panel, 1)
+    assert panel._tabs.count() == 8
+    assert panel._tabs.tabText(4) == "Tasks & Active Workers"
+    assert panel._task_table.rowCount() == 1
+    assert panel._task_table.item(0, 0).text() == "41"
+    assert panel._task_table.item(0, 1).text() == "Task one"
+    assert panel._task_table.item(0, 3).text() == "developer"
+    assert panel._task_table.item(0, 4).text() == "40"
+    assert panel._workers_table.rowCount() == 1
+    assert panel._workers_table.item(0, 0).text() == "9"
+    assert panel._workers_table.item(0, 2).text() == "running"
+    assert panel._workers_table.item(0, 3).text() == "supervisor-1"
+    assert panel._queue_table.rowCount() == 1
+    assert "empty" in panel._queue_table.item(0, 0).text().lower()
+    fake.queue_items = [{"mission_id": 5, "queue_id": 3, "queue_state": "READY",
+                         "priority": 1, "attempts": 2, "max_attempts": 3,
+                         "lease_owner": "worker-1", "created_at": "2026-01-01",
+                         "updated_at": "2026-01-02"}]
+    panel._load_goal(panel._current)
+    assert panel._queue_table.rowCount() == 1
+    assert panel._queue_table.item(0, 2).text() == "READY"
+    assert panel._queue_table.item(0, 4).text() == "2/3"
+    assert panel._queue_table.item(0, 5).text() == "worker-1"
+    assert panel._queue_table.item(0, 6).text() == "2026-01-01"
+    assert panel._approve_plan_btn.isEnabled() is True
+    assert panel._approve_plan_btn.accessibleName() == "Approve selected goal plan version"
+    assert panel._version_detail.isReadOnly() is True
+
+
+def test_empty_and_not_connected_task_worker_states():
+    _app()
+    panel, fake = make_panel()
+    select_goal(panel, 1)
+    fake.tasks_result = {"ok": True, "tasks": []}
+    fake.workers_result = {"ok": True, "workers": []}
+    panel._load_goal(panel._current)
+    assert "No linked mission tasks" in panel._task_table.item(0, 0).text()
+    assert "No active supervisor" in panel._workers_table.item(0, 0).text()
+
+    fake.goal_tasks = None
+    fake.goal_active_workers = None
+    panel._load_goal(panel._current)
+    assert "not connected" in panel._task_table.item(0, 0).text().lower()
+    assert "not connected" in panel._workers_table.item(0, 0).text().lower()
+
+
+def test_plan_approval_success_refusal_idempotent_and_selected_version():
+    _app()
+    panel, fake = make_panel()
+    select_goal(panel, 1)
+    assert panel._approve_plan(2, "reviewed") is True
+    assert fake.approve_calls == [(1, 2, "reviewed")]
+    assert "approved" in panel._approval_label.text().lower()
+    assert "no mission" in panel._status_label.text().lower()
+    fake.approve_result = {"ok": True, "version": 1, "approved_version": 1,
+                           "idempotent": True}
+    assert panel._approve_plan(1, "") is True
+    assert "already approved" in panel._approval_label.text()
+    fake.approve_result = {"ok": False, "error": "plan approval refused"}
+    assert panel._approve_plan(2, "") is False
+    assert "refused" in panel._approval_label.text().lower()
+
+
+def test_approve_disabled_without_facade_or_goal():
+    _app()
+    from types import SimpleNamespace
+    from nl_coding_agent.gui.widgets.goals_panel import GoalsPanel
+    offline = GoalsPanel(SimpleNamespace())
+    assert offline._approve_plan_btn.isEnabled() is False
+    offline.set_project({"id": 1, "name": "P"})
+    assert offline._approve_plan_btn.isEnabled() is False
+    assert offline._approve_plan(2, "r") is False
 
 def test_replan_dialog_validation_success_diff_and_failure():
     _app()

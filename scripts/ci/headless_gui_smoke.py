@@ -49,7 +49,11 @@ def run(report_dir: Path | None = None) -> dict:
             "ide_page": window._page_index.get("ide") == 8,
             "research_page": window._page_index.get("research") == 9,
             "goals_page": window._page_index.get("goals") == 10,
-            "goals_sections_7": window._goals_panel._tabs.count() == 7,
+            "goals_sections_8": window._goals_panel._tabs.count() == 8,
+            "goals_tasks_controls": bool(window._goals_panel._task_table.accessibleName())
+                                    and bool(window._goals_panel._workers_table.accessibleName()),
+            "goals_approval_control": window._goals_panel._approve_plan_btn is not None
+                                      and bool(window._goals_panel._approve_plan_btn.accessibleName()),
             "goals_actions": bool(window._goals_panel._verify_btn.accessibleName())
                               and bool(window._goals_panel._replan_btn.accessibleName())
                               and bool(window._goals_panel._complete_btn.accessibleName()),
