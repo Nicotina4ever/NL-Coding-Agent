@@ -1809,6 +1809,127 @@ class AppServices:
         })
         return payload
 
+    # ------------------------------------------------------ document planning
+    @staticmethod
+    def _document_plan_error(exc: Exception) -> dict:
+        from nl_coding_agent.core import doc_planning
+        mapping = {"DocPlanValidationError": "validation",
+                   "DocPlanNotFoundError": "not_found",
+                   "DocPlanLifecycleError": "lifecycle"}
+        code = mapping.get(type(exc).__name__, "error")
+        return {"ok": False, "outcome": code,
+                "error": {"code": code, "type": type(exc).__name__,
+                          "message": str(exc)}, "executed": False}
+
+    def _document_plan_corpus(self, *, project_root=None, corpus=None,
+                             documents=None, paths=None, consent=True):
+        if corpus is not None or documents is not None:
+            return corpus if corpus is not None else {"documents": documents or []}
+        if not project_root:
+            raise ValueError("project_root or corpus is required for plan generation")
+        from nl_coding_agent.core.document_corpus import DocumentCorpus
+        root = Path(str(project_root)).expanduser().resolve()
+        if not root.is_dir():
+            raise ValueError("project root does not exist: " + str(root))
+        configured = getattr(self, "_document_ingest_config", {}) or {}
+        corpus_limits = self._document_ingest_limits(None)
+        files, folders = [], []
+        for item in paths or []:
+            path = Path(str(item)).expanduser().resolve()
+            if path.is_file():
+                files.append(path)
+            elif path.is_dir():
+                folders.append(path)
+            else:
+                raise ValueError("document path does not exist: " + str(path))
+        if not consent:
+            return DocumentCorpus(corpus_limits,
+                                  extractor=configured.get("extractor")).discover(
+                consent=False, project_roots=[root])
+        return DocumentCorpus(
+            corpus_limits, extractor=configured.get("extractor")).discover(
+            consent=True, project_roots=[root], explicit_files=files,
+            explicit_folders=folders)
+
+    def docs_plan_generate(self, *, project_root=None, corpus=None,
+                           documents=None, paths=None, title=None,
+                           objective=None, project_id=None,
+                           consent=True, persist=True) -> dict:
+        try:
+            from nl_coding_agent.core.doc_planning import generate_plan
+            corpus_value = self._document_plan_corpus(
+                project_root=project_root, corpus=corpus,
+                documents=documents, paths=paths, consent=consent)
+            plan = generate_plan(
+                corpus_value, project_root=project_root, title=title,
+                objective=objective, project_id=project_id,
+                persist=persist)
+        except Exception as exc:  # noqa: BLE001
+            return self._document_plan_error(exc)
+        return {"ok": True, "plan": plan,
+                "plan_id": plan.get("plan_id"),
+                "version": plan.get("version"),
+                "plan_hash": plan.get("plan_hash"),
+                "status": plan.get("status"), "untrusted": True,
+                "executed": False}
+
+    def docs_plan_list(self, *, project_id=None, project_root=None,
+                       status=None, limit=100) -> dict:
+        try:
+            from nl_coding_agent.core.doc_planning import list_plans
+            plans = list_plans(project_id=project_id, project_root=project_root,
+                               status=status, limit=limit)
+        except Exception as exc:  # noqa: BLE001
+            return self._document_plan_error(exc)
+        return {"ok": True, "plans": plans, "total": len(plans)}
+
+    def docs_plan_get(self, plan_id: int) -> dict:
+        try:
+            from nl_coding_agent.core.doc_planning import get_plan
+            plan = get_plan(plan_id, include_versions=True)
+        except Exception as exc:  # noqa: BLE001
+            return self._document_plan_error(exc)
+        return {"ok": True, "plan": plan}
+
+    def docs_plan_versions(self, plan_id: int) -> dict:
+        try:
+            from nl_coding_agent.core.doc_planning import get_plan, list_plan_versions
+            get_plan(plan_id, include_versions=False)
+            versions = list_plan_versions(plan_id)
+        except Exception as exc:  # noqa: BLE001
+            return self._document_plan_error(exc)
+        return {"ok": True, "versions": versions, "total": len(versions)}
+
+    def docs_plan_edit(self, plan_id: int, milestones, rationale: str,
+                       *, title=None, objective=None) -> dict:
+        try:
+            from nl_coding_agent.core.doc_planning import edit_plan
+            result = edit_plan(plan_id, milestones, rationale,
+                               title=title, objective=objective)
+        except Exception as exc:  # noqa: BLE001
+            return self._document_plan_error(exc)
+        return {"ok": True, **result, "untrusted": True, "executed": False}
+
+    def docs_plan_approve(self, plan_id: int, version=None, *,
+                          reason: str, approver: str = "user") -> dict:
+        try:
+            from nl_coding_agent.core.doc_planning import approve_plan
+            result = approve_plan(plan_id, version, rationale=reason,
+                                  approver=approver)
+        except Exception as exc:  # noqa: BLE001
+            return self._document_plan_error(exc)
+        return {"ok": True, **result, "executed": False}
+
+    def docs_plan_reject(self, plan_id: int, version=None, *,
+                         reason: str, rejected_by: str = "user") -> dict:
+        try:
+            from nl_coding_agent.core.doc_planning import reject_plan
+            result = reject_plan(plan_id, version, rationale=reason,
+                                 rejected_by=rejected_by)
+        except Exception as exc:  # noqa: BLE001
+            return self._document_plan_error(exc)
+        return {"ok": True, **result, "executed": False}
+
     # ---------------------------------------------------------------- goals
     def _goal_service(self):
         with self._goal_lock:

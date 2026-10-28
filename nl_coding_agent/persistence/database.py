@@ -448,6 +448,43 @@ CREATE TABLE IF NOT EXISTS doc_reconciliation_runs (
 );
 CREATE INDEX IF NOT EXISTS idx_doc_reconciliation_runs_project
     ON doc_reconciliation_runs(project_id, id DESC);
+
+-- Stage-8 document planning D4: generated plans and immutable version snapshots.
+CREATE TABLE IF NOT EXISTS document_plans (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id      INTEGER,
+    project_root    TEXT NOT NULL DEFAULT '',
+    title           TEXT NOT NULL,
+    objective       TEXT NOT NULL DEFAULT '',
+    status          TEXT NOT NULL DEFAULT 'draft',
+    current_version INTEGER NOT NULL DEFAULT 1,
+    plan_hash       TEXT NOT NULL,
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS document_plan_versions (
+    id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id                  INTEGER NOT NULL REFERENCES document_plans(id) ON DELETE CASCADE,
+    version                  INTEGER NOT NULL,
+    milestones_json          TEXT NOT NULL DEFAULT '[]',
+    acceptance_criteria_json TEXT NOT NULL DEFAULT '[]',
+    provenance_json          TEXT NOT NULL DEFAULT '[]',
+    risks_json               TEXT NOT NULL DEFAULT '[]',
+    blockers_json            TEXT NOT NULL DEFAULT '[]',
+    limitations_json         TEXT NOT NULL DEFAULT '[]',
+    unknowns_json            TEXT NOT NULL DEFAULT '[]',
+    rationale                TEXT NOT NULL DEFAULT '',
+    diff_json                TEXT NOT NULL DEFAULT '{}',
+    plan_hash                TEXT NOT NULL,
+    approved_by              TEXT,
+    approved_at              TEXT,
+    rejected_by              TEXT,
+    rejected_at              TEXT,
+    created_at               TEXT NOT NULL,
+    UNIQUE(plan_id, version)
+);
+CREATE INDEX IF NOT EXISTS idx_document_plans_project
+    ON document_plans(project_id, id DESC);
 """
 
 # Columns added after the first operational baseline.  Migrations are additive

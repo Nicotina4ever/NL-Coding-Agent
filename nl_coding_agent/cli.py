@@ -1340,12 +1340,147 @@ def _dispatch_goal_with(args, services) -> int:
     return 2
 
 
+def _docs_plan_inputs(args):
+    path = getattr(args, "file", None)
+    if not path:
+        print("ERROR: --file is required (use - for stdin)", file=sys.stderr)
+        return None, 2
+    if path == "-":
+        raw = sys.stdin.read()
+    else:
+        target = Path(path).expanduser()
+        if not target.is_file():
+            print("ERROR: plan file not found: " + str(target), file=sys.stderr)
+            return None, 2
+        raw = target.read_text(encoding="utf-8")
+    try:
+        data = json.loads(raw)
+    except ValueError as exc:
+        print("ERROR: plan JSON is invalid: " + str(exc), file=sys.stderr)
+        return None, 2
+    if isinstance(data, dict):
+        milestones = data.get("milestones")
+        title = data.get("title")
+        objective = data.get("objective")
+    else:
+        milestones, title, objective = data, None, None
+    if not isinstance(milestones, list):
+        print("ERROR: plan JSON must be a milestone list or {milestones:[...]}",
+              file=sys.stderr)
+        return None, 2
+    return {"milestones": milestones, "title": title, "objective": objective}, 0
+
+
+def _docs_plan_emit(result: dict, as_json: bool, text_lines) -> int:
+    if as_json:
+        print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+    elif result.get("ok"):
+        for line in (text_lines() if callable(text_lines) else text_lines or []):
+            print(line)
+    if not result.get("ok"):
+        error = result.get("error") or {}
+        print("ERROR [" + str(error.get("code") or "error") + "]: "
+              + str(error.get("message") or error), file=sys.stderr)
+        return 1
+    return 0
+
+
+def _dispatch_doc_planning(args) -> int:
+    command = str(getattr(args, "docs_command", "") or "")
+    as_json = bool(getattr(args, "json", False))
+    from nl_coding_agent.app.services import AppServices
+    services = AppServices()
+    try:
+        if command == "plan":
+            result = services.docs_plan_generate(
+                project_root=(getattr(args, "project_positional", None)
+                              or getattr(args, "project", None) or "."),
+                paths=list(getattr(args, "path", None) or []),
+                title=getattr(args, "title", None),
+                objective=getattr(args, "objective", None),
+                consent=True, persist=True)
+            plan = result.get("plan") or {}
+            return _docs_plan_emit(result, as_json, lambda: [
+                "Document plan #" + str(plan.get("plan_id")) + " v"
+                + str(plan.get("version")) + " [" + str(plan.get("status")) + "]",
+                "Title: " + str(plan.get("title")),
+                "Objective: " + str(plan.get("objective")),
+                "Milestones: " + str(len(plan.get("milestones") or [])),
+                "Acceptance criteria: " + str(len(plan.get("acceptance_criteria") or [])),
+                "Risks: " + str(len(plan.get("risks") or []))
+                + " blockers: " + str(len(plan.get("blockers") or [])),
+                "Plan hash: " + str(plan.get("plan_hash")),
+                "UNTRUSTED document-derived plan; approval does not execute anything.",
+            ])
+        if command == "plans":
+            plan_id = getattr(args, "plan_id", None)
+            if plan_id is not None:
+                result = services.docs_plan_get(plan_id)
+                plan = result.get("plan") or {}
+                return _docs_plan_emit(result, as_json, lambda: [
+                    "Document plan #" + str(plan.get("id")) + " ["
+                    + str(plan.get("status")) + "] v"
+                    + str(plan.get("current_version")),
+                    "Title: " + str(plan.get("title")),
+                    "Objective: " + str(plan.get("objective")),
+                    "Versions: " + str(plan.get("versions_count")),
+                ])
+            result = services.docs_plan_list(
+                project_root=getattr(args, "project", None),
+                status=getattr(args, "status", None),
+                limit=getattr(args, "limit", 100))
+            plans = result.get("plans") or []
+            return _docs_plan_emit(result, as_json, lambda: (
+                ["No document plans."] if not plans else [
+                    "#" + str(item.get("id")) + " [" + str(item.get("status"))
+                    + "] v" + str(item.get("current_version")) + " "
+                    + str(item.get("title")) for item in plans]))
+        if command == "plan-edit":
+            payload, code = _docs_plan_inputs(args)
+            if payload is None:
+                return code
+            result = services.docs_plan_edit(
+                args.plan_id, payload["milestones"],
+                getattr(args, "reason", ""),
+                title=payload.get("title"), objective=payload.get("objective"))
+            return _docs_plan_emit(result, as_json, lambda: [
+                "Document plan #" + str(args.plan_id) + " edited to version "
+                + str(result.get("version")) + " [draft]",
+                "Diff: " + json.dumps(result.get("diff") or {}, sort_keys=True),
+            ])
+        if command == "plan-approve":
+            result = services.docs_plan_approve(
+                args.plan_id, getattr(args, "version", None),
+                reason=getattr(args, "reason", ""),
+                approver=getattr(args, "approver", "user") or "user")
+            return _docs_plan_emit(result, as_json, lambda: [
+                "Document plan #" + str(args.plan_id) + " approved version "
+                + str(result.get("version"))
+                + (" (already approved)" if result.get("already_approved") else "")
+                + "; approval does not execute or start missions."])
+        if command == "plan-reject":
+            result = services.docs_plan_reject(
+                args.plan_id, getattr(args, "version", None),
+                reason=getattr(args, "reason", ""),
+                rejected_by=getattr(args, "rejected_by", "user") or "user")
+            return _docs_plan_emit(result, as_json, lambda: [
+                "Document plan #" + str(args.plan_id) + " rejected version "
+                + str(result.get("version"))
+                + (" (already rejected)" if result.get("already_rejected") else "")])
+        print("ERROR: unknown docs command: " + command, file=sys.stderr)
+        return 2
+    finally:
+        try:
+            services._db.close()
+        except Exception:
+            pass
+
+
 def _dispatch_docs(args) -> int:
-    """Read-only document ingestion; docs are untrusted data and never executed."""
+    """Document ingestion and document-derived plan lifecycle (no execution)."""
     command = getattr(args, "docs_command", None)
     if command != "ingest":
-        print("ERROR: unknown docs command: " + str(command), file=sys.stderr)
-        return 2
+        return _dispatch_doc_planning(args)
     from nl_coding_agent.app.services import AppServices
     services = AppServices()
     try:
@@ -1679,7 +1814,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Document ingestion command (read-only; no model/network by default)
     docs_p = sub.add_parser(
-        "docs", help="Read-only document ingestion; docs are UNTRUSTED and never executed")
+        "docs", help="Document ingestion/planning; docs are UNTRUSTED and never executed")
     doc_sub = docs_p.add_subparsers(dest="docs_command", required=True)
     ingest_p = doc_sub.add_parser(
         "ingest",
@@ -1701,6 +1836,53 @@ def main(argv: list[str] | None = None) -> int:
     ingest_p.add_argument("--git-ref", default=None,
                           help="Read documentation at a pinned Git ref")
     ingest_p.add_argument("--json", action="store_true", help="JSON summary output")
+
+    plan_p = doc_sub.add_parser(
+        "plan", help="Generate a document-derived draft plan (untrusted; no execution)",
+        description="Generate a deterministic Goal-style draft plan from documentation. "
+                    "Content is UNTRUSTED and derived only from documents; generation "
+                    "never executes commands, starts missions or calls a model.")
+    plan_p.add_argument("project_positional", nargs="?", default=None,
+                        help="Project folder (alternative to --project)")
+    plan_p.add_argument("--project", default=".",
+                        help="Project folder (default: current directory)")
+    plan_p.add_argument("--path", action="append", default=[],
+                        help="Extra documentation file/folder (repeatable)")
+    plan_p.add_argument("--title", default=None)
+    plan_p.add_argument("--objective", default=None)
+    plan_p.add_argument("--json", action="store_true")
+
+    plans_p = doc_sub.add_parser(
+        "plans", help="List or show document plans (read-only)")
+    plans_p.add_argument("plan_id", nargs="?", type=int, default=None)
+    plans_p.add_argument("--project", default=None)
+    plans_p.add_argument("--status", default=None)
+    plans_p.add_argument("--limit", type=int, default=100)
+    plans_p.add_argument("--json", action="store_true")
+
+    edit_p = doc_sub.add_parser(
+        "plan-edit", help="Create a new draft plan version from JSON (reason required)")
+    edit_p.add_argument("plan_id", type=int)
+    edit_p.add_argument("--file", default=None,
+                        help="JSON milestone list or {milestones:[...]}; - for stdin")
+    edit_p.add_argument("--reason", required=True)
+    edit_p.add_argument("--json", action="store_true")
+
+    approve_p = doc_sub.add_parser(
+        "plan-approve", help="Approve the current document plan version (metadata only)")
+    approve_p.add_argument("plan_id", type=int)
+    approve_p.add_argument("--version", type=int, default=None)
+    approve_p.add_argument("--reason", required=True)
+    approve_p.add_argument("--approver", default="user")
+    approve_p.add_argument("--json", action="store_true")
+
+    reject_p = doc_sub.add_parser(
+        "plan-reject", help="Reject the current document plan version")
+    reject_p.add_argument("plan_id", type=int)
+    reject_p.add_argument("--version", type=int, default=None)
+    reject_p.add_argument("--reason", required=True)
+    reject_p.add_argument("--rejected-by", default="user")
+    reject_p.add_argument("--json", action="store_true")
     # GUI subcommand
     sub.add_parser("gui")
 
