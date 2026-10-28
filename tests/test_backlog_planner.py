@@ -334,7 +334,10 @@ class GoalTests(PlannerTestCase):
         self.assertIn("Program stage 2: Supervisor", goal)
         self.assertIn("Area: autonomy; Priority: P1", goal)
         self.assertIn("- second works", goal)
-        self.assertIn("- spec-2", goal)
+        self.assertIn("Implementation requirement", goal)
+        self.assertIn("documentation-only or comment-only change does not satisfy", goal)
+        self.assertNotIn("Source references", goal)
+        self.assertNotIn("spec-2", goal)
         self.assertIn("nothing is live until promotion", goal)
         self.assertEqual(goal, B.compose_mission_goal(requirement, stage))
 

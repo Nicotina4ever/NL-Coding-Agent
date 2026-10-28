@@ -605,12 +605,18 @@ def compose_mission_goal(requirement: BacklogRequirement, stage: ProgramStage) -
         lines.append(
             "- (no explicit acceptance gates recorded; derive verifiable checks from the source references)"
         )
-    lines.extend(["", "Source references (read on demand, do not paste the whole blueprint):"])
-    if requirement.source_refs:
-        lines.extend("- " + reference for reference in requirement.source_refs)
-    else:
-        lines.append("- (none recorded)")
+    # Source references are deliberately NOT included in the goal: they are
+    # read-only pointers (often specification paths). Including them let the
+    # orchestrator derive a documentation-only write scope and models emitted
+    # docs-only candidates that passed verification trivially (SH-07 Tier B #1).
     lines.extend([
+        "",
+        "Reference material: consult the blueprint and specifications on demand; source references",
+        "are read-only and must not be created or modified as the deliverable.",
+        "",
+        "Implementation requirement: the deliverable is working code and tests that satisfy the",
+        "acceptance gates. A documentation-only or comment-only change does not satisfy this",
+        "requirement.",
         "",
         "Scope: implement the smallest verifiable change that satisfies the gates.",
         "Do not perform destructive actions, installs, network access or cloud calls.",

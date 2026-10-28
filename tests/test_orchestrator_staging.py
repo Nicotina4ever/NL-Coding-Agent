@@ -416,3 +416,33 @@ def test_human_edit_during_review_blocks_cas_promotion(project, mission_env):
     assert json.loads(mission["changed_paths"]) == []
     assert Path(mission["staging_dir"]).is_dir()
     assert not (mission_env / "recovery" / f"{mission_id}.json").exists()
+
+
+def test_documentation_only_candidate_is_blocked_for_requirement_mission(project, mission_env):
+    """SH-07 Tier B #1 regression: docs-only candidates must not satisfy functional requirements."""
+    project_row = open_project(project)
+    goal = "Update docs/notes.md with a summary of durable mission persistence."
+    mission_id = create_mission(
+        project_row["id"],
+        "NL-BP-051 Durable mission persistence",
+        goal,
+        requirement_id="NL-BP-051",
+    )
+    live_doc = project / "docs" / "notes.md"
+    orch = MultiAgentOrchestrator(project)
+    install_fake(
+        orch,
+        {
+            MODEL_DEVELOPER: [write_block("docs/notes.md", "# Notes\n\nNothing implemented.\n")],
+            MODEL_REVIEWER: ["APPROVE\n"],
+        },
+    )
+
+    result = orch.run_mission(mission_id)
+
+    assert result["status"] == "blocked", result
+    assert "Documentation-only candidate rejected" in result["error"]
+    assert not live_doc.exists()
+    mission = get_mission(mission_id)
+    assert mission["status"] == "blocked"
+    assert Path(mission["staging_dir"]).is_dir()

@@ -82,6 +82,28 @@ class VerificationError(RuntimeError):
     """Raised when automated verification cannot be made to pass."""
 
 
+#: Candidate files that count as implementation evidence for a functional
+#: requirement. Documentation-only candidates are rejected before promotion.
+_IMPLEMENTATION_SUFFIXES = (
+    ".py", ".pyi", ".toml", ".yaml", ".yml", ".json", ".ini", ".cfg",
+    ".bat", ".ps1", ".sh", ".js", ".mjs", ".ts", ".tsx", ".css", ".qss",
+)
+_IMPLEMENTATION_PREFIXES = ("tests/", "scripts/", "nl_coding_agent/", "installer/")
+_DOCUMENTATION_REQUIREMENT_TOKENS = ("documentation", "docs-only", "readme", "policy document")
+
+
+def is_implementation_path(rel_path: str) -> bool:
+    """True when a changed path is code/test/config evidence, not a Markdown doc."""
+    rel = str(rel_path or "").replace("\\", "/").lstrip("./").lower()
+    if not rel:
+        return False
+    if rel.endswith(".md") or rel.endswith(".rst") or rel.endswith(".txt"):
+        return False
+    if rel.endswith(_IMPLEMENTATION_SUFFIXES):
+        return True
+    return rel.startswith(_IMPLEMENTATION_PREFIXES)
+
+
 def _truncate(text: str, limit: int = 20_000) -> str:
     text = text or ""
     if len(text) <= limit:
@@ -477,6 +499,27 @@ class MultiAgentOrchestrator:
         if verdict["valid"]:
             self._save_promotion_status(stage.mission_id, "validated")
         return verdict
+
+    def _assert_implementation_candidate(self, mission_id: int, stage: promotion.Stage) -> None:
+        """Reject documentation-only candidates for functional backlog requirements."""
+        mission = get_mission(mission_id) or {}
+        requirement_id = mission.get("requirement_id")
+        if not requirement_id:
+            return
+        title = str(mission.get("title") or "").lower()
+        if any(token in title for token in _DOCUMENTATION_REQUIREMENT_TOKENS):
+            return
+        manifest = promotion.read_manifest(stage)
+        changed = sorted((manifest.get("changed") or {}).keys())
+        if not any(is_implementation_path(path) for path in changed):
+            raise GateFailure(
+                "Documentation-only candidate rejected for implementation requirement "
+                + str(requirement_id)
+                + ": changed paths "
+                + repr(changed)
+                + " contain no code/test evidence.",
+                code="documentation-only-candidate",
+            )
 
     def _run_verification(self, stage: promotion.Stage, task_id: int) -> candidate_verification.VerificationReport:
         baseline = promotion.read_manifest(stage)["baseline"]
@@ -1207,6 +1250,8 @@ INSTRUCTIONS:
                 )
                 self._run_debugger(mission_id, debug_model, errors, write_paths, baseline, stage)
                 continue
+
+            self._assert_implementation_candidate(mission_id, stage)
 
             report = self._run_verification(stage, task_id)
             if report.passed:

@@ -215,7 +215,14 @@ def _refuse_unless_local_only(project_root: Path) -> dict:
     fallback = roles.get("fallback_cloud") or {}
     if fallback.get("enabled"):
         raise SystemExit("ERROR: cloud fallback is enabled; live SH-07 requires local-only")
-    model_names = [str((role or {}).get("model") or "") for role in roles.values() if isinstance(role, dict)]
+    # Only ACTIVE roles count: a disabled fallback (enabled: false) may name a cloud
+    # model without enabling cloud escalation. Roles without an explicit enabled flag
+    # are active by default.
+    active_roles = [
+        role for role in roles.values()
+        if isinstance(role, dict) and role.get("enabled", True) is not False
+    ]
+    model_names = [str(role.get("model") or "") for role in active_roles]
     cloud_models = [name for name in model_names if name and is_cloud_model(name)]
     if cloud_models:
         raise SystemExit("ERROR: cloud model configured for a role: " + ", ".join(cloud_models))
@@ -232,10 +239,9 @@ def _refuse_unless_local_only(project_root: Path) -> dict:
         raise SystemExit("ERROR: local Ollama is not reachable; live SH-07 requires it")
     available = {model.name for model in ollama_registry.list_models()}
     required = [
-        str((role or {}).get("model") or "").removeprefix("ollama/")
-        for role in roles.values()
-        if isinstance(role, dict) and role.get("model")
-        and not role.get("enabled", True) is False
+        str(role.get("model") or "").removeprefix("ollama/")
+        for role in active_roles
+        if role.get("model")
     ]
     missing = sorted({name for name in required if name and name not in available})
     if missing:
@@ -246,6 +252,26 @@ def _refuse_unless_local_only(project_root: Path) -> dict:
         "required_models": sorted(set(required)),
         "available_model_count": len(available),
     }
+
+
+_IMPLEMENTATION_SUFFIXES = (
+    ".py", ".pyi", ".toml", ".yaml", ".yml", ".json", ".ini", ".cfg",
+    ".bat", ".ps1", ".sh", ".js", ".mjs", ".ts", ".tsx", ".css", ".qss",
+)
+_IMPLEMENTATION_PREFIXES = ("tests/", "scripts/", "nl_coding_agent/", "installer/")
+
+
+def has_implementation_change(paths) -> bool:
+    """True when at least one changed path is code/test evidence, not Markdown."""
+    for raw in paths or ():
+        rel = str(raw or "").replace("\\", "/").lstrip("./").lower()
+        if not rel or rel.endswith((".md", ".rst", ".txt")):
+            continue
+        if rel.endswith(_IMPLEMENTATION_SUFFIXES):
+            return True
+        if rel.startswith(_IMPLEMENTATION_PREFIXES):
+            return True
+    return False
 
 
 def run_live(worktree: Path | None, evidence_root: Path) -> dict:
@@ -287,11 +313,25 @@ def run_live(worktree: Path | None, evidence_root: Path) -> dict:
             shutil.copy2(Path(database.db_path()), db_copy)
         except Exception:
             db_copy = None
+        def _changed_paths(mission: dict) -> list[str]:
+            try:
+                parsed = json.loads(mission.get("changed_paths") or "[]")
+            except Exception:
+                parsed = []
+            return [str(item) for item in parsed] if isinstance(parsed, list) else []
+
+        completed_missions = [
+            m for m in missions
+            if m.get("harness_version") == 2 and str(m.get("status")) == "completed"
+        ]
+        implementation_missions = [
+            m for m in completed_missions if has_implementation_change(_changed_paths(m))
+        ]
         ok = (
             str(result.get("status")) == "completed"
             and int(result.get("completed") or 0) >= 2
-            and all(str(m.get("status")) == "completed"
-                    for m in missions if m.get("harness_version") == 2)
+            and len(completed_missions) >= 2
+            and len(implementation_missions) == len(completed_missions)
         )
         payload = {
             "tier": "B",
@@ -310,6 +350,13 @@ def run_live(worktree: Path | None, evidence_root: Path) -> dict:
             "evidence_rows": evidence_rows,
             "git_status": git_status,
             "git_diff_sha256": hashlib.sha256(git_diff.encode("utf-8")).hexdigest(),
+            "quality_gate": {
+                "completed_missions": len(completed_missions),
+                "implementation_missions": len(implementation_missions),
+                "changed_paths": {
+                    str(m.get("id")): _changed_paths(m) for m in completed_missions
+                },
+            },
             "database_copy": str(db_copy) if db_copy else None,
         }
         (evidence_dir / "evidence.json").write_text(
