@@ -40,6 +40,11 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
     assert "Supervisore" in window._emergency_controls._status_label.text()
     assert window._projects_panel._self_build_btn.objectName() == "subtleLinkButton"
     assert "Advanced self-build" in window._projects_panel._self_build_btn.text()
+    assert hasattr(window._projects_panel, "_plan_btn")
+    assert window._projects_panel._plan_btn.objectName() == "subtleLinkButton"
+    assert window._projects_panel._plan_btn.isEnabled() is False
+    from nl_coding_agent.gui.dialogs.document_plan import DocumentPlanDialog
+    assert DocumentPlanDialog.__name__ == "DocumentPlanDialog"
     assert window._inspector._cards and window._inspector._diagnostics
     assert window._projects_panel._empty_card.isHidden() is False
     assert window._projects_panel._list.isHidden() is True

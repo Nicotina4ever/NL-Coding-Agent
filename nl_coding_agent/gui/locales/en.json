@@ -416,6 +416,7 @@
     "projects.ingest_docs_tooltip": "Read-only bounded documentation discovery. Documents are UNTRUSTED and are never executed; no model/network is started.",
     "projects.ingest_choose": "Choose documentation folder",
     "projects.ingest_title": "Document ingestion summary",
-    "projects.ingest_unavailable": "Document ingestion unavailable"
+    "projects.ingest_unavailable": "Document ingestion unavailable",
+    "projects.document_plan": "Document plan…"
   }
 }

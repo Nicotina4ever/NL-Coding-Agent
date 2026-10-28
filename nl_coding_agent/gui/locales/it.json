@@ -416,6 +416,7 @@
     "projects.ingest_docs_tooltip": "Scoperta documentazione in sola lettura e con limiti. I documenti sono NON AFFIDABILI e non vengono mai eseguiti; nessun modello/rete viene avviato.",
     "projects.ingest_choose": "Scegli cartella documentazione",
     "projects.ingest_title": "Riepilogo acquisizione documenti",
-    "projects.ingest_unavailable": "Acquisizione documenti non disponibile"
+    "projects.ingest_unavailable": "Acquisizione documenti non disponibile",
+    "projects.document_plan": "Piano documentale…"
   }
 }

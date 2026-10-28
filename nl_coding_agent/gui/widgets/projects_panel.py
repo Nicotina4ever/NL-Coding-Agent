@@ -77,8 +77,17 @@ class ProjectsPanel(QWidget):
         if not self._ingest_btn.isEnabled():
             self._ingest_btn.setToolTip("Document ingestion is not configured.")
         dev_row.addWidget(self._ingest_btn)
+        self._plan_btn = QPushButton(tr_for(
+            self._i18n, "projects.document_plan", "Document plan…"))
+        self._plan_btn.setObjectName("subtleLinkButton")
+        self._plan_btn.setFlat(True)
+        self._plan_btn.setAccessibleName(
+            "Open read-only document plan workspace for selected/opened project")
+        self._plan_btn.clicked.connect(self._on_open_document_plan)
+        dev_row.addWidget(self._plan_btn)
         dev_row.addWidget(self._self_build_btn)
         layout.addLayout(dev_row)
+        self._update_plan_action()
 
         # Recent projects list
         self._recent_label = QLabel(tr_for(
@@ -178,6 +187,34 @@ class ProjectsPanel(QWidget):
         self._empty_card.setVisible(not has_projects)
         self._recent_label.setVisible(has_projects)
 
+
+    def _current_project_for_plan(self):
+        return self._selected_project or self._opened_project
+
+    def _update_plan_action(self) -> None:
+        if not hasattr(self, "_plan_btn"):
+            return
+        has_project = self._current_project_for_plan() is not None
+        facade = callable(getattr(self._services, "docs_plan_generate", None))
+        self._plan_btn.setEnabled(has_project and facade)
+        if not has_project:
+            self._plan_btn.setToolTip("Select or open a project first.")
+        elif not facade:
+            self._plan_btn.setToolTip("Document planning is not configured.")
+        else:
+            self._plan_btn.setToolTip(
+                "Open the document plan workspace (read-only planning; approval "
+                "never executes a plan or starts a mission).")
+
+    def _on_open_document_plan(self) -> None:
+        project = self._current_project_for_plan()
+        if project is None or not callable(getattr(self._services,
+                                                    "docs_plan_generate", None)):
+            return
+        from nl_coding_agent.gui.dialogs.document_plan import DocumentPlanDialog
+        dialog = DocumentPlanDialog(self._services, project, self)
+        dialog.exec()
+
     def _on_open_project(self):
         from nl_coding_agent.gui.dialogs.open_project import OpenProjectDialog
         dlg = OpenProjectDialog(self._services, self,
@@ -203,11 +240,13 @@ class ProjectsPanel(QWidget):
                     if current is not None else None)
         self._selected_project = selected
         self._update_identity_label()
+        self._update_plan_action()
 
     def set_opened_project(self, project) -> None:
         """Make the opened project unambiguously distinct from list selection."""
         self._opened_project = dict(project) if project else None
         self._update_identity_label()
+        self._update_plan_action()
 
     def _update_identity_label(self) -> None:
         opened = (self._opened_project or {}).get("name") or "—"

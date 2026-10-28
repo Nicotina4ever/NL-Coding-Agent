@@ -44,6 +44,17 @@ styles where practical.
   empty-state card (Open Project + recent-project guidance) instead of a blank box.
   Header opened/activity/autonomy labels have bounded widths at 1280/1600.
 
+- Document plan workspace (D5): a non-prominent "Document plan…" Projects action
+  (next to Ingest documentation/Advanced self-build, localized it/en, disabled with a
+  reason without project/facade) opens a dialog that generates via injected
+  AppServices docs_plan_* only. It renders objective/acceptance/provenance/
+  limitations, milestone tree with priority/dependencies/risk/validation/explicit-
+  inferred/provenance, reconciliation blockers/risks and immutable version history
+  with current/approved/rejected states. Milestone edits use validated JSON/text and
+  a required rationale (new immutable version); approve/reject require reason and
+  confirmation and record metadata only. No execution, mission/goal creation, direct
+  DB/network/model access occurs.
+
 ## Verification and evidence
 
 - tests/test_inspector_panel.py covers cards/diagnostics/raw retention.

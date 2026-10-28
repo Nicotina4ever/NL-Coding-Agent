@@ -77,6 +77,22 @@ validation/not-found/lifecycle, 2 usage/argparse/malformed JSON. There are no ex
 flags. Plan generation and inspection work without a model config; document content is
 UNTRUSTED and is never executed. Approval does not execute or start anything.
 
+
+
+## GUI workspace (D5)
+
+Projects has a non-prominent "Document plan…" action for the selected/opened
+project (localized it/en, disabled with a reason when no project or facade). It
+opens an injected-services dialog that can generate a bounded draft plan, show the
+objective/acceptance/provenance/limitations, render the milestone tree (priority,
+dependencies, risk, validation, explicit/inferred label, provenance), show
+reconciliation blockers/risks, and display immutable version history with
+current/approved/rejected states. Edit uses a validated JSON/text milestone editor
+with a required rationale and creates a new version; approve/reject require a
+reason and confirmation and only record metadata. The dialog never executes a plan,
+creates/starts a mission or goal, calls a model, or accesses SQLite/network directly.
+Empty/unknown/offline/no-project states are explicit. Tests are offscreen with fake
+docs_plan_* services; real project/dialog acceptance remains MANUAL-PENDING.
 ## Table/API reference
 
 Core module: nl_coding_agent/core/doc_planning.py
@@ -94,4 +110,5 @@ tests/test_docs_planning_cli.py (temp fixtures, no network/model/mission).
 - Dynamic document content is untrusted data; generated titles/text mirror source excerpts
   and are not instructions. Human review remains required before any use.
 - Current CLI/text output is intentionally concise; JSON is the machine-readable surface.
-- GUI integration is out of scope for this increment.
+- GUI parity is implemented as a dialog workspace (see below); real interactive
+  GUI/real-project acceptance remains MANUAL-PENDING.
