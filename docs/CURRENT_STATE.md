@@ -791,3 +791,29 @@ Goal approval/inspection and GUI completion work (2026-10-29)
 - Verification: full integration suite 1081 passed in 147.8 s wall time after a broad cross-layer
   change (database, goals service, AppServices, CLI, GUI); goal suite 98 passed; targeted GUI 23
   passed. No network/model/mission execution run occurred.
+
+Studio final UX implementation (2026-10-29)
+
+- Localization (NL-BP-237 partial): gui/i18n.py provides JSON catalogs (Italian/English,
+  319 keys each), supported-language discovery, English/source fallback, safe placeholders and
+  resolution order persisted preference > System/OS detection > Italian fresh-install default;
+  AppServices persists ui.language in existing SQLite app settings. Settings offers Italiano/
+  English/System with live retranslation across sidebar, main window, Projects/Settings/Inspector/
+  IDE/dialogs and secondary panels (task board, chat, goals, research, autonomy, agents, models,
+  logs, editor, terminal, git, problems, command palette); restart persistence works and UI
+  language remains separate from agent/code/documentation language.
+- Visual/UX (NL-BP-238/239/240 partial): derived typography/spacing/density/radius tokens and
+  reusable section/card/badge/empty-state components; responsive Inspector with structured
+  summary cards, vertical-only scroll and expandable diagnostics; compact no-projects guidance;
+  explicit Opened vs Selected project identity; header activity badge IDLE/RUNNING/PAUSED/BLOCKED
+  with current mission; prominent Projects Self-Build action removed and replaced by a subtle
+  Advanced self-build link to Settings > Advanced, with existing activation/config controls,
+  progress via Goals/Tasks and emergency Pause/Stop preserved.
+- Real-GUI evidence (NL-BP-241 partial): scripts/capture_gui_screenshots.py launches the actual
+  Windows Qt Studio and captures 1280x800/1.0, 1600x1000/1.25 and 1920x1080/1.5 PNGs with a
+  functional interaction sequence; docs/evidence/gui/SCREENSHOTS.md records sizes/DPI/checks and
+  the 1280x800 capture was visually inspected after layout fixes.
+- Verification: targeted UX/i18n/GUI tests plus screenshot script; full integration suite 1102
+  passed in 139.7 s measured wall time. Counts: 193 requirements, 34 verified / 87 partial /
+  69 planned / 3 blocked. Human aesthetic/Italian QA sign-off, complete legacy-style migration,
+  real self-build/live-mission content and screen-reader acceptance remain MANUAL-PENDING.

@@ -76,10 +76,10 @@ Publication/push remains forbidden without explicit owner authorization.
 | Status | P0 | P1 | P2 | P3 | Total |
 |---|---|---|---|---|---|
 | verified | 21 | 13 | 0 | 0 | 34 |
-| partial | 42 | 28 | 11 | 1 | 82 |
-| planned | 45 | 19 | 9 | 1 | 74 |
+| partial | 47 | 28 | 11 | 1 | 87 |
+| planned | 40 | 19 | 9 | 1 | 69 |
 | blocked | 3 | 0 | 0 | 0 | 3 |
-| **Total** | **111** | **60** | **20** | **2** | **193** |
+| **Total** | 111 | 60 | 20 | 2 | 193 |
 
 | Area | Requirements | verified | partial | planned | blocked |
 |---|---|---|---|---|---|
@@ -102,6 +102,8 @@ Publication/push remains forbidden without explicit owner authorization.
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v5.3 (2026-10-29)** - Studio final-UX implementation: Italian-default/English i18n framework with persisted live switching across principal and secondary panels (319 catalog keys each), NL-token visual system and reusable components, responsive Inspector/Projects/header fixes based on real screenshots, self-build moved from Projects to Settings > Advanced with progress/emergency-stop preserved, structured Inspector diagnostics and explicit opened/selected + IDLE/RUNNING activity state, and real Windows Qt screenshot evidence at three sizes/DPI with functional interaction capture. Five new requirements 237-241 now partial; full suite 1102 passed in 139.7 s; counts 34 verified / 87 partial / 69 planned / 3 blocked. Human aesthetic/Italian QA sign-off, complete legacy-style migration, real self-build/live-mission content and screen-reader acceptance remain MANUAL-PENDING.
 
 **v5.2 (2026-10-29)** - Queue-only final Studio GUI UX acceptance directive. Read-only audit (docs/STUDIO_FINAL_UX_AUDIT.md) confirmed: verified NL branding/theme shell (020) and partial navigation/settings/self-build/emergency/accessibility/state requirements (021/022/023/024/044/045/046); NO UI internationalization/language setting/persistence; 82 setStyleSheet calls and 110 hardcoded colour literals across the GUI; a prominent Projects-page 'Self-Build (This Agent)' button (projects_panel.py:34-37, 121-125) alongside existing Settings > Advanced controls; a raw read-only QTextEdit Inspector; ambiguous project/open/activity state; and offscreen-only GUI evidence with real-desktop/clipboard/DPI items MANUAL-PENDING. Five acceptance gaps appended to the EXISTING program stage 4 as planned NL-BP-237..241 (i18n, visual/IA polish, self-build placement/runtime UX, Inspector/state clarity, real-GUI evidence). Stage 4 status/note corrected honestly from completed to in_progress ('engineering complete; final UX acceptance reopened'); no new stage/framework; stages 1-3/5-10 untouched; existing requirement IDs/acceptance retained; addenda preserved; no code/GUI/model/network run started. Totals: 193 requirements; 34 verified / 82 partial / 74 planned / 3 blocked.
 
