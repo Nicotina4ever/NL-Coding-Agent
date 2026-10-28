@@ -6,11 +6,13 @@ Single index of every consolidated product requirement. Each row has a stable ID
 
 **Original snapshot:** 2026-10-28 16:12 Europe/Rome - git HEAD 7e778da - Python 3.12.10 (python/python.exe).
 
-**v3.7 addendum import (2026-10-28, queue-only):** 39 planned requirements NL-BP-166..204 added under pending stage 7 (no existing ID/acceptance/stage status rewritten; no implementation started).
+**v3.7 addendum import (queue-only):** 39 planned NL-BP-166..204 added under pending stage 7 (existing IDs/acceptance/stage statuses untouched; no implementation started).
 
-**v3.8 web-research directive (2026-10-28, queue-only):** read-only audit found no external web research; seven gaps added as NL-BP-205..211 in stage 7 (existing research requirements NL-BP-169..176/203 preserved; no implementation started).
+**v3.8 web-research directive (queue-only):** seven gaps NL-BP-205..211 added to stage 7; existing research requirements preserved.
 
-**v4.2 goal-mode directive (2026-10-28, queue-only):** read-only audit of the Universal Goal Mode + Document-Driven Goal Bootstrap & Planning directives: SQLite has no goals/milestones tables, supervisor/queue/lease/Flow substrate exists, GUI has no Goals page, document ingestion is local attachments/scanner metadata only, GOAL_TEMPLATE.md is advisory. Twelve genuine gaps added as **NL-BP-212..223** in new **pending program stage 8** (depends on stages 3 and 7). Existing requirement NL-BP-050 stays partial and unchanged. No code/model/network/mission run started. Totals: **175 requirements** (33 verified / 77 partial / 62 planned / 3 blocked).
+**v4.2 goal-mode directive (queue-only):** twelve gaps NL-BP-212..223 added to new pending stage 8; existing NL-BP-050 stays partial and unchanged.
+
+**v4.3 open-model directive (queue-only):** read-only audit of the Open Model & Provider Ecosystem directive: config-driven Ollama + OpenAI-compatible discovery, closed provider kind branch, Bearer-only auth, temperature-only params, read-only Model Hub GUI and an unwired but tested router; capability registry measured/declared/unknown/unavailable. Ten extension gaps added as **NL-BP-224..233** in new pending **stage 9** (depends on stages 4 and 7). Existing NL-BP-008/009/010/036/068/069/183/208 are unchanged. Totals: **185 requirements** (33 verified / 77 partial / 72 planned / 3 blocked). No code/model/network/mission run started.
 
 ## Program execution order (authoritative)
 
@@ -22,8 +24,9 @@ Single index of every consolidated product requirement. Each row has a stable ID
 - **Stage 6 - Lightweight portable/bootstrapper and final release testing**: in progress (40 requirements; NL-BP 110-124, 140-142, 144-165)
 - **Stage 7 - Universal autonomy, research intelligence and Mega Suite**: pending (46 requirements; NL-BP 166-211) - queued scope; no implementation started
 - **Stage 8 - Universal Goal Mode and document-driven planning**: pending (12 requirements; NL-BP 212-223) - queued scope; no implementation started
+- **Stage 9 - Open model and provider ecosystem**: pending (10 requirements; NL-BP 224-233) - queued scope; no implementation started
 
-Every row below carries the same requirement ID and evidence; the stage mapping is authoritative in docs/product-blueprint/INDEX.json (program_stage). Stage 8 is pending and depends on stages 3 and 7.
+Every row below carries the same requirement ID and evidence; the stage mapping is authoritative in docs/product-blueprint/INDEX.json (program_stage). Stage 9 is pending and depends on stages 4 and 7.
 
 ## Status legend
 
@@ -34,7 +37,7 @@ Every row below carries the same requirement ID and evidence; the stage mapping 
 
 ## Requirement index
 
-### Area 1 - CrewAI + CrewAI Flows first-class integration (CORE, 16 requirements)
+### Area 1 - CrewAI + CrewAI Flows first-class integration (CORE, 24 requirements)
 
 | ID | Requirement | Source | BP priority | Status | Evidence (primary) | Backlog |
 |---|---|---|---|---|---|---|
@@ -54,8 +57,16 @@ Every row below carries the same requirement ID and evidence; the stage mapping 
 | NL-BP-183 | Model Competence Lab: multi-backend inspection, capability verification and role benchmarks | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-183](PRODUCT_BACKLOG.md#nl-bp-183) |
 | NL-BP-187 | Plugin/SDK extension ecosystem with documented interfaces | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-187](PRODUCT_BACKLOG.md#nl-bp-187) |
 | NL-BP-208 | Hugging Face acquisition workflow with compatibility evidence and explicit license/gated approval | user directive 2026-10-28 (web research) | new (user directive 2026-10-28: universal web research & intelligence engine) | planned | not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILI... | [NL-BP-208](PRODUCT_BACKLOG.md#nl-bp-208) |
+| NL-BP-224 | Built-in provider presets with editable defaults | user directive 2026-10-28 (open model ecosystem) | new (user directive 2026-10-28: open model and provider ecosystem) | planned | not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_... | [NL-BP-224](PRODUCT_BACKLOG.md#nl-bp-224) |
+| NL-BP-225 | Custom provider profiles: arbitrary endpoint, auth, headers and protocol | user directive 2026-10-28 (open model ecosystem) | new (user directive 2026-10-28: open model and provider ecosystem) | planned | not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_... | [NL-BP-225](PRODUCT_BACKLOG.md#nl-bp-225) |
+| NL-BP-226 | Automatic discovery plus always-available manual entry | user directive 2026-10-28 (open model ecosystem) | new (user directive 2026-10-28: open model and provider ecosystem) | planned | not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_... | [NL-BP-226](PRODUCT_BACKLOG.md#nl-bp-226) |
+| NL-BP-227 | Extensible provider protocol adapters (no closed provider list) | user directive 2026-10-28 (open model ecosystem) | new (user directive 2026-10-28: open model and provider ecosystem) | planned | not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_... | [NL-BP-227](PRODUCT_BACKLOG.md#nl-bp-227) |
+| NL-BP-228 | Automatic parameter suggestions plus unrestricted expert configuration | user directive 2026-10-28 (open model ecosystem) | new (user directive 2026-10-28: open model and provider ecosystem) | planned | not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_... | [NL-BP-228](PRODUCT_BACKLOG.md#nl-bp-228) |
+| NL-BP-229 | Per-model and per-role profiles with project bindings and override preservation | user directive 2026-10-28 (open model ecosystem) | new (user directive 2026-10-28: open model and provider ecosystem) | planned | not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_... | [NL-BP-229](PRODUCT_BACKLOG.md#nl-bp-229) |
+| NL-BP-230 | Explicit capability states declared/detected/tested/unknown with warnings, not arbitrary rejection | user directive 2026-10-28 (open model ecosystem) | new (user directive 2026-10-28: open model and provider ecosystem) | planned | not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_... | [NL-BP-230](PRODUCT_BACKLOG.md#nl-bp-230) |
+| NL-BP-231 | Flexible local/external/embedding/multimodal routing with explanations, override and policy enforcement | user directive 2026-10-28 (open model ecosystem) | new (user directive 2026-10-28: open model and provider ecosystem) | planned | not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_... | [NL-BP-231](PRODUCT_BACKLOG.md#nl-bp-231) |
 
-### Area 2 - Studio GUI + multimodal chat (STUDIO, 34 requirements)
+### Area 2 - Studio GUI + multimodal chat (STUDIO, 35 requirements)
 
 | ID | Requirement | Source | BP priority | Status | Evidence (primary) | Backlog |
 |---|---|---|---|---|---|---|
@@ -93,6 +104,7 @@ Every row below carries the same requirement ID and evidence; the stage mapping 
 | NL-BP-194 | OCR-on-demand extraction for images, screenshots and documents | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-194](PRODUCT_BACKLOG.md#nl-bp-194) |
 | NL-BP-210 | Studio Research workspace: search history, source previews, permission status and saved findings | user directive 2026-10-28 (web research) | new (user directive 2026-10-28: universal web research & intelligence engine) | partial | not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILI... | [NL-BP-210](PRODUCT_BACKLOG.md#nl-bp-210) |
 | NL-BP-216 | Goals GUI with CLI/API parity: milestones, progress, evidence, blockers and lifecycle actions | user directive 2026-10-28 (goal mode) | new (user directives 2026-10-28: Universal Goal Mode + document-driven planning) | planned | not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY... | [NL-BP-216](PRODUCT_BACKLOG.md#nl-bp-216) |
+| NL-BP-232 | Model Hub GUI/CLI/API provider and profile management | user directive 2026-10-28 (open model ecosystem) | new (user directive 2026-10-28: open model and provider ecosystem) | planned | not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_... | [NL-BP-232](PRODUCT_BACKLOG.md#nl-bp-232) |
 
 ### Area 3 - Universal autonomous development (AUTONOMY, 60 requirements)
 
@@ -204,7 +216,7 @@ Every row below carries the same requirement ID and evidence; the stage mapping 
 | NL-BP-195 | Mega Suite modular installer with shared model cache and storage plan | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-195](PRODUCT_BACKLOG.md#nl-bp-195) |
 | NL-BP-196 | Self-update with atomic deployment, verified manifests and previous-app fallback | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-196](PRODUCT_BACKLOG.md#nl-bp-196) |
 
-### Area 6 - Release acceptance criteria (RELEASE, 30 requirements)
+### Area 6 - Release acceptance criteria (RELEASE, 31 requirements)
 
 | ID | Requirement | Source | BP priority | Status | Evidence (primary) | Backlog |
 |---|---|---|---|---|---|---|
@@ -238,6 +250,7 @@ Every row below carries the same requirement ID and evidence; the stage mapping 
 | NL-BP-204 | Multi-project Genome/Integration Forge acceptance on real projects | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-204](PRODUCT_BACKLOG.md#nl-bp-204) |
 | NL-BP-211 | Research acceptance extension: fixture-vs-real-network matrix and cross-project evidence reuse | user directive 2026-10-28 (web research) | new (user directive 2026-10-28: universal web research & intelligence engine) | planned | not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILI... | [NL-BP-211](PRODUCT_BACKLOG.md#nl-bp-211) |
 | NL-BP-223 | Document-driven goal acceptance scenario on an unfamiliar project | user directive 2026-10-28 (goal mode) | new (user directives 2026-10-28: Universal Goal Mode + document-driven planning) | planned | not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY... | [NL-BP-223](PRODUCT_BACKLOG.md#nl-bp-223) |
+| NL-BP-233 | Open-provider acceptance scenario on real endpoints | user directive 2026-10-28 (open model ecosystem) | new (user directive 2026-10-28: open model and provider ecosystem) | planned | not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_... | [NL-BP-233](PRODUCT_BACKLOG.md#nl-bp-233) |
 
 ## Source inventory
 
@@ -327,10 +340,9 @@ Every row below carries the same requirement ID and evidence; the stage mapping 
 | docs/product-blueprint/addenda/README_IMPORT.md | addendum | addendum import rules (merge, do not replace live index) | yes |
 | USER-DIRECTIVE 2026-10-28 universal web research & intelligence engine (task-60 brief) | external-brief | web-research capability audit + dedupe mapping + NL-BP-205..211 | external |
 | USER-DIRECTIVE 2026-10-28 universal goal mode + document-driven goal bootstrap & planning (task-68 brief) | external-brief | goal-mode/document-planning audit + dedupe mapping + NL-BP-212..223 | external |
+| USER-DIRECTIVE 2026-10-28 open model & provider ecosystem (task-69 brief) | external-brief | model/provider ecosystem audit + dedupe mapping + NL-BP-224..233 | external |
 
 ## Addendum import v3.7 - dedupe mapping (queue-only)
-
-user-supplied addendum bundle preserved and committed unchanged at docs/product-blueprint/addenda/
 
 | Group | Capability | Existing coverage | New requirements | Decision |
 |---|---|---|---|---|
@@ -355,7 +367,7 @@ user-supplied addendum bundle preserved and committed unchanged at docs/product-
 | G19 | Operating metrics and readiness taxonomy | NL-BP-075, NL-BP-140, NL-BP-151, NL-BP-164 | NL-BP-189, NL-BP-198 | Diagnostics dashboard/status vocabulary exist; user-visible metrics and enforced readiness labels are new. |
 | G20 | End-to-end cross-app / Full Autonomy / Mega Suite / research / genome acceptance scenarios | NL-BP-140, NL-BP-164, NL-BP-165, NL-BP-063 | NL-BP-199, NL-BP-200, NL-BP-201, NL-BP-203, NL-BP-204 | Individual acceptance tooling exists; the addendum's program-level scenarios are new. |
 
-## Web-research directive v3.8 - capability audit and dedupe mapping (queue-only)
+## Web-research directive v3.8 - dedupe mapping (queue-only)
 
 Audit: [WEB_RESEARCH_CAPABILITY_AUDIT.md](WEB_RESEARCH_CAPABILITY_AUDIT.md).
 
@@ -381,9 +393,9 @@ Audit: [WEB_RESEARCH_CAPABILITY_AUDIT.md](WEB_RESEARCH_CAPABILITY_AUDIT.md).
 | research acceptance fixture-vs-real-network matrix | NL-BP-203 | NL-BP-211 | 203 scenario; 211 full failure/exception matrix |
 | real-network research verification | NL-BP-203 | NL-BP-211 | covered/enforced by 211 |
 
-## Goal-mode directive v4.2 - capability audit and dedupe mapping (queue-only)
+## Goal-mode directive v4.2 - dedupe mapping (queue-only)
 
-Audit: [GOAL_MODE_CAPABILITY_AUDIT.md](GOAL_MODE_CAPABILITY_AUDIT.md). Source: user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning.
+Audit: [GOAL_MODE_CAPABILITY_AUDIT.md](GOAL_MODE_CAPABILITY_AUDIT.md).
 
 | Sub-capability | Existing coverage | New requirements | Decision |
 |---|---|---|---|
@@ -402,14 +414,35 @@ Audit: [GOAL_MODE_CAPABILITY_AUDIT.md](GOAL_MODE_CAPABILITY_AUDIT.md). Source: u
 | Incremental doc-change/new-evidence reconciliation | NL-BP-219, NL-BP-174, NL-BP-214, NL-BP-215 | NL-BP-222 | new incremental reconciliation |
 | Document-driven goal acceptance scenario | NL-BP-203, NL-BP-199, NL-BP-200, NL-BP-201 | NL-BP-223 | new end-to-end stage-8 acceptance |
 
+## Open-model directive v4.3 - capability audit and dedupe mapping (queue-only)
+
+Audit: [OPEN_MODEL_ECOSYSTEM_AUDIT.md](OPEN_MODEL_ECOSYSTEM_AUDIT.md). Source: user directive 2026-10-28: Open Model & Provider Ecosystem (presets as conveniences not restrictions).
+
+| Sub-capability | Existing coverage | New requirements | Decision |
+|---|---|---|---|
+| Multi-provider discovery/health/loaded/unload | NL-BP-008 | none (covered) | verified foundation NL-BP-008 retained |
+| Built-in presets with editable defaults | - | NL-BP-224 | hand-edited YAML presets only today; first-class editable presets are new |
+| Custom provider profiles (URL/model/auth/headers/protocol/secret refs/import-export) | NL-BP-008, NL-BP-010 | NL-BP-225 | fixed YAML schema; new profile store |
+| Auto discovery + always-available manual entry | NL-BP-008 | NL-BP-226 | auto discovery exists; manual entry/fallback is new |
+| Extensible protocol adapters, no closed provider list | NL-BP-008 | NL-BP-227 | closed kind branch; adapter registry is new |
+| Automatic parameter suggestions + expert/backend-specific params | NL-BP-010, NL-BP-068 | NL-BP-228 | temperature-only today; suggestions/additional params new |
+| Per-model/per-role profiles + project bindings + switch-preserving overrides | NL-BP-010, NL-BP-011, NL-BP-068 | NL-BP-229 | YAML roles only; persistent profiles/bindings new |
+| Capability states declared/detected/tested/unknown + optional benchmarks, warnings not rejection | NL-BP-009, NL-BP-069, NL-BP-183 | NL-BP-230 | evidence registry exists; presentation/policy layer new; lab retained |
+| Flexible local/external/embedding/multimodal routing with explanations/override/policy | NL-BP-010, NL-BP-070, NL-BP-168 | NL-BP-231 | router module unwired; live routing surface new |
+| Model Hub GUI/CLI/API provider+profile management | NL-BP-036 | NL-BP-232 | read-only UI today; management surface new |
+| Model lifecycle load/unload/storage UI | NL-BP-036 | none (covered) | retained; 232 adds management, no duplicate |
+| Competence benchmarks/hardware profiling | NL-BP-069, NL-BP-183 | none (covered) | retained; 230 may consume |
+| Permission/cloud-spending enforcement | NL-BP-168, NL-BP-072 | none (covered) | retained; 231 enforces existing policy |
+| Open-provider acceptance scenario | - | NL-BP-233 | new end-to-end acceptance |
+
 Blocked / external items preserved by this import:
-- stage 8 is pending; depends_on_stages [3, 7] and stage 7 is itself pending/partially implemented
-- existing NL-BP-050 stays partial and is not rewritten; reconciliation needs an authorized evidence update
-- document-driven auto-execution requires autonomy policy/approval (NL-BP-064/166..168); corpus content is untrusted and never executed
-- independent goal verification cannot rely on model consensus; SH-07 Tier B (NL-BP-063) remains blocked
-- unbounded folder ingestion is not authorized; corpus discovery is consent-based and bounded
-- docs-only projects require honest document-consistency evidence, never fabricated test results
-- goal templates depend on the planned Mega Suite path (NL-BP-195)
+- stage 9 is pending; depends_on_stages [4, 7] and stage 7 is itself pending/partially implemented
+- ModelRouter is tested but not instantiated in product code; live wiring (231) must not weaken permission/cloud gates
+- provided presets must not become an approved-provider/architecture/quantization allow-list
+- manual provider entry must remain available but cannot bypass permission or cloud-spending policy
+- unknown/declared capability combinations warn for experimental use; hard refusals only where task/policy requires measured capability
+- real-endpoint acceptance (233) is permissioned/manual and distinct from fixture evidence
+- HF acquisition (208) and competence benchmarks (069/183) remain separate planned requirements; no downloads in this directive
 
 ## Conflicts recorded during consolidation
 
@@ -429,12 +462,13 @@ Blocked / external items preserved by this import:
 - **C14 - Backlog documents lagged INDEX.json before this import**: Before v3.7, PRODUCT_BACKLOG.md and BLUEPRINT_INDEX.md still listed only 103 requirement entries and stale area/stage counts, while INDEX.json already held 117 requirements including NL-BP-152..165. **Resolution:** This import synchronises both human-readable documents to the full 156-requirement registry (117 existing + 39 new) for the covered scope; existing IDs and acceptance criteria are unchanged and existing detailed entries are not rewritten.
 - **C15 - Web-research directive vs addendum research requirements**: The new directive overlaps substantially with the addendum-imported research engine, which is still planned only; a naive import would duplicate NL-BP-169..176/203. **Resolution:** Read-only capability audit mapped every directive sub-capability to existing IDs or the seven genuine gaps NL-BP-205..211 (provider registry, retrieval safety, connector registration, HF acquisition, version-aware docs, research workspace, acceptance matrix). Existing requirements were not rewritten.
 - **C16 - Universal Goal Mode vs existing mission/supervisor/backlog design**: The existing system already has a supervisor, durable mission queue, leases and mission goals, and NL-BP-050 already claims a Goals/Milestones hierarchy concept; importing goal mode naively would duplicate 050/061/062/064. **Resolution:** Read-only audit mapped the directives against existing requirements: the execution substrate is reused, NL-BP-050 keeps its conceptual acceptance unchanged (still partial), and only the executable goal-mode depth and document-driven bootstrap gaps were registered as NL-BP-212..223 in new stage 8. No existing ID/acceptance/status was rewritten.
+- **C17 - Open provider ecosystem vs existing fixed-schema Model Hub**: The existing Model Hub is a verified but config-schema-centic discovery layer with a closed provider kind list, Bearer-only auth, temperature-only params and a read-only GUI; the directive asks for editable presets, custom profiles/adapters, per-model profiles and management surfaces. A naive import would duplicate NL-BP-008/009/010/036/068/069/183. **Resolution:** Read-only audit mapped every directive sub-capability to existing IDs or ten genuine extension gaps NL-BP-224..233 in new stage 9. Existing requirements (including verified 008 and partial 009/010/036) are retained unchanged; presets are explicitly conveniences, not restrictions; no approved-family/architecture/quantization allow-list is created.
 
 ## Related documents
 
 - [PRODUCT_BACKLOG.md](PRODUCT_BACKLOG.md) - canonical backlog with acceptance gates, dependencies and dedup decisions.
-- [GOAL_MODE_CAPABILITY_AUDIT.md](GOAL_MODE_CAPABILITY_AUDIT.md) - read-only goal-mode/document-bootstrap capability audit with file:line evidence.
-- [WEB_RESEARCH_CAPABILITY_AUDIT.md](WEB_RESEARCH_CAPABILITY_AUDIT.md) - read-only web-research capability audit.
+- [OPEN_MODEL_ECOSYSTEM_AUDIT.md](OPEN_MODEL_ECOSYSTEM_AUDIT.md) - read-only model/provider ecosystem capability audit with file:line evidence.
+- [GOAL_MODE_CAPABILITY_AUDIT.md](GOAL_MODE_CAPABILITY_AUDIT.md); [WEB_RESEARCH_CAPABILITY_AUDIT.md](WEB_RESEARCH_CAPABILITY_AUDIT.md) - sibling capability audits.
 - [product-blueprint/INDEX.json](product-blueprint/INDEX.json) - machine-readable requirements, stages, source inventory, directive imports, dedup map and conflicts.
 - [product-blueprint/addenda/](product-blueprint/addenda/) - preserved user addendum bundle (unchanged; MANIFEST verified).
 

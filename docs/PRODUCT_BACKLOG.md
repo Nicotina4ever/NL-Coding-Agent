@@ -14,6 +14,8 @@
 
 **Goal-mode directive v4.2 (2026-10-28, queue-only):** the Universal Goal Mode + Document-Driven Goal Bootstrap & Planning directives were audited read-only (docs/GOAL_MODE_CAPABILITY_AUDIT.md): no goals/milestones tables or Goals GUI, supervisor/queue/lease/Flow substrate reusable, document ingestion local-only, GOAL_TEMPLATE advisory. Twelve gaps became planned NL-BP-212..223 in new pending stage 8; existing NL-BP-050 stays partial/unchanged. No code/model/network/mission run. Totals: 175 requirements (33 verified / 77 partial / 62 planned / 3 blocked).
 
+**Open-model directive v4.3 (2026-10-28, queue-only):** the Open Model & Provider Ecosystem directive was audited read-only (docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md): config-driven Ollama/OpenAI-compatible discovery with closed provider kind branch, Bearer-only auth, temperature-only params, read-only Model Hub GUI and an unwired tested router; capability states exist but measured-only gating; presets are hand-edited YAML. Ten extension gaps became planned NL-BP-224..233 in new pending stage 9; existing NL-BP-008/009/010/036/068/069/183/208 unchanged. No code/model/network/mission run. Totals: 185 requirements (33 verified / 77 partial / 72 planned / 3 blocked).
+
 ## How to use this backlog
 
 1. **Pick from the top, not from chat.** Execute only requirements that are READY (all dependencies done). P0 first, then P1; a single active requirement/milestone at a time unless write scopes are disjoint.
@@ -55,13 +57,12 @@ evidence only.
 | 6 | Lightweight portable/bootstrapper and final release testing | IN PROGRESS | 40 | NL-BP 110-124, 140-142, 144-165 | 5 |
 | 7 | Universal autonomy, research intelligence and Mega Suite | PENDING | 46 | NL-BP 166-211 | 6 |
 | 8 | Universal Goal Mode and document-driven planning | PENDING | 12 | NL-BP 212-223 | 3, 7 |
+| 9 | Open model and provider ecosystem | PENDING | 10 | NL-BP 224-233 | 4, 7 |
 
 Execution rule: a later stage starts only when the previous stage's gates pass, unless the
 Lead records an explicit evidence-backed exception for independent low-risk work. Stages 1-5
-are complete; stage 6 is in progress; stage 7 (universal autonomy/research/Mega Suite) is
-pending; stage 8 (Universal Goal Mode and document-driven planning) is pending and depends on
-stages 3 and 7. SH-07 Tier B (real local models) remains BLOCKED in NL-BP-063 and is not
-relaxed by any queued directive.
+are complete; stage 6 is in progress; stages 7, 8 and 9 are pending. SH-07 Tier B (real local
+models) remains BLOCKED in NL-BP-063 and is not relaxed by any queued directive.
 
 ## Summary
 
@@ -69,18 +70,18 @@ relaxed by any queued directive.
 |---|---|---|---|---|---|
 | verified | 20 | 13 | 0 | 0 | 33 |
 | partial | 37 | 28 | 11 | 1 | 77 |
-| planned | 34 | 18 | 9 | 1 | 62 |
+| planned | 44 | 18 | 9 | 1 | 72 |
 | blocked | 3 | 0 | 0 | 0 | 3 |
-| **Total** | **94** | **59** | **20** | **2** | **175** |
+| **Total** | **104** | **59** | **20** | **2** | **185** |
 
 | Area | Requirements | verified | partial | planned | blocked |
 |---|---|---|---|---|---|
-| Area 1 - CrewAI + CrewAI Flows first-class integration | 16 | 6 | 7 | 3 | 0 |
-| Area 2 - Studio GUI + multimodal chat | 34 | 3 | 24 | 7 | 0 |
+| Area 1 - CrewAI + CrewAI Flows first-class integration | 24 | 6 | 7 | 11 | 0 |
+| Area 2 - Studio GUI + multimodal chat | 35 | 3 | 24 | 8 | 0 |
 | Area 3 - Universal autonomous development | 60 | 16 | 18 | 25 | 1 |
 | Area 4 - Repository hygiene | 8 | 3 | 5 | 0 | 0 |
 | Area 5 - Lightweight installation + portable distribution | 27 | 2 | 12 | 13 | 0 |
-| Area 6 - Release acceptance criteria | 30 | 3 | 11 | 14 | 2 |
+| Area 6 - Release acceptance criteria | 31 | 3 | 11 | 15 | 2 |
 
 ### Area ownership
 
@@ -94,6 +95,8 @@ relaxed by any queued directive.
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v4.3 (2026-10-28)** - Queue-only Open Model & Provider Ecosystem directive. Read-only audit (docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md) confirmed: config-driven Ollama + generic OpenAI-compatible discovery, api_key_env Bearer headers, health/loaded/unload; dynamic Ollama tags/namespaces; a tested ModelRouter (override/project/role/fallback, capability/permission/resource gates, snapshots) not instantiated in product code; capability states measured/declared/unknown/unavailable with measured-only gating; read-only Model Hub GUI/Settings; presets exist only as hand-edited config/models.yaml; provider kind branch is closed; only temperature is passed. Requirements 008/009/010/036/068/069/183/208 retained unchanged; ten gaps added as planned NL-BP-224..233 in new pending stage 9 (depends_on_stages [4,7]). No existing ID/acceptance/status or stage 1-8 status rewritten; addenda preserved; no code/model/network/mission run started. Totals: 185 requirements; 33 verified / 77 partial / 72 planned / 3 blocked.
 
 **v4.2 (2026-10-28)** - Queue-only Universal Goal Mode + Document-Driven Goal Bootstrap & Planning directives. Read-only audit (docs/GOAL_MODE_CAPABILITY_AUDIT.md) confirmed: SQLite has missions/tasks/task_attempts/handoffs/verification_runs/mission_queue/supervisor_runs/leases/approvals/Flow tables but no goals/milestones; supervisor/queue/lease/Flow infrastructure and CLI supervisor commands exist; GUI has Task Board/Autonomy/Research but no Goals page; document ingestion is local attachment extraction plus scanner filenames; GOAL_TEMPLATE.md is advisory only. Deduped against NL-BP-050/051/052/061/062/063/064/066-070/166-168/169-176/177-181/203/205-211; twelve gaps added as planned NL-BP-212..223 in new pending program stage 8 (depends on stages 3 and 7). NL-BP-050 remains partial and unchanged. No code/model/network/mission run started; addenda preserved. Totals: 175 requirements; 33 verified / 77 partial / 62 planned / 3 blocked.
 
@@ -431,6 +434,142 @@ _CrewAI as a first-class engine dependency (not a cloned vendor checkout), agent
 - **Sources:** user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md); docs/WEB_RESEARCH_CAPABILITY_AUDIT.md; NL-BP-172; NL-BP-183; NL-BP-124; NL-BP-008
 - **Note:** Acquisition half of the HF research requirement (NL-BP-172); reuses model registry, competence index, scheduler and shared-cache requirements.
 - **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-224"></a>
+### NL-BP-224 - Built-in provider presets with editable defaults
+
+- **Area:** CORE - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directive 2026-10-28: open model and provider ecosystem)
+- **Dependencies:** NL-BP-008, NL-BP-010, NL-BP-036
+- **Acceptance gates:**
+  - Built-in presets exist for Ollama, llama.cpp, LM Studio and generic OpenAI-compatible providers, plus an extension point for further presets; they are conveniences, never restrictions.
+  - Every preset field (base URL, model, auth/secret reference, protocol, defaults) is user-editable and removable; providers outside all presets remain supported.
+  - No hardcoded approved provider/family/architecture/quantization list is introduced by presets.
+- **Evidence:**
+  - not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md; no code, model or network run started
+  - capability evidence: audit sections 3-4 (fixed YAML provider schema, closed kind branch, Bearer-only auth, temperature-only params, read-only Model Hub GUI, unwired router, measured-only capability gating)
+- **Sources:** user directive 2026-10-28: Open Model & Provider Ecosystem (task-69; audited in docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md); docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md; NL-BP-008; NL-BP-010; NL-BP-036
+- **Note:** Presets today exist only as hand-edited config/models.yaml entries (config/models.yaml:6-25); NL-BP-008/010/036 stay unchanged.
+- **Program stage:** 9 - Open model and provider ecosystem
+
+<a id="nl-bp-225"></a>
+### NL-BP-225 - Custom provider profiles: arbitrary endpoint, auth, headers and protocol
+
+- **Area:** CORE - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directive 2026-10-28: open model and provider ecosystem)
+- **Dependencies:** NL-BP-008, NL-BP-224
+- **Acceptance gates:**
+  - A custom provider profile can define an arbitrary base URL, model id, authentication (including secret references), custom headers and protocol semantics.
+  - Profiles are editable, importable, exportable and reusable across projects; secrets are referenced, never stored in plain profile files, and are redacted in UI/export/logs.
+  - Saved profiles are validated and versioned; a broken profile fails with actionable errors without blocking other providers.
+- **Evidence:**
+  - not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md; no code, model or network run started
+  - capability evidence: audit sections 3-4 (fixed YAML provider schema, closed kind branch, Bearer-only auth, temperature-only params, read-only Model Hub GUI, unwired router, measured-only capability gating)
+- **Sources:** user directive 2026-10-28: Open Model & Provider Ecosystem (task-69; audited in docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md); docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md; NL-BP-008; NL-BP-224
+- **Note:** New profile model/store; extends the fixed YAML schema without rewriting NL-BP-008.
+- **Program stage:** 9 - Open model and provider ecosystem
+
+<a id="nl-bp-226"></a>
+### NL-BP-226 - Automatic discovery plus always-available manual entry
+
+- **Area:** CORE - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directive 2026-10-28: open model and provider ecosystem)
+- **Dependencies:** NL-BP-008, NL-BP-224, NL-BP-225
+- **Acceptance gates:**
+  - Automatic discovery runs where supported (Ollama /api/tags + /api/ps incl. community namespaces/tags; OpenAI-compatible /models; llama.cpp/LM Studio through their OpenAI-compatible endpoints).
+  - Manual provider/model entry is always available, even when discovery is unsupported, empty or offline, and feeds the same profile/routing pipeline.
+  - Discovery failures are actionable and never remove manually entered entries.
+- **Evidence:**
+  - not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md; no code, model or network run started
+  - capability evidence: audit sections 3-4 (fixed YAML provider schema, closed kind branch, Bearer-only auth, temperature-only params, read-only Model Hub GUI, unwired router, measured-only capability gating)
+- **Sources:** user directive 2026-10-28: Open Model & Provider Ecosystem (task-69; audited in docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md); docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md; NL-BP-008; NL-BP-224; NL-BP-225
+- **Note:** Complements verified NL-BP-008 discovery; manual fallback is genuinely new.
+- **Program stage:** 9 - Open model and provider ecosystem
+
+<a id="nl-bp-227"></a>
+### NL-BP-227 - Extensible provider protocol adapters (no closed provider list)
+
+- **Area:** CORE - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directive 2026-10-28: open model and provider ecosystem)
+- **Dependencies:** NL-BP-008, NL-BP-225
+- **Acceptance gates:**
+  - Provider protocols are implemented as registered adapters (Ollama, OpenAI-compatible and additional/non-OpenAI protocols) declared by the adapter itself.
+  - Adding a protocol does not require editing a closed kind list or core routing branch; adapters declare their discovery/auth/model-list behaviour and capabilities.
+  - Adapter identity/version/health and provenance are exposed; a malformed adapter cannot corrupt other providers.
+- **Evidence:**
+  - not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md; no code, model or network run started
+  - capability evidence: audit sections 3-4 (fixed YAML provider schema, closed kind branch, Bearer-only auth, temperature-only params, read-only Model Hub GUI, unwired router, measured-only capability gating)
+- **Sources:** user directive 2026-10-28: Open Model & Provider Ecosystem (task-69; audited in docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md); docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md; NL-BP-008; NL-BP-225
+- **Note:** Replaces the closed kind branch in providers.py:268-293; no provider list becomes authoritative.
+- **Program stage:** 9 - Open model and provider ecosystem
+
+<a id="nl-bp-228"></a>
+### NL-BP-228 - Automatic parameter suggestions plus unrestricted expert configuration
+
+- **Area:** CORE - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directive 2026-10-28: open model and provider ecosystem)
+- **Dependencies:** NL-BP-010, NL-BP-225, NL-BP-068
+- **Acceptance gates:**
+  - The system suggests sane parameters per model/backend (context window, temperature, reasoning/thinking mode, tool-calling, structured output) with rationale and uncertainty.
+  - Experts can override or add backend-specific extra parameters without artificial restrictions; unsupported parameters are warned about, not silently dropped.
+  - Suggested vs user-specified values remain distinguishable and are persisted with the profile.
+- **Evidence:**
+  - not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md; no code, model or network run started
+  - capability evidence: audit sections 3-4 (fixed YAML provider schema, closed kind branch, Bearer-only auth, temperature-only params, read-only Model Hub GUI, unwired router, measured-only capability gating)
+- **Sources:** user directive 2026-10-28: Open Model & Provider Ecosystem (task-69; audited in docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md); docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md; NL-BP-010; NL-BP-225; NL-BP-068
+- **Note:** Today the router passes only temperature (model_router.py:222-234); suggestions/additional parameters are new.
+- **Program stage:** 9 - Open model and provider ecosystem
+
+<a id="nl-bp-229"></a>
+### NL-BP-229 - Per-model and per-role profiles with project bindings and override preservation
+
+- **Area:** CORE - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directive 2026-10-28: open model and provider ecosystem)
+- **Dependencies:** NL-BP-010, NL-BP-011, NL-BP-068, NL-BP-225
+- **Acceptance gates:**
+  - Each model can carry a profile (context, reasoning, sampling, tool-calling, prompt templates, extra params) and each role can bind a model+profile; bindings can be project-specific.
+  - Switching model or profile preserves explicit user overrides and records the effective configuration snapshot.
+  - Profiles are versioned, editable/importable/exportable and never silently reset.
+- **Evidence:**
+  - not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md; no code, model or network run started
+  - capability evidence: audit sections 3-4 (fixed YAML provider schema, closed kind branch, Bearer-only auth, temperature-only params, read-only Model Hub GUI, unwired router, measured-only capability gating)
+- **Sources:** user directive 2026-10-28: Open Model & Provider Ecosystem (task-69; audited in docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md); docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md; NL-BP-010; NL-BP-011; NL-BP-068; NL-BP-225
+- **Note:** Per-role model/temperature exists in YAML (config/models.yaml:27-43); persistent profiles/project bindings are new.
+- **Program stage:** 9 - Open model and provider ecosystem
+
+<a id="nl-bp-230"></a>
+### NL-BP-230 - Explicit capability states declared/detected/tested/unknown with warnings, not arbitrary rejection
+
+- **Area:** CORE - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directive 2026-10-28: open model and provider ecosystem)
+- **Dependencies:** NL-BP-009, NL-BP-069, NL-BP-183, NL-BP-070
+- **Acceptance gates:**
+  - The UI/API distinguishes declared, detected, tested and unknown capability states (mapped onto the existing measured/declared/unknown/unavailable evidence model) and shows their source.
+  - Unknown/declared capabilities produce visible warnings for ordinary experimental use instead of hard refusal; hard gates remain only where a task/policy explicitly requires a measured capability.
+  - Optional competence benchmarks and hardware profiling can enrich the states and never become an arbitrary allow-list for experimental use.
+- **Evidence:**
+  - not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md; no code, model or network run started
+  - capability evidence: audit sections 3-4 (fixed YAML provider schema, closed kind branch, Bearer-only auth, temperature-only params, read-only Model Hub GUI, unwired router, measured-only capability gating)
+- **Sources:** user directive 2026-10-28: Open Model & Provider Ecosystem (task-69; audited in docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md); docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md; NL-BP-009; NL-BP-069; NL-BP-183; NL-BP-070
+- **Note:** Existing registry has measured/declared/unknown/unavailable (capabilities.py:17-18) and measured-only gating; presentation/policy layer is new. NL-BP-009/069/183 retained.
+- **Program stage:** 9 - Open model and provider ecosystem
+
+<a id="nl-bp-231"></a>
+### NL-BP-231 - Flexible local/external/embedding/multimodal routing with explanations, override and policy enforcement
+
+- **Area:** CORE - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directive 2026-10-28: open model and provider ecosystem)
+- **Dependencies:** NL-BP-008, NL-BP-009, NL-BP-010, NL-BP-070, NL-BP-168, NL-BP-225, NL-BP-230
+- **Acceptance gates:**
+  - Routing covers local, external, embedding and multimodal backends with a deterministic resolution order and capability-aware selection.
+  - Each decision is explainable (why this model/backend, refused candidates, missing capabilities) and the user can override without losing the recorded reason.
+  - Existing permission/cloud-spending policy is enforced on every route; no hidden cloud or cost path is introduced.
+- **Evidence:**
+  - not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md; no code, model or network run started
+  - capability evidence: audit sections 3-4 (fixed YAML provider schema, closed kind branch, Bearer-only auth, temperature-only params, read-only Model Hub GUI, unwired router, measured-only capability gating)
+- **Sources:** user directive 2026-10-28: Open Model & Provider Ecosystem (task-69; audited in docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md); docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md; NL-BP-008; NL-BP-009; NL-BP-010; NL-BP-070; NL-BP-168; NL-BP-225; NL-BP-230
+- **Note:** Router module exists and is tested but not instantiated in product code; live wiring, explanations, override and embedding/multimodal routes are new. NL-BP-010/070/168 retained.
+- **Program stage:** 9 - Open model and provider ecosystem
 
 ## Area 2 - Studio GUI + multimodal chat
 
@@ -993,6 +1132,23 @@ _Professional NL-branded Studio shell; multimodal mission chat (drag-and-drop, C
 - **Sources:** user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md); docs/GOAL_MODE_CAPABILITY_AUDIT.md; NL-BP-212; NL-BP-213; NL-BP-214
 - **Note:** New GUI/CLI/API surface; extends the Task Board/Autonomy panel rather than replacing them.
 - **Program stage:** 8 - Universal Goal Mode and document-driven planning
+
+<a id="nl-bp-232"></a>
+### NL-BP-232 - Model Hub GUI/CLI/API provider and profile management
+
+- **Area:** STUDIO - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directive 2026-10-28: open model and provider ecosystem)
+- **Dependencies:** NL-BP-036, NL-BP-224, NL-BP-225, NL-BP-229, NL-BP-231
+- **Acceptance gates:**
+  - Model Hub supports provider/profile switch, edit, import, export and reuse across projects from GUI, CLI and API with equivalent behavior.
+  - Preset and custom-provider management is available in the UI; credential values are redacted and secret references are the only stored form.
+  - No hardcoded approved provider/family/architecture/quantization list gates the UI; the existing read-only model discovery table remains.
+- **Evidence:**
+  - not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md; no code, model or network run started
+  - capability evidence: audit sections 3-4 (fixed YAML provider schema, closed kind branch, Bearer-only auth, temperature-only params, read-only Model Hub GUI, unwired router, measured-only capability gating)
+- **Sources:** user directive 2026-10-28: Open Model & Provider Ecosystem (task-69; audited in docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md); docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md; NL-BP-036; NL-BP-224; NL-BP-225; NL-BP-229; NL-BP-231
+- **Note:** Extends the partial read-only Model Hub UI (NL-BP-036) without rewriting it.
+- **Program stage:** 9 - Open model and provider ecosystem
 
 ## Area 3 - Universal autonomous development
 
@@ -3176,6 +3332,23 @@ _Evidence gates for the final product: non-default install path; clean Windows w
 - **Note:** End-to-end acceptance for stage 8; separate from research acceptance (203/211) and cross-app scenario (199).
 - **Program stage:** 8 - Universal Goal Mode and document-driven planning
 
+<a id="nl-bp-233"></a>
+### NL-BP-233 - Open-provider acceptance scenario on real endpoints
+
+- **Area:** RELEASE - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directive 2026-10-28: open model and provider ecosystem)
+- **Dependencies:** NL-BP-224, NL-BP-225, NL-BP-226, NL-BP-227, NL-BP-228, NL-BP-229, NL-BP-230, NL-BP-231, NL-BP-232
+- **Acceptance gates:**
+  - Connect a custom OpenAI-compatible endpoint, llama.cpp and LM Studio, plus an Ollama community-namespace model or custom fine-tune; use both discovery and manual entry.
+  - Apply per-role profiles and verify unknown capabilities are displayed with warnings, routing explanations/overrides and unsupported-combination warnings without arbitrary rejection.
+  - Verify permission/cloud-spending controls and profile import/export/reuse across projects; evidence distinguishes fixture-verified vs real-endpoint-verified vs manual-pending.
+- **Evidence:**
+  - not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md; no code, model or network run started
+  - capability evidence: audit sections 3-4 (fixed YAML provider schema, closed kind branch, Bearer-only auth, temperature-only params, read-only Model Hub GUI, unwired router, measured-only capability gating)
+- **Sources:** user directive 2026-10-28: Open Model & Provider Ecosystem (task-69; audited in docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md); docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md; NL-BP-224; NL-BP-225; NL-BP-226; NL-BP-227; NL-BP-228; NL-BP-229; NL-BP-230; NL-BP-231; NL-BP-232
+- **Note:** End-to-end acceptance for stage 9; real endpoints are permissioned/manual and cannot be claimed from fixtures alone.
+- **Program stage:** 9 - Open model and provider ecosystem
+
 ## Addendum import v3.7 - Universal Autonomy/Research/Mega Suite dedupe mapping
 
 User-supplied addendum (2026-10-28) preserved unchanged at docs/product-blueprint/addenda/ (MANIFEST verified). Queue-only import by shared task-59: the spec was cross-checked against the 117 existing requirements; only genuinely missing capabilities were added. Existing IDs, acceptance criteria and statuses were not rewritten; stages 1-6 statuses were not changed.
@@ -3269,6 +3442,36 @@ New requirements are program stage 8, status planned. Blocked/external items pre
 - unbounded folder ingestion is not authorized; corpus discovery is consent-based and bounded
 - docs-only projects require honest document-consistency evidence, never fabricated test results
 - goal templates depend on the planned Mega Suite path (NL-BP-195)
+
+## Open-model directive v4.3 - capability audit and dedupe mapping
+
+Read-only audit: docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md (file:line evidence). Source: user directive 2026-10-28: Open Model & Provider Ecosystem (presets as conveniences not restrictions). Queue-only: no implementation, no code/model/network/mission run.
+
+| Sub-capability | Existing coverage | New requirements | Decision |
+|---|---|---|---|
+| Multi-provider discovery/health/loaded/unload | NL-BP-008 | none (covered) | verified foundation NL-BP-008 retained |
+| Built-in presets with editable defaults | - | NL-BP-224 | hand-edited YAML presets only today; first-class editable presets are new |
+| Custom provider profiles (URL/model/auth/headers/protocol/secret refs/import-export) | NL-BP-008, NL-BP-010 | NL-BP-225 | fixed YAML schema; new profile store |
+| Auto discovery + always-available manual entry | NL-BP-008 | NL-BP-226 | auto discovery exists; manual entry/fallback is new |
+| Extensible protocol adapters, no closed provider list | NL-BP-008 | NL-BP-227 | closed kind branch; adapter registry is new |
+| Automatic parameter suggestions + expert/backend-specific params | NL-BP-010, NL-BP-068 | NL-BP-228 | temperature-only today; suggestions/additional params new |
+| Per-model/per-role profiles + project bindings + switch-preserving overrides | NL-BP-010, NL-BP-011, NL-BP-068 | NL-BP-229 | YAML roles only; persistent profiles/bindings new |
+| Capability states declared/detected/tested/unknown + optional benchmarks, warnings not rejection | NL-BP-009, NL-BP-069, NL-BP-183 | NL-BP-230 | evidence registry exists; presentation/policy layer new; lab retained |
+| Flexible local/external/embedding/multimodal routing with explanations/override/policy | NL-BP-010, NL-BP-070, NL-BP-168 | NL-BP-231 | router module unwired; live routing surface new |
+| Model Hub GUI/CLI/API provider+profile management | NL-BP-036 | NL-BP-232 | read-only UI today; management surface new |
+| Model lifecycle load/unload/storage UI | NL-BP-036 | none (covered) | retained; 232 adds management, no duplicate |
+| Competence benchmarks/hardware profiling | NL-BP-069, NL-BP-183 | none (covered) | retained; 230 may consume |
+| Permission/cloud-spending enforcement | NL-BP-168, NL-BP-072 | none (covered) | retained; 231 enforces existing policy |
+| Open-provider acceptance scenario | - | NL-BP-233 | new end-to-end acceptance |
+
+New requirements are program stage 9, status planned. Blocked/external items preserved:
+- stage 9 is pending; depends_on_stages [4, 7] and stage 7 is itself pending/partially implemented
+- ModelRouter is tested but not instantiated in product code; live wiring (231) must not weaken permission/cloud gates
+- provided presets must not become an approved-provider/architecture/quantization allow-list
+- manual provider entry must remain available but cannot bypass permission or cloud-spending policy
+- unknown/declared capability combinations warn for experimental use; hard refusals only where task/policy requires measured capability
+- real-endpoint acceptance (233) is permissioned/manual and distinct from fixture evidence
+- HF acquisition (208) and competence benchmarks (069/183) remain separate planned requirements; no downloads in this directive
 
 ## Deduplication and merge decisions
 
