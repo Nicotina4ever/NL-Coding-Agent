@@ -638,7 +638,8 @@ class AppServices:
         root = Path(project_root).resolve()
         findings = []
         py_files = sorted(path for path in root.rglob("*.py")
-                          if ".git" not in path.parts and "build" not in path.parts
+                          if ".git" not in path.parts and ".workspace" not in path.parts
+                          and "build" not in path.parts
                           and "__pycache__" not in path.parts)[:200]
         for path in py_files:
             try:

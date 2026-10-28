@@ -2,7 +2,7 @@ r"""SH-07 acceptance runner (C3e).
 
 Tier A (default, fake mode): runs the deterministic two-consecutive-mission
 supervisor test suite plus the read-only diagnostic gate, and writes machine-readable
-evidence under build/phase3/evidence/. No Ollama/model call and no live DB write.
+evidence under .workspace/build/phase3/evidence/. No Ollama/model call and no live DB write.
 
 Tier B (live mode, NOT executed by default): requires --confirm-live and an isolated
 git worktree outside the repository, a temporary NL_DATA_DIR, local-only model
@@ -35,7 +35,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
-DEFAULT_EVIDENCE_ROOT = REPO_ROOT / "build" / "phase3" / "evidence"
+from nl_coding_agent.core.workspace import WORKSPACE_DIRNAME  # noqa: E402
+
+DEFAULT_EVIDENCE_ROOT = REPO_ROOT / WORKSPACE_DIRNAME / "build" / "phase3" / "evidence"
 SH07_TESTS = REPO_ROOT / "tests" / "test_supervisor_sh07.py"
 VERIFY_SCRIPT = REPO_ROOT / "scripts" / "verify_supervisor.py"
 

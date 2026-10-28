@@ -52,7 +52,7 @@ python\python.exe -c "import platform, sys, sqlite3; print(platform.platform(), 
 python\python.exe -m pytest tests/test_platform_support.py -q -p no:cacheprovider   # 31 passed
 python\python.exe -m pytest tests/test_bootstrap_installer.py tests/test_build_release.py -q -p no:cacheprovider
 python\python.exe -m pytest tests/test_ci_workflows.py tests/test_release_secrets_audit.py -q -p no:cacheprovider
-python\python.exe scripts\audit_release_secrets.py --json-out build/phase6/secrets_audit.json --markdown-out docs\SECRETS_AUDIT.md
+python\python.exe scripts\audit_release_secrets.py --json-out .workspace/build/phase6/secrets_audit.json --markdown-out docs\SECRETS_AUDIT.md
 # read-only review: docs/CI.md, .github/workflows/ci.yml, installer/runtime_manifest.{json,py},
 # installer/platform_targets.py, installer/provision.py, docs/BETA_TESTING.md,
 # docs/PRIVATE_BETA_RUNBOOK.md, docs/BOOTSTRAPPER.md section 7, docs/RELEASE_ACCEPTANCE.md

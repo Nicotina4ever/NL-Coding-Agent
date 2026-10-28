@@ -157,7 +157,7 @@ def build_secret_and_artifact_fixture(fixture: GitFixture) -> None:
     fixture.write("models/tiny.gguf", "model-marker")
     fixture.write("python/embedded.txt", "runtime-marker")
     fixture.write("crewAI/vendor.txt", "vendor-marker")
-    fixture.write("dist/payload.txt", "build-output-marker")
+    fixture.write(".workspace/dist/payload.txt", "build-output-marker")
     fixture.write(".env", "API_TOKEN=" + fake_password_value() + chr(10))
     fixture.commit("fixture with secrets and artifacts")
 
@@ -312,7 +312,7 @@ class TestReadOnly(AuditTestBase):
         completed = run_cli(fixture.root)
         self.assertIn("gate=", completed.stdout)
         self.assertEqual(before, snapshot_tree(fixture.root))
-        self.assertFalse(Path(str(fixture.root) + "/build").exists())
+        self.assertFalse((fixture.root / ".workspace" / "build").exists())
 
     def test_static_no_network_no_destructive_commands(self):
         source = SCRIPT.read_text(encoding="utf-8")
@@ -370,8 +370,8 @@ class TestCleanAndLocalOnlyTrees(AuditTestBase):
         fixture.commit("clean")
         (fixture.root / "data").mkdir()
         (fixture.root / "data" / "nl_coding_agent.sqlite3").write_bytes(b"SQLite format 3" + bytes([0]))
-        (fixture.root / "logs").mkdir()
-        (fixture.root / "logs" / "run.log").write_text("log line", encoding="utf-8")
+        (fixture.root / ".workspace" / "logs").mkdir(parents=True)
+        (fixture.root / ".workspace" / "logs" / "run.log").write_text("log line", encoding="utf-8")
         (fixture.root / "python").mkdir()
         (fixture.root / "python" / "python.exe").write_text("binary", encoding="utf-8")
         completed = run_cli(fixture.root, out_dir=self.out)
@@ -379,7 +379,7 @@ class TestCleanAndLocalOnlyTrees(AuditTestBase):
         report, markdown = read_reports(self.out)
         present = [item for item in report["findings"] if item["scope"] == "present-untracked"]
         paths = {item["path"] for item in present}
-        for expected in ("data", "logs", "python"):
+        for expected in ("data", ".workspace", "python"):
             self.assertIn(expected, paths)
         self.assertTrue(all(item["classification"] == "EXCLUDE-FROM-UPLOAD" for item in present))
         self.assertEqual(report["summary"]["blocking_count"], 0)
@@ -408,6 +408,34 @@ class TestOutputContract(AuditTestBase):
         self.assertIn("no upload", report["authorization_note"].lower())
         self.assertIn("owner authorization", markdown.lower())
         self.assertIn("Read-only audit", markdown)
+
+
+class TestFixtureAllowlist(AuditTestBase):
+    """Documented synthetic redaction fixtures are REVIEW, never blocking."""
+
+    FIXTURE_VALUE = "sk-TESTSECRET1234567890"
+
+    def test_allowlist_hashes_match_documented_fixtures(self):
+        self.assertIn(
+            hashlib.sha256(self.FIXTURE_VALUE.encode("utf-8")).hexdigest(),
+            audit.TEST_FIXTURE_SECRET_ALLOWLIST,
+        )
+
+    def test_allowlisted_value_in_tests_is_review_not_rotate(self):
+        collector = audit.Collector(50)
+        line = "SECRET_SK = \"" + self.FIXTURE_VALUE + "\"" + chr(10)
+        audit._match_secret_rules(line, "tests/test_diagnostic_report.py", 32, collector, "tracked")
+        tokens = [item for item in collector.items if item["rule"] == "openai_key"]
+        self.assertTrue(tokens)
+        self.assertTrue(all(item["classification"] == audit.REVIEW for item in tokens))
+
+    def test_same_value_outside_tests_remains_blocking(self):
+        collector = audit.Collector(50)
+        line = "SECRET_SK = \"" + self.FIXTURE_VALUE + "\"" + chr(10)
+        audit._match_secret_rules(line, "nl_coding_agent/app.py", 1, collector, "tracked")
+        tokens = [item for item in collector.items if item["rule"] == "openai_key"]
+        self.assertTrue(tokens)
+        self.assertTrue(all(item["classification"] == audit.ROTATE for item in tokens))
 
 
 if __name__ == "__main__":

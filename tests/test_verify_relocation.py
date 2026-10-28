@@ -65,5 +65,40 @@ class ScanTests(unittest.TestCase):
         self.assertEqual([hit["path"] for hit in hits], [expected])
 
 
+class WorkspaceLayoutTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.repo = Path(self._tmp.name)
+        (self.repo / "python").mkdir()
+        (self.repo / "data").mkdir()
+        verify.CHECKS.clear()
+        self.addCleanup(verify.CHECKS.clear)
+
+    def _checks(self) -> dict:
+        return {item["check"]: item["status"] for item in verify.CHECKS}
+
+    def test_detects_missing_workspace_and_legacy_output_dirs(self):
+        (self.repo / "build").mkdir()
+        verify.check_workspace_layout(self.repo)
+        checks = self._checks()
+        self.assertEqual(checks["workspace.root"], "FAIL")
+        self.assertEqual(checks["workspace.no_legacy_root_outputs"], "FAIL")
+        self.assertEqual(checks["workspace.python_preserved"], "PASS")
+        self.assertEqual(checks["workspace.data_preserved"], "PASS")
+
+    def test_passes_for_consolidated_workspace_layout(self):
+        for name in ("build", "dist", "logs", "temp", "cache", "state"):
+            (self.repo / ".workspace" / name).mkdir(parents=True)
+        (self.repo / "python").mkdir(exist_ok=True)
+        (self.repo / "data").mkdir(exist_ok=True)
+        verify.check_workspace_layout(self.repo)
+        checks = self._checks()
+        self.assertEqual(checks["workspace.root"], "PASS")
+        self.assertEqual(checks["workspace.no_legacy_root_outputs"], "PASS")
+        self.assertEqual(checks["workspace.python_preserved"], "PASS")
+        self.assertEqual(checks["workspace.data_preserved"], "PASS")
+
+
 if __name__ == "__main__":
     unittest.main()

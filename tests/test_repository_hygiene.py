@@ -86,30 +86,31 @@ class AuditFixture(unittest.TestCase):
         self.write("python/Lib/site-packages/crewai/__init__.py", "crewai" + chr(10))
         self.write("python/Lib/site-packages/crewai/__pycache__/x.pyc", "pyc")
         self.write("data/history.json", "{}" + chr(10))
-        self.write("logs/app.log", "log" + chr(10))
+        self.write(".workspace/logs/app.log", "log" + chr(10))
         self.write("crewAI/README.md", "vendor" + chr(10))
         self.write("crewAI/.git/config", "gitdir" + chr(10))
         self.write("crewAI-tools/placeholder.txt", "vendor tools" + chr(10))
-        self.write("dist/portable-release/nl_agent.py", "launcher" + chr(10))
-        self.write("dist/portable-release/nl_coding_agent/__init__.py", "packaged" + chr(10))
-        self.write_bytes("dist/portable-release/python/python.exe", b"MZfakeexe")
-        self.write_bytes("dist/portable-release/python/python312.zip", b"zipdata")
-        self.write_bytes("dist/portable-release/python/python312.dll", b"dll")
-        self.write("dist/portable-release/python/Lib/site-packages/crewai/__init__.py", "crewai" + chr(10))
-        self.write("dist/portable-release/payload_manifest.json",
+        self.write(".workspace/dist/portable-release/nl_agent.py", "launcher" + chr(10))
+        self.write(".workspace/dist/portable-release/nl_coding_agent/__init__.py", "packaged" + chr(10))
+        self.write_bytes(".workspace/dist/portable-release/python/python.exe", b"MZfakeexe")
+        self.write_bytes(".workspace/dist/portable-release/python/python312.zip", b"zipdata")
+        self.write_bytes(".workspace/dist/portable-release/python/python312.dll", b"dll")
+        self.write(".workspace/dist/portable-release/python/Lib/site-packages/crewai/__init__.py", "crewai" + chr(10))
+        self.write(".workspace/dist/portable-release/payload_manifest.json",
                    json.dumps({"source": self.old_root(), "output": "x"}))
-        self.write("build/phase4/CREWAI_FLOWS_PLAN.md", "stage4 plan" + chr(10))
-        self.write("build/portable_plan.json", json.dumps({"source": self.old_root()}))
-        self.write("build/audit_payload_db.py", "print('scratch')" + chr(10))
-        self.write("build/relocation/audit.md", "evidence" + chr(10))
+        self.write(".workspace/build/phase4/CREWAI_FLOWS_PLAN.md", "stage4 plan" + chr(10))
+        self.write(".workspace/build/portable_plan.json", json.dumps({"source": self.old_root()}))
+        self.write(".workspace/build/audit_payload_db.py", "print('scratch')" + chr(10))
+        self.write(".workspace/build/relocation/audit.md", "evidence" + chr(10))
         self.write("PATCH/nl_coding_agent/core/a.py", "VALUE = 1" + chr(10))
         self.write("PATCH/README.md", "patch readme" + chr(10))
         self.write("__pycache__/x.pyc", "pyc")
         self.write(".pytest_cache/README.md", "cache")
         self.write("%SystemDrive%/ProgramData/cache.db", "junk")
         self.write("nl_agent.py", "print('launcher')" + chr(10))
-        self.write(".gitignore", "python/" + chr(10) + "crewAI/" + chr(10) + "dist/" + chr(10)
-                   + "build/" + chr(10) + "data/" + chr(10) + "logs/" + chr(10) + "__pycache__/" + chr(10))
+        self.write(".gitignore", "python/" + chr(10) + "crewAI/" + chr(10) + ".workspace/" + chr(10)
+                   + "dist/" + chr(10) + "build/" + chr(10) + "data/" + chr(10)
+                   + "logs/" + chr(10) + "__pycache__/" + chr(10))
         self.write("pyproject.toml",
                    "[project]" + chr(10) + "name = \"demo\"" + chr(10)
                    + "requires-python = \">=3.12\"" + chr(10)
@@ -190,12 +191,12 @@ class AreaAndCacheTests(AuditFixture):
         source = self.area(report, "nl_coding_agent")
         self.assertEqual((source["kind"], source["classification"]), ("source", "source"))
         self.assertEqual(self.area(report, "data")["classification"], "protected")
-        self.assertEqual(self.area(report, "logs")["classification"], "protected")
+        self.assertEqual(self.area(report, ".workspace/logs")["classification"], "protected")
         self.assertEqual(self.area(report, "python")["classification"], "protected")
         self.assertEqual(self.area(report, "crewAI")["classification"], "protected")
-        self.assertEqual(self.area(report, "dist")["classification"], "protected")
+        self.assertEqual(self.area(report, ".workspace/dist")["classification"], "protected")
         self.assertEqual(self.area(report, "%SystemDrive%")["classification"], "safe")
-        self.assertEqual(self.area(report, "build")["classification"], "evidence")
+        self.assertEqual(self.area(report, ".workspace/build")["classification"], "evidence")
 
     def test_caches_separate_repository_candidates_from_runtime_caches(self):
         report = self.run_audit()
@@ -222,9 +223,12 @@ class DuplicateTests(AuditFixture):
         patch_group = by_paths.get(("PATCH/nl_coding_agent/core/a.py", "nl_coding_agent/core/a.py"))
         self.assertIsNotNone(patch_group)
         self.assertEqual(patch_group["classification"], "NEEDS-AUTHORIZATION")
-        build_group = by_paths.get(("build/phase4/CREWAI_FLOWS_PLAN.md", "docs/PHASE4_CREWAI_FLOWS_PLAN.md"))
-        self.assertIsNotNone(build_group)
-        self.assertEqual(build_group["classification"], "SAFE")
+        build_evidence = [item for item in report["obsolete"]
+                          if item["kind"] == "duplicate-build-evidence"]
+        self.assertEqual(len(build_evidence), 1)
+        self.assertEqual(build_evidence[0]["path"],
+                         ".workspace/build/phase4/CREWAI_FLOWS_PLAN.md")
+        self.assertEqual(build_evidence[0]["classification"], "SAFE")
         generic = by_paths.get(("docs/dup_a.md", "docs/dup_b.md"))
         self.assertIsNotNone(generic)
         self.assertEqual(generic["classification"], "NEEDS-AUTHORIZATION")
@@ -365,11 +369,11 @@ class SafetyStaticTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, source, "forbidden token in audit script: " + forbidden)
 
-    def test_default_reports_live_under_build(self):
+    def test_default_reports_live_under_workspace_build(self):
         self.assertEqual(str(audit.DEFAULT_JSON).replace(chr(92), "/"),
-                         "build/phase5/repository_hygiene.json")
+                         ".workspace/build/phase5/repository_hygiene.json")
         self.assertEqual(str(audit.DEFAULT_MD).replace(chr(92), "/"),
-                         "build/phase5/repository_hygiene.md")
+                         ".workspace/build/phase5/repository_hygiene.md")
 
 
 if __name__ == "__main__":

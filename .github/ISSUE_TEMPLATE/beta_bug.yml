@@ -161,7 +161,7 @@ body:
     attributes:
       label: Relevant log lines (redacted)
       description: |
-        Optional. Copy only the relevant lines, from logs/ in the installation folder or the console
+        Optional. Copy only the relevant lines, from .workspace/logs/ in the installation folder or the console
         output. Remove API keys, tokens, passwords, personal paths and project names before pasting.
         For long output attach a .txt file to the issue instead of pasting it.
       render: text

@@ -31,7 +31,7 @@ Dry-run measured on 2026-10-28:
 | Top-level launchers and entry point | 1,568 bytes |
 
 The plan excludes the 467 MiB `crewAI/` vendor checkout, `crewAI-tools/` if present, user `data/`,
-`logs/`, `state/`, tests, docs, scripts, `.git`, and generated caches. The staged payload is
+`.workspace/`, tests, docs, scripts, `.git`, and generated caches. The staged payload is
 smaller than the full workspace because the vendor checkout is not part of the runtime.
 
 ## Included Roots
@@ -50,7 +50,9 @@ smaller than the full workspace because the vendor checkout is not part of the r
 ## Excluded Roots and Patterns
 
 - Vendor/reference: `crewAI/`, `crewAI-tools/`
-- User data and runtime state: `data/`, `logs/`, `state/`
+- User data and runtime state: `data/`; generated logs/state/caches: `.workspace/` (ROOT REORG
+  Phase B: `build/`, `dist/`, `logs/`, `temp/`, `cache/`, `state/` live there; override with
+  `NL_WORKSPACE_DIR`)
 - Development-only: `tests/`, `docs/`, `scripts/`, `.agents/`
 - Version control: `.git/`
 - Caches: `__pycache__`, `.pytest_cache`, `.ruff_cache`, `.mypy_cache`, `node_modules`, `.venv`,

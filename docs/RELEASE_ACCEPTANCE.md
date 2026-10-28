@@ -3,8 +3,8 @@
 **Status:** portable candidate staged and smoke-tested from a managed temp installation path; **release acceptance is PARTIAL** because several acceptance criteria can only be verified manually on hardware/clean machines. Revision 1's release-blocking status portability defect is **fixed and re-verified** (see Revision 2 below).
 **Date:** 2026-10-28. Revision 1 measured at HEAD 7dbd40b; Revision 2 measured after the CLI status portability fix (full suite 513 passed; see Revision 2).
 **Task:** shared `task-38` (stage 6b release acceptance). Owner: runner-integrator.
-**Candidate:** dist/stage6b-portable-candidate-r2 (supersedes the revision-1 dist/stage6b-portable-candidate, retained pending authorization) - built with the repository embedded Python runtime and current sources by scripts/stage_portable.py (stage-6b allowlist).
-**Existing stale release:** `dist/portable-release` was **not modified or deleted** (23,639 files / 1,507,677,689 B, payload_manifest.json sha256 `fcec8cc9...8d44`). Replacement/deletion requires the explicit authorization requested in section 8.
+**Candidate:** .workspace/dist/stage6b-portable-candidate-r2 (supersedes the revision-1 .workspace/dist/stage6b-portable-candidate, retained pending authorization) - built with the repository embedded Python runtime and current sources by scripts/stage_portable.py (stage-6b allowlist).
+**Existing stale release:** `.workspace/dist/portable-release` was **not modified or deleted** (23,639 files / 1,507,677,689 B, payload_manifest.json sha256 `fcec8cc9...8d44`). Replacement/deletion requires the explicit authorization requested in section 8.
 
 **Constraints respected:** no network downloads, no model inference, no autonomous/self-build mission, no Ollama model runs (the `doctor` smoke performs the application own read-only `ollama list` check requested by the acceptance step), no git commit, no destructive changes, live `data/` untouched.
 
@@ -14,7 +14,7 @@
 
 | Property | Measured value |
 |---|---|
-| Candidate directory | `dist/stage6b-portable-candidate` |
+| Candidate directory | `.workspace/dist/stage6b-portable-candidate` |
 | Manifest file count / source bytes | **23,682 files / 1,508,402,351 B (1.40 GiB)** |
 | On-disk files / bytes (incl. payload_manifest.json) | **23,683 / 1,508,405,002 B** |
 | Payload tree sha256 (sorted rel-path + file sha256) | `80e4664618a165d49e7375fc1441a27e1b8416be1eb7206cda8bbe347ffa7b03` |
@@ -30,7 +30,7 @@ Build command and timing:
 
 ```powershell
 $env:PYTHONDONTWRITEBYTECODE='1'
-python\python.exe scripts\stage_portable.py --output dist\stage6b-portable-candidate --json
+python\python.exe scripts\stage_portable.py --output .workspace\dist\stage6b-portable-candidate --json
 # exit 0, 35-59 s on this host, source tree read-only, no network
 ```
 
@@ -84,17 +84,17 @@ data:      <temp>/data
 | Imports incl. flows | `import nl_coding_agent; nl_coding_agent.flows; core.supervisor; agents.orchestrator; gui.main` (cwd payload, sys.path=[payload]) | **PASS** exit 0; all module files resolve **inside the temp payload** |
 | GUI offscreen smoke | `QT_QPA_PLATFORM=offscreen` plus `QApplication` and `MainWindow(get_services())` + show + processEvents | **PASS** exit 0; window title "NL Coding Agent" (only a non-fatal Qt font-directory warning) |
 | Mission persistence from payload | candidate Python creates project + mission via registry/persistence with `NL_DATA_DIR=temp/data`, then a second process reads it back | **PASS** project_id 1, mission_id 1, title "Stage6b acceptance", status "pending", DB under `<temp>/data` |
-| No dev-only files in payload | relocation check + listing | **PASS**: none of tests/ scripts/ installer/ docs/ build/ data/ logs/ AGENTS.md PATCH/ crewAI/ crewAI-tools/ .git .agents present; `config/voicebridge.yaml` absent; `payload_manifest.json` present |
+| No dev-only files in payload | relocation check + listing | **PASS**: none of tests/ scripts/ installer/ docs/ .workspace/ data/ AGENTS.md PATCH/ crewAI/ crewAI-tools/ .git .agents present; `config/voicebridge.yaml` absent; `payload_manifest.json` present |
 | Single runtime copy | manifest check + on-disk count | **PASS** 1 `python.exe`, 1 `crewai` site-packages copy, 222 `.pyd` included |
 | Relocation-safe payload (no absolute workspace paths) | scan all non-runtime text files in the temp payload for current repo root and old `K:/AI/Coding Agent` root | **PASS** 0 hits; staging-time check also 0 hits |
-| Payload not mutated by smoke | recursive before/after listing of temp payload | **PASS** same file count/size; 0 `__pycache__`; no `state/` dir created |
+| Payload not mutated by smoke | recursive before/after listing of temp payload | **PASS** same file count/size; 0 `__pycache__`; no `.workspace/state/` dir created |
 | Live repository data untouched | `data/` mtimes before/after; all commands used temp `NL_DATA_DIR` | **PASS** `data/nl_coding_agent.sqlite3` mtime unchanged (2026-10-28 18:36:06) |
 
 ### Cleanup record
 
 - Managed temp directory removed after the smoke: **23,689 files / 1,508,650,018 B** removed; `Test-Path` false afterwards; no `nl-stage6b-acceptance-*` leftovers.
-- No repo files, `data/`, `logs/`, model files or vendor/runtime trees were modified by the smoke.
-- The dist candidate and its payload manifest were kept for Lead review (git-ignored `dist/`).
+- No repo files, `data/`, `.workspace/`, model files or vendor/runtime trees were modified by the smoke.
+- The dist candidate and its payload manifest were kept for Lead review (git-ignored `.workspace/dist/`).
 
 ---
 
@@ -150,20 +150,20 @@ Options for the Lead (a code change is outside this task write scopes):
 
 ## 8. Authorization request: stale dist replacement / candidate retention
 
-Current `dist/` inventory (all git-ignored; **no deletion or replacement was performed**):
+Current `.workspace/dist/` inventory (all git-ignored; **no deletion or replacement was performed**):
 
 | Path | Files | Bytes | Identity / status |
 |---|---:|---:|---|
-| `dist/portable-release` | 23,639 | 1,507,677,689 | **STALE** pre-relocation payload; payload_manifest sha256 `fcec8cc...8d44`; missing current `flows` package; source recorded as `K:/AI/Coding Agent` |
-| `dist/stage6a-source-candidate` | 3 | 1,102,563 | stage-6a source-only candidate/evidence (README/manifests/zip), not a runtime payload |
-| `dist/stage6b-portable-candidate` | 23,683 | 1,508,405,002 | **this stage-6b candidate**, tree sha256 `80e4664...7b03`; one verified portable candidate (partial acceptance due to status defect) |
+| `.workspace/dist/portable-release` | 23,639 | 1,507,677,689 | **STALE** pre-relocation payload; payload_manifest sha256 `fcec8cc...8d44`; missing current `flows` package; source recorded as `K:/AI/Coding Agent` |
+| `.workspace/dist/stage6a-source-candidate` | 3 | 1,102,563 | stage-6a source-only candidate/evidence (README/manifests/zip), not a runtime payload |
+| `.workspace/dist/stage6b-portable-candidate` | 23,683 | 1,508,405,002 | **this stage-6b candidate**, tree sha256 `80e4664...7b03`; one verified portable candidate (partial acceptance due to status defect) |
 
 Requests to the Lead/user:
 
-1. **Authorize replacement/removal of the stale `dist/portable-release`** after this stage-6b candidate (or its successor after the status fix) passes final acceptance; archive its `payload_manifest.json` and a file inventory as historical evidence before deletion.
-2. **Authorize removal of `dist/stage6a-source-candidate`** once its evidence is superseded (recommended), so `dist/` converges to one candidate.
+1. **Authorize replacement/removal of the stale `.workspace/dist/portable-release`** after this stage-6b candidate (or its successor after the status fix) passes final acceptance; archive its `payload_manifest.json` and a file inventory as historical evidence before deletion.
+2. **Authorize removal of `.workspace/dist/stage6a-source-candidate`** once its evidence is superseded (recommended), so `.workspace/dist/` converges to one candidate.
 3. **Authorize the small `cli.py` status-portability fix** (outside this task write scopes) or accept the documented limitation; until then the release cannot be called accepted.
-4. Keep exactly **one** new stage-6b candidate; this task created only `dist/stage6b-portable-candidate` and did not delete anything.
+4. Keep exactly **one** new stage-6b candidate; this task created only `.workspace/dist/stage6b-portable-candidate` and did not delete anything.
 
 ---
 
@@ -192,7 +192,7 @@ directory, and re-smoked from that non-default path:
 
 | Property | Measured value (revision 2) |
 |---|---|
-| Candidate directory | dist/stage6b-portable-candidate-r2 |
+| Candidate directory | .workspace/dist/stage6b-portable-candidate-r2 |
 | Manifest file count / source bytes | **23,682 files / 1,508,403,109 B (1.40 GiB)** |
 | Payload tree sha256 | 606462d3f8c0fa5ed69e3bb880d5a48f131652f38c79fb935bc4481f79906dcd |
 | payload_manifest.json sha256 | e2620b6f7470f20a84f0e820265bf648764b512f5b81515e8957c9bd1b6dfba0 |
@@ -213,8 +213,8 @@ PYTHONPATH):
 | Payload tree hash equality candidate vs temp staging | **PASS** |
 | Temp payload cleanup | removed; no leftovers; no __pycache__ in payload |
 
-Revision-1 (dist/stage6b-portable-candidate, tree 80e4664...) remains on disk only as historical
-evidence; retiring it, dist/stage6a-source-candidate and the stale dist/portable-release still
+Revision-1 (.workspace/dist/stage6b-portable-candidate, tree 80e4664...) remains on disk only as historical
+evidence; retiring it, .workspace/dist/stage6a-source-candidate and the stale .workspace/dist/portable-release still
 requires the explicit authorization requested in section 8.
 
 ---

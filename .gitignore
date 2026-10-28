@@ -5,10 +5,24 @@ python/
 crewAI/
 crewAI-tools/
 
-# User data, persisted state and diagnostics (never committed or shipped)
+# User data and diagnostics (never committed or shipped). data/ is the live SQLite
+# database, self-build state and backups; it stays outside .workspace/ by design.
 data/
+
+# Generated workspace root (ROOT REORG Phase B, task-45): transient build/audit
+# evidence, release payloads, run logs, telemetry/scratch caches and the legacy
+# bootstrap CLI state all live under .workspace/<child>. Never committed, never
+# shipped in the portable payload or the source-release builder.
+.workspace/
+
+# Legacy root locations retained defensively for a pre-reorg checkout or restore.
+# The application no longer creates anything here (policy: nl_coding_agent/core/workspace.py).
 logs/
 state/
+dist/
+build/
+cache/
+temp/
 
 # Python bytecode and packaging metadata
 __pycache__/
@@ -20,10 +34,6 @@ __pycache__/
 .venv/
 venv/
 
-# Build and release outputs (regenerated; keep at most one verified release candidate)
-dist/
-build/
-
 # Test/type-check/coverage artifacts (regenerated on demand)
 .pytest_cache/
 .ruff_cache/
@@ -33,8 +43,6 @@ build/
 htmlcov/
 
 # Local scratch and accidental variable-expansion paths
-cache/
-temp/
 tmp/
 *.tmp
 *.bak

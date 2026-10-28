@@ -76,10 +76,8 @@ CLI commands: `doctor`, `audit`, `work`, `status`, `roadmap`, `mission`,
 | `assets/` | Real product logo and theme tokens. |
 | `.agents/` | Agent definitions, rules and skills used by agentic development sessions. |
 | `docs/` | Documentation; dated historical bundles live under `docs/history/legacy/`. |
-| `data/` | SQLite database, self-build state, backups, mission baselines. **User data — never shipped.** |
-| `logs/` | Run logs and historical mission output. **Never shipped.** |
-| `build/` | Transient build/audit evidence and scratch output (git-ignored). |
-| `dist/` | Release payloads; at most one verified candidate (git-ignored). |
+| `data/` | SQLite database, self-build state, backups, mission baselines. **User data — never shipped.** Deliberately outside `.workspace/` (live-data path is a relocation-acceptance dependency). |
+| `.workspace/` | Single generated-data root (git-ignored): `build/` transient evidence, `dist/` release payloads (at most one verified candidate), `logs/`, `temp/`, `cache/`, `state/`. Default `<repo>/.workspace`; override with `NL_WORKSPACE_DIR`. |
 | `installer/` | Lightweight bootstrapper/installer tooling (stage-6 work in progress). |
 | `da_eliminare/crewAI/` | Reference-only CrewAI vendor checkout (own nested `.git`), staged for review by ROOT REORG Phase C (task-46). **Not imported** — the application uses the installed `crewai==1.15.32` package; nothing here is shipped or deleted without owner authorization. |
 | `docs/evidence/` | Acceptance and SBOM evidence kept for audit traceability. |

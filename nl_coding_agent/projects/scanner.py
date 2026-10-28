@@ -1,4 +1,4 @@
-﻿"""Project scanner — language/framework detection for an arbitrary folder."""
+"""Project scanner — language/framework detection for an arbitrary folder."""
 from __future__ import annotations
 
 import json
@@ -49,7 +49,7 @@ _EXT_LANGS: dict[str, str] = {
 
 _IGNORE_DIRS = {
     "__pycache__", ".git", ".svn", ".hg", "node_modules",
-    ".venv", "venv", "env", ".env", "dist", "build",
+    ".venv", "venv", "env", ".env", ".workspace", "dist", "build",
     "target", "bin", "obj", ".idea", ".vscode",
     "python", "crewAI", "crewAI-tools",  # vendor dirs in this workspace
 }

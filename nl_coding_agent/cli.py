@@ -12,11 +12,11 @@ from pathlib import Path
 import yaml
 from crewai import Agent, Crew, LLM, Process, Task
 
+from nl_coding_agent.core.workspace import logs_root, state_root
+
 APP_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MODELS = APP_ROOT / "config" / "models.yaml"
 DEFAULT_PROJECT = APP_ROOT / "config" / "voicebridge.yaml"
-STATE_ROOT = APP_ROOT / "state"
-LOG_ROOT = APP_ROOT / "logs"
 
 
 def load_yaml(path: Path) -> dict:
@@ -144,7 +144,7 @@ def read_docs(project_cfg: dict, max_chars: int = 140_000) -> str:
 
 def save_state(project_name: str, stage: str, content: str) -> Path:
     safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in project_name)
-    folder = STATE_ROOT / safe_name
+    folder = state_root() / safe_name
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{stage}.md"
     path.write_text(content, encoding="utf-8")
@@ -248,7 +248,7 @@ Be conservative: write "to verify" when you cannot know from the provided materi
 def work(models_cfg: dict, project_cfg: dict, goal: str) -> int:
     project = project_cfg["project"]["name"]
     root = ensure_project(project_cfg)
-    audit_path = STATE_ROOT / "".join(c if c.isalnum() or c in "-_" else "_" for c in project) / "audit.md"
+    audit_path = state_root() / "".join(c if c.isalnum() or c in "-_" else "_" for c in project) / "audit.md"
     if not audit_path.exists():
         raise SystemExit("Run AUDIT first: state/.../audit.md does not exist yet")
     audit_text = audit_path.read_text(encoding="utf-8", errors="replace")
@@ -334,7 +334,7 @@ def status(project_cfg: dict, config_path: Path | None = None) -> int:
         print("No state created yet. Open a project in the GUI or pass --project-config <file>.")
         return 0
     safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in project)
-    folder = STATE_ROOT / safe_name
+    folder = state_root() / safe_name
     print(f"Project: {project}")
     print(f"State: {folder}")
     if not folder.exists():
@@ -424,7 +424,7 @@ def _cmd_supervisor_run(args, *, detach: bool = False) -> int:
                             ("--debug-model", getattr(args, "debug_model", None))):
             if value:
                 command.extend([flag, value])
-        log_path = APP_ROOT / "logs" / "supervisor.log"
+        log_path = logs_root() / "supervisor.log"
         try:
             pid = _launch_detached(command, log_path)
         except Exception as exc:

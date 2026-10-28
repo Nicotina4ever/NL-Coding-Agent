@@ -35,14 +35,14 @@ writing, for that exact artifact/scope:
 | G-5 | Publishing download links, checksums intended for distribution, or beta invitations publicly | **FORBIDDEN** |
 | G-6 | Enabling telemetry/upload/analytics in the application or diagnostic tooling | **FORBIDDEN** |
 | G-7 | Rewriting repository history (`git reset` on published refs, rebase of shared history, tag deletion/moves) | **FORBIDDEN** |
-| G-8 | Deleting or replacing `data/`, `logs/`, databases, backups, model checkpoints, vendor checkouts or acceptance evidence | **FORBIDDEN** |
+| G-8 | Deleting or replacing `data/`, `.workspace/`, databases, backups, model checkpoints, vendor checkouts or acceptance evidence | **FORBIDDEN** |
 | G-9 | Publishing a candidate built from a workspace containing personal data or development databases | **FORBIDDEN** |
 | G-10 | Running model inference, network installs or mission runs as part of "verification" without owner approval | **FORBIDDEN by default** |
 
 Allowed without new authorization (local only, non-destructive):
 
 - local commits on the private repository (the Lead owns commit decisions);
-- local candidate builds under `build/` / `dist/` (git-ignored), with the existing safe tooling;
+- local candidate builds under `.workspace/build/` / `.workspace/dist/` (git-ignored), with the existing safe tooling;
 - read-only audits and tests that do not download or publish anything;
 - triage of issues within the private repository;
 - private, one-to-one communication with testers who already have the package.
@@ -55,14 +55,14 @@ Every step is read-only/local; record the output path or hash as evidence.
 1. **Repository hygiene audit** (secrets/stale/cache candidates, read-only):
 
    ```powershell
-   python\python.exe scripts\audit_repository_hygiene.py --json-out build\beta\hygiene.json --quiet
+   python\python.exe scripts\audit_repository_hygiene.py --json-out .workspace\build\beta\hygiene.json --quiet
    ```
 
    If the dedicated pre-upload secrets/history audit tool (NL-BP-162) is present in this checkout,
    run it as well (read-only, bounded, never publishes):
 
    ```powershell
-   python\python.exe scripts\audit_release_secrets.py --markdown-out build\beta\secrets_audit.md --quiet
+   python\python.exe scripts\audit_release_secrets.py --markdown-out .workspace\build\beta\secrets_audit.md --quiet
    ```
 
 2. **CrewAI SBOM compatibility check** (no network):
@@ -121,12 +121,12 @@ appropriate native runtime for the target platform, `assets/`, `config/models.ya
 
 **Must never be present** in a shared package:
 
-- `data/` (SQLite database, self-build state, backups, mission baselines), `logs/`, `state/`;
+- `data/` (SQLite database, self-build state, backups, mission baselines) and `.workspace/` (logs, state, caches);
 - `config/voicebridge.yaml` / `config/voicebridge.local.yaml` (machine-local external paths);
 - model files or checkpoints, Ollama caches, Hugging Face caches;
 - vendor checkouts (`crewAI/`, `crewAI-tools/`) unless an authorized license review explicitly
   requires reference material;
-- `build/`, `dist/`, test suites, development docs/evidence, patch/legacy evidence, temporary
+- `.workspace/`, test suites, development docs/evidence, patch/legacy evidence, temporary
   repair scripts, `.git/` metadata, `__pycache__`/tool caches, `.env` or secrets;
 - a Windows runtime inside a Linux/macOS candidate (never reuse runtimes across platforms).
 
@@ -146,7 +146,7 @@ payload)" for the maintained exclusion list.
 
 ## 6. Authorization and distribution procedure (owner-only steps)
 
-1. Maintainer builds the candidate locally under `build/` or `dist/` (git-ignored).
+1. Maintainer builds the candidate locally under `.workspace/build/` or `.workspace/dist/` (git-ignored).
 2. Maintainer runs the audit checklist (`3) and writes a short evidence note with the results.
 3. Owner reviews the evidence and the package content (`4), then records an explicit authorization
    in the beta log, for example:
@@ -231,7 +231,7 @@ API keys, tokens, passwords, private project files, full databases or full home-
 
 ## 9. Repository and artifact preservation
 
-- Never delete or rewrite `data/`, `logs/`, databases, backups, acceptance evidence, vendor
+- Never delete or rewrite `data/`, `.workspace/`, databases, backups, acceptance evidence, vendor
   checkouts, model caches or existing release candidates as part of triage or packaging.
 - Keep at most one verified release candidate per platform; record the others as candidates until
   an authorized cleanup decision.

@@ -11,12 +11,12 @@ from pathlib import Path
 import yaml
 from crewai import Agent, Crew, LLM, Process, Task
 
+from nl_coding_agent.core.workspace import state_root
+
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MODELS = APP_ROOT / "config" / "models.yaml"
 DEFAULT_PROJECT = APP_ROOT / "config" / "voicebridge.yaml"
-STATE_ROOT = APP_ROOT / "state"
-LOG_ROOT = APP_ROOT / "logs"
 
 
 def load_yaml(path: Path) -> dict:
@@ -163,7 +163,7 @@ def read_docs(project_cfg: dict, max_chars: int = 140_000) -> str:
 
 def save_state(project_name: str, stage: str, content: str) -> Path:
     safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in project_name)
-    folder = STATE_ROOT / safe_name
+    folder = state_root() / safe_name
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{stage}.md"
     path.write_text(content, encoding="utf-8")
@@ -297,7 +297,7 @@ Sii conservativo: quando non puoi sapere qualcosa dal materiale ricevuto, scrivi
 def work(models_cfg: dict, project_cfg: dict, goal: str) -> int:
     project = project_cfg["project"]["name"]
     root = ensure_project(project_cfg)
-    audit_path = STATE_ROOT / "".join(c if c.isalnum() or c in "-_" else "_" for c in project) / "audit.md"
+    audit_path = state_root() / "".join(c if c.isalnum() or c in "-_" else "_" for c in project) / "audit.md"
 
     if not audit_path.exists():
         raise SystemExit("Prima esegui AUDIT: non esiste ancora state/.../audit.md")
@@ -411,7 +411,7 @@ Non dichiarare test eseguiti.
 def status(project_cfg: dict) -> int:
     project = project_cfg["project"]["name"]
     safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in project)
-    folder = STATE_ROOT / safe_name
+    folder = state_root() / safe_name
     print(f"Project: {project}")
     print(f"State: {folder}")
     if not folder.exists():

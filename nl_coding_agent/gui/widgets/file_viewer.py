@@ -14,7 +14,7 @@ from nl_coding_agent.app.services import AppServices
 _BLOCKED_NAMES = {
     "python", "crewai", "crewai-tools", ".git", "data", "logs", "state",
     "__pycache__", ".venv", "venv", "node_modules", ".pytest_cache",
-    ".mypy_cache", "dist", "build",
+    ".mypy_cache", ".workspace", "dist", "build",
 }
 _BINARY_SUFFIXES = {
     ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".pdf", ".zip", ".7z",

@@ -50,7 +50,7 @@ historical evidence, rollback procedure and verification evidence.
 
 ## Pre-migration audit summary
 
-Read-only inventory: `build/relocation/audit_paths.json` (generated
+Read-only inventory: `.workspace/build/relocation/audit_paths.json` (generated
 `2026-10-28T15:22:21+01:00`, after the folder rename and before the SQLite/state data-identity
 migration).
 
@@ -210,9 +210,9 @@ Preconditions: stop NL Coding Agent and any Self-Build run; no `mission.lock` or
    - `python\python.exe scripts\migrate_project_root.py` — dry run must report the old identity
      as still pending (it must not report `ALREADY MIGRATED`);
    - `python\python.exe scripts\verify_relocation.py` — may report the expected failures recorded
-     in `build/relocation/verify_relocation_pre_migration.json`;
+     in `.workspace/build/relocation/verify_relocation_pre_migration.json`;
    - `python\python.exe nl_agent.py doctor` must exit 0.
-5. Keep `data/backups/` and `build/relocation/` after a rollback: they are the audit trail.
+5. Keep `data/backups/` and `.workspace/build/relocation/` after a rollback: they are the audit trail.
 
 ## Verification commands and evidence
 
@@ -222,14 +222,14 @@ the database or `data/selfbuild_state.json`.
 ### Relocation gate
 
 ```powershell
-python\python.exe scripts\verify_relocation.py --report build\relocation\verify_relocation_final_docs.json
+python\python.exe scripts\verify_relocation.py --report .workspace\build\relocation\verify_relocation_final_docs.json
 ```
 
 | Stage | Report | Result |
 |---|---|---|
-| Before the data-identity migration (after the folder rename) | `build/relocation/verify_relocation_pre_migration.json` | 19 passed, **9 failed**, 1 warning |
-| After data-identity migration, before the docs update | `build/relocation/verify_relocation_post_migration.json` | 27 passed, **1 failed** — only `paths.operational_docs_clean` — 1 warning |
-| After the documentation update (final) | `build/relocation/verify_relocation_final_docs.json` | 28 passed, **0 failed**, 1 warning; `RESULT: PASSED` — the warning is `git.working_tree` (uncommitted documentation changes, cleared by the checkpoint commit) |
+| Before the data-identity migration (after the folder rename) | `.workspace/build/relocation/verify_relocation_pre_migration.json` | 19 passed, **9 failed**, 1 warning |
+| After data-identity migration, before the docs update | `.workspace/build/relocation/verify_relocation_post_migration.json` | 27 passed, **1 failed** — only `paths.operational_docs_clean` — 1 warning |
+| After the documentation update (final) | `.workspace/build/relocation/verify_relocation_final_docs.json` | 28 passed, **0 failed**, 1 warning; `RESULT: PASSED` — the warning is `git.working_tree` (uncommitted documentation changes, cleared by the checkpoint commit) |
 
 The final gate run also re-verifies: single project row id=1 at the canonical root, 15 owned
 missions, 0 orphan missions, `state.canonical_key`, preserved mission id/fingerprint/audit notes,
@@ -256,8 +256,8 @@ remains recoverable from the SQLite migration event (id 75 payload), from
 migration from a restored backup; it backs up the database and state first and refuses to run
 while `data/selfbuild.lock` exists (unless `--force` is passed).
 
-Full plan/apply evidence: `build/relocation/migration_plan.json` and
-`build/relocation/migration_result.json` (`applied: true`, `applied_at: 2026-10-28T15:23:01`,
+Full plan/apply evidence: `.workspace/build/relocation/migration_plan.json` and
+`.workspace/build/relocation/migration_result.json` (`applied: true`, `applied_at: 2026-10-28T15:23:01`,
 backup directory, `db_result`, `state_result` and the post-apply verification block).
 
 ## Post-relocation verification checklist (completed)
@@ -274,8 +274,8 @@ backup directory, `db_result`, `state_result` and the post-apply verification bl
   projects; the relocation tooling added by `d471e79`/`c10e769` is listed above.
 ## Independent verification and follow-up fixes (2026-10-28)
 
-Read-only independent verification from the new root: `build/relocation/verification_report.md`
-and `build/relocation/verification_report.json`.
+Read-only independent verification from the new root: `.workspace/build/relocation/verification_report.md`
+and `.workspace/build/relocation/verification_report.json`.
 
 - **Verdict:** relocation data identity **VERIFIED** — one project identity (id=1), 45 missions
   (15 owned, 0 orphans), state key/fingerprint/mission-43/audit notes preserved, gate green on two
@@ -300,4 +300,35 @@ and `build/relocation/verification_report.json`.
   hardening the gate reports 30 passed, 0 failed, 0 warnings.
 - **Remaining historical references:** unchanged and intentional (see "Known remaining historical
   references"); the gate's operational-document scan is clean.
+
+## ROOT REORG Phase B - .workspace consolidation (2026-10-28, shared task-45)
+
+The root reorganization Phase B moved the generated roots under one configurable
+workspace directory (same-volume renames; no copies and no deletion of user data):
+
+| Before (repository root) | After | Files | Bytes |
+|---|---|---|---|
+| `build/` | `.workspace/build/` | 333 | 9,708,087 |
+| `dist/` | `.workspace/dist/` | 71,008 | 4,525,591,017 |
+| `logs/` | `.workspace/logs/` | 33 | 2,658,024 |
+| `state/` (absent) | `.workspace/state/` (created empty) | 0 | 0 |
+| `temp/`, `cache/` (absent) | `.workspace/temp/`, `.workspace/cache/` (created empty) | 0 | 0 |
+
+File counts and byte totals matched before/after for every moved directory and the
+free-space delta was zero. `python/` (embedded runtime) and `data/` (live SQLite
+user data, backups, mission baselines) deliberately stay at the repository root:
+their paths are a relocation-acceptance dependency, and the gate now checks them.
+
+The single path policy is `nl_coding_agent/core/workspace.py`
+(`workspace_root()`, `workspace_path()`, `build_root()`, `dist_root()`,
+`logs_root()`, `temp_root()`, `cache_root()`, `state_root()`): default
+`<repository>/.workspace`, override `NL_WORKSPACE_DIR`. `.workspace/` is
+git-ignored, excluded from the portable payload (`scripts/stage_portable.py`) and
+from the source-release builder (`scripts/build_release.py`), and a regression
+test (`tests/test_workspace_paths.py`) fails if a legacy root output directory
+reappears.
+
+The earlier sections above remain the dated record of the previous relocation; the
+evidence paths they cite are now under `.workspace/build/relocation/`.
+
 

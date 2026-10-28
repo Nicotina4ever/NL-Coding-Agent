@@ -1,10 +1,11 @@
 # Repository Structure and Ownership
 
 **Status:** authoritative for the repository layout after the 2026-10-28 hygiene follow-up
-(shared `task-34`), the root reorganization Phase A (shared `task-44`) and Phase C
+(shared `task-34`), the root reorganization Phase A (shared `task-44`), Phase B
+(shared `task-45`; generated roots consolidated under `.workspace/`) and Phase C
 (shared `task-46`; crewAI checkout staged under `da_eliminare/`). Measured before/after
 inventory and validation are in `docs/REPOSITORY_HYGIENE_FOLLOWUP.md`,
-`build/root_reorg/REPORT.md` and `docs/CREWAI_CHECKOUT_REMOVAL_PROPOSAL.md`.
+`.workspace/build/root_reorg/REPORT.md` and `docs/CREWAI_CHECKOUT_REMOVAL_PROPOSAL.md`.
 **Rule:** all paths are repository-relative. Do not introduce absolute workspace paths into
 documentation, launchers or runtime code — the repository must stay relocatable.
 
@@ -31,15 +32,12 @@ documentation, launchers or runtime code — the repository must stay relocatabl
 | `docs/history/legacy/` | archived evidence | tracked | Lead | Dated legacy docs + patch evidence moved from the root | **Never deleted**; verbatim | No |
 | `docs/evidence/` | acceptance evidence | tracked | stage owners | SH-07 evidence, CrewAI SBOM | Retain for audit traceability | No |
 | `da_eliminare/` | review-only staging | **ignored** (README tracked) | user/Lead | Staging for material that appears no longer needed; nothing is deleted or archived without explicit user authorization | Review-only; never shipped; portable payload and release builder exclude it | Never |
-| `data/` | user data | **ignored** | runtime | SQLite DB, self-build state, backups, mission baselines, staging, recovery | **Never deleted/shipped**; back up before migrations; restore only from verified backup | Never |
-| `logs/` | diagnostics | **ignored** | runtime | Run logs and historical mission output | Retention by user decision; never shipped | Never |
-| `build/` | transient evidence | **ignored** | task owners | Phase evidence, audit reports, scratch scripts, relocation evidence | Safe to regenerate; keep through the relevant acceptance decision; not shipped | Never |
-| `dist/` | release artifacts | **ignored** | release owner | At most one verified portable candidate | Existing `dist/portable-release` is stale (missing current packages): rebuild only at stage 6 with explicit authorization | Never packaged into itself |
+| `data/` | user data | **ignored** | runtime | SQLite DB, self-build state, backups, mission baselines, staging, recovery. Deliberately stays at the repository root (relocation-acceptance dependency; not moved by Phase B). | **Never deleted/shipped**; back up before migrations; restore only from verified backup | Never |
+| `.workspace/` | generated workspace | **ignored** | runtime/task owners | Single generated-data root (ROOT REORG Phase B): `build/` phase evidence, audits and scratch; `dist/` release candidates; `logs/`; `temp/`; `cache/`; `state/`. Default `<repo>/.workspace`; override `NL_WORKSPACE_DIR`; policy in `nl_coding_agent/core/workspace.py`. | Safe to regenerate/clear with the app and tests stopped (evidence retention by owner decision); never committed or shipped | Never |
 | `docs/history/legacy/temp-scripts/` | archived one-off repair scripts | tracked | — | Historical DB/source repair scripts (superseded; their functionality is integrated in the committed tree) | **Never deleted or executed**; verbatim historical evidence | Never |
 | `da_eliminare/crewAI/` | review-only staging (vendor checkout) | **ignored** (inside `da_eliminare/`) | user/Lead | Reference-only upstream CrewAI checkout (own `.git`, docs), moved intact by ROOT REORG Phase C (task-46). **Not imported**: the app uses installed `crewai==1.15.32`. The SBOM/legal gate reads its `LICENSE` | Review-only; nothing deleted, archived or removed from Git without explicit user authorization; restore by moving back to `crewAI/` | Never |
-| `crewAI-tools/` | vendor checkout | **ignored** | — | Legacy vendor checkout; absent at this audit | Same policy if restored | Never |
+| | `crewAI-tools/` | vendor checkout | **ignored** | — | Legacy vendor checkout; absent at this audit | Same policy if restored | Never |
 | `.git/` | git metadata | ignored | git | Repository history and worktree registrations | Never shipped; never cleaned | Never |
-| `state/`, `cache/`, `temp/` | runtime/scratch | **ignored** | runtime | Reserved application-state/cache/temp roots when used (currently the app keeps state under `data/`); `temp/`/`cache/` are ephemeral and may be emptied | Safe to clear when the app is stopped; never back up merged content | Never |
 
 ## Generated, cache and scratch policy
 
@@ -47,10 +45,10 @@ documentation, launchers or runtime code — the repository must stay relocatabl
 |---|---|---|
 | Python bytecode / tool caches | `__pycache__/`, `.pytest_cache/`, `.ruff_cache/`, `.mypy_cache/` | Regenerated on demand; git-ignored; never shipped; safe to delete with the app and tests stopped. Never touch caches inside `python/` or the staged vendor checkout (protected). |
 | Coverage output | `.coverage*`, `htmlcov/` | Regenerated; git-ignored; never shipped. |
-| OS/app scratch | `temp/`, `tmp/`, `*.tmp`, `*.bak`, `nul` | Ephemeral; git-ignored; may be emptied when no process holds files. |
+| OS/app scratch | `.workspace/temp/`, `tmp/`, `*.tmp`, `*.bak`, `nul` | Ephemeral; git-ignored; may be emptied when no process holds files. |
 | Accidental variable-expansion tree | `%SystemDrive%/` | Must never exist (a literal unexpanded variable created one in the past; it was removed). Defensively git-ignored. |
-| Build evidence | `build/` | Git-ignored; evidence for open acceptance decisions; removed only after the decision is closed and with owner agreement. |
-| Release payloads | `dist/` | Git-ignored; at most one verified candidate; stale payloads need explicit authorization before replacement/removal (stage-6 decision). |
+| Build evidence | `.workspace/build/` | Git-ignored; evidence for open acceptance decisions; removed only after the decision is closed and with owner agreement. |
+| Release payloads | `.workspace/dist/` | Git-ignored; at most one verified candidate; the stale `.workspace/dist/portable-release` needs explicit authorization before replacement/removal (stage-6 decision). |
 | Runtime caches | `python/`, `crewAI/` | Protected — hygiene passes never clean inside vendor/runtime trees. |
 
 **Backup rule:** `data/` is authoritative user/mission data. Before any migration or cleanup that
@@ -72,9 +70,11 @@ is development-only and must stay outside the payload:
 - **Documentation and evidence:** `docs/` (including `docs/history/legacy/`, `docs/evidence/`,
   this document, audit/plan/backlog docs). The root `AGENTS.md` is developer-only; a user-facing
   `README.md` **should** be added to the payload by the stage-6 build owner.
-- **Generated/transient:** `build/`, `dist/`, caches, `*.pyc`/`*.pyo`, `.pytest_cache/`,
+- **Generated/transient:** `.workspace/` (build evidence, release candidates, logs,
+  temp/cache/state), caches, `*.pyc`/`*.pyo`, `.pytest_cache/`,
   `.ruff_cache/`, `.mypy_cache/`, `.venv/`, `venv/`.
-- **User data and diagnostics:** `data/`, `logs/`, `state/`, `temp/`, `*.sqlite3`, `*.db`.
+- **User data and diagnostics:** `data/`, `*.sqlite3`, `*.db`; generated logs/state are
+  inside `.workspace/`.
 - **Machine-local configuration:** `config/voicebridge.yaml`, `config/voicebridge.local.yaml`
   (external project paths and user data; explicitly excluded by the staging tool).
 - **Vendor reference trees:** `da_eliminare/crewAI/` (reference-only upstream checkout with its
@@ -85,9 +85,33 @@ is development-only and must stay outside the payload:
   `docs/history/legacy/temp-scripts/`, and the archived patch evidence in
   `docs/history/legacy/patch-evidence/`.
 
-Packaging must never recurse into `dist/` or `build/`, and must not copy the embedded runtime from
+Packaging must never recurse into `.workspace/`, and must not copy the embedded runtime from
 inside an existing payload. Portable independence smoke tests run only in a managed temporary
 directory and record their cleanup path (see `AGENTS.md`).
+
+## Workspace layout (ROOT REORG Phase B)
+
+Generated data uses one configurable root, default `<repository>/.workspace` and overridable
+with `NL_WORKSPACE_DIR`; the single policy module is
+`nl_coding_agent/core/workspace.py` (`workspace_root()`, `workspace_path()`,
+`build_root()`, `dist_root()`, `logs_root()`, `temp_root()`, `cache_root()`,
+`state_root()`).
+
+| Child | Purpose |
+|---|---|
+| `.workspace/build/` | Transient build/audit evidence and generated reports |
+| `.workspace/dist/` | Release candidates and portable payloads (at most one verified) |
+| `.workspace/logs/` | Run logs and diagnostics |
+| `.workspace/temp/` | Disposable scratch files |
+| `.workspace/cache/` | Application caches |
+| `.workspace/state/` | Legacy bootstrap CLI state |
+
+`python/` (the embedded runtime shipped in the payload) and `data/` (live SQLite user data,
+backups, recovery, mission baselines) deliberately stay at their historical repository-relative
+paths: they are a relocation-acceptance dependency and are checked by
+`scripts/verify_relocation.py`. `.workspace/` is git-ignored, excluded from the portable payload
+and the source-release builder, and `tests/test_workspace_paths.py` fails if a legacy root
+output directory (build/dist/logs/temp/cache) reappears.
 
 ## Relocation safety
 

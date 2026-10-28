@@ -17,9 +17,12 @@ from pathlib import Path
 
 PROTECTED_NAMES = ("python", "crewAI", "crewAI-tools")
 CACHE_NAMES = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".cache"}
-BUILD_NAMES = {"build", "dist", "htmlcov", ".tox", ".nox"}
+# .workspace/ is the consolidated ROOT REORG Phase B root for build/dist/logs/
+# temp/cache/state; the legacy root names stay classified for pre-reorg checkouts.
+BUILD_NAMES = {".workspace", "build", "dist", "htmlcov", ".tox", ".nox"}
 DUPLICATE_EXCLUDED_NAMES = {
     ".git",
+    ".workspace",
     ".venv",
     "venv",
     "env",

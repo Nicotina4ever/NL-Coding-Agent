@@ -29,16 +29,20 @@ Everything is standard library only (Python >= 3.10): no global Python/pip/uv/co
 
 ## 2. Measured local evidence (2026-10-28)
 
+The measurements below were taken before ROOT REORG Phase B (shared `task-45`); the measured
+artifacts were moved unchanged into `.workspace/`, so the paths shown are the current equivalent
+locations under the single workspace policy (default `<repo>/.workspace`).
+
 | Step | Command | Result |
 |---|---|---|
-| Build candidate | `python scripts/build_release.py --name stage6a-source-candidate --json` | `dist/stage6a-source-candidate`: 255 tracked files, 3,625,705 B input; zip 1,053,218 B sha256 `55ea86742a8af56267cbc51366f2187292cc43771762348ade535695893eaa06` |
-| Reproducibility | two builds into `build/phase6a/repro-a` and `build/phase6a/repro-b` | identical candidate name, identical file set, **byte-identical** `release-manifest.json`, `platform-manifest.json` and source zip (same sha256) |
-| Offline plan | `python installer/bootstrap.py plan --offline-bundle dist/stage6a-source-candidate --target build/phase6a/install-test --cache build/phase6a/cache --json` | `installable: true`, 1,053,218 B to fetch, cache misses 0 -> 1, no writes |
+| Build candidate | `python scripts/build_release.py --name stage6a-source-candidate --json` | `.workspace/dist/stage6a-source-candidate`: 255 tracked files, 3,625,705 B input; zip 1,053,218 B sha256 `55ea86742a8af56267cbc51366f2187292cc43771762348ade535695893eaa06` |
+| Reproducibility | two builds into `.workspace/build/phase6a/repro-a` and `.workspace/build/phase6a/repro-b` | identical candidate name, identical file set, **byte-identical** `release-manifest.json`, `platform-manifest.json` and source zip (same sha256) |
+| Offline plan | `python installer/bootstrap.py plan --offline-bundle .workspace/dist/stage6a-source-candidate --target .workspace/build/phase6a/install-test --cache .workspace/build/phase6a/cache --json` | `installable: true`, 1,053,218 B to fetch, cache misses 0 -> 1, no writes |
 | Offline install | same with `install` | `status: installed`, 255 files / 3,625,705 B, 1 artifact into shared cache |
-| Verify | `python installer/bootstrap.py verify --target build/phase6a/install-test --json` | `status: verified`, `ok: true`, 255/255 files, 3,625,705 B checked, 0 missing/modified |
-| Cache | `python installer/bootstrap.py cache list --cache build/phase6a/cache --json` | 1 content-addressed entry, 1,053,218 B |
+| Verify | `python installer/bootstrap.py verify --target .workspace/build/phase6a/install-test --json` | `status: verified`, `ok: true`, 255/255 files, 3,625,705 B checked, 0 missing/modified |
+| Cache | `python installer/bootstrap.py cache list --cache .workspace/build/phase6a/cache --json` | 1 content-addressed entry, 1,053,218 B |
 
-The existing stale `dist/portable-release` was not touched: the new source-only candidate (`dist/stage6a-source-candidate`, zip 1,053,218 B + manifests) is a separate, newly created directory (the builder refuses to overwrite any existing candidate), and `python/` and `crewAI/` were not copied. That candidate and the `build/phase6a/` smoke workspace are retained as measured stage-6a evidence for Lead review only; they are not a verified full release (no runtime bundle), and removing/replacing or promoting them is a Lead decision under the repository structure policy (at most one verified release candidate under `dist/`).
+The existing stale `.workspace/dist/portable-release` was not touched: the new source-only candidate (`.workspace/dist/stage6a-source-candidate`, zip 1,053,218 B + manifests) is a separate, newly created directory (the builder refuses to overwrite any existing candidate), and `python/` and `crewAI/` were not copied. That candidate and the `.workspace/build/phase6a/` smoke workspace are retained as measured stage-6a evidence for Lead review only; they are not a verified full release (no runtime bundle), and removing/replacing or promoting them is a Lead decision under the repository structure policy (at most one verified release candidate under `.workspace/dist/`).
 
 ---
 
@@ -91,11 +95,11 @@ python installer/bootstrap.py plan --manifest C:/releases/0.2.0/platform-manifes
 python installer/bootstrap.py install --target C:/Users/me/Apps/NL-Coding-Agent --manifest C:/releases/0.2.0/platform-manifest.json --cache C:/Users/me/AppData/Local/NL-Coding-Agent/cache
 
 # No-network install from an offline bundle directory (manifest.json + artifacts).
-python installer/bootstrap.py install --target C:/Users/me/Apps/NL-Coding-Agent --offline-bundle dist/stage6a-source-candidate --cache C:/temp/nl-cache
+python installer/bootstrap.py install --target C:/Users/me/Apps/NL-Coding-Agent --offline-bundle .workspace/dist/stage6a-source-candidate --cache C:/temp/nl-cache
 
 # Update/repair/verify an existing managed installation.
 python installer/bootstrap.py update --target C:/Users/me/Apps/NL-Coding-Agent --manifest C:/releases/0.3.0/platform-manifest.json
-python installer/bootstrap.py repair --target C:/Users/me/Apps/NL-Coding-Agent --offline-bundle dist/stage6a-source-candidate
+python installer/bootstrap.py repair --target C:/Users/me/Apps/NL-Coding-Agent --offline-bundle .workspace/dist/stage6a-source-candidate
 python installer/bootstrap.py verify --target C:/Users/me/Apps/NL-Coding-Agent --json
 
 # Shared cache management (clear/prune require --yes).
@@ -140,12 +144,12 @@ Trust limitation: integrity is anchored in the manifest (sha256). A compromised 
 # Plan only (no writes): files/size/version/head/candidate name.
 python scripts/build_release.py --plan --json
 
-# Build a new candidate under dist/ (refuses to overwrite an existing directory).
+# Build a new candidate under .workspace/dist/ (refuses to overwrite an existing directory).
 python scripts/build_release.py --json
 
 # Two builds from the same inputs are byte-identical (same zip and manifests).
-python scripts/build_release.py --output-parent build/phase6a/repro-a --json
-python scripts/build_release.py --output-parent build/phase6a/repro-b --json
+python scripts/build_release.py --output-parent .workspace/build/phase6a/repro-a --json
+python scripts/build_release.py --output-parent .workspace/build/phase6a/repro-b --json
 
 # Optional prebuilt runtime archive (python/ and crewAI/ are never copied from the workspace).
 python scripts/build_release.py --with-runtime-archive C:/build/python-3.12.10-win64.zip --runtime-platform windows-x86_64 --runtime-version 3.12.10
@@ -163,7 +167,7 @@ Optional `runtime/<archive>` is added only for `--with-runtime-archive`.
 
 Determinism rules: no timestamps in manifests, no absolute paths, sorted file/component order, `json.dumps(sort_keys=True)`, fixed zip entry metadata, no environment data, version parsed from `nl_coding_agent/core/version.py`, HEAD from read-only git. Only git-tracked files are packaged; untracked files are never included.
 
-Default exclusions: `.git`, `data/`, `logs/`, `dist/`, `build/`, `python/`, `crewAI/`, `crewAI-tools/`, `PATCH/`, `.agents/`, caches (`__pycache__` etc.), bytecode, SQLite/log files, `config/voicebridge.yaml`, `.env`, `SHA256_MANIFEST.json`, `temp_*.py` and `*.patch` artifacts. The builder writes only a NEW candidate directory (default parent `<source>/dist`), refuses existing paths and never deletes, moves or rewrites anything - including the existing stale `dist/portable-release` (removal/replacement requires explicit authorization).
+Default exclusions: `.git`, `.workspace/`, `data/`, `python/`, `crewAI/`, `crewAI-tools/`, `PATCH/`, `.agents/`, caches (`__pycache__` etc.), bytecode, SQLite/log files, `config/voicebridge.yaml`, `.env`, `SHA256_MANIFEST.json`, `temp_*.py` and `*.patch` artifacts. The builder writes only a NEW candidate directory (default parent `<source>/.workspace/dist`), refuses existing paths and never deletes, moves or rewrites anything - including the existing stale `.workspace/dist/portable-release` (removal/replacement requires explicit authorization).
 
 ---
 
@@ -236,7 +240,7 @@ python installer/bootstrap.py provision plan --runtime-manifest installer/runtim
 python installer/bootstrap.py provision plan --runtime-manifest installer/runtime_manifest.json --platform linux-aarch64
 
 # Install/verify/update/repair from measured artifacts (offline bundle = local artifacts only).
-python installer/bootstrap.py provision install --runtime-manifest release/runtime-manifest.json --target C:/Apps/NL/runtime --offline-bundle build/release-candidate
+python installer/bootstrap.py provision install --runtime-manifest release/runtime-manifest.json --target C:/Apps/NL/runtime --offline-bundle .workspace/build/release-candidate
 python installer/bootstrap.py provision verify --target C:/Apps/NL/runtime
 python installer/bootstrap.py provision repair --runtime-manifest release/runtime-manifest.json --target C:/Apps/NL/runtime
 

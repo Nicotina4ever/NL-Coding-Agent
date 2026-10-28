@@ -21,7 +21,7 @@ It verifies, from the new canonical repository root:
 
 Usage:
   python\python.exe scripts\verify_relocation.py
-  python\python.exe scripts\verify_relocation.py --json --report build/relocation/verify_relocation_report.json
+  python\python.exe scripts\verify_relocation.py --json --report .workspace/build/relocation/verify_relocation_report.json
   python\python.exe scripts\verify_relocation.py --full-gui
 """
 from __future__ import annotations
@@ -46,6 +46,7 @@ from nl_coding_agent.core.relocation import (  # noqa: E402
     norm,
     verify_identity,
 )
+from nl_coding_agent.core.workspace import WORKSPACE_DIRNAME  # noqa: E402
 
 OLD_ROOT = r"K:\AI\Coding Agent"
 OLD_ROOT_PATTERNS = (
@@ -397,6 +398,24 @@ def check_hygiene(repo_root: Path) -> None:
         record("hygiene.no_live_selfbuild_process", True, "psutil unavailable; process check skipped", warning=True)
 
 
+def check_workspace_layout(repo_root: Path) -> None:
+    """ROOT REORG Phase B: generated data lives under .workspace.
+
+    build/dist/logs/temp/cache/state must not reappear at the repository root,
+    while the embedded runtime (python/) and live user data (data/) stay at their
+    historical paths and must remain present.
+    """
+    workspace = repo_root / WORKSPACE_DIRNAME
+    record("workspace.root", workspace.is_dir(), str(workspace))
+    legacy = [name for name in ("build", "dist", "logs", "temp", "cache")
+              if (repo_root / name).exists()]
+    record("workspace.no_legacy_root_outputs", not legacy,
+           "legacy root paths present: " + repr(legacy))
+    for name in ("python", "data"):
+        record("workspace." + name + "_preserved", (repo_root / name).is_dir(),
+               str(repo_root / name))
+
+
 def check_entry_points(repo_root: Path, full_gui: bool) -> None:
     rc, out = run_command([sys.executable, "nl_agent.py", "selfbuild", "--help"], repo_root, timeout=120)
     record("entry.cli_selfbuild_help", rc == 0 and "--autonomous" in out, "exit=" + str(rc))
@@ -436,6 +455,7 @@ def _main(args: argparse.Namespace) -> int:
         check_ollama(repo_root)
     check_database(repo_root)
     check_state(repo_root)
+    check_workspace_layout(repo_root)
     check_old_path_references(repo_root)
     check_hygiene(repo_root)
     check_entry_points(repo_root, args.full_gui)

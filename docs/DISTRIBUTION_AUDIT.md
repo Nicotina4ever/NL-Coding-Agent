@@ -122,13 +122,13 @@ delete or prune the current runtime in place.
 - `__pycache__`, `.pytest_cache`, and other generated cache directories.
 - `tests/__pycache__` and package-level `__pycache__` directories.
 - `.git` metadata and `.git` directories inside checkouts.
-- Audit output written outside the application payload, such as `logs/distribution_audit.json`.
+- Audit output written outside the application payload, such as `.workspace/logs/distribution_audit.json`.
 
 ### Requires user approval
 
 - `data/` contains the SQLite database, mission baselines, and runtime state. It is user data and
   must not be deleted or shipped as a template.
-- `logs/` contains diagnostics and audit output. Retention and packaging decisions require user
+- `.workspace/logs/` contains diagnostics and audit output. Retention and packaging decisions require user
   approval.
 - `crewAI/` is a vendor/reference checkout. Excluding it from a portable build is recommended, but
   deleting or rewriting it requires explicit approval.
@@ -145,12 +145,12 @@ delete or prune the current runtime in place.
 
 1. Create a staging payload containing only `nl_coding_agent/`, `assets/`, `config/`, launchers,
    `README`/license files, and `pyproject.toml`. Exclude `tests/`, `docs/` source notes, `.git`,
-   caches, `data/`, `logs/`, and the `crewAI` vendor checkout unless a reference copy is required.
+   caches, `data/`, `.workspace/`, and the `crewAI` vendor checkout unless a reference copy is required.
 2. Use the installed `crewai` package from the embedded runtime. Pin and record its version, and
    add the required third-party license notices.
 3. Keep the embedded `python/` runtime for a one-folder Windows build. Measure a clean runtime
    separately rather than pruning the working runtime.
-4. Exclude generated caches and user state from the payload, and create `data/` and `logs/` on
+4. Exclude generated caches and user state from the payload, and create `data/` and `.workspace/` on
    first launch.
 5. Validate the staged payload from a clean directory on Windows. Confirm GUI launch, project
    open, Ollama model discovery, and the full test suite in the source workspace.
@@ -173,7 +173,7 @@ build result.
 
 - Choose a one-folder layout with the embedded runtime, application package, assets, config, and
   launchers.
-- Exclude `.git`, caches, `data/`, `logs/`, and the `crewAI` vendor checkout from the payload.
+- Exclude `.git`, caches, `data/`, `.workspace/`, and the `crewAI` vendor checkout from the payload.
 - Add a clean-directory smoke test that launches the GUI, opens a project, and discovers Ollama
   models.
 - Verify the build on a clean Windows VM. Hardware-only checks such as ASIO, audio latency, and

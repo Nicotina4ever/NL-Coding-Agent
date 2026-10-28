@@ -13,8 +13,9 @@ manifests:
 
 Guarantees:
   * only git-tracked files are packaged (untracked files are never included);
-  * user data, logs, dist, build, embedded runtime, vendor checkouts, caches,
-    machine-local config and patch/temp artifacts are excluded;
+  * user data, logs, .workspace/ (build evidence, releases, temp/cache/state),
+    embedded runtime, vendor checkouts, caches, machine-local config and
+    patch/temp artifacts are excluded;
   * no timestamps, absolute paths or environment data enter the manifests, and
     zip entries use fixed metadata, so identical inputs produce identical
     manifest bytes and identical archive bytes;
@@ -38,6 +39,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 from installer.platform_targets import SUPPORTED_TARGETS, TARGET_ORDER  # noqa: E402
+from nl_coding_agent.core.workspace import WORKSPACE_DIRNAME  # noqa: E402
 TOOL_NAME = "build_release.py"
 TOOL_VERSION = "0.1.0"
 SCHEMA_VERSION = 1
@@ -46,8 +48,10 @@ FIXED_ZIP_DATE = (1980, 1, 1, 0, 0, 0)
 ZIP_COMPRESS_LEVEL = 9
 
 EXCLUDED_ROOTS = (
+    WORKSPACE_DIRNAME,
     ".git",
     ".agents",
+    # Legacy root locations retained defensively for pre-reorg checkouts.
     "build",
     "crewAI",
     "crewAI-tools",
@@ -478,7 +482,11 @@ def build_release(
     source_path = Path(source).resolve()
     if not source_path.is_dir():
         raise ReleaseError("source directory not found: " + str(source_path))
-    parent = Path(output_parent).resolve() if output_parent else source_path / "dist"
+    parent = (
+        Path(output_parent).resolve()
+        if output_parent
+        else source_path / WORKSPACE_DIRNAME / "dist"
+    )
     release_version = version or read_version(source_path)
     release_head = head or git_head(source_path)
     platform_map = dict(platforms or DEFAULT_PLATFORMS)
@@ -634,7 +642,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--source", default=str(REPO_ROOT))
     parser.add_argument("--output-parent", default=None,
-                        help="parent directory for the new candidate (default: <source>/dist)")
+                        help="parent directory for the new candidate (default: <source>/.workspace/dist)")
     parser.add_argument("--name", default=None, help="candidate directory name override")
     parser.add_argument("--head", default=None,
                         help="git HEAD override for exported sources without .git (advanced)")

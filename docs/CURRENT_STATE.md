@@ -101,7 +101,7 @@ NL Coding Agent is a local-first, multi-agent software development workstation. 
   status-bar supervisor state and emergency STOP; Settings shows the read-only permission
   policy.
 - **Evidence**: SH-07 **Tier A verified** (`tests/test_supervisor_sh07.py`, 7 tests; runner
-  evidence in `build/phase3/evidence/`); **Tier B (real local models) pending explicit
+  evidence in `.workspace/build/phase3/evidence/`); **Tier B (real local models) pending explicit
   authorization** — NL-BP-063 stays blocked and automatic mode remains opt-in.
 
 ### 9. Stage-4 CrewAI/Flows integration (C4a-C4e, engineering record)
@@ -169,7 +169,7 @@ NL Coding Agent is a local-first, multi-agent software development workstation. 
     `Project: not configured (Project root not configured)` instead of raising a traceback;
     `tests/test_cli_config.py` covers missing config and valid project roots.
   - Real payload staged at `K:\AI\nl-coding-agent-portable-final`: 23,711 payload files plus
-    `payload_manifest.json`, 1.44 GiB, no `crewAI/`, `data/`, `logs/`, `tests/`, `docs/`,
+    `payload_manifest.json`, 1.44 GiB, no `crewAI/`, `data/`, `.workspace/`, `tests/`, `docs/`,
     `scripts/`, or `config/voicebridge.yaml`.
   - From that payload: `doctor` exited 0 with `CrewAI: OK (1.15.32)`, Ollama reachable, and
     `Project: not configured`; offscreen `MainWindow` constructed six pages and closed cleanly.
@@ -234,7 +234,7 @@ NL Coding Agent is a local-first, multi-agent software development workstation. 
   implemented (durable queue/lease/preflight/backlog planner, CLI/service/GUI control surfaces,
   selfbuild shim) and SH-07 **Tier A** (fake model, two consecutive staged-candidate missions)
   is verified by `tests/test_supervisor_sh07.py` (7 tests) with runner evidence under
-  `build/phase3/evidence/`. **Tier B** (real local models on an isolated worktree) is NOT yet
+  `.workspace/build/phase3/evidence/`. **Tier B** (real local models on an isolated worktree) is NOT yet
   executed and requires explicit Lead/user authorization; until then NL-BP-063 stays blocked,
   program stage 3 stays in progress, and automatic mode remains opt-in/off by default.
 - Next: run/authorize Tier B SH-07 evidence, then close program stage 3. Packaging, installer,
@@ -345,7 +345,7 @@ portion, while the Studio GUI, multimodal chat/attachments, voice/ASR/TTS and ID
 program stage 4 are still outstanding. Stage 5 (repository hygiene) is complete and stage 6
 (distribution foundation) started early; final release acceptance stays gated on completing the
 outstanding stage-4 GUI/multimodal work and on explicit authorization for replacing the stale
-dist/portable-release payload. No safety gate was weakened and the sequential pipeline remains the
+.workspace/dist/portable-release payload. No safety gate was weakened and the sequential pipeline remains the
 default (Flow opt-in).
 
 
@@ -383,13 +383,13 @@ acceptance evidence is still in progress.
 
 ### Stage-6b portable release acceptance (2026-10-28, measured)
 
-- **Candidate**: dist/stage6b-portable-candidate, 23,682 payload files / 1,508,402,351 B
+- **Candidate**: .workspace/dist/stage6b-portable-candidate, 23,682 payload files / 1,508,402,351 B
   (1.40 GiB), tree sha256 80e4664618a165d49e7375fc1441a27e1b8416be1eb7206cda8bbe347ffa7b03, payload_manifest sha256
   8b89a2f6...8d7b3; exactly one embedded python runtime copy and one CrewAI package copy.
 - **Allowlist**: scripts/stage_portable.py now ships README.md, nl_agent.py, the supported launchers
   (main GUI/self-build + doctor/status), nl_coding_agent incl. flows/, one embedded python runtime,
-  assets/, config/models.yaml and pyproject.toml; tests/scripts/installer/docs/build/dist/AGENTS/PATCH/
-  data/logs/caches/vendor are excluded; staging fails closed on duplicate runtimes and absolute
+  assets/, config/models.yaml and pyproject.toml; tests/scripts/installer/docs/.workspace/AGENTS/PATCH/
+  data/.workspace/caches/vendor are excluded; staging fails closed on duplicate runtimes and absolute
   workspace paths. Native .pyd extension modules were accidentally excluded and this was fixed
   before the accepted candidate; tests/test_stage_portable.py covers it (8 targeted tests passed).
 - **Reproducibility**: two independent stagings produced identical file_count/total_size/tree_sha256
@@ -406,7 +406,7 @@ acceptance evidence is still in progress.
 - **Manual-pending**: clean Windows without global Python, clipboard screenshot/drag-drop,
   microphone/ASR/TTS hardware, real multimodal latency, signed installer/published downloads,
   runtime provenance, uninstall/OS integration, GUI full interaction, full pytest baseline (Lead-run).
-- **Authorization pending**: replace/remove stale dist/portable-release (23,639 files/1,507,677,689 B)
+- **Authorization pending**: replace/remove stale .workspace/dist/portable-release (23,639 files/1,507,677,689 B)
   after final acceptance and retire the extra stage-6a source candidate; no deletion/replacement was
   performed. Evidence: docs/RELEASE_ACCEPTANCE.md and docs/HARNESS_ACCEPTANCE.md.
 
@@ -420,7 +420,7 @@ PASS, reproducible payload tree hash. The revision-1 release-blocking default-st
 defect was fixed with regression tests (full suite 513 passed). Release acceptance is explicitly
 PARTIAL: clean Windows without global Python, real Windows clipboard screenshot/drag-drop, real
 microphone/ASR/TTS hardware, signed installer/update, and full desktop mission execution cannot be
-verified in this environment and remain manual-pending. The stale dist/portable-release, the
+verified in this environment and remain manual-pending. The stale .workspace/dist/portable-release, the
 revision-1 candidate and the stage-6a source candidate are retained until the user authorizes
 retirement/replacement.
 

@@ -74,7 +74,7 @@ it is not a claim of a complete OS sandbox.
   text-action fallback writes to the same staged workspace. Nothing is written to
   the live project tree before promotion.
 - A stage is created from a text snapshot of the project (vendor trees,
-  `python/`, `crewAI/`, caches, `data/`, logs, dist/build and binary assets are
+  `python/`, `crewAI/`, caches, `data/`, `.workspace/` content and binary assets are
   excluded) and its scope comes from the declared task write paths (or a derived
   top-level scope).
 

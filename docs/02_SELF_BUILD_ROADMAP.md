@@ -340,7 +340,7 @@ committed; `selfbuild --autonomous` is a deprecated compatibility shim.
 Acceptance status: **SH-07 Tier A verified** with a deterministic fake model
 (`tests/test_supervisor_sh07.py`: two consecutive staged-candidate missions,
 promotion only per mission, restart/pause/resume idempotency, fail-closed negatives;
-runner evidence under `build/phase3/evidence/`). **SH-07 Tier B** (real local Ollama
+runner evidence under `.workspace/build/phase3/evidence/`). **SH-07 Tier B** (real local Ollama
 models on an isolated git worktree) is not executed and requires explicit
 authorization; until its evidence is recorded, NL-BP-063 stays blocked, automatic
 mode stays off by default, and program stage 3 remains in progress.

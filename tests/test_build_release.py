@@ -51,9 +51,9 @@ def make_source(root: Path, version: str = "0.3.1") -> list[str]:
         ".gitignore": b"data/" + NL.encode(),
         "NL Coding Agent.bat": b"@echo off" + NL.encode(),
         "data/user.sqlite3": b"user data",
-        "logs/app.log": b"log line",
-        "dist/portable-release/old.txt": b"old payload",
-        "build/cache.txt": b"build cache",
+        ".workspace/logs/app.log": b"log line",
+        ".workspace/dist/portable-release/old.txt": b"old payload",
+        ".workspace/build/cache.txt": b"build cache",
         "python/python.exe": b"MZ fake exe",
         "crewAI/vendor.md": b"vendor",
         "PATCH/applied.py": b"patch",
@@ -149,8 +149,9 @@ class ManifestTests(ReleaseFixture):
         for included in ("nl_agent.py", "nl_coding_agent/core/app.py",
                          "docs/README.md", "tests/test_app.py"):
             self.assertIn(included, paths)
-        for excluded in ("data/user.sqlite3", "logs/app.log", "dist/portable-release/old.txt",
-                         "build/cache.txt", "python/python.exe", "crewAI/vendor.md",
+        for excluded in ("data/user.sqlite3", ".workspace/logs/app.log",
+                         ".workspace/dist/portable-release/old.txt",
+                         ".workspace/build/cache.txt", "python/python.exe", "crewAI/vendor.md",
                          "PATCH/applied.py", "temp_restore.py", "FOUNDATION_CHANGES.patch",
                          "config/voicebridge.yaml", "nl_coding_agent/__pycache__/x.pyc",
                          "SHA256_MANIFEST.json", "untracked_secret.txt"):
@@ -212,6 +213,13 @@ class ManifestTests(ReleaseFixture):
                               .read_text(encoding="utf-8"))
         self.assertEqual(manifest["product"]["version"], "9.9.9")
         self.assertEqual(release.read_version(self.source), "9.9.9")
+
+    def test_default_output_parent_is_workspace_dist(self):
+        result = release.build_release(self.source, tracked=self.tracked, head=HEAD,
+                                       name="default-out")
+        candidate = Path(result["candidate"])
+        self.assertEqual(candidate.parent, (self.source / ".workspace" / "dist").resolve())
+        self.assertTrue((candidate / "release-manifest.json").is_file())
 
 
 class RuntimeTests(ReleaseFixture):
@@ -308,7 +316,7 @@ class SafetyTests(unittest.TestCase):
             source = root / "src"
             source.mkdir()
             tracked = make_source(source)
-            parent = root / "dist"
+            parent = root / ".workspace" / "dist"
             result = release.build_release(source, parent, tracked=tracked, head=HEAD,
                                            name="candidate")
             self.assertTrue((parent / "candidate").is_dir())

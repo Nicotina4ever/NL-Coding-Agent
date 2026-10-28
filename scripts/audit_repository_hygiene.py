@@ -3,11 +3,11 @@
 READ-ONLY GUARANTEE: this script never deletes, moves, renames or modifies tracked
 files and never starts a mission, model or network request. It only reads the
 filesystem and runs local read-only git queries (rev-parse, status, worktree list).
-It writes only the requested JSON/markdown report paths (default under build/phase5/).
+It writes only the requested JSON/markdown report paths (default under .workspace/build/phase5/).
 
 What it measures (deterministic, bounded):
   * file counts and bytes by area (source, docs, tests, assets, runtime, vendor,
-    dist, build evidence, user data, logs, caches, junk, git metadata);
+    .workspace build/dist/logs evidence, user data, caches, junk, git metadata);
   * duplicate files by size + sha256 for small/medium files only (large runtimes
     are excluded from hashing and reported separately);
   * obsolete/stale candidates: temp_*.py at the repo root, *.patch artifacts,
@@ -38,22 +38,30 @@ import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from nl_coding_agent.core.workspace import WORKSPACE_DIRNAME  # noqa: E402
+
 SCHEMA_VERSION = 1
 NL = chr(10)
 BS = chr(92)
 
-DEFAULT_JSON = Path("build") / "phase5" / "repository_hygiene.json"
-DEFAULT_MD = Path("build") / "phase5" / "repository_hygiene.md"
+DEFAULT_JSON = Path(WORKSPACE_DIRNAME) / "build" / "phase5" / "repository_hygiene.json"
+DEFAULT_MD = Path(WORKSPACE_DIRNAME) / "build" / "phase5" / "repository_hygiene.md"
 
 SAFE = "SAFE"
 NEEDS_AUTHORIZATION = "NEEDS-AUTHORIZATION"
 DO_NOT_TOUCH = "DO-NOT-TOUCH"
 
 PROTECTED_AREAS = frozenset({
+    WORKSPACE_DIRNAME,
     "python", "crewAI", "crewAI-tools", "dist", "data", "logs", "build",
     "docs", ".git",
 })
 HASH_EXCLUDED_AREAS = frozenset({
+    WORKSPACE_DIRNAME,
     ".git", "python", "crewAI", "crewAI-tools", "dist", "data", "logs",
 })
 CACHE_DIR_NAMES = frozenset({
@@ -74,9 +82,12 @@ ROOT_HISTORICAL_DOCS = (
     "README.txt",
 )
 BUILD_DOC_DUPLICATES = (
-    ("build/phase2/IMPLEMENTATION_PLAN.md", "docs/PHASE2_HARNESS_INTEGRATION_PLAN.md"),
-    ("build/phase3/SUPERVISOR_PLAN.md", "docs/PHASE3_SUPERVISOR_PLAN.md"),
-    ("build/phase4/CREWAI_FLOWS_PLAN.md", "docs/PHASE4_CREWAI_FLOWS_PLAN.md"),
+    (WORKSPACE_DIRNAME + "/build/phase2/IMPLEMENTATION_PLAN.md",
+     "docs/PHASE2_HARNESS_INTEGRATION_PLAN.md"),
+    (WORKSPACE_DIRNAME + "/build/phase3/SUPERVISOR_PLAN.md",
+     "docs/PHASE3_SUPERVISOR_PLAN.md"),
+    (WORKSPACE_DIRNAME + "/build/phase4/CREWAI_FLOWS_PLAN.md",
+     "docs/PHASE4_CREWAI_FLOWS_PLAN.md"),
 )
 OLD_ROOT_PATTERN = re.compile(r"K:/+AI/+Coding[ ]+Agent", re.IGNORECASE)
 CANONICAL_ROOT_PATTERN = re.compile(r"K:/+AI/+NL[ ]+Coding[ ]+Agent", re.IGNORECASE)
@@ -164,8 +175,15 @@ def root_entry_kind(name: str) -> tuple[str, str]:
     return "other", "review"
 
 
+def _workspace_child(name: str) -> str | None:
+    """Return the logical child path of .workspace/<child>, or None."""
+    prefix = WORKSPACE_DIRNAME + "/"
+    return name[len(prefix):] if name.startswith(prefix) else None
+
+
 def area_kind(name: str) -> tuple[str, str]:
     mapping = {
+        WORKSPACE_DIRNAME: ("workspace", "protected"),
         "nl_coding_agent": ("source", "source"),
         "tests": ("tests", "source"),
         "scripts": ("scripts", "source"),
@@ -178,6 +196,9 @@ def area_kind(name: str) -> tuple[str, str]:
         "dist": ("release-artifact", "protected"),
         "data": ("user-data", "protected"),
         "logs": ("logs", "protected"),
+        "temp": ("scratch", "protected"),
+        "cache": ("cache", "protected"),
+        "state": ("runtime-state", "protected"),
         "python": ("runtime", "protected"),
         "crewAI": ("vendor", "protected"),
         "crewAI-tools": ("vendor", "protected"),
@@ -186,6 +207,9 @@ def area_kind(name: str) -> tuple[str, str]:
         "__pycache__": ("cache", "safe"),
         ".git": ("git-metadata", "protected"),
     }
+    logical = _workspace_child(name)
+    if logical is not None and logical in mapping:
+        return mapping[logical]
     if name in mapping:
         return mapping[name]
     return root_entry_kind(name)
@@ -404,14 +428,18 @@ def scan_duplicates(root: Path, state: dict, bounds: dict) -> dict:
     }
 
 
+def _is_build_evidence(path: str) -> bool:
+    return path.startswith(WORKSPACE_DIRNAME + "/build/") or path.startswith("build/")
+
+
 def classify_duplicate(paths: list[str]) -> tuple[str, str]:
     patched = [path for path in paths if path.startswith("PATCH/")]
     if patched and len(patched) < len(paths):
         return NEEDS_AUTHORIZATION, "applied audited patch copy is identical to the live file"
-    if all(path.startswith("build/") for path in paths):
-        return NEEDS_AUTHORIZATION, "duplicate generated evidence inside build/ - review before removal"
+    if all(_is_build_evidence(path) for path in paths):
+        return NEEDS_AUTHORIZATION, "duplicate generated evidence inside .workspace/build - review before removal"
     docs_copy = [path for path in paths if path.startswith("docs/")]
-    build_copy = [path for path in paths if path.startswith("build/")]
+    build_copy = [path for path in paths if _is_build_evidence(path)]
     if docs_copy and build_copy and len(docs_copy) + len(build_copy) == len(paths):
         if any(path.startswith("docs/evidence") for path in docs_copy):
             return NEEDS_AUTHORIZATION, "acceptance evidence duplicated in build/ and docs/evidence; review retention before removal"
@@ -529,10 +557,10 @@ def scan_obsolete(
         size = build_path.stat().st_size
         add("duplicate-build-evidence", build_rel, SAFE,
             "byte-identical duplicate of " + docs_rel + "; the tracked documentation copy is authoritative",
-            "delete the build copy (build/ is disposable generated output)",
+            "delete the .workspace/build copy (generated output)",
             files=1, bytes_=size, evidence={"tracked_copy": docs_rel})
 
-    plan_path = root / "build" / "portable_plan.json"
+    plan_path = root / WORKSPACE_DIRNAME / "build" / "portable_plan.json"
     if plan_path.is_file():
         text = ""
         try:
@@ -540,20 +568,22 @@ def scan_obsolete(
         except OSError:
             pass
         old_hits = len(OLD_ROOT_PATTERN.findall(normalise(text)))
-        add("stale-generated-metadata", "build/portable_plan.json", NEEDS_AUTHORIZATION,
+        add("stale-generated-metadata", WORKSPACE_DIRNAME + "/build/portable_plan.json",
+            NEEDS_AUTHORIZATION,
             "generated portable-build plan still records the pre-relocation source/output roots"
             + (" (" + str(old_hits) + " old-root references)" if old_hits else ""),
             "regenerate the portable build plan at stage 6 or update the stale paths after approval",
             files=1, bytes_=plan_path.stat().st_size, evidence={"old_root_references": old_hits})
 
-    stray_script = root / "build" / "audit_payload_db.py"
+    stray_script = root / WORKSPACE_DIRNAME / "build" / "audit_payload_db.py"
     if stray_script.is_file():
-        add("stray-build-script", "build/audit_payload_db.py", NEEDS_AUTHORIZATION,
+        add("stray-build-script", WORKSPACE_DIRNAME + "/build/audit_payload_db.py",
+            NEEDS_AUTHORIZATION,
             "one-off payload database audit script left in build/; it is generated scratch code, not a supported tool",
             "archive with the build evidence or delete with explicit approval",
             files=1, bytes_=stray_script.stat().st_size)
 
-    portable = root / "dist" / "portable-release"
+    portable = root / WORKSPACE_DIRNAME / "dist" / "portable-release"
     if portable.is_dir():
         state = {"started": time.monotonic(), "files_seen": 0, "truncated": False,
                  "symlinks_skipped": 0}
@@ -566,7 +596,8 @@ def scan_obsolete(
             current_names = {item.name for item in current_pkg.iterdir()}
             packaged_names = {item.name for item in packaged_pkg.iterdir()}
             missing = sorted(name for name in current_names - packaged_names if not name.startswith("__"))
-        add("stale-portable-release", "dist/portable-release", DO_NOT_TOUCH,
+        add("stale-portable-release", WORKSPACE_DIRNAME + "/dist/portable-release",
+            DO_NOT_TOUCH,
             "existing one-folder release artifact built before the workspace relocation and before "
             "stages 2-4; it is stale but must not be deleted without authorization"
             + (("; packaged package is missing: " + ", ".join(missing)) if missing else ""),
@@ -635,12 +666,14 @@ def scan_stale_paths(root: Path, bounds: dict) -> dict:
         for path in walk_files(base, state, bounds):
             if path.suffix.lower() in TEXT_SUFFIXES:
                 files.append(path)
-    for rel in ("build/portable_plan.json", "build/audit_payload_db.py",
-                "dist/portable-release/payload_manifest.json"):
+    workspace_build = WORKSPACE_DIRNAME + "/build"
+    for rel in (workspace_build + "/portable_plan.json",
+                workspace_build + "/audit_payload_db.py",
+                WORKSPACE_DIRNAME + "/dist/portable-release/payload_manifest.json"):
         path = root / rel
         if path.is_file():
             files.append(path)
-    build_dir = root / "build"
+    build_dir = root / WORKSPACE_DIRNAME / "build"
     if build_dir.is_dir():
         for path in sorted(build_dir.glob("*.json")):
             if path.is_file():
@@ -722,11 +755,15 @@ def classify_stale_match(rel: str) -> tuple[str, str]:
         return DO_NOT_TOUCH, "intentional relocation/migration test fixture"
     if rel in ("scripts/verify_relocation.py", "scripts/migrate_project_root.py"):
         return DO_NOT_TOUCH, "intentional legacy-root constant used by migration verification"
-    if rel.startswith("dist/"):
-        return DO_NOT_TOUCH, "stale release-artifact metadata; regenerate with the stage-6 portable build"
-    if rel == "build/portable_plan.json":
+    workspace_dist = WORKSPACE_DIRNAME + "/dist/"
+    workspace_build = WORKSPACE_DIRNAME + "/build/"
+    if rel.startswith(workspace_dist) or rel.startswith("dist/"):
+        return DO_NOT_TOUCH, "stale release-artifact metadata; regenerate with the portable build"
+    if rel in (workspace_build + "portable_plan.json", "build/portable_plan.json"):
         return NEEDS_AUTHORIZATION, "stale generated metadata with old absolute paths"
-    if rel.startswith("docs/") or rel.startswith("build/") or rel.startswith("PATCH/"):
+    if (rel.startswith("docs/") or rel.startswith(workspace_build)
+            or rel.startswith("build/") or rel.startswith(WORKSPACE_DIRNAME + "/")
+            or rel.startswith("PATCH/")):
         return DO_NOT_TOUCH, "historical documentation/evidence; old paths are preserved intentionally"
     if rel == "scripts/audit_repository_hygiene.py":
         return DO_NOT_TOUCH, "audit tool declares the legacy patterns it searches for"
@@ -846,7 +883,10 @@ def scan_runtime_copies(root: Path) -> dict:
     direct = root / "python" / "python.exe"
     if direct.is_file():
         candidates.append(direct)
-    for pattern in ("dist/*/python/python.exe", "*/python/python.exe", "python*/python.exe"):
+    for pattern in (
+        WORKSPACE_DIRNAME + "/dist/*/python/python.exe",
+        "dist/*/python/python.exe", "*/python/python.exe", "python*/python.exe",
+    ):
         for candidate in sorted(root.glob(pattern)):
             if candidate.is_file() and candidate not in candidates:
                 candidates.append(candidate)
@@ -869,7 +909,9 @@ def scan_runtime_copies(root: Path) -> dict:
             "classification": DO_NOT_TOUCH,
         })
     crewai_copies: list[dict] = []
-    for pattern in ("python/Lib/site-packages/crewai", "dist/*/python/Lib/site-packages/crewai"):
+    for pattern in ("python/Lib/site-packages/crewai",
+                    WORKSPACE_DIRNAME + "/dist/*/python/Lib/site-packages/crewai",
+                    "dist/*/python/Lib/site-packages/crewai"):
         for candidate in sorted(root.glob(pattern)):
             if not candidate.is_dir():
                 continue
@@ -1058,7 +1100,9 @@ def validate_manifests(root: Path) -> list[dict]:
         checks.append({"check": "manifest.blueprint_index_json", "status": "WARN",
                        "detail": "docs/product-blueprint/INDEX.json is missing"})
 
-    payload_manifest = root / "dist" / "portable-release" / "payload_manifest.json"
+    payload_manifest = (
+        root / WORKSPACE_DIRNAME / "dist" / "portable-release" / "payload_manifest.json"
+    )
     if payload_manifest.is_file():
         try:
             payload = json.loads(payload_manifest.read_text(encoding="utf-8"))
@@ -1183,10 +1227,10 @@ def build_recommendations(report: dict) -> list[dict]:
     duplicates = [item for item in report.get("obsolete") or []
                   if item["kind"] == "duplicate-build-evidence"]
     if duplicates:
-        add("H-03", SAFE, "Remove build/ copies identical to tracked docs/ plans",
+        add("H-03", SAFE, "Remove .workspace/build copies identical to tracked docs/ plans",
             [item["path"] for item in duplicates],
-            "delete the build/ duplicates; keep the tracked docs/ copy",
-            "byte-identical duplicates; build/ is disposable generated output",
+            "delete the .workspace/build duplicates; keep the tracked docs/ copy",
+            "byte-identical duplicates; .workspace/build is disposable generated output",
             "hash equality is re-checked by the audit; docs/ copy remains authoritative",
             sum(item["bytes"] for item in duplicates))
 
@@ -1252,7 +1296,7 @@ def build_recommendations(report: dict) -> list[dict]:
             total_bytes)
 
     add("H-09", DO_NOT_TOUCH, "Preserve user data, logs and the live SQLite database",
-        ["data/", "logs/"],
+        ["data/", WORKSPACE_DIRNAME + "/logs/"],
         "no cleanup; use the retention tooling with explicit human confirmation if ever needed",
         "user data, mission history and diagnostics are not cache and must never be deleted by a hygiene pass",
         "sqlite integrity/backups unchanged; not applicable")
@@ -1266,14 +1310,14 @@ def build_recommendations(report: dict) -> list[dict]:
     dist = [item for item in report.get("obsolete") or []
             if item["kind"] == "stale-portable-release"]
     add("H-11", DO_NOT_TOUCH, "Do not delete the existing release artifact",
-        [item["path"] for item in dist] or ["dist/"],
-        "keep dist/portable-release until stage 6 rebuilds one verified portable payload with explicit authorization",
+        [item["path"] for item in dist] or [WORKSPACE_DIRNAME + "/dist/"],
+        "keep .workspace/dist/portable-release until a verified portable payload is rebuilt with explicit authorization",
         "release outputs and acceptance evidence are protected; the current artifact is stale but cannot be removed without approval",
         "stage 6 rebuild + scripts/verify_relocation.py + launcher/import smoke + full suite")
 
-    add("H-12", DO_NOT_TOUCH, "Preserve build/ and docs/ evidence",
-        ["build/", "docs/evidence/"],
-        "no cleanup; build/ and docs/evidence hold stage acceptance and audit evidence",
+    add("H-12", DO_NOT_TOUCH, "Preserve .workspace/build and docs/ evidence",
+        [WORKSPACE_DIRNAME + "/build/", "docs/evidence/"],
+        "no cleanup; .workspace/build and docs/evidence hold stage acceptance and audit evidence",
         "evidence must not be deleted or moved without explicit authorization",
         "not applicable")
 
@@ -1292,7 +1336,7 @@ def build_recommendations(report: dict) -> list[dict]:
 
     for recommendation in recommendations:
         if recommendation["classification"] == SAFE:
-            recommendation["rationale"] += "; no user data, runtime, vendor, dist/build or evidence is affected"
+            recommendation["rationale"] += "; no user data, runtime, vendor, .workspace or evidence is affected"
     return recommendations
 
 
@@ -1313,6 +1357,13 @@ def audit_repository(
     state = {"started": started, "files_seen": 0, "truncated": False, "symlinks_skipped": 0}
     areas: list[dict] = []
     for entry in sorted(root_path.iterdir(), key=lambda item: item.name.lower()):
+        if entry.is_dir() and entry.name == WORKSPACE_DIRNAME:
+            # Report each consolidated workspace child as a logical area so the
+            # audit keeps the historical build/dist/logs classifications.
+            for child in sorted(entry.iterdir(), key=lambda item: item.name.lower()):
+                areas.append(measure_area(
+                    root_path, WORKSPACE_DIRNAME + "/" + child.name, state, limit))
+            continue
         areas.append(measure_area(root_path, entry.name, state, limit))
     total_files = sum(item["files"] for item in areas)
     total_bytes = sum(item["bytes"] for item in areas)
@@ -1447,7 +1498,7 @@ def render_markdown(report: dict) -> str:
     lines.append("")
     lines.append("All cache directories: " + str(caches.get("dirs")) + " dirs, "
                  + str(caches.get("files")) + " files, " + human_bytes(caches.get("bytes") or 0)
-                 + ". Runtime/vendor/build/docs caches are protected; only repository caches are cleanup candidates.")
+                 + ". Runtime/vendor/.workspace/docs caches are protected; only repository caches are cleanup candidates.")
     lines.append("")
     cache_rows = []
     for item in (caches.get("entries") or [])[:20]:
@@ -1570,7 +1621,7 @@ def render_markdown(report: dict) -> str:
     lines.append('5. Imports: `python -c "import nl_coding_agent.cli, nl_coding_agent.app.services, nl_coding_agent.agents.orchestrator"`.')
     lines.append("6. Doctor and relocation gates: `python nl_agent.py doctor`; `python scripts/verify_relocation.py --json`.")
     lines.append("7. Targeted tests for touched areas, then the full offscreen suite: `python -m pytest -q tests -p no:cacheprovider` with `PYTHONDONTWRITEBYTECODE=1` and `QT_QPA_PLATFORM=offscreen`.")
-    lines.append("8. Report the git diff and evidence; the Lead reviews and commits. No deletion of `data/`, `python/`, `crewAI/`, `dist/`, `build/` evidence, backups or model caches is authorized by this plan.")
+    lines.append("8. Report the git diff and evidence; the Lead reviews and commits. No deletion of `data/`, `python/`, `crewAI/`, `.workspace/dist/`, `.workspace/build/` evidence, backups or model caches is authorized by this plan.")
     lines.append("")
     lines.append("## Bounds and limitations")
     lines.append("")
@@ -1580,7 +1631,7 @@ def render_markdown(report: dict) -> str:
                  + ", max_hash_bytes=" + str(bounds.get("max_hash_bytes"))
                  + ", max_hash_files=" + str(bounds.get("max_hash_files"))
                  + ", max_hash_total_bytes=" + str(bounds.get("max_hash_total_bytes")) + ".")
-    lines.append("- Duplicate hashing excludes runtime/vendor/dist/data/logs areas and files above the per-file cap; "
+    lines.append("- Duplicate hashing excludes runtime/vendor/.workspace/data areas and files above the per-file cap; "
                  "large runtime copies are reported structurally instead.")
     lines.append("- No network access, no model inference, no mission or supervisor run, no git write operation.")
     lines.append("- Areas classified protected/evidence are measured but never proposed for deletion; "
@@ -1604,9 +1655,9 @@ def main(argv: list[str] | None = None) -> int:
     default_root = Path(__file__).resolve().parents[1]
     parser.add_argument("--root", default=str(default_root), help="repository root (default: script parent)")
     parser.add_argument("--json-out", default=str(DEFAULT_JSON),
-                        help="machine JSON report path (default: build/phase5/repository_hygiene.json)")
+                        help="machine JSON report path (default: .workspace/build/phase5/repository_hygiene.json)")
     parser.add_argument("--markdown-out", default=str(DEFAULT_MD),
-                        help="markdown report path (default: build/phase5/repository_hygiene.md)")
+                        help="markdown report path (default: .workspace/build/phase5/repository_hygiene.md)")
     parser.add_argument("--max-seconds", type=float, default=None, help="soft deadline for walks/hashing")
     parser.add_argument("--max-files", type=int, default=None, help="maximum files walked per scan")
     parser.add_argument("--max-hash-bytes", type=int, default=None, help="maximum bytes per hashed file")

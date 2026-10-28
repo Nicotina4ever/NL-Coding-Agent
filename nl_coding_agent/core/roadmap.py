@@ -11,7 +11,8 @@ from pathlib import Path
 
 DEFAULT_ROADMAP = Path("docs") / "NEXT_SELF_BUILD_MISSION.md"
 PROTECTED_PREFIXES = (
-    "python/", "crewai/", "crewai-tools/", ".git/", "data/", "logs/", "state/",
+    "python/", "crewai/", "crewai-tools/", ".git/", "data/", ".workspace/",
+    "logs/", "state/",
 )
 
 _BACKTICK_RE = re.compile(r"`([^`\n]+)`")

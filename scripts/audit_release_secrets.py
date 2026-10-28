@@ -41,6 +41,12 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from nl_coding_agent.core.workspace import WORKSPACE_DIRNAME  # noqa: E402
+
 TOOL_NAME = "audit_release_secrets.py"
 TOOL_VERSION = "0.1.0"
 SCHEMA_VERSION = 1
@@ -53,8 +59,8 @@ SAFE = "SAFE"
 CLASS_ORDER = {ROTATE: 0, EXCLUDE_FROM_UPLOAD: 1, REVIEW: 2, SAFE: 3}
 BLOCKING_CLASSES = frozenset({ROTATE, EXCLUDE_FROM_UPLOAD})
 
-DEFAULT_JSON = Path("build") / "phase6" / "secrets_audit.json"
-DEFAULT_MD = Path("build") / "phase6" / "secrets_audit.md"
+DEFAULT_JSON = Path(WORKSPACE_DIRNAME) / "build" / "phase6" / "secrets_audit.json"
+DEFAULT_MD = Path(WORKSPACE_DIRNAME) / "build" / "phase6" / "secrets_audit.md"
 
 DEFAULT_BOUNDS = {
     "max_files": 5000,
@@ -177,6 +183,30 @@ FIXTURE_MARKERS = (
     "sample", "fixture", "test-only", "test_only", "xxxx", "for-test", "for_test",
 )
 
+# Synthetic values used by the redaction regression tests in
+# tests/test_diagnostic_report.py. They are documented here by full-value SHA-256
+# (never by the value itself) so the audit can downgrade these exact fixture
+# matches from ROTATE to REVIEW for both tracked files and Git history without
+# loosening detection for any other value. Any change to the fixtures requires
+# updating this allowlist and tests/test_release_secrets_audit.py.
+TEST_FIXTURE_SECRET_ALLOWLIST = {
+    "c042850219b29f65dfb9dbfc08408757d88391ef0fc9e4ff82b1a132bc9be36d":
+        "synthetic OpenAI-style token in tests/test_diagnostic_report.py (redaction fixture)",
+    "8bcac7908eb950419537b91e19adc83ce2c9cbfdacf4f81157fdadfec11f7017":
+        "synthetic private-key header in tests/test_diagnostic_report.py (redaction fixture)",
+    "0c5a2a21630fdb484f156efbefd96e5d337c725fb6e85a179e679d00100b67a2":
+        "synthetic credential URL in tests/test_diagnostic_report.py (redaction fixture)",
+}
+
+
+def _is_allowlisted_test_fixture(rel: str, value: str) -> bool:
+    """True only for the documented synthetic values inside tests/."""
+    path_low = (rel or "").replace(os.sep, "/").lower()
+    if not (path_low.startswith("tests/") or "/tests/" in path_low):
+        return False
+    digest = hashlib.sha256((value or "").encode("utf-8", "replace")).hexdigest()
+    return digest in TEST_FIXTURE_SECRET_ALLOWLIST
+
 PERSONAL_PATH_RULES = [
     ("windows_user_profile", re.compile(r"\b[A-Za-z]:[\\/]+Users[\\/]+[^\\/\s\"'<>|]{2,64}")),
     ("posix_home_path", re.compile(r"(?<![\w.-])/(?:home|Users)/[A-Za-z0-9._-]{2,64}")),
@@ -208,6 +238,8 @@ ARCHIVE_BINARY_SUFFIXES = (".zip", ".7z", ".rar", ".tar", ".gz", ".tgz", ".bz2",
                            ".whl", ".jar", ".class", ".wasm", ".node", ".pyd", ".pyc",
                            ".pyo")
 BUILD_OUTPUT_PARTS = frozenset({
+    WORKSPACE_DIRNAME,
+    # Legacy root locations retained defensively for pre-reorg checkouts.
     "dist", "build", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache",
     ".cache", ".tox", ".nox", "htmlcov", ".coverage", "node_modules",
 })
@@ -252,8 +284,10 @@ PRESENT_UNTRACKED_ROOTS = [
     ("python", "embedded_runtime", EXCLUDE_FROM_UPLOAD, "Embedded runtime; never upload to the source repository; keep local/protected."),
     ("crewAI", "vendor_checkout", EXCLUDE_FROM_UPLOAD, "Vendor reference checkout; never upload or package."),
     ("crewAI-tools", "vendor_checkout", EXCLUDE_FROM_UPLOAD, "Vendor reference checkout; never upload or package."),
+    (WORKSPACE_DIRNAME, "workspace_output", EXCLUDE_FROM_UPLOAD,
+     "Consolidated build/dist/logs/temp/cache/state workspace; never upload, package or publish."),
     ("data", "user_data", EXCLUDE_FROM_UPLOAD, "User data/SQLite/state; never upload, package or publish."),
-    ("logs", "diagnostics", EXCLUDE_FROM_UPLOAD, "Run logs; never upload, package or publish."),
+    ("logs", "diagnostics", EXCLUDE_FROM_UPLOAD, "Run logs; never upload, package or publish (legacy location)."),
     ("state", "user_data", EXCLUDE_FROM_UPLOAD, "Runtime state; never upload, package or publish."),
     ("dist", "build_output", EXCLUDE_FROM_UPLOAD, "Release payload; never upload to source; distribute only via the owner-authorized channel."),
     ("build", "transient_evidence", EXCLUDE_FROM_UPLOAD, "Transient audit evidence; never upload to source."),
@@ -563,6 +597,8 @@ def _match_secret_rules(line: str, rel: str, lineno: int, collector: Collector,
                 continue
             classification = rule["classification"]
             if _is_fixture_context(rel, line):
+                classification = REVIEW
+            if _is_allowlisted_test_fixture(rel, value):
                 classification = REVIEW
             spans = [match.span(0)]
             collector.add(
@@ -1047,6 +1083,8 @@ def _scan_history(root: Path, tracked_set: set, collector: Collector, bounds: di
                     classification = rule["classification"]
                     if _is_fixture_context(current_path, added):
                         classification = REVIEW
+                    if _is_allowlisted_test_fixture(current_path, value):
+                        classification = REVIEW
                     matches.append((rule["id"], rule["kind"], rule["description"], classification, value, match.span(0)))
             for match in GENERIC_SECRET_RE.finditer(added):
                 key, value = match.group(1), match.group(2)
@@ -1201,7 +1239,7 @@ def render_markdown(report: dict) -> str:
     add("")
     add("Reproduce (from the repository root; writes only the two report paths):")
     add("")
-    add("    python" + chr(92) + "python.exe scripts" + chr(92) + "audit_release_secrets.py --json-out build/phase6/secrets_audit.json --markdown-out docs/SECRETS_AUDIT.md")
+    add("    python" + chr(92) + "python.exe scripts" + chr(92) + "audit_release_secrets.py --json-out " + WORKSPACE_DIRNAME + "/build/phase6/secrets_audit.json --markdown-out docs/SECRETS_AUDIT.md")
     add("")
     add("" + report["redaction_note"])
     add("")
@@ -1279,7 +1317,8 @@ def main(argv=None) -> int:
     )
     default_root = Path(__file__).resolve().parents[1]
     parser.add_argument("--root", default=str(default_root), help="repository root (default: script parent directory)")
-    parser.add_argument("--json-out", default=str(DEFAULT_JSON), help="JSON report path (relative to root) or absolute")
+    parser.add_argument("--json-out", default=str(DEFAULT_JSON),
+                        help="JSON report path (relative to root; default .workspace/build/phase6/...) or absolute")
     parser.add_argument("--markdown-out", default=str(DEFAULT_MD), help="Markdown report path (relative to root) or absolute")
     parser.add_argument("--no-write", action="store_true", help="do not write report files (stdout summary only)")
     parser.add_argument("--no-git", action="store_true", help="skip Git metadata/history (bounded filesystem walk only)")

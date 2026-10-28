@@ -39,8 +39,8 @@ HARNESS_VERSION = 2
 PROMOTION_JOURNAL = "promotion-journal.json"
 MAX_ROLLBACK_FILE_BYTES = 1_000_000
 PROTECTED_DELTA_PREFIXES = (
-    "python/", "crewai/", "crewai-tools/", ".git/", "data/", "logs/", "state/",
-    "dist/", "build/", "patch/",
+    "python/", "crewai/", "crewai-tools/", ".git/", "data/", ".workspace/",
+    "logs/", "state/", "dist/", "build/", "patch/",
 )
 PROTECTED_DELTA_FILES = ("sha256_manifest.json", "foundation_changes.patch")
 MISSION_INPUT_DENY = ("docs/NEXT_SELF_BUILD_MISSION.md",)

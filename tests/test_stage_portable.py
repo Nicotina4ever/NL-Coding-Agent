@@ -58,12 +58,12 @@ class TestPortableStaging(unittest.TestCase):
         _write(root / "PATCH" / "old.py", "patch evidence")
         _write(root / "crewAI" / "vendor.py", "vendor")
         _write(root / "data" / "db.sqlite3", "user-data")
-        _write(root / "logs" / "app.log", "log")
+        _write(root / ".workspace" / "logs" / "app.log", "log")
         _write(root / "tests" / "test_x.py", "def test_x(): pass\n")
         _write(root / ".git" / "config", "git")
         _write(root / "scripts" / "ignored.py", "script")
         _write(root / "docs" / "ignored.md", "doc")
-        _write(root / "build" / "tmp.txt", "temp-build")
+        _write(root / ".workspace" / "build" / "tmp.txt", "temp-build")
 
     def test_staging_uses_stage6b_allowlist(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -88,8 +88,8 @@ class TestPortableStaging(unittest.TestCase):
             self.assertTrue((source / "scripts" / "launchers" / "doctor.bat").is_file())
             self.assertFalse((output / "scripts").exists())
             for excluded in (
-                "crewAI", "data", "logs", "tests", ".git", "scripts", "docs",
-                "build", "installer", "PATCH", "AGENTS.md",
+                "crewAI", "data", ".workspace", "tests", ".git", "scripts", "docs",
+                "installer", "PATCH", "AGENTS.md",
             ):
                 self.assertFalse((output / excluded).exists(), excluded)
             self.assertFalse((output / "config" / "voicebridge.yaml").exists())
@@ -111,6 +111,7 @@ class TestPortableStaging(unittest.TestCase):
                 "doctor.bat",
             )
             self.assertIn("installer", manifest["excluded_roots"])
+            self.assertIn(".workspace", manifest["excluded_roots"])
             self.assertIn("PATCH", manifest["excluded_roots"])
             self.assertIn("AGENTS.md", manifest["excluded_roots"])
             checks = manifest["payload_checks"]
@@ -167,7 +168,7 @@ class TestPortableStaging(unittest.TestCase):
             self.assertEqual(completed.returncode, 2)
             self.assertIn("not empty", completed.stderr)
 
-    def test_default_output_is_under_dist(self):
+    def test_default_output_is_under_workspace_dist(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "source"
@@ -184,14 +185,14 @@ class TestPortableStaging(unittest.TestCase):
             manifest = json.loads(completed.stdout)
             self.assertEqual(manifest["output_name"], "portable-release")
             self.assertEqual(manifest["output_location"], "dist")
-            self.assertFalse((source / "dist" / "portable-release").exists())
+            self.assertFalse((source / ".workspace" / "dist" / "portable-release").exists())
 
-    def test_dist_output_is_allowed(self):
+    def test_workspace_dist_output_is_allowed(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "source"
             self._source_tree(source)
-            output = source / "dist" / "payload"
+            output = source / ".workspace" / "dist" / "payload"
 
             completed = _run(source, output, "--json")
             self.assertEqual(completed.returncode, 0, completed.stderr)
@@ -205,7 +206,7 @@ class TestPortableStaging(unittest.TestCase):
             source = root / "source"
             self._source_tree(source)
 
-            completed = _run(source, source / "build")
+            completed = _run(source, source / ".workspace" / "build")
             self.assertEqual(completed.returncode, 2)
             self.assertIn("outside the source tree", completed.stderr)
 

@@ -14,8 +14,9 @@ Stage-6b allowlist (intentionally narrow):
   * assets/, config/models.yaml, pyproject.toml.
 
 Everything development-only is excluded: tests/, scripts/, installer/, docs/,
-build/, dist/ (self-nesting), AGENTS.md, PATCH/ historical evidence, data/,
-logs/, state/, caches, vendor checkouts (crewAI*, .git) and machine-local config.
+.workspace/ (build evidence, release payloads, logs, temp/cache/state scratch),
+AGENTS.md, PATCH/ historical evidence, data/, caches, vendor checkouts (crewAI*,
+.git) and machine-local config.
 The payload is validated for a single runtime copy and for the absence of
 absolute workspace paths before the manifest is written.
 """
@@ -30,6 +31,12 @@ import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from nl_coding_agent.core.workspace import WORKSPACE_DIRNAME  # noqa: E402
 
 PAYLOAD_MANIFEST_VERSION = 1
 INCLUDED_ROOTS = (
@@ -50,10 +57,13 @@ LAUNCHER_SOURCE_TO_PAYLOAD = {
     "scripts/launchers/Self-Build Mode.bat": "Self-Build Mode.bat",
 }
 EXCLUDED_ROOTS = (
+    WORKSPACE_DIRNAME,
     ".agents",
     ".git",
     "AGENTS.md",
     "PATCH",
+    # Legacy root locations retained defensively so a pre-reorg checkout can
+    # never leak build outputs, releases, logs or scratch state into a payload.
     "build",
     "crewAI",
     "crewAI-tools",
@@ -261,7 +271,8 @@ def _manifest(
     checks: dict,
 ) -> dict:
     total_size = sum(path.stat().st_size for path in files)
-    output_location = "dist" if output.parent == source / "dist" else "external"
+    payload_dist_root = source / WORKSPACE_DIRNAME / "dist"
+    output_location = "dist" if output.parent == payload_dist_root else "external"
     return {
         "payload_manifest_version": PAYLOAD_MANIFEST_VERSION,
         "source_name": source.name,
@@ -286,8 +297,11 @@ def _manifest(
 def _validate_output(source: Path, output: Path, dry_run: bool = False) -> None:
     if output == source:
         raise ValueError("output directory must not be the source tree")
-    if output.is_relative_to(source) and not output.is_relative_to(source / "dist"):
-        raise ValueError("output directory must be outside the source tree or under dist/")
+    payload_dist_root = source / WORKSPACE_DIRNAME / "dist"
+    if output.is_relative_to(source) and not output.is_relative_to(payload_dist_root):
+        raise ValueError(
+            "output directory must be outside the source tree or under .workspace/dist/"
+        )
     if output.exists():
         if not output.is_dir():
             raise ValueError("output path exists and is not a directory")
@@ -327,14 +341,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--output",
         default=None,
-        help="Destination payload directory (default: <source>/dist/portable-release)",
+        help="Destination payload directory (default: <source>/.workspace/dist/portable-release)",
     )
     parser.add_argument("--dry-run", action="store_true", help="Plan without copying")
     parser.add_argument("--json", action="store_true", help="Print the manifest as JSON")
     args = parser.parse_args(argv)
 
     source = Path(args.source).resolve()
-    output = Path(args.output).resolve() if args.output else source / "dist" / "portable-release"
+    output = (
+        Path(args.output).resolve()
+        if args.output
+        else source / WORKSPACE_DIRNAME / "dist" / "portable-release"
+    )
     if not source.is_dir():
         print(f"error: source directory not found: {source}", file=sys.stderr)
         return 2

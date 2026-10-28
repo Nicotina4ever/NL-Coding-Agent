@@ -31,7 +31,7 @@ Existing paths:
   ever restored.
 - `nl_coding_agent\` — existing bootstrap application. Refactor incrementally; do not throw away
   working CLI behavior without replacement tests.
-- `config\`, `state\`, `logs\` may already exist.
+- `config\` may already exist; generated state/logs live under `.workspace\`.
 
 Python validation already succeeded:
 - `python\python.exe -m pip check` -> no broken requirements.
@@ -68,10 +68,13 @@ Python validation already succeeded:
 Canonical source repository: `K:\AI\NL Coding Agent`. Keep permanent project-owned files inside
 this repository. Do not create sibling directories under `K:\AI` without explicit user approval.
 
-- Permanent build artifacts: `dist\` (for example `dist\portable-release`).
-- Temporary build files: `build\`; remove them when the build or audit is finished.
+- Generated workspace root: `.workspace\` (default; override with `NL_WORKSPACE_DIR`), holding
+  `build\` (temporary build/audit evidence), `dist\` (release candidates; at most one verified),
+  `logs\`, `temp\`, `cache\` and `state\`. Remove temporary content when the build/audit is finished.
+- Keep `python\` (embedded runtime) and `data\` (live SQLite/user data) at their historical
+  repository paths; they are deliberately outside the `.workspace\` policy.
 - Tests and fixtures: the normal project test/fixture directories, never a sibling workspace.
-- Packaging input must exclude `dist\`, `build\`, caches, logs, user data, vendor checkouts, and
+- Packaging input must exclude `.workspace\`, caches, user data, vendor checkouts, and
   test output to prevent recursive inclusion.
 - A portable independence smoke test may run outside the source tree only from a managed
   temporary directory. Record its owner and cleanup path; do not leave a permanent installation.

@@ -19,6 +19,7 @@ from typing import Callable
 from nl_coding_agent.core import promotion
 from nl_coding_agent.core.roadmap import next_mission
 from nl_coding_agent.core.supervisor import run_supervisor
+from nl_coding_agent.core.workspace import logs_root
 from nl_coding_agent.persistence.database import db_path
 from nl_coding_agent.persistence.missions import (
     create_mission,
@@ -144,7 +145,7 @@ def reconcile_completed_mission(
 def _log(message: str, on_event: Callable | None = None) -> None:
     line = f"[{_now()}] {message}"
     print(line, flush=True)
-    log_dir = db_path().parent.parent / "logs"
+    log_dir = logs_root()
     try:
         log_dir.mkdir(parents=True, exist_ok=True)
         with (log_dir / "selfbuild.log").open("a", encoding="utf-8") as fh:

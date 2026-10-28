@@ -13,7 +13,7 @@ from pathlib import Path
 
 IGNORED_DIRS = {
     ".git", ".hg", ".svn", ".idea", ".vscode", ".pytest_cache", ".mypy_cache",
-    "__pycache__", "node_modules", ".venv", "venv", "env", "dist", "build",
+    "__pycache__", "node_modules", ".venv", "venv", "env", ".workspace", "dist", "build",
     "target", "bin", "obj", "python", "crewAI", "crewAI-tools", "data",
     "logs", "state",
 }
@@ -26,6 +26,73 @@ IGNORED_SUFFIXES = {
 }
 
 MAX_FILE_BYTES = 1_000_000
+
+# ---------------------------------------------------------------------------
+# Workspace layout policy (ROOT REORG Phase B)
+# ---------------------------------------------------------------------------
+# Generated build/dist/logs/temp/cache/state data lives under one configurable
+# root: <repository root>/.workspace by default, overridable with
+# NL_WORKSPACE_DIR. python/ is the embedded runtime shipped in the payload and
+# data/ is live user data (SQLite, backups, recovery, mission baselines): both
+# stay at their historical repository-relative paths, which is a hard
+# relocation-acceptance dependency.
+APP_ROOT = Path(__file__).resolve().parents[2]
+WORKSPACE_DIRNAME = ".workspace"
+WORKSPACE_ENV_VAR = "NL_WORKSPACE_DIR"
+WORKSPACE_CHILDREN = ("build", "dist", "logs", "temp", "cache", "state")
+
+
+def workspace_root() -> Path:
+    """Return the root of generated workspace data (default <repo>/.workspace).
+
+    NL_WORKSPACE_DIR overrides the location: absolute paths are used as-is,
+    relative paths resolve against the repository root (APP_ROOT).
+    """
+    override = os.environ.get(WORKSPACE_ENV_VAR, "").strip()
+    if not override:
+        return (APP_ROOT / WORKSPACE_DIRNAME).resolve()
+    candidate = Path(override).expanduser()
+    if not candidate.is_absolute():
+        candidate = APP_ROOT / candidate
+    return candidate.resolve()
+
+
+def workspace_path(*parts: str, create: bool = False) -> Path:
+    """Return a path below workspace_root(); create the directory when asked."""
+    path = workspace_root().joinpath(*(str(part) for part in parts))
+    if create:
+        path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def build_root() -> Path:
+    """Root for transient build/audit evidence."""
+    return workspace_path("build")
+
+
+def dist_root() -> Path:
+    """Root for release candidates and portable payloads."""
+    return workspace_path("dist")
+
+
+def logs_root() -> Path:
+    """Root for run logs and diagnostics."""
+    return workspace_path("logs")
+
+
+def temp_root() -> Path:
+    """Root for disposable scratch files."""
+    return workspace_path("temp")
+
+
+def cache_root() -> Path:
+    """Root for application caches."""
+    return workspace_path("cache")
+
+
+def state_root() -> Path:
+    """Root for legacy bootstrap CLI state (audit/spec Markdown files)."""
+    return workspace_path("state")
 
 
 def _iter_files(root: Path):

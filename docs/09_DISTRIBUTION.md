@@ -10,11 +10,11 @@ full suite. Mission #36 completed the read-only repository audit and size-reduct
 (`docs/CREWAI_RUNTIME.md`); mission #38 completed portable payload staging
 (`docs/PORTABLE_BUILD.md`) with reviewer approval; mission #39 added the `NL_DATA_DIR` override
 for the SQLite database and self-build state. A new canonical release candidate is staged at
-`dist\portable-release`; launcher default data-directory wiring, data migration, installer work,
+`.workspace\dist\portable-release`; launcher default data-directory wiring, data migration, installer work,
 and the full acceptance flow remain open.
 
 The canonical staging plan is measured at 23,638 source files and 1,507,676,008 bytes (1.40 GiB)
-after excluding `python\Scripts`, the machine-local `config/voicebridge.yaml`, `dist\`, `build\`,
+after excluding `python\Scripts`, the machine-local `config/voicebridge.yaml`, `.workspace\`,
 and runtime caches. The release candidate was copied to a managed temporary directory and
 verified outside the source tree with `NL_DATA_DIR` outside the payload: `doctor` exited 0,
 CrewAI and Ollama were detected, the offscreen GUI constructed six pages, a project opened, and
@@ -32,7 +32,7 @@ A first, tested distribution foundation now exists (see `docs/BOOTSTRAPPER.md`):
 - `scripts/build_release.py`: reproducible source-only release candidate from git-tracked files (deterministic zip with fixed metadata, `release-manifest.json` and installer-compatible `platform-manifest.json`). Two builds from identical inputs are byte-identical (measured: zip sha256 `55ea8674...eaa06`, 1,053,218 B). It writes only a NEW candidate directory and never copies `python/` or `crewAI/` by default.
 - 40 targeted tests (fake/local artifacts, no network) and measured local offline install/verify evidence are documented in `docs/BOOTSTRAPPER.md`.
 
-Still manual-pending: clean Windows machine acceptance, a published/signed download channel, a bundled clean runtime archive, code signing/uninstaller, user-data migration/`NL_DATA_DIR` launcher wiring, and license notices in the payload. The existing stale `dist\portable-release` was left untouched; the measured source-only smoke candidate `dist/stage6a-source-candidate` (zip 1,053,218 B + manifests, no runtime) is retained for Lead review only and is not a verified full release candidate.
+Still manual-pending: clean Windows machine acceptance, a published/signed download channel, a bundled clean runtime archive, code signing/uninstaller, user-data migration/`NL_DATA_DIR` launcher wiring, and license notices in the payload. The existing stale `.workspace\dist\portable-release` was left untouched; the measured source-only smoke candidate `.workspace/dist/stage6a-source-candidate` (zip 1,053,218 B + manifests, no runtime) is retained for Lead review only and is not a verified full release candidate.
 
 ## Priority gate
 
@@ -86,9 +86,9 @@ equivalent according to actual compatibility, size, and performance. Do not clai
 success merely because an EXE was generated.
 
 Staging is implemented in `scripts/stage_portable.py` and documented in
-`docs/PORTABLE_BUILD.md`. The default output is `dist\portable-release`; a non-empty output is
+`docs/PORTABLE_BUILD.md`. The default output is `.workspace\dist\portable-release`; a non-empty output is
 still refused. A dry run produces 23,638 files and 1,507,676,008 bytes (1.40 GiB) after excluding
-`python\Scripts`, `dist\`, `build\`, caches, and the machine-local `config/voicebridge.yaml`.
+`python\Scripts`, `.workspace\`, caches, and the machine-local `config/voicebridge.yaml`.
 The staged candidate was copied to a managed temporary directory and passed `doctor`, offscreen
 GUI startup, project opening, and restart persistence with `NL_DATA_DIR` outside the payload.
 Mission #39 added `NL_DATA_DIR`, so user data can be moved outside the installation; the
@@ -100,7 +100,7 @@ per-user bootstrapper foundation and the reproducible source release builder (`i
 packaging remain manual-pending.
 
 Build outputs are now governed by the workspace-containment policy: permanent build artifacts
-belong under `dist\`, temporary build files under `build\`, and no new sibling directories under
+belong under `.workspace\dist\`, temporary build files under `.workspace\build\`, and no new sibling directories under
 `K:\AI` are created without explicit approval. Portable independence tests use a managed
 temporary directory and record its cleanup. Existing sibling payloads are audit-only until the
 user approves deletion.
