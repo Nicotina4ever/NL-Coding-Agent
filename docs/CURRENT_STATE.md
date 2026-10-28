@@ -842,3 +842,26 @@ Localization and pre-push guard verified (2026-10-29)
 - Full integration suite 1110 passed in 142.8 s measured wall time. Counts: 193 requirements,
   36 verified / 85 partial / 69 planned / 3 blocked. NL-BP-238/239/240/241 remain partial for full
   style migration, real self-build/live-mission content and human visual/screen-reader acceptance.
+
+Document planning D2/D3 (2026-10-29)
+
+- NL-BP-218 is verified: DocumentCorpus discovery/ingestion is usable end-to-end through
+  AppServices.document_ingest, the docs ingest CLI and a non-prominent Projects GUI action. It
+  supports consent-based project roots, explicit files/folders, bounded documentation archives,
+  read-only Git documentation with ref/commit provenance and authorized URLs only through an
+  explicitly configured research reader (no implicit network). Text/Markdown/RST/JSON/YAML/TOML/
+  CSV/HTML and docs/specs/architecture/roadmaps/checklists are included; PDF/Office use existing
+  optional extractors with fail-closed reasons; runtime/data/vendor/logs/caches/build paths are
+  ignored, symlinks refused and file/byte/archive bounds enforced with incomplete/bounded reporting.
+  Every item carries provenance/hash/source kind/authority and an immutable untrusted marker; no
+  content is executed. Real live-URL/PDF acceptance remains external/manual.
+- NL-BP-219 partial: deterministic read-only reconciliation of authoritative/stale/duplicate docs,
+  version conflicts, obsolete paths/commands, missing docs, contradictory requirements and
+  doc-vs-source/dependency/test/Git evidence, with immutable provenance findings, explicit
+  unknown states, deterministic hashes and additive versioned run history; never auto-resolves.
+- NL-BP-220 partial: deterministic extraction of objectives/requirements/constraints/dependencies/
+  acceptance criteria with stable IDs, explicit-vs-inferred labels/confidence, source excerpt/hash/
+  line provenance, dedupe and bounds; no execution/network. Both remain partial until they feed
+  plan generation/approval (221) and inferred items receive human confirmation.
+- Full integration suite 1137 passed in 185.0 s measured wall time. Counts: 193 requirements,
+  37 verified / 86 partial / 67 planned / 3 blocked.

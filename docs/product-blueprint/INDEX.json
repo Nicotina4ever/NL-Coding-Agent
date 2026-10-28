@@ -5910,7 +5910,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "new (user directives 2026-10-28: Universal Goal Mode + document-driven planning)",
-      "status": "partial",
+      "status": "verified",
       "dependencies": [
         "NL-BP-077",
         "NL-BP-043",
@@ -5924,7 +5924,8 @@
       "evidence": [
         "not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY_AUDIT.md; no code, mission or network run started",
         "capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)",
-        "Bounded read-only DocumentCorpus implemented: consent-gated project roots/explicit files/folders/documentation archives/read-only Git docs/injected URL readers; includes README/AGENTS/Markdown/text/RST/JSON/YAML/TOML/CSV/HTML/docs/specs/architecture/roadmaps/checklists; PDF/Office only through existing optional extractors with explicit fail-closed reasons; ignores runtime/data/vendor/logs/caches/build directories, refuses symlinks and enforces file/byte/archive/section bounds; extracts title/headings/sections/sha256/size/content type/source provenance with duplicate-hash detection and authority-candidate flags; all content is immutably marked untrusted and never executed or fetched by the module. 8 tests. Reconciliation/authority resolution/planning persistence remain unimplemented."
+        "Bounded read-only DocumentCorpus implemented: consent-gated project roots/explicit files/folders/documentation archives/read-only Git docs/injected URL readers; includes README/AGENTS/Markdown/text/RST/JSON/YAML/TOML/CSV/HTML/docs/specs/architecture/roadmaps/checklists; PDF/Office only through existing optional extractors with explicit fail-closed reasons; ignores runtime/data/vendor/logs/caches/build directories, refuses symlinks and enforces file/byte/archive/section bounds; extracts title/headings/sections/sha256/size/content type/source provenance with duplicate-hash detection and authority-candidate flags; all content is immutably marked untrusted and never executed or fetched by the module. 8 tests. Reconciliation/authority resolution/planning persistence remain unimplemented.",
+        "Document corpus discovery/ingestion completed end-to-end and verified: DocumentCorpus supports consent-based project roots, explicit files/folders, documentation archives (bounded extraction with traversal/symlink refusal), read-only Git documentation with ref/commit provenance, and authorized documentation URLs only through an explicitly configured research fetch reader/transport (no implicit network; structured unavailable otherwise); Markdown/text/RST/JSON/YAML/TOML/CSV/HTML and docs/specs/architecture/roadmaps/checklists are included, PDF/Office use existing optional extractors with explicit fail-closed reasons, runtime/data/vendor/logs/caches/build paths are ignored, symlinks refused and file/byte/archive/section bounds enforced with bounded/incomplete reporting. Every item carries path/URL, source kind, sha256, size, content type, Git ref/commit where applicable, authority flags and an immutable untrusted marker; duplicate hashes are reported, content is never executed and archives are safely refused. AppServices document_ingest/document_ingest_status/configure_document_ingest expose the corpus with structured summaries and no implicit persistence/execution/network; the docs ingest CLI and a non-prominent Projects GUI ingest action with localized summary dialog make it usable end-to-end. Tests cover consent, nested docs, explicit/archive/Git/PDF-Office fake+fail-closed, URL unavailable+injected success, bounds/unsafe archives, CLI JSON/text/exit codes, GUI states and static no-execution/network guards. Real live-URL/PDF acceptance remains external/manual."
       ],
       "source_refs": [
         "user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md)",
@@ -5934,7 +5935,7 @@
         "NL-BP-030"
       ],
       "primary_source": "user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md)",
-      "note": "Bounded read-only DocumentCorpus implemented: consent-gated project roots/explicit files/folders/documentation archives/read-only Git docs/injected URL readers; includes README/AGENTS/Markdown/text/RST/JSON/YAML/TOML/CSV/HTML/docs/specs/architecture/roadmaps/checklists; PDF/Office only through existing optional extractors with explicit fail-closed reasons; ignores runtime/data/vendor/logs/caches/build directories, refuses symlinks and enforces file/byte/archive/section bounds; extracts title/headings/sections/sha256/size/content type/source provenance with duplicate-hash detection and authority-candidate flags; all content is immutably marked untrusted and never executed or fetched by the module. 8 tests. Reconciliation/authority resolution/planning persistence remain unimplemented.",
+      "note": "Document corpus discovery/ingestion completed end-to-end and verified: DocumentCorpus supports consent-based project roots, explicit files/folders, documentation archives (bounded extraction with traversal/symlink refusal), read-only Git documentation with ref/commit provenance, and authorized documentation URLs only through an explicitly configured research fetch reader/transport (no implicit network; structured unavailable otherwise); Markdown/text/RST/JSON/YAML/TOML/CSV/HTML and docs/specs/architecture/roadmaps/checklists are included, PDF/Office use existing optional extractors with explicit fail-closed reasons, runtime/data/vendor/logs/caches/build paths are ignored, symlinks refused and file/byte/archive/section bounds enforced with bounded/incomplete reporting. Every item carries path/URL, source kind, sha256, size, content type, Git ref/commit where applicable, authority flags and an immutable untrusted marker; duplicate hashes are reported, content is never executed and archives are safely refused. AppServices document_ingest/document_ingest_status/configure_document_ingest expose the corpus with structured summaries and no implicit persistence/execution/network; the docs ingest CLI and a non-prominent Projects GUI ingest action with localized summary dialog make it usable end-to-end. Tests cover consent, nested docs, explicit/archive/Git/PDF-Office fake+fail-closed, URL unavailable+injected success, bounds/unsafe archives, CLI JSON/text/exit codes, GUI states and static no-execution/network guards. Real live-URL/PDF acceptance remains external/manual.",
       "backlog_anchor": "nl-bp-218",
       "program_stage": 8,
       "program_stage_name": "Universal Goal Mode and document-driven planning",
@@ -5949,7 +5950,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "new (user directives 2026-10-28: Universal Goal Mode + document-driven planning)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-218",
         "NL-BP-178",
@@ -5962,7 +5963,8 @@
       ],
       "evidence": [
         "not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY_AUDIT.md; no code, mission or network run started",
-        "capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)"
+        "capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)",
+        "Documentation reconciliation implemented and tested offline: deterministic read-only analysis of authoritative vs stale/duplicate docs, version conflicts, obsolete referenced paths/files/missing commands, missing README/docs, contradictory requirements, and doc-vs-source/dependency/test/Git evidence comparison with explicit unknown/no-evidence states; immutable findings carry stable IDs/category/severity/source provenance/excerpts/hashes/lines/counterparts and never auto-resolve or rewrite; deterministic report/corpus hashes and additive doc_reconciliation_runs persistence support re-runs/history. Still partial because reconciliation is not yet wired into document-driven plan generation/UI (NL-BP-221) and heuristic findings require human/evidence review; no truth claim."
       ],
       "source_refs": [
         "user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md)",
@@ -5972,7 +5974,7 @@
         "NL-BP-174"
       ],
       "primary_source": "user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md)",
-      "note": "New reconciliation engine; complementary to the planned Project Genome (178) and research store (174).",
+      "note": "Documentation reconciliation implemented and tested offline: deterministic read-only analysis of authoritative vs stale/duplicate docs, version conflicts, obsolete referenced paths/files/missing commands, missing README/docs, contradictory requirements, and doc-vs-source/dependency/test/Git evidence comparison with explicit unknown/no-evidence states; immutable findings carry stable IDs/category/severity/source provenance/excerpts/hashes/lines/counterparts and never auto-resolve or rewrite; deterministic report/corpus hashes and additive doc_reconciliation_runs persistence support re-runs/history. Still partial because reconciliation is not yet wired into document-driven plan generation/UI (NL-BP-221) and heuristic findings require human/evidence review; no truth claim.",
       "backlog_anchor": "nl-bp-219",
       "program_stage": 8,
       "program_stage_name": "Universal Goal Mode and document-driven planning",
@@ -5987,7 +5989,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "new (user directives 2026-10-28: Universal Goal Mode + document-driven planning)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-218",
         "NL-BP-219",
@@ -6000,7 +6002,8 @@
       ],
       "evidence": [
         "not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY_AUDIT.md; no code, mission or network run started",
-        "capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)"
+        "capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)",
+        "Requirement/constraint extraction implemented and tested offline: deterministic extraction of objectives, requirements, constraints (technical/legal/owner), dependencies and acceptance criteria from markdown/text documentation with stable IDs, explicit-vs-inferred labels/confidence, source document ID/path/URL/title/hash, excerpt plus excerpt SHA-256/line/offset/section, dependency/constraint subtypes, machine-readable items/by-kind output, normalized-text/source dedupe and bounded item/text limits with limitations/unknowns. Still partial because extraction is not yet connected to plan generation/approval UI (NL-BP-221) and inferred items require human confirmation; no execution/network."
       ],
       "source_refs": [
         "user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md)",
@@ -6010,7 +6013,7 @@
         "NL-BP-050"
       ],
       "primary_source": "user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md)",
-      "note": "New extraction layer; the goal/acceptance concept in 050 remains the record shape.",
+      "note": "Requirement/constraint extraction implemented and tested offline: deterministic extraction of objectives, requirements, constraints (technical/legal/owner), dependencies and acceptance criteria from markdown/text documentation with stable IDs, explicit-vs-inferred labels/confidence, source document ID/path/URL/title/hash, excerpt plus excerpt SHA-256/line/offset/section, dependency/constraint subtypes, machine-readable items/by-kind output, normalized-text/source dedupe and bounded item/text limits with limitations/unknowns. Still partial because extraction is not yet connected to plan generation/approval UI (NL-BP-221) and inferred items require human confirmation; no execution/network.",
       "backlog_anchor": "nl-bp-220",
       "program_stage": 8,
       "program_stage_name": "Universal Goal Mode and document-driven planning",
@@ -6904,9 +6907,9 @@
   "counts": {
     "total": 193,
     "by_status": {
-      "verified": 36,
-      "partial": 85,
-      "planned": 69,
+      "verified": 37,
+      "partial": 86,
+      "planned": 67,
       "blocked": 3
     },
     "by_priority": {
@@ -6935,9 +6938,9 @@
         "planned": 7
       },
       "autonomy": {
-        "verified": 17,
-        "partial": 21,
-        "planned": 21,
+        "verified": 18,
+        "partial": 22,
+        "planned": 19,
         "blocked": 1
       },
       "hygiene": {
@@ -6959,9 +6962,9 @@
     },
     "by_priority_status": {
       "P0": {
-        "verified": 23,
-        "partial": 45,
-        "planned": 40,
+        "verified": 24,
+        "partial": 46,
+        "planned": 38,
         "blocked": 3
       },
       "P1": {
@@ -8846,7 +8849,8 @@
     "v5.1_2026-10-29_goal_approval_workers_gui": "Goal Mode G8/G9: additive plan approval metadata/audit (current/explicit version, idempotent, replan creates unapproved version), read-only linked mission-task/queue-entry/active-work inspection, AppServices/CLI goal approve/tasks/workers, and an eighth Goals GUI section (Tasks & Active Workers) plus Plan Version approval controls; adapters aligned to the real facade. Goal suite 98 passed; targeted GUI 23 passed; full integration suite 1081 passed in 147.8 s. Counts unchanged at 34 verified / 82 partial / 69 planned / 3 blocked. 216 remains partial for permission-policy gating and non-blocking refresh; 213 remains partial for objective/evidence-driven task/mission derivation.",
     "v5.2_2026-10-29_studio_final_ux": "Queue-only registration of the user's final Studio GUI UX acceptance directive. Read-only audit (docs/STUDIO_FINAL_UX_AUDIT.md) found: verified NL branding/theme shell and partial navigation/settings/self-build/emergency/accessibility/responsive/dashboard requirements; NO UI internationalization/language setting; 82 setStyleSheet calls and 110 hardcoded colour literals bypassing tokens; a prominent Projects-page Self-Build button still present; a raw QTextEdit Inspector; ambiguous project/open/activity state; and offscreen-only GUI evidence with real-desktop/clipboard/DPI items MANUAL-PENDING. Five gaps were appended to the EXISTING program stage 4 as planned NL-BP-237..241 (i18n, visual/IA polish, self-build placement/runtime UX, Inspector/state clarity, real-GUI evidence); stage 4 status/note corrected honestly from completed to in_progress ('engineering complete; final UX acceptance reopened'). No new stage/framework; stages 1-3/5-10 untouched; all existing requirement IDs/acceptance retained; no code/GUI/model/network run started. Totals: 193 requirements; 34 verified / 82 partial / 74 planned / 3 blocked.",
     "v5.3_2026-10-29_studio_ux_implementation": "Studio UX implementation: Italian/English i18n framework with persisted live switching across principal and secondary panels (319 keys each), visual tokens/components and responsive Inspector/Projects/header polish, self-build moved from Projects to Settings > Advanced with progress/emergency-stop preserved, structured Inspector diagnostics and explicit opened/selected + activity state, and real Windows Qt screenshots at 1280x800/1.0, 1600x1000/1.25 and 1920x1080/1.5 with functional capture evidence. Five new requirements 237-241 now partial; full suite 1102 passed in 139.7 s; counts 34 verified / 87 partial / 69 planned / 3 blocked.",
-    "v5.4_2026-10-29_localization_prepush_verified": "Static UI localization completed and NL-BP-237 verified (Italian default/English, 409 keys each, identical key/placeholder sets, preserved live switching across principal and secondary panels, persisted preference, separation from agent/code/docs language). Pre-push guard blocker cleared with a precise digest+path+rule+scope+commit synthetic-fixture allowlist; measured scan-staged/head/all PASS with 0 blocking and 5 allowlisted, scanner rules unchanged, NL-BP-235 verified. Full integration suite 1110 passed in 142.8 s. Counts 36 verified / 85 partial / 69 planned / 3 blocked. 238-241 remain partial; final release-HEAD rerun, external acceptance and owner publication authorization still required."
+    "v5.4_2026-10-29_localization_prepush_verified": "Static UI localization completed and NL-BP-237 verified (Italian default/English, 409 keys each, identical key/placeholder sets, preserved live switching across principal and secondary panels, persisted preference, separation from agent/code/docs language). Pre-push guard blocker cleared with a precise digest+path+rule+scope+commit synthetic-fixture allowlist; measured scan-staged/head/all PASS with 0 blocking and 5 allowlisted, scanner rules unchanged, NL-BP-235 verified. Full integration suite 1110 passed in 142.8 s. Counts 36 verified / 85 partial / 69 planned / 3 blocked. 238-241 remain partial; final release-HEAD rerun, external acceptance and owner publication authorization still required.",
+    "v5.5_2026-10-29_document_planning_d2_d3": "Document planning D2/D3: documentation reconciliation (authoritative/stale/version conflicts/obsolete/missing/contradictions/doc-vs-code evidence, immutable provenance findings, versioned run history) and requirement/constraint/acceptance extraction with explicit-vs-inferred provenance; end-to-end DocumentCorpus ingestion via AppServices/CLI/Projects GUI. NL-BP-218 verified; 219/220 partial pending plan-generation/approval integration. Full integration suite 1137 passed in 185.0 s. Counts 37 verified / 86 partial / 67 planned / 3 blocked."
   },
   "program_order": {
     "schema_version": 1,
@@ -9178,7 +9182,7 @@
           "NL-BP-222",
           "NL-BP-223"
         ],
-        "note": "Queued by task-68. Execute after stages 3 and 7 gates pass or when the Lead records an explicit evidence-backed exception. Stages 1-7 statuses and all existing requirements are untouched. Goal mode reuses supervisor/SQLite/Flow; document-driven plans must be approved and independent completion verification remains mandatory. No deletion/publication/cloud authorization is granted. First implementation increments landed: G1 (durable goals/milestones tables linked to existing missions, GoalService lifecycle/dependencies/structured decomposition/next-work/progress/audit; 17 tests) and D1 (bounded read-only document corpus discovery/ingestion with provenance and untrusted-content marking; 8 tests). Remaining: GUI/CLI/API surfaces, multi-goal continuation/execution, LLM-free adaptive replanning/versioning, document reconciliation/authority/conflict analysis, requirement extraction, plan preview/approval, independent goal verification and the end-to-end acceptance scenario. Second increment: G2 exposed GoalService through a lazy AppServices facade and a non-executing CLI goal group (lifecycle, decomposition, next-work, progress, JSON/text, stable errors; no execution), and G3 added an independent GoalVerifier with evidence-type enforcement, append-only verification records and false-completion detection (20 tests; not yet wired into completion transitions/CLI/GUI). GUI goal page, scheduler/continuation, LLM-free adaptive replanning, document reconciliation/extraction/plan approval and end-to-end acceptance remain pending. Third increment: G4 delivered the Goals GUI workspace (11th page: project-scoped goals, filters, create dialog, valid lifecycle actions, milestones, next-work, progress and blockers) and G5 wired verification-gated completion through AppServices and the CLI (GoalVerifier before completion, persisted reports, refusals with no status mutation, dry-run/read-only verify/records/false-completion helpers, 12 gate tests; goal suite 62). Remaining: autonomous scheduler/continuation, autonomy-policy/resource conflicts, versioned adaptive replanning, template reuse, task-queue/active-agent/log GUI views, verifier reuse of staged-candidate/oracle gates and end-to-end acceptance. G6 added versioned replanning (goal_plan_versions snapshots/diffs, rationale/trigger/evidence validation, objective immutability, in-place milestones preserving links, plan-version/current APIs, replan audit and CLI/API replan/versions/links/activity/queue). G7 expanded the Goals GUI into a seven-section vertical slice (missions/queue, activity/decisions, plan versions, evidence/verification, replan dialog, verify-before-complete evidence dialog) with 12 GUI tests and headless smoke. Still partial: derivation of tasks/missions from objective/evidence, autonomous scheduling/triggering, active-agent views/approve, and real project/database lifecycle acceptance. G8 added plan approval metadata/audit, linked task/queue/active-work inspection and CLI/API approve/tasks/workers commands; G9 added the Tasks & Active Workers GUI section and Approve plan action, and aligned the GUI adapters to the real facade. 216 remains partial only for permission-policy gating of lifecycle/approval and fully non-blocking GUI refresh plus real project/supervisor lifecycle acceptance; 213 remains partial for task/mission derivation from objective/evidence and autonomous replan triggering."
+        "note": "Queued by task-68. Execute after stages 3 and 7 gates pass or when the Lead records an explicit evidence-backed exception. Stages 1-7 statuses and all existing requirements are untouched. Goal mode reuses supervisor/SQLite/Flow; document-driven plans must be approved and independent completion verification remains mandatory. No deletion/publication/cloud authorization is granted. First implementation increments landed: G1 (durable goals/milestones tables linked to existing missions, GoalService lifecycle/dependencies/structured decomposition/next-work/progress/audit; 17 tests) and D1 (bounded read-only document corpus discovery/ingestion with provenance and untrusted-content marking; 8 tests). Remaining: GUI/CLI/API surfaces, multi-goal continuation/execution, LLM-free adaptive replanning/versioning, document reconciliation/authority/conflict analysis, requirement extraction, plan preview/approval, independent goal verification and the end-to-end acceptance scenario. Second increment: G2 exposed GoalService through a lazy AppServices facade and a non-executing CLI goal group (lifecycle, decomposition, next-work, progress, JSON/text, stable errors; no execution), and G3 added an independent GoalVerifier with evidence-type enforcement, append-only verification records and false-completion detection (20 tests; not yet wired into completion transitions/CLI/GUI). GUI goal page, scheduler/continuation, LLM-free adaptive replanning, document reconciliation/extraction/plan approval and end-to-end acceptance remain pending. Third increment: G4 delivered the Goals GUI workspace (11th page: project-scoped goals, filters, create dialog, valid lifecycle actions, milestones, next-work, progress and blockers) and G5 wired verification-gated completion through AppServices and the CLI (GoalVerifier before completion, persisted reports, refusals with no status mutation, dry-run/read-only verify/records/false-completion helpers, 12 gate tests; goal suite 62). Remaining: autonomous scheduler/continuation, autonomy-policy/resource conflicts, versioned adaptive replanning, template reuse, task-queue/active-agent/log GUI views, verifier reuse of staged-candidate/oracle gates and end-to-end acceptance. G6 added versioned replanning (goal_plan_versions snapshots/diffs, rationale/trigger/evidence validation, objective immutability, in-place milestones preserving links, plan-version/current APIs, replan audit and CLI/API replan/versions/links/activity/queue). G7 expanded the Goals GUI into a seven-section vertical slice (missions/queue, activity/decisions, plan versions, evidence/verification, replan dialog, verify-before-complete evidence dialog) with 12 GUI tests and headless smoke. Still partial: derivation of tasks/missions from objective/evidence, autonomous scheduling/triggering, active-agent views/approve, and real project/database lifecycle acceptance. G8 added plan approval metadata/audit, linked task/queue/active-work inspection and CLI/API approve/tasks/workers commands; G9 added the Tasks & Active Workers GUI section and Approve plan action, and aligned the GUI adapters to the real facade. 216 remains partial only for permission-policy gating of lifecycle/approval and fully non-blocking GUI refresh plus real project/supervisor lifecycle acceptance; 213 remains partial for task/mission derivation from objective/evidence and autonomous replan triggering. D2/D3 landed: documentation reconciliation and requirement/constraint extraction with provenance and versioned run persistence, plus end-to-end DocumentCorpus ingestion through AppServices, CLI and Projects GUI. NL-BP-218 is verified; 219/220 are partial until reconciliation/extraction feed plan generation and approval (221) and inferred items are human-confirmed; 221-223 remain planned."
       },
       {
         "stage": 9,
@@ -9229,7 +9233,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-29T00:45:00+01:00",
+  "updated_at": "2026-10-29T01:15:00+01:00",
   "addendum_import": {
     "imported_at": "2026-10-28T21:08:26+01:00",
     "task": "shared task-59 (queue-only backlog import; no implementation)",

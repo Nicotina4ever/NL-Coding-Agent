@@ -75,9 +75,9 @@ Publication/push remains forbidden without explicit owner authorization.
 
 | Status | P0 | P1 | P2 | P3 | Total |
 |---|---|---|---|---|---|
-| verified | 23 | 13 | 0 | 0 | 36 |
-| partial | 45 | 28 | 11 | 1 | 85 |
-| planned | 40 | 19 | 9 | 1 | 69 |
+| verified | 24 | 13 | 0 | 0 | 37 |
+| partial | 46 | 28 | 11 | 1 | 86 |
+| planned | 38 | 19 | 9 | 1 | 67 |
 | blocked | 3 | 0 | 0 | 0 | 3 |
 | **Total** | 111 | 60 | 20 | 2 | 193 |
 
@@ -102,6 +102,8 @@ Publication/push remains forbidden without explicit owner authorization.
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v5.5 (2026-10-29)** - Document planning D2/D3: documentation reconciliation (authoritative/stale/version conflicts, obsolete/missing docs, contradictions, doc-vs-source/dependency/test/Git evidence, immutable provenance findings, deterministic/versioned runs, no auto-resolution) and requirement/constraint/acceptance extraction (explicit-vs-inferred labels, confidence, source excerpt/hash/line provenance, dedupe/bounds); end-to-end DocumentCorpus ingestion through AppServices, CLI and a non-prominent Projects GUI action with structured untrusted summaries. NL-BP-218 verified; 219/220 partial pending plan generation/approval integration (221) and human confirmation of inferred items. Full integration suite 1137 passed in 185.0 s; counts 37 verified / 86 partial / 67 planned / 3 blocked.
 
 **v5.4 (2026-10-29)** - Static UI localization completed and NL-BP-237 verified (Italian default/English catalogs 409 keys each, identical key/placeholder sets, live switching across principal and secondary panels, persisted preference, separation from agent/code/documentation language). Pre-push guard historical blocker cleared with a precise tests-only synthetic-fixture allowlist (exact digest/path/rule/scope/commits/reason, visible in reports, narrowness tests); measured scan-staged/head/all PASS with 0 blocking and 5 allowlisted under unchanged detection rules, NL-BP-235 verified. Full integration suite 1110 passed in 142.8 s. Counts 36 verified / 85 partial / 69 planned / 3 blocked. NL-BP-238/239/240/241 remain partial; final release-HEAD rerun, real self-build/live content, human visual/screen-reader acceptance, external acceptance and owner publication authorization remain pending.
 
