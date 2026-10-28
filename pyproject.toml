@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "nl-coding-agent"
+version = "0.1.0"
+description = "NL Coding Agent - local-first multi-agent software development orchestrator"
+requires-python = ">=3.12"
+dependencies = [
+    "PySide6",
+    "psutil",
+    "crewai",
+    "PyYAML",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["nl_coding_agent*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

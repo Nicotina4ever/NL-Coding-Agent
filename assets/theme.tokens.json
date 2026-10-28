@@ -1,0 +1,35 @@
+{
+  "brand": {
+    "electric_violet": "#7531FE",
+    "magenta": "#E4469B",
+    "deep_purple": "#521B8D",
+    "purple_mid": "#8E24A4",
+    "rose": "#BA266C",
+    "lavender": "#AB83C6",
+    "cyan": "#46A3C0",
+    "blue_cyan": "#449CBF"
+  },
+  "ui_neutrals": {
+    "background": "#111216",
+    "surface_1": "#181A20",
+    "surface_2": "#20232B",
+    "surface_3": "#292D37",
+    "border": "#343947",
+    "text_primary": "#F3F4F7",
+    "text_secondary": "#B8BECA",
+    "text_muted": "#7E8798"
+  },
+  "semantic": {
+    "success": "#55C58A",
+    "warning": "#E6B85C",
+    "danger": "#E26472",
+    "info": "#46A3C0"
+  },
+  "rules": {
+    "text_glow": false,
+    "code_glow": false,
+    "log_glow": false,
+    "logo_glow_allowed": true,
+    "decorative_accent_glow_allowed": true
+  }
+}

@@ -1,0 +1,22 @@
+ollama:
+  base_url: "http://127.0.0.1:11434"
+  sequential_only: true
+  unload_after_stage: true
+
+roles:
+  architect:
+    model: "ollama/muse-glimmer:30b-q4_K_M"
+    temperature: 0.15
+
+  developer:
+    model: "ollama/qwen3.5:9b"
+    temperature: 0.10
+
+  reviewer:
+    model: "ollama/qwen2.5-coder:7b-instruct-q4_K_M"
+    temperature: 0.05
+
+  fallback_cloud:
+    enabled: false
+    model: "ollama/gpt-oss:120b-cloud"
+    temperature: 0.10

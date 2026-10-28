@@ -1,0 +1,31 @@
+project:
+  name: "NL VoiceBridge Studio"
+  root: "K:\\AI\\NL VoiceBridge Studio"
+
+  # Questi archivi sono backup: non vengono letti, estratti, modificati o cancellati.
+  protected_paths:
+    - "K:\\AI\\NL VoiceBridge Studio\\NL VoiceBridge Studio.rar"
+    - "K:\\AI\\NL VoiceBridge Studio\\NL VoiceBridge Studio.zip"
+
+  ignore_names:
+    - ".git"
+    - ".venv"
+    - "venv"
+    - "node_modules"
+    - "target"
+    - "dist"
+    - "build"
+    - "__pycache__"
+    - ".pytest_cache"
+    - ".mypy_cache"
+    - ".ruff_cache"
+
+  docs_globs:
+    - "*.md"
+    - "**/*.md"
+    - "*.txt"
+    - "**/*.txt"
+
+  # Lascia vuoto all'inizio: durante l'audit l'architetto identificherà
+  # i comandi di build/test realmente presenti nel repository.
+  verification_commands: []
