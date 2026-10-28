@@ -216,3 +216,46 @@ the supervisor default mode stays off. See docs/SH07_TIERB_EVIDENCE.md.
 - **The terminal policy is still not an OS sandbox.** Allowed commands run with user privileges;
   network commands are denied unless granted, but isolation and hardware/GUI verification remain
   manual-pending. No claim of sandboxing, verified hardware or verified DPI behaviour is made.
+
+## Capability taxonomy and durable scoped approvals (stage 7, NL-BP-168, implemented 2026-10-28)
+
+Additive layer in `nl_coding_agent/core/permissions.py` and
+`nl_coding_agent/persistence/permissions_store.py` on top of the legacy
+read/write/execute/delete/network/cloud scopes. No legacy deny or gate semantics
+(grants, audit, `require`, `assert_model_permitted`) were changed.
+
+- **Capabilities (20)** each carry a risk class and a default decision: read,
+  write, execute, install-private, install-system, web-search, web-fetch,
+  browser-interact, download, open-external-project, model-inference-local,
+  model-inference-cloud, secret-use, git-commit, git-push, publish-release,
+  delete, network-write, mcp-call, microphone.
+- **Fail-closed defaults:** only the local reversible capabilities default allowed
+  (read/write/execute/model-inference-local). High-impact capabilities default
+  denied (install-system, delete, publish-release, secret-use, git-push,
+  network-write, model-inference-cloud and the external network/browser/download
+  capabilities). Medium capabilities require a durable explicit approval
+  (install-private, git-commit, mcp-call, microphone, open-external-project).
+- **Scopes and decisions:** tool, process, path, project, external-resource,
+  host-domain, repository, task, mission, workspace, session, saved-policy; with
+  allow-once, mission, project, always, deny and revoke semantics. Deny wins over
+  allow, project/mission scoped grants never leak across projects/missions, and
+  allow-once grants are consumed atomically.
+- **Durable persistence:** additive SQLite tables `capability_grants` and
+  `capability_approvals` are created idempotently by `init_db` (legacy
+  `app_settings` policy is untouched). Grants have expiry, revocation,
+  inspection and audit; approval requests are durable so a pending WAIT_APPROVAL
+  survives crash/restart and a denied decision stays fail-closed. Every write
+  appends an `events` row (source `permissions`, `event_kind`
+  `capability_*`); no secrets or full context values are logged.
+- **Single evaluation API:** `check_capability(capability, scope, context)`
+  returns Allowed/Denied/NeedsApproval with a reason and policy/approval id;
+  `require_capability` raises `PermissionDenied` for anything not Allowed.
+  Permission-store errors fail closed (Denied), and unknown
+  capabilities/scopes/decisions raise `ValueError` before execution.
+- **No silent cross-enable:** granting one capability (or one legacy
+  network/cloud scope) never enables another capability; the new taxonomy is
+  evaluated independently from the legacy scope policy.
+- **Honest limitation:** this is an application-level filter, not an OS sandbox.
+  It does not constrain arbitrary subprocesses; future research/tool code must
+  call `check_capability` at the execution boundary.
+

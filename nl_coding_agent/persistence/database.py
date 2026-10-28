@@ -313,6 +313,42 @@ CREATE TABLE IF NOT EXISTS flow_runs (
     updated_at        TEXT NOT NULL,
     finished_at       TEXT
 );
+
+-- Stage-7 capability taxonomy: durable scoped approvals/grants (NL-BP-168).
+-- Additive tables only - legacy app_settings policies stay authoritative for the
+-- read/write/execute/delete/network/cloud scopes in core/permissions.py.
+CREATE TABLE IF NOT EXISTS capability_grants (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    capability   TEXT NOT NULL,
+    scope_kind   TEXT NOT NULL,
+    scope_value  TEXT,
+    project_id   INTEGER,
+    decision     TEXT NOT NULL,
+    source       TEXT NOT NULL DEFAULT 'human',
+    context_json TEXT NOT NULL DEFAULT '{}',
+    created_at   TEXT NOT NULL,
+    expires_at   TEXT,
+    consumed_at  TEXT,
+    revoked_at   TEXT
+);
+
+CREATE TABLE IF NOT EXISTS capability_approvals (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    capability   TEXT NOT NULL,
+    scope_kind   TEXT NOT NULL,
+    scope_value  TEXT,
+    project_id   INTEGER,
+    context_json TEXT NOT NULL DEFAULT '{}',
+    reason       TEXT NOT NULL DEFAULT '',
+    status       TEXT NOT NULL DEFAULT 'pending',
+    requested_at TEXT NOT NULL,
+    decided_at   TEXT,
+    decided_by   TEXT,
+    decision     TEXT,
+    grant_id     INTEGER,
+    expires_at   TEXT,
+    source       TEXT NOT NULL DEFAULT 'human'
+);
 """
 
 # Columns added after the first operational baseline.  Migrations are additive
@@ -367,6 +403,14 @@ CREATE INDEX IF NOT EXISTS idx_flow_runs_status ON flow_runs(status);
 CREATE INDEX IF NOT EXISTS idx_attachments_mission ON mission_attachments(mission_id, id);
 CREATE INDEX IF NOT EXISTS idx_attachments_project ON mission_attachments(project_id, id DESC);
 CREATE INDEX IF NOT EXISTS idx_attachments_sha ON mission_attachments(sha256);
+CREATE INDEX IF NOT EXISTS idx_capability_grants_cap
+    ON capability_grants(capability, revoked_at, expires_at);
+CREATE INDEX IF NOT EXISTS idx_capability_grants_project
+    ON capability_grants(project_id, capability, id DESC);
+CREATE INDEX IF NOT EXISTS idx_capability_approvals_status
+    ON capability_approvals(capability, status, id DESC);
+CREATE INDEX IF NOT EXISTS idx_capability_approvals_project
+    ON capability_approvals(project_id, status, id DESC);
 """
 
 
