@@ -1,0 +1,80 @@
+name: "Beta feature request"
+description: "Suggest or prioritise a capability for the private beta (no automatic telemetry)."
+title: "[Beta feature]: "
+labels: ["beta", "type/feature", "status/needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This project has **no automatic telemetry**. Please do not paste API keys, tokens, secrets,
+        personal paths or private project content. Feature requests are backlog input, not a
+        promise of implementation; see `docs/BETA_TESTING.md` (tester guide) and
+        `docs/PRIVATE_BETA_RUNBOOK.md` (triage rules) for the feedback workflow.
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform you care about
+      options:
+        - Windows (x64 / ARM64)
+        - Linux (x86_64 / ARM64)
+        - macOS (Intel / Apple Silicon)
+        - All platforms
+        - Not platform-specific
+    validations:
+      required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: Beta package version you are testing (if any)
+      placeholder: "0.2.0"
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Installation / bootstrapper
+        - GUI / Studio
+        - Project discovery / audit
+        - Missions / orchestration / supervisor
+        - Models / inference providers
+        - Attachments / multimodal
+        - Voice / ASR / TTS
+        - Performance / GPU / resources
+        - Developer workflow (terminal / Git / tools)
+        - Documentation / packaging
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or gap
+      description: What is hard, missing or confusing today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: What should happen instead? Keep it testable if possible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered (optional)
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Before submitting
+      options:
+        - label: I removed any secret, token, personal path or private project content from this request.
+          required: true
+        - label: I understand this is backlog input and does not change the current platform support status.
+          required: true

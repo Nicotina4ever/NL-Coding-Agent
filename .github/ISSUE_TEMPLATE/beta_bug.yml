@@ -1,0 +1,191 @@
+name: "Beta bug report"
+description: "Report a defect in a private-beta build of NL Coding Agent (no auto-telemetry)."
+title: "[Beta bug]: "
+labels: ["beta", "type/bug", "status/needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing the NL Coding Agent private beta.
+
+        Read `docs/BETA_TESTING.md` for installation, checksum verification, the per-platform
+        validation checklist and the opt-in diagnostic report.
+
+        **Privacy first — read this before posting**
+        - This project has **no automatic telemetry and no upload**: nothing is sent by the app or by
+          the diagnostic tool. Everything you share here is voluntary.
+        - **Never paste** API keys, tokens, passwords, private keys, cloud account identifiers or
+          personal file listings. If you think a secret leaked into a log, redact it before posting
+          and tell us only that a secret may have been exposed.
+        - Prefer an opt-in diagnostic report over raw logs (see the last section). Review it first;
+          you can delete any section you do not want to share.
+        - Private beta builds are shared privately: do not post download links or builds publicly.
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Operating system
+      description: The OS you tested on. Unsupported combinations are still useful feedback.
+      options:
+        - Windows 11
+        - Windows 10
+        - Linux (x86_64)
+        - Linux (ARM64 / aarch64)
+        - macOS (Apple Silicon / arm64)
+        - macOS (Intel / x86_64)
+        - Other / unsupported platform
+    validations:
+      required: true
+
+  - type: dropdown
+    id: architecture
+    attributes:
+      label: CPU architecture
+      options:
+        - x86_64 / AMD64
+        - ARM64 / aarch64
+        - Apple Silicon (arm64)
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: Beta package version
+      description: Exact version of the package you installed, for example 0.2.0.
+      placeholder: "0.2.0"
+    validations:
+      required: true
+
+  - type: input
+    id: package_checksum
+    attributes:
+      label: Package SHA-256 checksum
+      description: |
+        SHA-256 of the package file you downloaded (not the unpacked folder). If your package
+        includes a release-manifest.json, copy archive.sha256 from it.
+        Windows PowerShell: Get-FileHash -Algorithm SHA256 .\package.zip
+        Linux: sha256sum package.tar.gz
+        macOS: shasum -a 256 package.zip
+      placeholder: "64 hexadecimal characters"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install_method
+    attributes:
+      label: Installation method
+      options:
+        - Portable package (unzipped folder + .bat/.sh launcher)
+        - Bootstrapper install (install --target)
+        - Built from source in a checkout
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: evidence_provenance
+    attributes:
+      label: Where did you observe this?
+      description: |
+        Real-hardware results are recorded as MANUAL-PENDING until verified on a real machine; a
+        passing CI job is never treated as full platform support.
+      options:
+        - Real hardware - MANUAL-PENDING until triaged
+        - CI artifact run
+        - Both CI and real hardware
+        - Not sure
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: areas
+    attributes:
+      label: Affected area(s)
+      options:
+        - label: Installation / bootstrapper / launch
+        - label: GUI window / theme / layout
+        - label: Project discovery / audit / recent projects
+        - label: Missions / self-build / supervisor
+        - label: Models / Ollama / inference
+        - label: Attachments / clipboard / drag and drop
+        - label: Voice / microphone / ASR-TTS
+        - label: GPU / performance / resource usage
+        - label: Terminal / Git / file tools
+        - label: Documentation / packaging / checksums
+        - label: Other (explain below)
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity (your judgement)
+      options:
+        - Blocker - cannot install or launch at all
+        - Major - core workflow unusable
+        - Minor - works with a workaround
+        - Cosmetic - appearance only
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Numbered steps a developer can follow from a clean machine.
+      placeholder: |
+        1. Unzip the package to ...
+        2. Run doctor.bat / the launcher ...
+        3. Open Project and select ...
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Include the exact error message or status text if there is one.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log lines (redacted)
+      description: |
+        Optional. Copy only the relevant lines, from logs/ in the installation folder or the console
+        output. Remove API keys, tokens, passwords, personal paths and project names before pasting.
+        For long output attach a .txt file to the issue instead of pasting it.
+      render: text
+
+  - type: textarea
+    id: diagnostic
+    attributes:
+      label: Opt-in diagnostic report (attach manually)
+      description: |
+        Optional but very helpful. In the installation folder run:
+        python python.exe scripts\diagnostic_report.py --output beta-diagnostic.md
+        Open the resulting file, review it (it is redacted but only you can decide what is
+        shareable), then either paste it here or attach the file in a follow-up comment.
+        The tool never uploads anything and collects no telemetry.
+      render: text
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Before submitting
+      options:
+        - label: I reviewed everything I am posting and removed any secret, token, personal path or private project content.
+          required: true
+        - label: I understand that a CI-verified or "works for someone else" configuration is not a platform support claim; real-hardware results stay MANUAL-PENDING until accepted.
+          required: true
+        - label: I have not posted private beta download links or builds publicly.
+          required: true

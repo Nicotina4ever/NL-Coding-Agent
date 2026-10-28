@@ -1,0 +1,7 @@
+# Issue chooser configuration for the private beta.
+#
+# There is intentionally no contact link with a public URL: the repository is a private beta
+# repository with no configured remote until the owner explicitly authorizes publication
+# (see docs/PRIVATE_BETA_RUNBOOK.md). Testers reach the guides from the issue form itself and
+# from the repository files (docs/BETA_TESTING.md, docs/PRIVATE_BETA_RUNBOOK.md).
+blank_issues_enabled: false
