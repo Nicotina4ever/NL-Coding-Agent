@@ -710,3 +710,36 @@ autonomy-policy integration, versioned adaptive replanning, goal templates, full
 active-agent/decision-log GUI views, verifier reuse of staged-candidate/oracle gates, automated
 evidence execution and real external/human evidence. No network/model/autonomous run occurred;
 stage-6 external acceptance is unchanged.
+
+Goal Mode vertical slice and pre-push acceptance (2026-10-28)
+
+- Goal Mode G6 (NL-BP-213 partial): versioned replanning with additive goal_plan_versions
+  snapshots, rationale/trigger/evidence validation, immutable original objectives, in-place
+  milestone matching that preserves IDs and mission links, added/removed/changed diffs, prior
+  version preservation, plan-version/current APIs, replan audit, and CLI/API replan/versions/
+  links/activity/queue commands; mission links are observed only and no mission is created or
+  executed. Risk/validation/mission-intent fields are persisted per milestone.
+- Goal Mode G7 (NL-BP-216 partial): the Goals page now has seven sections (Overview/lifecycle,
+  Milestones, Missions and Queue, Activity and Decisions, Plan Versions, Evidence and
+  Verification, Next Work), a Replan dialog with required rationale/trigger and diff display,
+  an evidence dialog that verifies before completion, linked-mission/queue and activity views,
+  and verification records/criteria/blockers. 12 GUI tests + headless smoke pass; active-agent
+  views, approve action and real project/database lifecycle evidence remain pending.
+- Pre-push R2/R3 (NL-BP-235 partial): installed hook now embeds the installing interpreter and
+  quoted absolute paths (Windows/Git-Bash/POSIX), real temp-bare-remote pushes are blocked for
+  committed secrets while clean pushes succeed, operational Git failures fail closed (exit 3),
+  later-deleted paths no longer crash bounded history scans, --no-verify is documented as
+  outside hook control, CI has a blocking read-only scan job, and synthetic AWS/OpenAI fixture
+  literals are runtime-assembled. Measured at HEAD 144bd3a: scan-staged and scan-head pass with
+  0 blocking findings, a clean-history rehearsal passes, but canonical scan-all remains BLOCKED
+  by the old synthetic fixture literal in bounded-history commits d9341cd3/3cae00c5. Clean
+  canonical verification is not claimed; it requires the old commits to age out, an
+  owner-authorized precise tests-only allowlist entry for that exact synthetic digest, or an
+  authorized history rewrite, then a final release-HEAD rerun. No hook was installed in the
+  canonical repository and no push/publish happened.
+- Full suite 1031 passed; relocation/supervisor gates green; no network/model/GUI/autonomous run.
+
+Counts remain 188 requirements: 33 verified / 83 partial / 69 planned / 3 blocked. Goal Mode
+still needs task/mission derivation from objectives/evidence, autonomous scheduling/triggering,
+active-agent/approve GUI, real project lifecycle acceptance; document planning, autonomy profiles,
+open provider ecosystem and final release items remain pending.
