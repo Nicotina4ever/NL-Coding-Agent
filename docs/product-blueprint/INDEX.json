@@ -1,0 +1,4399 @@
+{
+  "schema_version": "1.0",
+  "project": "NL Coding Agent",
+  "artifact": "product_backlog_index",
+  "generated_at": "2026-10-28T15:12:53.842Z",
+  "snapshot": {
+    "captured_at": "2026-10-28T15:12:05Z",
+    "captured_at_local": "2026-10-28 16:12 Europe/Rome",
+    "git_head": "7e778da",
+    "git_head_subject": "feat(harness): additive harness schema, persistence helpers and legacy/preflight gates (C5)",
+    "git_working_tree": "clean at snapshot; only the backlog deliverables untracked/modified",
+    "python": "Python 3.12.10 (python/python.exe)",
+    "pytest_collected": "134",
+    "phase2_state": "Phase 2 (task-6) was being implemented concurrently: C1a/C1b/C2/C3/C4/C5 landed during consolidation; C6 (orchestrator staging wiring) and C7 remain pending at this snapshot",
+    "node_environment": "consolidation ran with an empty inherited environment; commands use explicit Windows env (USERPROFILE, APPDATA, LOCALAPPDATA, PATH)"
+  },
+  "priority_semantics": [
+    "P0 - release-blocking: required by the final release acceptance criteria (area 6) or a hard safety/prerequisite gate. Do not ship without it.",
+    "P1 - required for a coherent, useful final product; can run in parallel once P0 foundations land.",
+    "P2 - advanced evolution planned by the Master Blueprint; after the core release.",
+    "P3 - polish / optional distribution extras and long-term maintenance."
+  ],
+  "status_semantics": [
+    "verified - implemented AND proven in this repository by a named test, a measured command, or both recorded in Evidence.",
+    "partial - implemented or usable but unverified, limited, or missing acceptance evidence (e.g. components exist but are not wired).",
+    "planned - specified but absent, or only a static placeholder exists.",
+    "blocked - the acceptance depends on an incomplete earlier phase/integration; no amount of local work on it alone can make it pass."
+  ],
+  "areas": {
+    "core": {
+      "label": "Area 1 - CrewAI + CrewAI Flows first-class integration",
+      "short": "CORE",
+      "shared_task": "task-9",
+      "description": "CrewAI as a first-class engine dependency (not a cloned vendor checkout), agent/task/crew execution with verified gates, and complete CrewAI Flows integration for product workflows."
+    },
+    "studio": {
+      "label": "Area 2 - Studio GUI + multimodal chat",
+      "short": "STUDIO",
+      "shared_task": "task-10",
+      "description": "Professional NL-branded Studio shell; multimodal mission chat (drag-and-drop, Ctrl+V screenshots, attachments), media/ASR/TTS backends, IDE tools (editor/terminal/Git/tests/debug/LSP/MCP), accessibility and non-blocking UX."
+    },
+    "autonomy": {
+      "label": "Area 3 - Universal autonomous development",
+      "short": "AUTONOMY",
+      "shared_task": "task-11",
+      "description": "Persistent goals/milestones/tasks/missions, dynamic teams, model competence evidence, resource scheduling, permissions/tool registry, supervised execution on arbitrary projects, independent gates, staged changes, safe rollback; the indexed blueprint is the durable specification."
+    },
+    "hygiene": {
+      "label": "Area 4 - Repository hygiene",
+      "short": "HYGIENE",
+      "shared_task": "task-12",
+      "description": "Read-only audits, removal of duplicate/generated/obsolete artifacts, consolidated build outputs, one verified candidate, no destructive action without explicit authorization."
+    },
+    "distribution": {
+      "label": "Area 5 - Lightweight installation + portable distribution",
+      "short": "DISTRO",
+      "shared_task": "task-13",
+      "description": "Online native bootstrapper, private runtimes into a user-selected location, no global Python/pip/uv/conda, optional components and offline packages, repair/update/cache management, shared downloads without isolation loss, Windows/Linux/macOS verified builds."
+    },
+    "release": {
+      "label": "Area 6 - Release acceptance criteria",
+      "short": "RELEASE",
+      "shared_task": "task-14",
+      "description": "Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds."
+    }
+  },
+  "requirements": [
+    {
+      "id": "NL-BP-001",
+      "title": "CrewAI pinned as a native runtime dependency",
+      "area": "core",
+      "priority": "P0",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-05; docs/CREWAI_RUNTIME.md)",
+      "status": "verified",
+      "dependencies": [],
+      "acceptance": [
+        "python/python.exe -c \"import crewai; print(crewai.__version__)\" reports the pinned 1.15.32",
+        "crewai.__file__ resolves under python/Lib/site-packages, never under the repository crewAI/ checkout",
+        "a pytest test enforces the pin and the import path"
+      ],
+      "evidence": [
+        "pyproject.toml declares dependencies [PySide6, psutil, crewai==1.15.32, PyYAML]",
+        "tests/test_crewai_runtime.py::test_crewai_imports_from_embedded_runtime - PASS (targeted safe batch: 68 passed, 2026-10-28)",
+        "python/python.exe --version = Python 3.12.10 (measured at consolidation snapshot)",
+        "docs/CREWAI_RUNTIME.md"
+      ],
+      "source_refs": [
+        "specifiche/01_ARCHITETTURA_E_RUNTIME.md",
+        "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
+        "03_MASTER_CHECKLIST.md#P0-05",
+        "docs/CREWAI_RUNTIME.md"
+      ],
+      "primary_source": "specifiche/01_ARCHITETTURA_E_RUNTIME.md; docs/CREWAI_RUNTIME.md",
+      "note": "Vendor checkout is not the import source; the embedded runtime site-packages is.",
+      "backlog_anchor": "nl-bp-001"
+    },
+    {
+      "id": "NL-BP-002",
+      "title": "Vendor CrewAI checkout excluded from app runtime and payload",
+      "area": "core",
+      "priority": "P0",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-05; SPEC-23)",
+      "status": "verified",
+      "dependencies": [
+        "NL-BP-001"
+      ],
+      "acceptance": [
+        "no application module imports from the repository crewAI/ directory",
+        "the portable staging script refuses to include crewAI/ and writes the exclusion in the payload manifest",
+        "tests cover the exclusion"
+      ],
+      "evidence": [
+        "tests/test_crewai_runtime.py (import path proof) - PASS in 68-test targeted batch",
+        "tests/test_stage_portable.py::test_staging_excludes_vendor_user_data_and_caches - PASS (16 passed safe batch)",
+        "dist/portable-release/payload_manifest.json lists crewAI and crewAI-tools under excluded_roots",
+        "docs/CREWAI_RUNTIME.md (vendor checkout policy)"
+      ],
+      "source_refs": [
+        "specifiche/01_ARCHITETTURA_E_RUNTIME.md",
+        "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
+        "AGENTS.md#existing-environment-preserve-it",
+        "03_MASTER_CHECKLIST.md#P1-05"
+      ],
+      "primary_source": "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
+      "note": "The 467 MiB crewAI/ checkout is reference-only and excluded from staging.",
+      "backlog_anchor": "nl-bp-002"
+    },
+    {
+      "id": "NL-BP-003",
+      "title": "Developer -> Tester -> Debugger -> Reviewer mission pipeline with real changes",
+      "area": "core",
+      "priority": "P0",
+      "bp_priority": "P0 (03_MASTER_CHECKLIST P0-05, P0-09)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-001",
+        "NL-BP-012"
+      ],
+      "acceptance": [
+        "one mission with a local model changes source, persists changed paths and a real diff, records verification exit codes/logs and a reviewer verdict in SQLite",
+        "a developer stage that produces no file change fails instead of reporting completion",
+        "the evidence survives a process restart"
+      ],
+      "evidence": [
+        "nl_coding_agent/agents/orchestrator.py implements the stages, baseline snapshots, scope checks and handoffs",
+        "SQLite measured: 58 verification_runs, 151 handoffs, 13 completed missions with 11 APPROVE verdicts (read-only probe, 2026-10-28)",
+        "historical live missions #16, #24, #36, #37, #38, #39, #40, #41 completed/APPROVE (docs/CURRENT_STATE.md, docs/COMPLETED_MISSIONS.md, DB rows)",
+        "docs/08_ACCEPTANCE_GATES.md#Gate-F"
+      ],
+      "source_refs": [
+        "specifiche/02_SELF_BUILD_E_RECOVERY.md",
+        "specifiche/19_TEST_MATRIX_E_GATE.md",
+        "docs/08_ACCEPTANCE_GATES.md#Gate-F",
+        "03_MASTER_CHECKLIST.md#P0-05",
+        "03_MASTER_CHECKLIST.md#P0-09"
+      ],
+      "primary_source": "specifiche/02_SELF_BUILD_E_RECOVERY.md",
+      "note": "Pipeline code exists and historical missions were executed with local models, but the current run was not re-verified end-to-end and Phase 2 is rewiring its internals.",
+      "backlog_anchor": "nl-bp-003"
+    },
+    {
+      "id": "NL-BP-004",
+      "title": "Fail-closed test/verification gate blocks completion",
+      "area": "core",
+      "priority": "P0",
+      "bp_priority": "P0 (03_MASTER_CHECKLIST P0-06)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-003"
+      ],
+      "acceptance": [
+        "a mission with failing tests can never end as completed, even if the reviewer returns APPROVE",
+        "an ambiguous reviewer verdict is treated as REJECT",
+        "adversarial test SH-04 (green candidate tests, weakened baseline oracle) blocks promotion"
+      ],
+      "evidence": [
+        "orchestrator._run_tester_stage raises VerificationError after max_retries=2 (nl_coding_agent/agents/orchestrator.py)",
+        "parse_reviewer_verdict ambiguity -> REJECT covered by tests/test_roadmap.py::test_verdicts - PASS in 68-test batch",
+        "SQLite: mission #45 status=blocked, review_verdict=REJECT (measured probe)",
+        "gap: no automated test yet for test-fail + reviewer-approve (planned as NL-BP-058 oracle gate)"
+      ],
+      "source_refs": [
+        "specifiche/07_QUALITY_GATES_E_BENCHMARK.md",
+        "specifiche/19_TEST_MATRIX_E_GATE.md",
+        "03_MASTER_CHECKLIST.md#P0-06"
+      ],
+      "primary_source": "specifiche/07_QUALITY_GATES_E_BENCHMARK.md",
+      "note": "Tester failure raises before review and the reviewer parser defaults to REJECT, but the SH-04 adversarial case (red oracle with weakened tests) is only planned, and the post-hoc runner gate is fail-open on exceptions.",
+      "backlog_anchor": "nl-bp-004"
+    },
+    {
+      "id": "NL-BP-005",
+      "title": "Reviewer independence and persisted verdict",
+      "area": "core",
+      "priority": "P1",
+      "bp_priority": "P0 (03_MASTER_CHECKLIST P0-06; SPEC-07)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-003",
+        "NL-BP-004"
+      ],
+      "acceptance": [
+        "reviewer receives task contract, candidate/live diff and verification evidence",
+        "verdict is persisted and a REJECT blocks completion",
+        "reviewer approval can never override a failing deterministic gate"
+      ],
+      "evidence": [
+        "orchestrator reviewer stage persists verdict + handoff; mission #45 REJECT/blocked in DB",
+        "tests/test_roadmap.py verdict parsing PASS",
+        "docs/COMPLETED_MISSIONS.md records a reviewer false-negative incident (mission #24) requiring a stronger reviewer model"
+      ],
+      "source_refs": [
+        "specifiche/07_QUALITY_GATES_E_BENCHMARK.md",
+        "docs/05_ORCHESTRATION.md#Reviewer-independence",
+        "03_MASTER_CHECKLIST.md#P0-06"
+      ],
+      "primary_source": "docs/05_ORCHESTRATION.md",
+      "note": "The reviewer is an additional LLM gate with persisted verdict; the deterministic independent oracle that outranks it is not wired.",
+      "backlog_anchor": "nl-bp-005"
+    },
+    {
+      "id": "NL-BP-006",
+      "title": "CrewAI Flows first-class integration in a product pipeline",
+      "area": "core",
+      "priority": "P0",
+      "bp_priority": "new (final product requirement area 1)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-001"
+      ],
+      "acceptance": [
+        "at least one production pipeline (mission orchestration or autonomous supervisor) is implemented with crewai.flow.flow.Flow",
+        "Flow state is persisted and resumable; transitions are deterministic and unit-tested with fake LLM output",
+        "no vendor checkout dependency and no placeholder Flow left unused"
+      ],
+      "evidence": [
+        "tests/test_foundation.py::test_crewai_flow_import proves only the installed package import - PASS in 68-test batch",
+        "grep over nl_coding_agent/**/*.py finds no Flow usage and no flows module"
+      ],
+      "source_refs": [
+        "FINAL-REQ/area-1",
+        "specifiche/01_ARCHITETTURA_E_RUNTIME.md",
+        "gs-tasks/task-9"
+      ],
+      "primary_source": "FINAL-REQ/area-1 (direct final-product requirement)",
+      "note": "Only an import smoke test exists (from crewai.flow.flow import Flow). No production Flow is used.",
+      "backlog_anchor": "nl-bp-006"
+    },
+    {
+      "id": "NL-BP-007",
+      "title": "Flow-based durable autonomous mission pipeline",
+      "area": "core",
+      "priority": "P0",
+      "bp_priority": "new (final product requirement area 1)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-006",
+        "NL-BP-051"
+      ],
+      "acceptance": [
+        "an autonomous mission sequence runs as a CrewAI Flow with persisted state (SQLite or app data)",
+        "crash/restart resumes the flow without repeating completed steps",
+        "integration tests use fake models and isolate the live tree"
+      ],
+      "evidence": [
+        "no Flow-based pipeline exists (grep)",
+        "durable mission state components exist but are not Flow-driven (nl_coding_agent/core/selfbuild_runner.py uses a plain loop)"
+      ],
+      "source_refs": [
+        "FINAL-REQ/area-1",
+        "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md",
+        "specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md"
+      ],
+      "primary_source": "FINAL-REQ/area-1 (direct final-product requirement)",
+      "note": "Requires the Flow foundation plus durable mission state from area 3.",
+      "backlog_anchor": "nl-bp-007"
+    },
+    {
+      "id": "NL-BP-008",
+      "title": "Multi-provider Model Hub core: dynamic discovery, health, loaded state, unload",
+      "area": "core",
+      "priority": "P0",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-04, P1-05)",
+      "status": "verified",
+      "dependencies": [
+        "NL-BP-001"
+      ],
+      "acceptance": [
+        "Ollama and OpenAI-compatible providers discover models dynamically with timeouts and actionable offline/auth errors",
+        "loaded-model state is reported and unload is available through the native API",
+        "GUI discovery runs off the UI thread and recovers from errors"
+      ],
+      "evidence": [
+        "nl_coding_agent/models/providers.py (OllamaProvider, OpenAICompatibleProvider, build_providers)",
+        "nl_coding_agent/models/ollama_registry.py (HTTP + CLI fallback, loaded state, stop)",
+        "tests/test_model_hub.py - 7 tests PASS in 68-test targeted batch (incl. panel error recovery)",
+        "build/relocation/verify_relocation_final_lead.json: ollama.reachable PASS, 21 models listed (2026-10-28T15:48)"
+      ],
+      "source_refs": [
+        "specifiche/05_MODEL_HUB_PROVIDERS.md",
+        "03_MASTER_CHECKLIST.md#P1-04",
+        "03_MASTER_CHECKLIST.md#P1-05",
+        "FINAL-REQ/area-6"
+      ],
+      "primary_source": "specifiche/05_MODEL_HUB_PROVIDERS.md",
+      "note": "Ollama and OpenAI-compatible adapters are implemented and unit-tested; LM Studio/llama.cpp are reachable through the generic OpenAI-compatible adapter but have no presets.",
+      "backlog_anchor": "nl-bp-008"
+    },
+    {
+      "id": "NL-BP-009",
+      "title": "Provider capability registry from real probes (tools, JSON, vision, audio, context)",
+      "area": "core",
+      "priority": "P0",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-05 'capability test reale')",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-008"
+      ],
+      "acceptance": [
+        "per backend+model capability records distinguish measured, declared and unknown capabilities",
+        "real probes test tool calling, JSON/structured output, vision and max usable context",
+        "capability-aware routing refuses unsupported combinations and explains why"
+      ],
+      "evidence": [
+        "ModelInfo in nl_coding_agent/models/providers.py exposes only provider/name/size/loaded/family/modified/capabilities tuple that is never populated",
+        "grep finds no capability probe, no JSON-schema probe and no vision probing code"
+      ],
+      "source_refs": [
+        "specifiche/05_MODEL_HUB_PROVIDERS.md",
+        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
+        "03_MASTER_CHECKLIST.md#P1-05",
+        "FINAL-REQ/area-2"
+      ],
+      "primary_source": "specifiche/05_MODEL_HUB_PROVIDERS.md",
+      "note": "OpenAI compatibility is not treated as proof of tool calling or multimodal support; capability probing is entirely absent.",
+      "backlog_anchor": "nl-bp-009"
+    },
+    {
+      "id": "NL-BP-010",
+      "title": "Configurable role -> model mapping without mandatory per-project YAML",
+      "area": "core",
+      "priority": "P1",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-05; SPEC-05)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-008"
+      ],
+      "acceptance": [
+        "role->model mapping is editable from GUI/CLI and persisted per project or globally",
+        "opening a project requires no YAML authoring",
+        "per-mission overrides win over stored defaults and are recorded"
+      ],
+      "evidence": [
+        "nl_coding_agent/cli.py flags --dev-model, --reviewer-model, --debug-model",
+        "config/models.yaml global defaults; nl_coding_agent/agents/orchestrator.py DEFAULT_*_MODEL constants",
+        "GUI Agents panel is read-only (nl_coding_agent/gui/widgets/agents_panel.py; docs/CURRENT_STATE.md)",
+        "project registry persists facts in SQLite without per-project YAML (tests/test_foundation.py::test_open_project_round_trip - PASS)"
+      ],
+      "source_refs": [
+        "specifiche/05_MODEL_HUB_PROVIDERS.md",
+        "docs/05_ORCHESTRATION.md",
+        "03_MASTER_CHECKLIST.md#P1-05",
+        "AGENTS.md#no-configuration-ceremony"
+      ],
+      "primary_source": "specifiche/05_MODEL_HUB_PROVIDERS.md",
+      "note": "CLI per-mission overrides and a global config file exist; GUI mapping is read-only and project-level mapping is not persisted.",
+      "backlog_anchor": "nl-bp-010"
+    },
+    {
+      "id": "NL-BP-011",
+      "title": "Mission configuration snapshot for reproducibility",
+      "area": "core",
+      "priority": "P1",
+      "bp_priority": "P1 (SPEC-05; SPEC-18; SPEC-21)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-010"
+      ],
+      "acceptance": [
+        "each mission persists provider, model, parameters and version snapshot usable to reproduce the run",
+        "handoffs/review evidence reference that snapshot",
+        "missions table or related tables expose the snapshot without external config files"
+      ],
+      "evidence": [
+        "handoff payloads include \"model\": <model_name> per stage (orchestrator.py lines ~718, 864, 958)",
+        "SQLite PRAGMA table_info(missions) measured: no model/provider/params columns (read-only probe)",
+        "temperature is set in _make_llm (0.1) but not persisted"
+      ],
+      "source_refs": [
+        "specifiche/05_MODEL_HUB_PROVIDERS.md",
+        "specifiche/18_SQLITE_SCHEMA_E_STATI.md",
+        "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md"
+      ],
+      "primary_source": "specifiche/18_SQLITE_SCHEMA_E_STATI.md",
+      "note": "Stage handoffs record the model name; sampling parameters, provider version and a mission-level config snapshot are not persisted as first-class rows.",
+      "backlog_anchor": "nl-bp-011"
+    },
+    {
+      "id": "NL-BP-012",
+      "title": "Structured handoff contract persisted in SQLite",
+      "area": "core",
+      "priority": "P1",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-02/P1-03)",
+      "status": "verified",
+      "dependencies": [
+        "NL-BP-003"
+      ],
+      "acceptance": [
+        "handoffs table stores mission_id, from_role, to_role, summary, payload and timestamp",
+        "every stage transition records a handoff",
+        "handoffs are readable after restart"
+      ],
+      "evidence": [
+        "SQLite PRAGMA table_info(handoffs) measured: [id, mission_id, from_role, to_role, summary, payload, created_at]",
+        "151 handoff rows present (read-only probe, 2026-10-28)",
+        "nl_coding_agent/agents/orchestrator.py record_handoff calls; docs/05_ORCHESTRATION.md handoff contract"
+      ],
+      "source_refs": [
+        "specifiche/03_GOALS_MILESTONES_TASKS.md",
+        "specifiche/18_SQLITE_SCHEMA_E_STATI.md",
+        "docs/05_ORCHESTRATION.md",
+        "03_MASTER_CHECKLIST.md#P1-02"
+      ],
+      "primary_source": "docs/05_ORCHESTRATION.md",
+      "note": "Handoff rows are the durable communication contract between stages.",
+      "backlog_anchor": "nl-bp-012"
+    },
+    {
+      "id": "NL-BP-013",
+      "title": "Windows console/Unicode encoding hardening at the application boundary",
+      "area": "core",
+      "priority": "P1",
+      "bp_priority": "P0 (03_MASTER_CHECKLIST P0-10)",
+      "status": "verified",
+      "dependencies": [],
+      "acceptance": [
+        "child-process output decodes as UTF-8 with Windows OEM and locale fallbacks",
+        "emoji/unicode event text never crashes a mission with charmap/UnicodeDecodeError",
+        "a test exercises shell decoding"
+      ],
+      "evidence": [
+        "nl_coding_agent/tools/shell.py decode_output + UTF-8 child env (_UTF8_CHILD_ENV)",
+        "tests/test_operational_tools.py::test_scoped_shell_execution - PASS in 68-test batch",
+        "docs/CURRENT_STATE.md section 4 records the charmap fix"
+      ],
+      "source_refs": [
+        "specifiche/01_ARCHITETTURA_E_RUNTIME.md",
+        "03_MASTER_CHECKLIST.md#P0-10"
+      ],
+      "primary_source": "specifiche/01_ARCHITETTURA_E_RUNTIME.md",
+      "note": "Vendor code is not patched; decoding is handled at the tool/log boundary.",
+      "backlog_anchor": "nl-bp-013"
+    },
+    {
+      "id": "NL-BP-020",
+      "title": "Studio shell with NL branding: logo, design tokens, dark theme",
+      "area": "studio",
+      "priority": "P1",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-07)",
+      "status": "verified",
+      "dependencies": [],
+      "acceptance": [
+        "the GUI launches offscreen and constructs/closes the main window without errors",
+        "assets/LogoMio.svg and assets/theme.tokens.json drive the visual identity",
+        "brand palette is used and body/code/log text has no glow"
+      ],
+      "evidence": [
+        "assets/LogoMio.svg and assets/theme.tokens.json exist",
+        "nl_coding_agent/gui/theme.py + main_window.py",
+        "tests/test_gui_smoke.py::test_main_window_constructs_and_closes_cleanly - PASS (16 passed safe batch)",
+        "docs/03_GUI_SPEC.md visual rules"
+      ],
+      "source_refs": [
+        "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
+        "docs/03_GUI_SPEC.md",
+        "AGENTS.md#gui-identity",
+        "03_MASTER_CHECKLIST.md#P1-07"
+      ],
+      "primary_source": "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
+      "note": "Brand assets are the real ones (LogoMio.svg + theme.tokens.json); no glow on text is implemented in stylesheet but final visual review remains human.",
+      "backlog_anchor": "nl-bp-020"
+    },
+    {
+      "id": "NL-BP-021",
+      "title": "Navigation shell: sidebar, stacked panels, resizable splitters, inspector, log, status bar",
+      "area": "studio",
+      "priority": "P1",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-07)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-020"
+      ],
+      "acceptance": [
+        "sidebar switches between Projects/Files/Tasks/Agents/Models/Settings",
+        "panes are resizable; inspector, log panel and status bar are present",
+        "layout is persisted per project and restored on restart"
+      ],
+      "evidence": [
+        "nl_coding_agent/gui/main_window.py: stack indices 0-5 (6 pages), QSplitter layout, inspector + log + status bar",
+        "tests/test_gui_smoke.py offscreen construction PASS",
+        "no layout persistence code (grep for settings/storage of splitter state absent)"
+      ],
+      "source_refs": [
+        "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
+        "docs/03_GUI_SPEC.md#Suggested-desktop-composition",
+        "03_MASTER_CHECKLIST.md#P1-07"
+      ],
+      "primary_source": "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
+      "note": "Six pages and resizable splitters exist; per-project layout persistence is missing.",
+      "backlog_anchor": "nl-bp-021"
+    },
+    {
+      "id": "NL-BP-022",
+      "title": "Settings panel surfacing project/runtime/provider configuration",
+      "area": "studio",
+      "priority": "P1",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-07/P1-08)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-020"
+      ],
+      "acceptance": [
+        "settings show project root, SQLite path, provider URL, model config, cloud state",
+        "settings are editable from the GUI where the product allows configuration",
+        "changes persist and affect backend services"
+      ],
+      "evidence": [
+        "nl_coding_agent/gui/widgets/settings_panel.py rows: Project root, SQLite database, Ollama base URL, Model config, Cloud escalation",
+        "tests/test_gui_panels.py::test_settings_panel_is_read_only_and_tracks_project - PASS (16-test batch)",
+        "no write path exists in the panel"
+      ],
+      "source_refs": [
+        "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
+        "03_MASTER_CHECKLIST.md#P1-07",
+        "03_MASTER_CHECKLIST.md#P1-08"
+      ],
+      "primary_source": "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
+      "note": "Read-only display only; user-editable settings and self-build controls are absent.",
+      "backlog_anchor": "nl-bp-022"
+    },
+    {
+      "id": "NL-BP-023",
+      "title": "Self-Build controls under Settings > Advanced (modes, plan, limits, history, stop)",
+      "area": "studio",
+      "priority": "P1",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-08, P1-16)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-064"
+      ],
+      "acceptance": [
+        "self-build/autonomy controls exist only under Settings > Advanced with opt-in toggle, plan, limits and history",
+        "self-build never starts automatically on app open",
+        "running mission status is visible naturally in Tasks/Missions with pause/stop controls"
+      ],
+      "evidence": [
+        "settings_panel.py contains no self-build/autonomy controls; GUI panes are read-only status displays",
+        "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md explicit UX decision",
+        "no mode persistence in SQLite (tables measured)"
+      ],
+      "source_refs": [
+        "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
+        "specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md",
+        "03_MASTER_CHECKLIST.md#P1-08",
+        "03_MASTER_CHECKLIST.md#P1-16"
+      ],
+      "primary_source": "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
+      "note": "Explicit UX decision: no prominent self-build CTA on the home screen; controls belong in Advanced settings.",
+      "backlog_anchor": "nl-bp-023"
+    },
+    {
+      "id": "NL-BP-024",
+      "title": "Emergency Pause/Stop always reachable during an active mission",
+      "area": "studio",
+      "priority": "P0",
+      "bp_priority": "P0 (03_MASTER_CHECKLIST P0-15; SPEC-21 governance)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-064"
+      ],
+      "acceptance": [
+        "Pause/Stop is visible whenever a mission is running, outside settings",
+        "stop cancels owned work gracefully, persists state and never kills external processes",
+        "verified with a live mission and a restart"
+      ],
+      "evidence": [
+        "no stop/pause widget exists (grep over GUI); only external process kill used during recovery tests",
+        "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md; specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md"
+      ],
+      "source_refs": [
+        "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md",
+        "specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md",
+        "03_MASTER_CHECKLIST.md#P0-15",
+        "FINAL-REQ/area-2"
+      ],
+      "primary_source": "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md",
+      "note": "Safety requirement before unattended autonomy: the user must be able to interrupt a run without killing external processes.",
+      "backlog_anchor": "nl-bp-024"
+    },
+    {
+      "id": "NL-BP-025",
+      "title": "Mission creation, run and resume from the GUI",
+      "area": "studio",
+      "priority": "P1",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-03)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-021"
+      ],
+      "acceptance": [
+        "a mission can be created with a goal from the GUI and appears in the task board",
+        "run/resume is wired to the backend and status refreshes",
+        "no GUI thread blocking; evidence test or smoke run recorded"
+      ],
+      "evidence": [
+        "nl_coding_agent/gui/widgets/projects_panel.py New Mission QInputDialog + create_mission",
+        "nl_coding_agent/gui/widgets/task_board.py mission list, Run/Resume action, roadmap mission creation",
+        "no GUI automation for mission execution; only read-only panel tests (16-test batch)"
+      ],
+      "source_refs": [
+        "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
+        "specifiche/03_GOALS_MILESTONES_TASKS.md",
+        "03_MASTER_CHECKLIST.md#P1-03"
+      ],
+      "primary_source": "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
+      "note": "Project panel can create a mission from a single-line goal dialog and the task board can run/resume; no GUI test covers a mission run.",
+      "backlog_anchor": "nl-bp-025"
+    },
+    {
+      "id": "NL-BP-026",
+      "title": "Multimodal Mission Chat input: text, multi-file picker, drag-and-drop",
+      "area": "studio",
+      "priority": "P0",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-06)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-021"
+      ],
+      "acceptance": [
+        "mission chat surface is attached to project/mission and accepts text plus multiple files/folders",
+        "drag-and-drop and file picker produce attachment items with type detection",
+        "sending is explicit and testable offscreen with fixture files"
+      ],
+      "evidence": [
+        "grep: no chat widget, no drag/drop handlers, no attachment model (GUI has dialogs, file viewer, task board only)",
+        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md expected experiences"
+      ],
+      "source_refs": [
+        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
+        "03_MASTER_CHECKLIST.md#P2-06",
+        "FINAL-REQ/area-2",
+        "FINAL-REQ/area-6 (criterion 4)"
+      ],
+      "primary_source": "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
+      "note": "There is no chat surface at all today: only a single-line goal dialog.",
+      "backlog_anchor": "nl-bp-026"
+    },
+    {
+      "id": "NL-BP-027",
+      "title": "Ctrl+V screenshot/image paste including Windows screenshots",
+      "area": "studio",
+      "priority": "P0",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-06)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-026"
+      ],
+      "acceptance": [
+        "pasting an image from the Windows clipboard (Win+Shift+S screenshot) creates an attachment with preview",
+        "unsupported clipboard formats fail with an explicit message, never silently",
+        "manual Windows test recorded as evidence"
+      ],
+      "evidence": [
+        "no clipboard handling code (grep clipboard/QClipboard absent)",
+        "FINAL-REQ/area-6 criterion 4; specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md"
+      ],
+      "source_refs": [
+        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
+        "FINAL-REQ/area-2",
+        "FINAL-REQ/area-6"
+      ],
+      "primary_source": "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
+      "note": "Release acceptance criterion 4 explicitly requires Windows screenshot paste.",
+      "backlog_anchor": "nl-bp-027"
+    },
+    {
+      "id": "NL-BP-028",
+      "title": "Attachment UX: previews, removal, type handling, explicit submit",
+      "area": "studio",
+      "priority": "P0",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-06)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-026"
+      ],
+      "acceptance": [
+        "attachments show thumbnail/name/size/type and can be removed before submit",
+        "media type is detected and unsupported types are explained",
+        "transcript/attachments are editable before explicit send"
+      ],
+      "evidence": [
+        "no attachment UI (grep)",
+        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md"
+      ],
+      "source_refs": [
+        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
+        "FINAL-REQ/area-2"
+      ],
+      "primary_source": "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
+      "note": "Atomic UX requirement from final area 2; nothing implemented.",
+      "backlog_anchor": "nl-bp-028"
+    },
+    {
+      "id": "NL-BP-029",
+      "title": "Attachment provenance persistence across restart",
+      "area": "studio",
+      "priority": "P0",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-06; SPEC-09/18)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-026",
+        "NL-BP-028"
+      ],
+      "acceptance": [
+        "attachment rows persist canonical path, content hash, media type, size, owner, project/mission refs and policy",
+        "attachments are revisitable after restart and removable without deleting user source files",
+        "deduplication and originals/derived separation are tested"
+      ],
+      "evidence": [
+        "SQLite tables measured: no media_attachments, assets or attachments tables",
+        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md; specifiche/18_SQLITE_SCHEMA_E_STATI.md"
+      ],
+      "source_refs": [
+        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
+        "specifiche/18_SQLITE_SCHEMA_E_STATI.md",
+        "03_MASTER_CHECKLIST.md#P2-06"
+      ],
+      "primary_source": "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
+      "note": "Requires a media_attachments table and content-addressed storage in app data, not project source.",
+      "backlog_anchor": "nl-bp-029"
+    },
+    {
+      "id": "NL-BP-030",
+      "title": "Media backends: PDF/Office/text/log/code/JSON/CSV extraction and safe archives",
+      "area": "studio",
+      "priority": "P1",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-07)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-026"
+      ],
+      "acceptance": [
+        "supported document types extract text with source provenance and size limits",
+        "archives are extracted safely (no traversal, no bomb) or refused",
+        "no media leaves the machine without explicit cloud consent"
+      ],
+      "evidence": [
+        "no document/media parser modules (only an extension allowlist in file_viewer.py)",
+        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md"
+      ],
+      "source_refs": [
+        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
+        "03_MASTER_CHECKLIST.md#P2-07"
+      ],
+      "primary_source": "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
+      "note": "Separate adapters per media family; archive extraction must be traversal/zip-bomb safe.",
+      "backlog_anchor": "nl-bp-030"
+    },
+    {
+      "id": "NL-BP-031",
+      "title": "Capability-aware routing of images and attachments to supporting models",
+      "area": "studio",
+      "priority": "P1",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-07)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-009",
+        "NL-BP-026",
+        "NL-BP-030"
+      ],
+      "acceptance": [
+        "images are sent only to models whose vision capability is verified; otherwise the user gets an explicit alternative",
+        "audio understanding is never confused with ASR",
+        "routing respects local-only/cloud policy and is shown in the UI"
+      ],
+      "evidence": [
+        "no capability-aware routing (grep vision/attachment absent)",
+        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md; specifiche/05_MODEL_HUB_PROVIDERS.md"
+      ],
+      "source_refs": [
+        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
+        "specifiche/05_MODEL_HUB_PROVIDERS.md",
+        "03_MASTER_CHECKLIST.md#P2-07"
+      ],
+      "primary_source": "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
+      "note": "Vision support must come from the capability registry, never from 'OpenAI-compatible' assumptions.",
+      "backlog_anchor": "nl-bp-031"
+    },
+    {
+      "id": "NL-BP-032",
+      "title": "Audio/video media backends: transcription and frame sampling/audio extraction",
+      "area": "studio",
+      "priority": "P1",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-07)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-035"
+      ],
+      "acceptance": [
+        "audio attachments produce local ASR transcripts with timestamps where supported",
+        "video is sampled into frames and audio extracted for ASR with provenance",
+        "processing is async, cancellable and bounded"
+      ],
+      "evidence": [
+        "no audio/video/ffmpeg integration in nl_coding_agent/ (grep)",
+        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md"
+      ],
+      "source_refs": [
+        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
+        "specifiche/10_SPEECH_ASR_MODELS.md",
+        "03_MASTER_CHECKLIST.md#P2-07"
+      ],
+      "primary_source": "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
+      "note": "FFmpeg/audio tooling is not integrated; no media modules exist.",
+      "backlog_anchor": "nl-bp-032"
+    },
+    {
+      "id": "NL-BP-033",
+      "title": "Microphone push-to-talk/dictation with editable local transcript",
+      "area": "studio",
+      "priority": "P0",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-08) elevated by release criterion 5",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-035"
+      ],
+      "acceptance": [
+        "push-to-talk captures the microphone, transcribes locally, and inserts editable text before submit",
+        "language auto/manual selection and abort control exist",
+        "works with no cloud and no network; evidence recorded on Windows"
+      ],
+      "evidence": [
+        "no microphone/audio capture code (grep)",
+        "specifiche/10_SPEECH_ASR_MODELS.md speech-to-mission section"
+      ],
+      "source_refs": [
+        "specifiche/10_SPEECH_ASR_MODELS.md",
+        "FINAL-REQ/area-2",
+        "FINAL-REQ/area-6 (criterion 5)"
+      ],
+      "primary_source": "specifiche/10_SPEECH_ASR_MODELS.md",
+      "note": "Release acceptance criterion 5: mic + local transcription must work.",
+      "backlog_anchor": "nl-bp-033"
+    },
+    {
+      "id": "NL-BP-034",
+      "title": "Optional text-to-speech with local model discovery/install/switch/unload",
+      "area": "studio",
+      "priority": "P2",
+      "bp_priority": "new (final product requirement area 2)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-035"
+      ],
+      "acceptance": [
+        "TTS is disabled by default and installable on demand from local models",
+        "switch/unload works and frees resources",
+        "app remains fully usable without TTS"
+      ],
+      "evidence": [
+        "no TTS code (grep tts/speech absent outside a placeholder label)",
+        "FINAL-REQ/area-2"
+      ],
+      "source_refs": [
+        "FINAL-REQ/area-2",
+        "specifiche/10_SPEECH_ASR_MODELS.md"
+      ],
+      "primary_source": "FINAL-REQ/area-2 (direct final-product requirement)",
+      "note": "Optional capability; must never block text/mic operation when absent.",
+      "backlog_anchor": "nl-bp-034"
+    },
+    {
+      "id": "NL-BP-035",
+      "title": "Speech/ASR manager: Qwen3-ASR, Vosk, Faster-Whisper, WhisperX catalog and lifecycle",
+      "area": "studio",
+      "priority": "P0",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-08) elevated by release criterion 5",
+      "status": "planned",
+      "dependencies": [],
+      "acceptance": [
+        "optional engines with catalog showing languages, source, size, hardware, latency, license",
+        "on-demand resumable install; enable/load/unload/uninstall/cleanup separated",
+        "disabling keeps weights; uninstall only app-owned non-shared assets; app works with none installed"
+      ],
+      "evidence": [
+        "nl_coding_agent/gui/widgets/models_panel.py Speech tab is a placeholder label ('No speech engine is installed')",
+        "no ASR/audio modules or dependencies (grep whisper/vosk/asr absent)",
+        "specifiche/10_SPEECH_ASR_MODELS.md acceptance list"
+      ],
+      "source_refs": [
+        "specifiche/10_SPEECH_ASR_MODELS.md",
+        "03_MASTER_CHECKLIST.md#P2-08",
+        "03_MASTER_CHECKLIST.md#P3-05",
+        "FINAL-REQ/area-2"
+      ],
+      "primary_source": "specifiche/10_SPEECH_ASR_MODELS.md",
+      "note": "Only a static placeholder tab exists; at minimum one local engine must back mic transcription for release.",
+      "backlog_anchor": "nl-bp-035"
+    },
+    {
+      "id": "NL-BP-036",
+      "title": "Model lifecycle UI: install/load/unload/uninstall and storage audit",
+      "area": "studio",
+      "priority": "P1",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-09)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-008"
+      ],
+      "acceptance": [
+        "Model Hub exposes install/load/unload/uninstall and owned-model cleanup with confirmations",
+        "storage audit shows ownership, size and references before deletion",
+        "shared Ollama/Hugging Face checkpoints are never deleted"
+      ],
+      "evidence": [
+        "providers.py supports unload (Ollama stop); models_panel has no action buttons",
+        "models_panel Storage/Hardware tabs are read-only labels",
+        "specifiche/14_STORAGE_E_MODEL_LIFECYCLE.md"
+      ],
+      "source_refs": [
+        "specifiche/14_STORAGE_E_MODEL_LIFECYCLE.md",
+        "03_MASTER_CHECKLIST.md#P2-09",
+        "03_MASTER_CHECKLIST.md#P2-14"
+      ],
+      "primary_source": "specifiche/14_STORAGE_E_MODEL_LIFECYCLE.md",
+      "note": "Backend unload exists; the GUI model surfaces are read-only status tables with no lifecycle actions.",
+      "backlog_anchor": "nl-bp-036"
+    },
+    {
+      "id": "NL-BP-037",
+      "title": "Integrated code editor (maintained component) with tabs and highlighting",
+      "area": "studio",
+      "priority": "P2",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-10)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-021"
+      ],
+      "acceptance": [
+        "editable editor with tabs, syntax highlighting, undo/save and large-file performance",
+        "component licensing and packaging impact documented",
+        "offscreen smoke test opens/edits/saves a fixture"
+      ],
+      "evidence": [
+        "nl_coding_agent/gui/widgets/file_viewer.py is read-only QFileSystemModel + QPlainTextEdit",
+        "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md"
+      ],
+      "source_refs": [
+        "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
+        "03_MASTER_CHECKLIST.md#P2-10",
+        "docs/02_SELF_BUILD_ROADMAP.md#Phase-8"
+      ],
+      "primary_source": "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
+      "note": "Current Files panel is a read-only viewer; editor component choice (Monaco/WebEngine vs CodeMirror 6) must be evaluated on size, performance, licensing.",
+      "backlog_anchor": "nl-bp-037"
+    },
+    {
+      "id": "NL-BP-038",
+      "title": "Integrated terminal/PTY with command policy",
+      "area": "studio",
+      "priority": "P2",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-10)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-072"
+      ],
+      "acceptance": [
+        "terminal runs commands in the project cwd with timeout/output bounds and visible policy",
+        "no widget-held business logic; cancellation works",
+        "tests cover policy and cancellation"
+      ],
+      "evidence": [
+        "no terminal widget (grep); backend scoped_run_command uses shell=True with cwd only",
+        "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md"
+      ],
+      "source_refs": [
+        "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
+        "03_MASTER_CHECKLIST.md#P2-10"
+      ],
+      "primary_source": "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
+      "note": "Backend shell helper exists but is not a sandbox; terminal UI must be policy-gated.",
+      "backlog_anchor": "nl-bp-038"
+    },
+    {
+      "id": "NL-BP-039",
+      "title": "Git UI: status, branches, diff, selective staging",
+      "area": "studio",
+      "priority": "P2",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-10)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-053"
+      ],
+      "acceptance": [
+        "visual diff with file-level staging selection and branch/status display",
+        "destructive git operations require explicit confirmation",
+        "tests use a temporary repository"
+      ],
+      "evidence": [
+        "nl_coding_agent/tools/git_tools.py provides get_git_status/get_git_diff; no GUI module references it",
+        "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md"
+      ],
+      "source_refs": [
+        "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
+        "03_MASTER_CHECKLIST.md#P2-10"
+      ],
+      "primary_source": "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
+      "note": "git_tools backend exists for status/diff; no GUI.",
+      "backlog_anchor": "nl-bp-039"
+    },
+    {
+      "id": "NL-BP-040",
+      "title": "Test explorer, problems panel and debugger integration (DAP)",
+      "area": "studio",
+      "priority": "P2",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-10)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-011",
+        "NL-BP-039"
+      ],
+      "acceptance": [
+        "tests can be run/filtered from the UI and failures listed as problems",
+        "debugger via DAP or an explicit documented non-support statement",
+        "no fake buttons; every action performs a real backend call"
+      ],
+      "evidence": [
+        "task_board.py shows verification runs/handoffs only; no problems/test/debug panels",
+        "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md"
+      ],
+      "source_refs": [
+        "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
+        "03_MASTER_CHECKLIST.md#P2-10"
+      ],
+      "primary_source": "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
+      "note": "No test explorer/problems/debugger surface exists; mission evidence is visible in the task board.",
+      "backlog_anchor": "nl-bp-040"
+    },
+    {
+      "id": "NL-BP-041",
+      "title": "LSP integration for diagnostics, completion and symbols",
+      "area": "studio",
+      "priority": "P2",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-10)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-037"
+      ],
+      "acceptance": [
+        "at least one language server session provides diagnostics/completion/symbol navigation",
+        "server lifecycle is managed and resource-bounded",
+        "integration test with a mock or local server"
+      ],
+      "evidence": [
+        "grep LSP: only false positives inside Qt class names; no protocol client",
+        "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md"
+      ],
+      "source_refs": [
+        "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
+        "03_MASTER_CHECKLIST.md#P2-10"
+      ],
+      "primary_source": "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
+      "note": "No LSP client or language-server management exists.",
+      "backlog_anchor": "nl-bp-041"
+    },
+    {
+      "id": "NL-BP-042",
+      "title": "MCP tool integration",
+      "area": "studio",
+      "priority": "P2",
+      "bp_priority": "new (final product requirement area 2; SPEC-11)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-073"
+      ],
+      "acceptance": [
+        "MCP servers can be registered with consent, their tools discovered and invoked under the permission model",
+        "tests against a local mock MCP server",
+        "no implicit network or credential exposure"
+      ],
+      "evidence": [
+        "no MCP code (grep only finds a ctypes cp call)",
+        "FINAL-REQ/area-2; specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md"
+      ],
+      "source_refs": [
+        "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
+        "FINAL-REQ/area-2"
+      ],
+      "primary_source": "FINAL-REQ/area-2 (direct final-product requirement)",
+      "note": "MCP appears in the final area 2 list; no client/registry exists.",
+      "backlog_anchor": "nl-bp-042"
+    },
+    {
+      "id": "NL-BP-043",
+      "title": "Project explorer, search, indexing and targeted context retrieval",
+      "area": "studio",
+      "priority": "P1",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-11)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-077"
+      ],
+      "acceptance": [
+        "project explorer + text search operate on the open project",
+        "selective indexing/retrieval feeds missions without dumping the whole repository",
+        "no surprise downloads/embeddings; context budget measured"
+      ],
+      "evidence": [
+        "nl_coding_agent/gui/widgets/file_viewer.py read-only browser with text filter",
+        "no search/index/embedding module (grep)",
+        "specifiche/12_PROJECT_DISCOVERY.md context retrieval section"
+      ],
+      "source_refs": [
+        "specifiche/12_PROJECT_DISCOVERY.md",
+        "03_MASTER_CHECKLIST.md#P2-11"
+      ],
+      "primary_source": "specifiche/12_PROJECT_DISCOVERY.md",
+      "note": "A filtered read-only file browser exists; search/index/semantic retrieval do not.",
+      "backlog_anchor": "nl-bp-043"
+    },
+    {
+      "id": "NL-BP-044",
+      "title": "Accessibility and usability: keyboard focus, DPI scaling, contrast, shortcuts, command palette",
+      "area": "studio",
+      "priority": "P1",
+      "bp_priority": "P1 (SPEC-08; final area 2 'accessible')",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-020"
+      ],
+      "acceptance": [
+        "keyboard navigation/focus order, tooltips, contrast and DPI scaling verified",
+        "shortcuts and command palette implemented",
+        "UI review evidence recorded (manual accessibility checklist)"
+      ],
+      "evidence": [
+        "gui/theme.py defines focus styles; no accessibility tests or command palette code",
+        "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md; final area 2 wording"
+      ],
+      "source_refs": [
+        "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
+        "FINAL-REQ/area-2"
+      ],
+      "primary_source": "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
+      "note": "Theme defines focus states, but no accessibility verification or command palette exists.",
+      "backlog_anchor": "nl-bp-044"
+    },
+    {
+      "id": "NL-BP-045",
+      "title": "Non-blocking responsive UI with explicit empty/loading/error/offline states",
+      "area": "studio",
+      "priority": "P1",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-07; SPEC-08)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-021"
+      ],
+      "acceptance": [
+        "inference/download/scan/build work never blocks the Qt event loop",
+        "each async surface defines empty/loading/error/offline states and never fabricates metrics",
+        "a measurable latency or responsiveness test exists"
+      ],
+      "evidence": [
+        "ModelHubFetchThread in gui/widgets/models_panel.py; SequentialScheduler thread",
+        "tests/test_model_hub.py::test_model_hub_panel_renders_and_recovers_from_error - PASS in 68-test batch",
+        "no latency/responsiveness test; other panels have no async states"
+      ],
+      "source_refs": [
+        "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
+        "specifiche/05_MODEL_HUB_PROVIDERS.md",
+        "03_MASTER_CHECKLIST.md#P1-07"
+      ],
+      "primary_source": "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
+      "note": "Model discovery runs in a worker and has error/empty labels; there is no systematic state design or latency test.",
+      "backlog_anchor": "nl-bp-045"
+    },
+    {
+      "id": "NL-BP-046",
+      "title": "Project dashboard and agent/task visualization",
+      "area": "studio",
+      "priority": "P1",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-03, P1-07)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-021",
+        "NL-BP-051"
+      ],
+      "acceptance": [
+        "dashboard shows project facts, detected stack, docs, Git state, last audit, missions and unresolved manual checks",
+        "task cards show state, role, model, dependencies, write scope, verification and retry count",
+        "agent panel shows role/model availability and resource policy"
+      ],
+      "evidence": [
+        "gui/widgets/projects_panel.py, task_board.py, agents_panel.py, inspector_panel.py, log_panel.py",
+        "tests/test_gui_panels.py 3 tests PASS (16-test batch)",
+        "no dashboard Git-state/unresolved-checks surface"
+      ],
+      "source_refs": [
+        "docs/03_GUI_SPEC.md#Project-dashboard",
+        "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
+        "03_MASTER_CHECKLIST.md#P1-03"
+      ],
+      "primary_source": "docs/03_GUI_SPEC.md",
+      "note": "Projects, task board, agents and inspector panels exist; project dashboard with Git state and unresolved manual checks is missing.",
+      "backlog_anchor": "nl-bp-046"
+    },
+    {
+      "id": "NL-BP-050",
+      "title": "Persistent Goals > Milestones > Tasks > Missions hierarchy with CRUD",
+      "area": "autonomy",
+      "priority": "P1",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-02, P1-03)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-012"
+      ],
+      "acceptance": [
+        "goals and milestones tables with relations, dependencies, acceptance criteria and evidence links",
+        "CRUD + semantic dedup + project association; user-defined goals distinguishable from agent proposals",
+        "task board/Goals views render the hierarchy; checklist import never auto-ticks completion"
+      ],
+      "evidence": [
+        "SQLite tables measured (read-only): missions, tasks, task_attempts, handoffs, verification_runs, events; no goals or milestones tables",
+        "core/task_graph.py + tests/test_missions_graph.py 4 tests PASS (68-test batch)",
+        "specifiche/03_GOALS_MILESTONES_TASKS.md; docs/02_SELF_BUILD_ROADMAP.md#Phase-14"
+      ],
+      "source_refs": [
+        "specifiche/03_GOALS_MILESTONES_TASKS.md",
+        "03_MASTER_CHECKLIST.md#P1-02",
+        "03_MASTER_CHECKLIST.md#P1-03",
+        "docs/02_SELF_BUILD_ROADMAP.md#Phase-14"
+      ],
+      "primary_source": "specifiche/03_GOALS_MILESTONES_TASKS.md",
+      "note": "Missions/tasks/task_attempts already exist and are persistent; the Goals and Milestones layers and their CRUD/UI do not exist.",
+      "backlog_anchor": "nl-bp-050"
+    },
+    {
+      "id": "NL-BP-051",
+      "title": "Durable mission/task persistence, resume and idempotent recovery",
+      "area": "autonomy",
+      "priority": "P0",
+      "bp_priority": "P0 (03_MASTER_CHECKLIST P0-07, P0-08)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-012"
+      ],
+      "acceptance": [
+        "every significant transition is committed before reporting success",
+        "interrupted missions resume without duplicating applied patches; state distinguishes INTERRUPTED/RETRYABLE/BLOCKED",
+        "mission/task state survives restart; resume command is exact and tested"
+      ],
+      "evidence": [
+        "persistence/database.py schema + migrations; orchestrator baseline save/load; mission/interrupted reset logic",
+        "additive harness schema (missions.harness_version/staging_dir/promotion_status) + tests/test_harness_schema.py 3 tests PASS (C5, HEAD 7e778da)",
+        "tests/test_selfbuild_runner.py 9 tests PASS (68-test batch, selection/reconcile/resume-command)",
+        "SQLite measured: mission #41 resume_count and completed/APPROVE; mission #40 completion record",
+        "docs/CURRENT_STATE.md live stop-after/resume evidence; no crash-idempotency test yet"
+      ],
+      "source_refs": [
+        "specifiche/02_SELF_BUILD_E_RECOVERY.md",
+        "specifiche/18_SQLITE_SCHEMA_E_STATI.md",
+        "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md",
+        "03_MASTER_CHECKLIST.md#P0-07",
+        "03_MASTER_CHECKLIST.md#P0-08"
+      ],
+      "primary_source": "specifiche/02_SELF_BUILD_E_RECOVERY.md",
+      "note": "Resume, baseline persistence and reconciliation are implemented and exercised live (#40/#41), but double-write prevention is not proven by an automated crash test.",
+      "backlog_anchor": "nl-bp-051"
+    },
+    {
+      "id": "NL-BP-052",
+      "title": "Single-writer mission lock across processes",
+      "area": "autonomy",
+      "priority": "P1",
+      "bp_priority": "P1 (SPEC-02; docs/CURRENT_STATE.md)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-051"
+      ],
+      "acceptance": [
+        "two processes cannot write the same working tree concurrently",
+        "stale locks from dead processes are reclaimed safely",
+        "a test exercises contention and stale-lock recovery"
+      ],
+      "evidence": [
+        "nl_coding_agent/core/mission_lock.py (O_EXCL lock, pid liveness, stale reclaim)",
+        "docs/CURRENT_STATE.md claims single-writer lock; one test patches mission_lock for isolation only (tests/test_selfbuild_mode.py:75)"
+      ],
+      "source_refs": [
+        "specifiche/02_SELF_BUILD_E_RECOVERY.md",
+        "specifiche/15_SICUREZZA_E_PRIVACY.md"
+      ],
+      "primary_source": "nl_coding_agent/core/mission_lock.py (implementation)",
+      "note": "Implementation exists and stale-pid recovery is coded; no contention test proves it.",
+      "backlog_anchor": "nl-bp-052"
+    },
+    {
+      "id": "NL-BP-053",
+      "title": "Task dependency DAG and write-scope collision prevention",
+      "area": "autonomy",
+      "priority": "P1",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-02; docs/02 Phase 6)",
+      "status": "verified",
+      "dependencies": [
+        "NL-BP-050"
+      ],
+      "acceptance": [
+        "tasks with unmet dependencies cannot start",
+        "dependency cycles are detected and rejected",
+        "tasks with overlapping write scopes are not run concurrently"
+      ],
+      "evidence": [
+        "nl_coding_agent/core/task_graph.py",
+        "tests/test_missions_graph.py::test_task_graph_dependencies, ::test_task_graph_cycle_detection, ::test_task_collision_prevention, ::test_mission_persistence_roundtrip - all PASS (68-test batch)",
+        "docs/02_SELF_BUILD_ROADMAP.md#Phase-6"
+      ],
+      "source_refs": [
+        "specifiche/03_GOALS_MILESTONES_TASKS.md",
+        "specifiche/04_AGENT_FACTORY_E_TEAM_DINAMICI.md",
+        "docs/02_SELF_BUILD_ROADMAP.md#Phase-6"
+      ],
+      "primary_source": "specifiche/03_GOALS_MILESTONES_TASKS.md",
+      "note": "Unit-verified at the graph layer; not yet enforced by the live orchestrator for parallel workstreams.",
+      "backlog_anchor": "nl-bp-053"
+    },
+    {
+      "id": "NL-BP-054",
+      "title": "Evidence-based completion: no mission completes without passing gates",
+      "area": "autonomy",
+      "priority": "P0",
+      "bp_priority": "P0 (03_MASTER_CHECKLIST P0-06; SPEC-07)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-003",
+        "NL-BP-005"
+      ],
+      "acceptance": [
+        "completed requires passing verification runs, reviewer APPROVE and persisted evidence",
+        "failed tests or empty diff make completion impossible",
+        "baseline/diff cannot be retroactively rewritten to hide agent changes"
+      ],
+      "evidence": [
+        "orchestrator _finalize only called on APPROVE path; tester raises VerificationError on failure",
+        "SQLite measured: 13 completed (11 with APPROVE), missions #44/#45 blocked REJECT",
+        "specifiche/07_QUALITY_GATES_E_BENCHMARK.md; gap: SH-04 oracle test planned"
+      ],
+      "source_refs": [
+        "specifiche/07_QUALITY_GATES_E_BENCHMARK.md",
+        "specifiche/19_TEST_MATRIX_E_GATE.md",
+        "03_MASTER_CHECKLIST.md#P0-06"
+      ],
+      "primary_source": "specifiche/07_QUALITY_GATES_E_BENCHMARK.md",
+      "note": "The orchestrator finalizes completed only after tester success and reviewer APPROVE; the independent deterministic oracle from NL-BP-058 is required for full compliance.",
+      "backlog_anchor": "nl-bp-054"
+    },
+    {
+      "id": "NL-BP-055",
+      "title": "Staged candidate writes: every model mutation stays off the live tree",
+      "area": "autonomy",
+      "priority": "P0",
+      "bp_priority": "P0 (03_MASTER_CHECKLIST P0-17; SPEC-28 invariants)",
+      "status": "blocked",
+      "dependencies": [
+        "NL-BP-051",
+        "NL-BP-053"
+      ],
+      "acceptance": [
+        "developer/debugger tools and the Markdown/text fallback write only inside a staged workspace",
+        "before promotion no live file changes; an automated test asserts live-tree bytes are unchanged after a developer stage",
+        "staging excluded from vendor/data/cache copies and cleaned on terminal status"
+      ],
+      "evidence": [
+        "nl_coding_agent/core/staging_broker.py exists (v2, C1a commit cb5184e); tests/test_staging_broker_adversarial.py 7 tests PASS (68-test batch, incl SH-01/SH-02/SH-03/SH-04)",
+        "promotion lifecycle (C3 commit 7372128, 14 tests), candidate/oracle verification (C4 commit 10aa437, 7 tests) and harness schema (C5 commit 7e778da) landed during consolidation; 24 harness tests PASS (HEAD 7e778da)",
+        "grep: no staging/promotion import or call in nl_coding_agent/agents/orchestrator.py",
+        "docs/PHASE2_HARNESS_INTEGRATION_PLAN.md section 1.3 (runtime imports not wired); mission #45 result summary: agent overwrote planner/test live before rollback (SQLite probe)"
+      ],
+      "source_refs": [
+        "specifiche/28_SELF_HEALING_AGENT_HARNESS.md#2",
+        "specifiche/27_SELF_CHANGE_GATES_AND_DEPLOY.md",
+        "03_MASTER_CHECKLIST.md#P0-17",
+        "FINAL-REQ/area-6 (criterion 7)"
+      ],
+      "primary_source": "specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
+      "note": "BLOCKED on integration: staging_broker v2, promotion.py (C3) and candidate_verification.py (C4) are implemented and tested standalone; the orchestrator still does not import them (grep 0), so model writes reach the live root. This is the core Phase 2 (task-6) gap.",
+      "backlog_anchor": "nl-bp-055"
+    },
+    {
+      "id": "NL-BP-056",
+      "title": "Pre-edit recovery points, compare-and-swap rollback and baseline provenance",
+      "area": "autonomy",
+      "priority": "P0",
+      "bp_priority": "P0 (03_MASTER_CHECKLIST P0-13)",
+      "status": "blocked",
+      "dependencies": [
+        "NL-BP-055"
+      ],
+      "acceptance": [
+        "preimage of every in-scope dirty/untracked file is stored before modification (size-bounded, content-addressed)",
+        "rollback restores only files whose current hash equals the recorded postimage; human edits are never overwritten",
+        "SH-02/SH-03 crash and concurrency tests pass; external changes are tracked distinctly from mission changes"
+      ],
+      "evidence": [
+        "nl_coding_agent/core/recovery_store.py v2 applied (C1a); tests/test_rollback_stub.py 3 tests PASS (68-test batch)",
+        "promotion.ensure_recovery_point/promote/rollback implement recovery point + CAS + journal (C3, 14 tests PASS); selfbuild_runner preflight calls promotion.preflight (C5); orchestrator not wired yet",
+        "tests/test_staging_broker_adversarial.py::test_sh02_cas_rollback_preserves_newer_human_edit and ::test_sh03_recovery_from_promoted_candidate - PASS (broker level)",
+        "selfbuild_runner.py imports save_snapshot/rollback_from_snapshot at line 12, used only in the post-hoc block at ~line 308",
+        "data/mission_baselines: 16 baseline files measured; mission #45 rollback evidence (agent-reported in result summary)"
+      ],
+      "source_refs": [
+        "specifiche/02A_RECOVERY_POINTS_ROLLBACK_CACHE.md",
+        "specifiche/15_SICUREZZA_E_PRIVACY.md",
+        "03_MASTER_CHECKLIST.md#P0-13"
+      ],
+      "primary_source": "specifiche/02A_RECOVERY_POINTS_ROLLBACK_CACHE.md",
+      "note": "BLOCKED: recovery_store v2 is implemented and unit-tested but has no call site in the orchestrator; the only call is the post-hoc gate in selfbuild_runner.py.",
+      "backlog_anchor": "nl-bp-056"
+    },
+    {
+      "id": "NL-BP-057",
+      "title": "Stub/weak-test integrity gate enforced before promotion",
+      "area": "autonomy",
+      "priority": "P0",
+      "bp_priority": "P0 (03_MASTER_CHECKLIST P0-17; SPEC-27; SPEC-28 SH-01/SH-04)",
+      "status": "blocked",
+      "dependencies": [
+        "NL-BP-055",
+        "NL-BP-056"
+      ],
+      "acceptance": [
+        "stub/placeholder/truncation and weakened-test detection runs as a mandatory promotion gate",
+        "SH-01 (planner replaced by pass + self-approving test) and SH-04 (green weakened tests) are blocked before any live write",
+        "no false positive for legitimate pass/abstract bodies; evidence persisted"
+      ],
+      "evidence": [
+        "nl_coding_agent/core/code_integrity_gate.py (detect_stub, detect_weak_test) present",
+        "promotion.validate wires the integrity gate into candidate validation (C3/C4; 24 harness tests PASS at HEAD 7e778da); still not called by the orchestrator",
+        "tests/test_staging_broker_adversarial.py::test_sh01_stub_never_touches_live_source and ::test_sh04_weak_test_rejected - PASS (68-test batch, broker level)",
+        "selfbuild_runner.py lines 308-310 still run the post-hoc detect_stub + direct baseline rewrite; AUDIT_REALE_E_LIMITI.md item 6 records the fail-open except",
+        "mission #45 blocked after live stub overwrite restored from baseline 42 (SQLite result summary)"
+      ],
+      "source_refs": [
+        "specifiche/27_SELF_CHANGE_GATES_AND_DEPLOY.md",
+        "specifiche/28_SELF_HEALING_AGENT_HARNESS.md#4",
+        "03_MASTER_CHECKLIST.md#P0-17"
+      ],
+      "primary_source": "specifiche/27_SELF_CHANGE_GATES_AND_DEPLOY.md",
+      "note": "BLOCKED: AST detection exists and works at broker level, but the promotion path is not wired; the runner gate runs after the mission already wrote the live tree and is fail-open on unexpected exceptions.",
+      "backlog_anchor": "nl-bp-057"
+    },
+    {
+      "id": "NL-BP-058",
+      "title": "Independent candidate + oracle verification before promotion",
+      "area": "autonomy",
+      "priority": "P0",
+      "bp_priority": "P0 (SPEC-28 section 5; SPEC-19; SH-04)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-055"
+      ],
+      "acceptance": [
+        "candidate tests run in a disposable copy with scrubbed env, offscreen Qt and throw-away NL_DATA_DIR",
+        "baseline-pinned oracle tests run over candidate source; both suites green before promotion",
+        "SH-04 prototype (green weakened tests + red oracle) is reproduced as an automated test"
+      ],
+      "evidence": [
+        "docs/PHASE2_HARNESS_INTEGRATION_PLAN.md sections 4.1-4.9 (measured prototypes: source-only copy 182 files/1.32 MB, suite ~13.5 s; oracle-overlay proof)",
+        "nl_coding_agent/core/candidate_verification.py exists (C4 commit 10aa437) with tests/test_candidate_verification.py 7 tests PASS (24-test harness batch, HEAD 7e778da)",
+        "grep: no candidate_verification import/call in nl_coding_agent/agents/orchestrator.py (integration pending, Phase 2 C6b)",
+        "oracle gate required by SPEC-28 section 5 and final area 6 criterion 7"
+      ],
+      "source_refs": [
+        "specifiche/28_SELF_HEALING_AGENT_HARNESS.md#5",
+        "specifiche/19_TEST_MATRIX_E_GATE.md",
+        "docs/PHASE2_HARNESS_INTEGRATION_PLAN.md"
+      ],
+      "primary_source": "specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
+      "note": "Module and tests landed (C4) but the orchestrator does not call them yet (C6b pending); the oracle gate therefore still does not protect live missions.",
+      "backlog_anchor": "nl-bp-058"
+    },
+    {
+      "id": "NL-BP-059",
+      "title": "Promotion journal, CAS and crash reconciliation",
+      "area": "autonomy",
+      "priority": "P0",
+      "bp_priority": "P0 (03_MASTER_CHECKLIST P0-13; SPEC-28 SH-03)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-055",
+        "NL-BP-056"
+      ],
+      "acceptance": [
+        "promotion writes a durable journal with before/after hashes; per-file CAS before atomic writes",
+        "resume reconciles all-after/all-before/mixed states, automatic CAS rollback on mixed, blocked on conflict",
+        "journal is never deleted without proof; tests cover crash points"
+      ],
+      "evidence": [
+        "tests/test_staging_broker_adversarial.py promotion/rollback tests PASS (68-test batch)",
+        "nl_coding_agent/core/promotion.py (C3) + tests/test_promotion_stage.py 14 tests PASS (24-test harness batch, HEAD 7e778da); DB promotion_status/staging_dir columns present (C5); selfbuild preflight uses promotion.preflight",
+        "docs/PHASE2_HARNESS_INTEGRATION_PLAN.md sections 5.3-5.5 (algorithm); no orchestrator call sites (grep)",
+        "SQLite missions table has no promotion_status/staging_dir columns yet (PRAGMA measured)"
+      ],
+      "source_refs": [
+        "specifiche/28_SELF_HEALING_AGENT_HARNESS.md#4",
+        "specifiche/02A_RECOVERY_POINTS_ROLLBACK_CACHE.md#3",
+        "03_MASTER_CHECKLIST.md#P0-13"
+      ],
+      "primary_source": "specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
+      "note": "Promotion module, journal/CAS tests and DB columns landed (C3/C5); the orchestrator promotion call and finalize split (C6c) are still pending, so the live path does not use them.",
+      "backlog_anchor": "nl-bp-059"
+    },
+    {
+      "id": "NL-BP-060",
+      "title": "Fail-closed mission status semantics (no false APPROVE/completed)",
+      "area": "autonomy",
+      "priority": "P0",
+      "bp_priority": "P0 (SPEC-28 invariant 9; SPEC-19)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-054",
+        "NL-BP-059"
+      ],
+      "acceptance": [
+        "every gate failure maps to blocked/failed, never completed",
+        "no APPROVE persisted when tests failed; no baseline rewrite after the fact",
+        "static check proves only the finalize function writes completed"
+      ],
+      "evidence": [
+        "SQLite: missions #44/#45 blocked with REJECT; 13 completed; no completed mission visible with failing verification",
+        "selfbuild_runner preflight/legacy gates added in C5 return blocked for unresolved promotion state and non-harness missions (HEAD 7e778da)",
+        "AUDIT_REALE_E_LIMITI.md item 6 records the runner fail-open exception (swallowed error)",
+        "orchestrator finalize path only on APPROVE; Phase 2 C6c plans explicit finalize split"
+      ],
+      "source_refs": [
+        "specifiche/28_SELF_HEALING_AGENT_HARNESS.md#2",
+        "specifiche/19_TEST_MATRIX_E_GATE.md",
+        "specifiche/07_QUALITY_GATES_E_BENCHMARK.md"
+      ],
+      "primary_source": "specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
+      "note": "Mostly enforced at orchestrator level and in DB history; the runner still post-processes results and the fail-open exception path remains.",
+      "backlog_anchor": "nl-bp-060"
+    },
+    {
+      "id": "NL-BP-061",
+      "title": "Supervisor daemon independent of the chat/LLM with durable queue, lease and preflight",
+      "area": "autonomy",
+      "priority": "P0",
+      "bp_priority": "P0 (03_MASTER_CHECKLIST P0-14, P0-15, P0-18)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-051"
+      ],
+      "acceptance": [
+        "non-LLM supervisor process/loop survives restart with durable queue, lease/heartbeat and single-claim guarantee",
+        "startup preflight blocks when an unresolved promotion journal/stage exists",
+        "Stop/Pause/Resume honored; no duplicate or conflicting claims; tests"
+      ],
+      "evidence": [
+        "nl_coding_agent/core/selfbuild_runner.py run_autonomous bounded by --max-missions 1-5 (cli.py); data/selfbuild.lock + data/selfbuild_state.json",
+        "tests/test_selfbuild_runner.py 9 tests PASS (selection/reconcile/resume command)",
+        "selfbuild_runner now calls promotion.preflight and filters legacy (harness_version != 2) missions (C5, lines ~68-120 and ~219); no always-on daemon, lease/heartbeat table or durable queue yet",
+        "AUDIT_REALE_E_LIMITI.md item 7: run_autonomous still reads fixed NEXT_SELF_BUILD_MISSION.md, not the durable planner"
+      ],
+      "source_refs": [
+        "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md",
+        "specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md",
+        "03_MASTER_CHECKLIST.md#P0-14",
+        "03_MASTER_CHECKLIST.md#P0-15",
+        "03_MASTER_CHECKLIST.md#P0-18"
+      ],
+      "primary_source": "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md",
+      "note": "A bounded autonomous runner exists (plain loop, state JSON, lock); it is not an always-on supervisor and lacks lease/heartbeat/preflight.",
+      "backlog_anchor": "nl-bp-061"
+    },
+    {
+      "id": "NL-BP-062",
+      "title": "Automatic next-mission selection from the indexed backlog",
+      "area": "autonomy",
+      "priority": "P0",
+      "bp_priority": "P0 (03_MASTER_CHECKLIST P0-14, P0-18)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-061"
+      ],
+      "acceptance": [
+        "after a verified mission, the next READY task is selected from the indexed backlog without a new prompt",
+        "dedupe by stable requirement ID/fingerprint; roadmap/state updated automatically",
+        "two consecutive selection runs verified live"
+      ],
+      "evidence": [
+        "nl_coding_agent/core/autonomous_roadmap_planner.py select_next_task/write_roadmap_mission (78 lines) - grep shows no importer",
+        "selfbuild_runner.py imports next_mission from core/roadmap and reads docs/NEXT_SELF_BUILD_MISSION.md",
+        "AUDIT_REALE_E_LIMITI.md item 7; missions #42/#43 were driven through a manually updated roadmap document"
+      ],
+      "source_refs": [
+        "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md",
+        "specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md",
+        "03_MASTER_CHECKLIST.md#P0-14",
+        "03_MASTER_CHECKLIST.md#P0-18"
+      ],
+      "primary_source": "specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md",
+      "note": "A small planner exists (parses the checklist, writes a roadmap mission) but it is dead code: nothing imports it, and the runner still consumes the fixed Markdown roadmap.",
+      "backlog_anchor": "nl-bp-062"
+    },
+    {
+      "id": "NL-BP-063",
+      "title": "Two consecutive missions with local models and no manual repair",
+      "area": "autonomy",
+      "priority": "P0",
+      "bp_priority": "P0 (03_MASTER_CHECKLIST P0-18; SPEC-28 SH-07)",
+      "status": "blocked",
+      "dependencies": [
+        "NL-BP-055",
+        "NL-BP-056",
+        "NL-BP-057",
+        "NL-BP-058",
+        "NL-BP-059",
+        "NL-BP-061",
+        "NL-BP-062"
+      ],
+      "acceptance": [
+        "two consecutive real missions complete with tests/review/evidence and automatic backlog progress",
+        "no manual code repair between them; survives a supervisor restart",
+        "evidence recorded in SQLite/logs and reproducible from a clean start"
+      ],
+      "evidence": [
+        "SQLite: mission #44 blocked REJECT (supervisor continuous execution); mission #45 blocked after stub overwrite (result summary)",
+        "data/selfbuild_state.json audit_note_42/43: stub restore and manual repair recorded",
+        "HANDOFF_DEEPSEEK_HARNESS.md: previous cycle #43/#45 produced stubs; protections not integrated",
+        "docs/CURRENT_STATE.md known boundaries: no unattended proof"
+      ],
+      "source_refs": [
+        "specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md",
+        "specifiche/28_SELF_HEALING_AGENT_HARNESS.md#7",
+        "03_MASTER_CHECKLIST.md#P0-18"
+      ],
+      "primary_source": "specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
+      "note": "BLOCKED by the harness integration and by recorded real incidents: #42/#43 needed manual restoration of stub-overwritten files; #44 blocked; #45 blocked after live overwrite.",
+      "backlog_anchor": "nl-bp-063"
+    },
+    {
+      "id": "NL-BP-064",
+      "title": "Autonomy modes Off/Assisted/Automatic with budgets, approvals and stop/pause",
+      "area": "autonomy",
+      "priority": "P0",
+      "bp_priority": "P0 (03_MASTER_CHECKLIST P0-15; SPEC-26)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-061"
+      ],
+      "acceptance": [
+        "Off/Assisted/Automatic mode persisted per project with advanced parameters (budget, attempts, risk, resources)",
+        "risky operations (delete, migrate, publish, cloud, install) require explicit approval policies",
+        "no cloud activation by default; budget/attempt limits enforced; stop/pause honored"
+      ],
+      "evidence": [
+        "cli.py selfbuild flags only (--autonomous/--loop, --max-missions, --stop-after); no modes in DB or GUI",
+        "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md GUI modes; specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md modes"
+      ],
+      "source_refs": [
+        "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md",
+        "specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md",
+        "03_MASTER_CHECKLIST.md#P0-15"
+      ],
+      "primary_source": "specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md",
+      "note": "Only CLI flags exist; modes, budgets and approval policies are not implemented or persisted.",
+      "backlog_anchor": "nl-bp-064"
+    },
+    {
+      "id": "NL-BP-065",
+      "title": "Bounded repair loop driven by structured diagnostics",
+      "area": "autonomy",
+      "priority": "P0",
+      "bp_priority": "P0 (SPEC-28 section 4; SPEC-07 retries)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-054"
+      ],
+      "acceptance": [
+        "repair attempts are bounded and logged; the same error signature does not loop forever",
+        "after repeated comparable failures the mission blocks with diagnosis instead of retrying",
+        "repair acts on staged candidates only (NL-BP-055)"
+      ],
+      "evidence": [
+        "orchestrator _run_tester_stage max_retries=2 loop calls _run_debugger; attempts recorded in task_attempts (59 rows measured)",
+        "no signature classification/dead-letter; historical missions #37/#40 needed manual fixes (docs/COMPLETED_MISSIONS.md)"
+      ],
+      "source_refs": [
+        "specifiche/28_SELF_HEALING_AGENT_HARNESS.md#4",
+        "specifiche/07_QUALITY_GATES_E_BENCHMARK.md",
+        "specifiche/24_OPERATIONS_SUPERVISION_HEALTH_AND_DIAGNOSTICS.md"
+      ],
+      "primary_source": "specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
+      "note": "A tester->debugger retry loop with max_retries=2 exists; structured failure signatures, dead-letter and strategy changes are missing.",
+      "backlog_anchor": "nl-bp-065"
+    },
+    {
+      "id": "NL-BP-066",
+      "title": "Dynamic agent teams / Agent Factory with Automatic/Assisted/Manual modes",
+      "area": "autonomy",
+      "priority": "P2",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-01, P2-02)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-050"
+      ],
+      "acceptance": [
+        "project analysis proposes team composition (roles, count, models) with rationale",
+        "temporary/vertical specialists can be added/removed/reused; user overrides preserved",
+        "modes Automatic/Assisted/Manual implemented; no recursive spawning storms"
+      ],
+      "evidence": [
+        "orchestrator fixed stages/roles; no agent-factory module (grep)",
+        "specifiche/04_AGENT_FACTORY_E_TEAM_DINAMICI.md"
+      ],
+      "source_refs": [
+        "specifiche/04_AGENT_FACTORY_E_TEAM_DINAMICI.md",
+        "03_MASTER_CHECKLIST.md#P2-01",
+        "03_MASTER_CHECKLIST.md#P2-02"
+      ],
+      "primary_source": "specifiche/04_AGENT_FACTORY_E_TEAM_DINAMICI.md",
+      "note": "Orchestrator currently has fixed Developer/Tester/Debugger/Reviewer roles; no team composition analysis.",
+      "backlog_anchor": "nl-bp-066"
+    },
+    {
+      "id": "NL-BP-067",
+      "title": "Optimize My Team workflow with before/after preview and apply/customize/keep",
+      "area": "autonomy",
+      "priority": "P2",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-02; SPEC-06)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-066",
+        "NL-BP-068",
+        "NL-BP-069"
+      ],
+      "acceptance": [
+        "preview compares current vs recommended roles/models/params/parallelism with reasons, estimates vs measurements",
+        "Apply/Customize/Keep actions persist configuration and history",
+        "never interrupts an active mission; changes only at mission boundaries"
+      ],
+      "evidence": [
+        "no team optimizer code/GUI (grep)",
+        "specifiche/06_MODEL_ADVISOR_E_PARAMETRI.md; specifiche/04_AGENT_FACTORY_E_TEAM_DINAMICI.md"
+      ],
+      "source_refs": [
+        "specifiche/06_MODEL_ADVISOR_E_PARAMETRI.md",
+        "specifiche/04_AGENT_FACTORY_E_TEAM_DINAMICI.md",
+        "03_MASTER_CHECKLIST.md#P2-02"
+      ],
+      "primary_source": "specifiche/06_MODEL_ADVISOR_E_PARAMETRI.md",
+      "note": "Tied to the Model Advisor and Competence Index; no decorative button shipped.",
+      "backlog_anchor": "nl-bp-067"
+    },
+    {
+      "id": "NL-BP-068",
+      "title": "Explainable Model Advisor with profiles and per-agent parameters",
+      "area": "autonomy",
+      "priority": "P0",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-03, P2-04, P2-12) elevated by final criterion 8",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-008",
+        "NL-BP-009"
+      ],
+      "acceptance": [
+        "recommends provider/model/sampling/context/parallelism per task/role with reasons and confidence",
+        "profiles Maximum Verified Quality/Balanced/Speed/Resource Saving/Custom; overrides persist and win",
+        "unmeasured recommendations labelled PROVISIONAL; no invented scores"
+      ],
+      "evidence": [
+        "no advisor module; DEFAULT_DEVELOPER_MODEL/REVIEWER/DEBUG constants in orchestrator; no parameter persistence",
+        "specifiche/06_MODEL_ADVISOR_E_PARAMETRI.md"
+      ],
+      "source_refs": [
+        "specifiche/06_MODEL_ADVISOR_E_PARAMETRI.md",
+        "03_MASTER_CHECKLIST.md#P2-03",
+        "03_MASTER_CHECKLIST.md#P2-04",
+        "03_MASTER_CHECKLIST.md#P2-12",
+        "FINAL-REQ/area-6 (criterion 8)"
+      ],
+      "primary_source": "specifiche/06_MODEL_ADVISOR_E_PARAMETRI.md",
+      "note": "Final release criterion 8 (evidence-based selection) depends on this component.",
+      "backlog_anchor": "nl-bp-068"
+    },
+    {
+      "id": "NL-BP-069",
+      "title": "Model/Agent Competence Index fed by targeted, reproducible micro-benchmarks",
+      "area": "autonomy",
+      "priority": "P0",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-16, P2-17) elevated by final criterion 8",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-068"
+      ],
+      "acceptance": [
+        "evaluation runs persist exact model+quantization+role+tools+params+hardware+task and pass/fail evidence",
+        "targeted micro-benchmarks with hidden oracle; no massive benchmark runs; sample/confidence recorded",
+        "results invalidated on model/toolchain/hardware change; selection consumes the index"
+      ],
+      "evidence": [
+        "SQLite tables measured: no benchmark/evaluation_runs/measurements tables; no benchmark code",
+        "specifiche/22_MODEL_AGENT_COMPETENCE_INDEX.md"
+      ],
+      "source_refs": [
+        "specifiche/22_MODEL_AGENT_COMPETENCE_INDEX.md",
+        "03_MASTER_CHECKLIST.md#P2-16",
+        "03_MASTER_CHECKLIST.md#P2-17",
+        "FINAL-REQ/area-6 (criterion 8)"
+      ],
+      "primary_source": "specifiche/22_MODEL_AGENT_COMPETENCE_INDEX.md",
+      "note": "Needed for evidence-based model selection; no benchmark tables or runs exist.",
+      "backlog_anchor": "nl-bp-069"
+    },
+    {
+      "id": "NL-BP-070",
+      "title": "Resource-aware scheduler: RAM/VRAM pressure, serialization, unload idle models",
+      "area": "autonomy",
+      "priority": "P1",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-05)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-008"
+      ],
+      "acceptance": [
+        "scheduler sequences local inference and accounts for measured RAM/VRAM and loaded models",
+        "idle owned models can be unloaded; checkpoints are not deleted; GUI remains responsive",
+        "serialize/parallelize decisions are explainable and configurable"
+      ],
+      "evidence": [
+        "nl_coding_agent/resources/scheduler.py SequentialScheduler thread",
+        "nl_coding_agent/models/ollama_registry.py exposes loaded-model query and stop; resources status via nvidia-smi/psutil in core/status.py",
+        "no VRAM-based scheduling/unload automation (grep decision logic)"
+      ],
+      "source_refs": [
+        "specifiche/13_RESOURCE_SCHEDULER.md",
+        "03_MASTER_CHECKLIST.md#P2-05"
+      ],
+      "primary_source": "specifiche/13_RESOURCE_SCHEDULER.md",
+      "note": "A sequential worker scheduler and Ollama list/ps/stop helpers exist; scheduling decisions do not consume measured VRAM pressure or unload idle owned models automatically.",
+      "backlog_anchor": "nl-bp-070"
+    },
+    {
+      "id": "NL-BP-071",
+      "title": "GPU contention detection and authorized cloud fallback policies",
+      "area": "autonomy",
+      "priority": "P2",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-13; SPEC-13A)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-070",
+        "NL-BP-076"
+      ],
+      "acceptance": [
+        "external GPU load is detected and AI inference vs GPU test execution is distinguished",
+        "local-only/ask/preauthorized cloud policies enforced; queue/defer with visible reason",
+        "adaptive timeouts/heartbeat; no silent cloud; degrades without NVIDIA telemetry"
+      ],
+      "evidence": [
+        "no contention/fallback logic (grep)",
+        "specifiche/13A_GPU_CONTENTION_CLOUD_FALLBACK.md"
+      ],
+      "source_refs": [
+        "specifiche/13A_GPU_CONTENTION_CLOUD_FALLBACK.md",
+        "specifiche/13_RESOURCE_SCHEDULER.md",
+        "03_MASTER_CHECKLIST.md#P2-13"
+      ],
+      "primary_source": "specifiche/13A_GPU_CONTENTION_CLOUD_FALLBACK.md",
+      "note": "No contention detection, adaptive timeouts or cloud policy engine exists.",
+      "backlog_anchor": "nl-bp-071"
+    },
+    {
+      "id": "NL-BP-072",
+      "title": "Universal permission model: read/write/execute/delete/network/cloud scopes and grants",
+      "area": "autonomy",
+      "priority": "P0",
+      "bp_priority": "P0 (03_MASTER_CHECKLIST P0-16; P1-09; P1-15)",
+      "status": "planned",
+      "dependencies": [],
+      "acceptance": [
+        "per project/mission/agent grants (once/mission/project/global) for read/write/execute/delete/network/cloud, with revocation and audit",
+        "symlink/junction realpath and TOCTOU-safe scope enforcement; out-of-scope writes denied and logged",
+        "SH-05 adversarial test proves broker enforcement and honest OS-sandbox limitations"
+      ],
+      "evidence": [
+        "nl_coding_agent/tools/filesystem.py PROTECTED_DIRS + resolve_scoped_path; tests/test_scope_permission.py 2 tests PASS, tests/test_operational_tools.py security test PASS (68-test batch)",
+        "nl_coding_agent/tools/shell.py shell=True with cwd only (no confinement); no grants/broker/tables in SQLite",
+        "specifiche/25_PERMISSIONS_AND_EXTERNAL_TOOLS.md; AUDIT_REALE_E_LIMITI.md item 5"
+      ],
+      "source_refs": [
+        "specifiche/25_PERMISSIONS_AND_EXTERNAL_TOOLS.md",
+        "specifiche/15_SICUREZZA_E_PRIVACY.md",
+        "03_MASTER_CHECKLIST.md#P0-16",
+        "03_MASTER_CHECKLIST.md#P1-09",
+        "03_MASTER_CHECKLIST.md#P1-15"
+      ],
+      "primary_source": "specifiche/25_PERMISSIONS_AND_EXTERNAL_TOOLS.md",
+      "note": "Only filesystem scope checks exist today; arbitrary shell is bounded by cwd only and is not an OS sandbox.",
+      "backlog_anchor": "nl-bp-072"
+    },
+    {
+      "id": "NL-BP-073",
+      "title": "Tool Registry for external tools with probe, capabilities and grants",
+      "area": "autonomy",
+      "priority": "P1",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-15)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-072"
+      ],
+      "acceptance": [
+        "register executable/endpoint with platform, version, checksum, capabilities, health probe and grants",
+        "Execute grant does not imply Write to the tool directory; tools can be reused without copying",
+        "GUI Settings > Permissions & External Tools with revocation and history"
+      ],
+      "evidence": [
+        "no tool-registry code/tables (grep tool_registry absent)",
+        "specifiche/25_PERMISSIONS_AND_EXTERNAL_TOOLS.md"
+      ],
+      "source_refs": [
+        "specifiche/25_PERMISSIONS_AND_EXTERNAL_TOOLS.md",
+        "03_MASTER_CHECKLIST.md#P1-15"
+      ],
+      "primary_source": "specifiche/25_PERMISSIONS_AND_EXTERNAL_TOOLS.md",
+      "note": "Universal tool registry does not exist; only internal Python tool wrappers.",
+      "backlog_anchor": "nl-bp-073"
+    },
+    {
+      "id": "NL-BP-074",
+      "title": "Model-facing tool surface limited to file operations; no false sandbox claims",
+      "area": "autonomy",
+      "priority": "P0",
+      "bp_priority": "P0 (03_MASTER_CHECKLIST P0-16; SPEC-28 SH-05)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-072"
+      ],
+      "acceptance": [
+        "get_project_tools exposes only read_file/write_file/patch_file/list_dir; no shell/test/git tools for the model",
+        "verification commands run only through the deterministic tester stage",
+        "docs state explicitly that candidate code executes with user privileges and no OS sandbox is claimed"
+      ],
+      "evidence": [
+        "nl_coding_agent/tools/crew_tools.py 4 tools (commit 8871145 C2)",
+        "tests/test_operational_tools.py::test_crew_tools_binding_limited_to_file_operations - PASS (68-test batch; asserts run_command/run_tests/git_diff absent)",
+        "docs/07_SAFETY.md currently lacks the staged-harness limitation section (planned C8 in Phase 2 plan)"
+      ],
+      "source_refs": [
+        "specifiche/25_PERMISSIONS_AND_EXTERNAL_TOOLS.md",
+        "specifiche/28_SELF_HEALING_AGENT_HARNESS.md#2",
+        "03_MASTER_CHECKLIST.md#P0-16"
+      ],
+      "primary_source": "specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
+      "note": "C2 reduced the model tool set to read_file/write_file/patch_file/list_dir; disclosure of the staged-harness/no-OS-sandbox boundary in product docs is still pending (Phase 2 C8).",
+      "backlog_anchor": "nl-bp-074"
+    },
+    {
+      "id": "NL-BP-075",
+      "title": "Operations reliability and diagnostics dashboard",
+      "area": "autonomy",
+      "priority": "P1",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-14)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-051"
+      ],
+      "acceptance": [
+        "structured logs with correlation IDs; 429/timeout backoff honoring Retry-After; dead-letter/blocked queue",
+        "Health & Diagnostics view exposes versions, providers, models, last test pass/fail, blocked tasks, space audit and owned processes",
+        "diagnostic export is redacted; tests for 429/timeout paths"
+      ],
+      "evidence": [
+        "SQLite events table 77 rows + logs/*.log evidence; no correlation fields in schema (id/source/level/message/payload/created_at)",
+        "no retry/backoff/dead-letter code (grep); historical 429 incident in 02_STATO_REALE_DA_VERIFICARE.md",
+        "specifiche/24_OPERATIONS_SUPERVISION_HEALTH_AND_DIAGNOSTICS.md"
+      ],
+      "source_refs": [
+        "specifiche/24_OPERATIONS_SUPERVISION_HEALTH_AND_DIAGNOSTICS.md",
+        "03_MASTER_CHECKLIST.md#P1-14"
+      ],
+      "primary_source": "specifiche/24_OPERATIONS_SUPERVISION_HEALTH_AND_DIAGNOSTICS.md",
+      "note": "Structured events table and log files exist; there is no diagnostics dashboard, retry/backoff policy or dead-letter queue.",
+      "backlog_anchor": "nl-bp-075"
+    },
+    {
+      "id": "NL-BP-076",
+      "title": "Cloud escalation enforcement: local-only default, explicit consent",
+      "area": "autonomy",
+      "priority": "P1",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-06; SPEC-15)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-072"
+      ],
+      "acceptance": [
+        "cloud disabled by default; explicit per-project/mission consent required; UI marks cloud-backed models",
+        "no source/media leaves the machine before consent; fallback is never silent",
+        "tests with missing credentials and zero budget; audit trail of cloud decisions"
+      ],
+      "evidence": [
+        "settings_panel.py Cloud escalation read-only label; no cloud routing code (grep cloud)",
+        "models/providers.py lists whatever the provider exposes; no local/cloud classification beyond provider kind",
+        "specifiche/15_SICUREZZA_E_PRIVACY.md; specifiche/05_MODEL_HUB_PROVIDERS.md"
+      ],
+      "source_refs": [
+        "specifiche/15_SICUREZZA_E_PRIVACY.md",
+        "specifiche/05_MODEL_HUB_PROVIDERS.md",
+        "03_MASTER_CHECKLIST.md#P1-06"
+      ],
+      "primary_source": "specifiche/15_SICUREZZA_E_PRIVACY.md",
+      "note": "A cloud escalation flag is displayed read-only; no enforcement, consent flow or source-upload guard exists.",
+      "backlog_anchor": "nl-bp-076"
+    },
+    {
+      "id": "NL-BP-077",
+      "title": "Open arbitrary project with automatic discovery, SQLite profile and Recent Projects",
+      "area": "autonomy",
+      "priority": "P1",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-01)",
+      "status": "verified",
+      "dependencies": [],
+      "acceptance": [
+        "Open Project accepts an arbitrary folder and returns a project profile without any user-authored YAML",
+        "profile (languages, frameworks, build files, docs) is persisted in SQLite and survives restart",
+        "Recent Projects lists it and removal from the registry never deletes the folder"
+      ],
+      "evidence": [
+        "nl_coding_agent/projects/scanner.py + registry.py",
+        "tests/test_foundation.py::test_scan_valid_directory, ::test_scan_rejects_nonexistent, ::test_open_project_round_trip - PASS (68-test batch)",
+        "SQLite measured: 1 project row (id=1, NL Coding Agent, canonical root), 6 project_facts rows",
+        "docs/CURRENT_STATE.md project registry section; historical smoke project persistence evidence"
+      ],
+      "source_refs": [
+        "specifiche/12_PROJECT_DISCOVERY.md",
+        "03_MASTER_CHECKLIST.md#P1-01",
+        "AGENTS.md#no-configuration-ceremony",
+        "docs/04_PROJECT_MANAGER.md"
+      ],
+      "primary_source": "specifiche/12_PROJECT_DISCOVERY.md",
+      "note": "One-click project opening exists with zero per-project YAML; scanner covers common stacks and project facts are persisted.",
+      "backlog_anchor": "nl-bp-077"
+    },
+    {
+      "id": "NL-BP-090",
+      "title": "Read-only distribution/dependency audit tooling with measured report",
+      "area": "hygiene",
+      "priority": "P1",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-12, P1-13)",
+      "status": "verified",
+      "dependencies": [],
+      "acceptance": [
+        "one command audits workspace size, protected trees, duplicates, caches and declared dependencies without writing to the tree",
+        "JSON output is machine-readable and a test covers it",
+        "a committed report records measured totals and cleanup classifications"
+      ],
+      "evidence": [
+        "scripts/audit_distribution.py; tests/test_distribution_audit.py::test_json_audit_on_temp_workspace - PASS (16-test safe batch)",
+        "docs/DISTRIBUTION_AUDIT.md measured totals: 2,215,430,573 B working tree, 99.75% protected, 270 B reclaimable duplicates, zero walk errors"
+      ],
+      "source_refs": [
+        "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
+        "03_MASTER_CHECKLIST.md#P1-12",
+        "03_MASTER_CHECKLIST.md#P1-13",
+        "docs/DISTRIBUTION_AUDIT.md"
+      ],
+      "primary_source": "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
+      "note": "Audit is read-only; it produces evidence but is not authorization to clean anything.",
+      "backlog_anchor": "nl-bp-090"
+    },
+    {
+      "id": "NL-BP-091",
+      "title": "Build/dist containment: no sibling directories, packaging excludes vendor/user data/caches",
+      "area": "hygiene",
+      "priority": "P1",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-10, P1-13)",
+      "status": "verified",
+      "dependencies": [],
+      "acceptance": [
+        "staging refuses output inside the source tree or a non-empty directory and defaults under dist/",
+        "payload excludes vendor checkouts, user data, logs, tests, docs, scripts, .git and caches",
+        "no new sibling directory is created under K:/AI by the build paths"
+      ],
+      "evidence": [
+        "scripts/stage_portable.py + tests/test_stage_portable.py 6 tests PASS (16-test batch)",
+        ".gitignore covers python/, crewAI/, crewAI-tools/, data/, logs/, state/, dist/, build/, caches",
+        "read-only K:/AI listing at 2026-10-28: no nl-coding-agent-portable* or portable-smoke-project directories present",
+        "AGENTS.md workspace containment rules"
+      ],
+      "source_refs": [
+        "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
+        "13A_GPU_CONTENTION_CLOUD_FALLBACK.md",
+        "03_MASTER_CHECKLIST.md#P1-10",
+        "03_MASTER_CHECKLIST.md#P1-13",
+        "AGENTS.md#workspace-containment-and-build-outputs"
+      ],
+      "primary_source": "AGENTS.md",
+      "note": "Current K:/AI inspection shows no nl-coding-agent-portable* siblings; only the internal dist/portable-release candidate exists.",
+      "backlog_anchor": "nl-bp-091"
+    },
+    {
+      "id": "NL-BP-092",
+      "title": "One verified release candidate; stale payloads labeled, never auto-deleted",
+      "area": "hygiene",
+      "priority": "P1",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-12)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-091"
+      ],
+      "acceptance": [
+        "at most one verified release candidate exists with a validation manifest (HEAD, hashes, smoke evidence)",
+        "older payloads are labeled superseded and kept audit-only until the user authorizes cleanup",
+        "candidate can be rebuilt from the current HEAD and re-validated"
+      ],
+      "evidence": [
+        "dist/portable-release/payload_manifest.json: 23,638 files, 1,507,676,008 B, source K:/AI/Coding Agent, created 2026-10-28T07:41:13 (pre-relocation)",
+        "no verified-candidate manifest with HEAD/hashes; docs/09_DISTRIBUTION.md describes the historical candidate",
+        "K:/AI read-only listing: no external portable dirs remain at snapshot"
+      ],
+      "source_refs": [
+        "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
+        "docs/09_DISTRIBUTION.md",
+        "03_MASTER_CHECKLIST.md#P1-12"
+      ],
+      "primary_source": "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
+      "note": "The existing dist payload is stale: its manifest records the pre-relocation source root and was built before C1/C2; it has not been re-validated against current HEAD.",
+      "backlog_anchor": "nl-bp-092"
+    },
+    {
+      "id": "NL-BP-093",
+      "title": "External/legacy build artifacts audited with explicit user authorization",
+      "area": "hygiene",
+      "priority": "P1",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-12; SPEC-23)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-090"
+      ],
+      "acceptance": [
+        "read-only inventory with unique-file detection, verification and size accounting exists for any legacy build directory",
+        "cleanup proposal lists exact paths, unique contents, risk and rollback; deletion only after explicit authorization",
+        "current state documented honestly (what exists now, what was removed and when/why)"
+      ],
+      "evidence": [
+        "Historical claims: specifiche/23 inventory table and 02_STATO_REALE_DA_VERIFICARE.md (three 1.46 GB portables, smoke fixture)",
+        "Read-only check 2026-10-28: none of those four paths exist under K:/AI; only dist/portable-release",
+        "docs/AUDIT_E_MIGRAZIONE_SENZA_RISCHI.md runbook + docs/product-blueprint/tools/audit_external_builds.ps1 (read-only script exists)"
+      ],
+      "source_refs": [
+        "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
+        "02_STATO_REALE_DA_VERIFICARE.md",
+        "AUDIT_E_MIGRAZIONE_SENZA_RISCHI.md",
+        "03_MASTER_CHECKLIST.md#P1-12"
+      ],
+      "primary_source": "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
+      "note": "Blueprint claimed three sibling portables (~1.46 GB each) plus a smoke fixture; measured current state has none. Removal provenance is not recorded in the repository, so the audit/authorization record is incomplete.",
+      "backlog_anchor": "nl-bp-093"
+    },
+    {
+      "id": "NL-BP-094",
+      "title": "Cleanup preview, trash/quarantine and retention policy implemented",
+      "area": "hygiene",
+      "priority": "P2",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-14, P2-15)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-056",
+        "NL-BP-090"
+      ],
+      "acceptance": [
+        "cleanup preview shows exact paths, sizes, ownership, references and recoverable space",
+        "trash/quarantine restore or selective archive restore verified end-to-end",
+        "auto-clean only app-owned finished-job temporaries; shared caches/models/user data never touched"
+      ],
+      "evidence": [
+        "no storage-manager/trash/zip implementation (grep); data/recovery contains only recovery points",
+        "specifiche/02A_RECOVERY_POINTS_ROLLBACK_CACHE.md section 8; specifiche/14_STORAGE_E_MODEL_LIFECYCLE.md"
+      ],
+      "source_refs": [
+        "specifiche/02A_RECOVERY_POINTS_ROLLBACK_CACHE.md",
+        "specifiche/14_STORAGE_E_MODEL_LIFECYCLE.md",
+        "03_MASTER_CHECKLIST.md#P2-14",
+        "03_MASTER_CHECKLIST.md#P2-15"
+      ],
+      "primary_source": "specifiche/02A_RECOVERY_POINTS_ROLLBACK_CACHE.md",
+      "note": "Policy is specified; no storage manager, trash/quarantine or archive/restore implementation exists.",
+      "backlog_anchor": "nl-bp-094"
+    },
+    {
+      "id": "NL-BP-095",
+      "title": "Repository artifact hygiene: tracked temp scripts, caches, stale files",
+      "area": "hygiene",
+      "priority": "P1",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P1-13)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-090"
+      ],
+      "acceptance": [
+        "no stale tracked temp/debug scripts in the repository root",
+        "caches/logs/user data ignored; build working notes confined to build/",
+        "artifact audit and cleanup decisions recorded before removal (authorization for tracked-file deletion)"
+      ],
+      "evidence": [
+        "git ls-files measured: temp_fix_planner.py, temp_fix_title.py, temp_restore.py, temp_restore_planner.py are tracked",
+        ".pytest_cache/ and package __pycache__/ present on disk (ignored by .gitignore/global config); git status clean at HEAD 8871145",
+        "docs/DISTRIBUTION_AUDIT.md counts generated caches outside protected trees"
+      ],
+      "source_refs": [
+        "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
+        "03_MASTER_CHECKLIST.md#P1-13",
+        "AGENTS.md#workspace-containment-and-build-outputs"
+      ],
+      "primary_source": "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
+      "note": "Four stale temp scripts remain tracked at the repository root; caches are ignored and the working tree was clean at snapshot.",
+      "backlog_anchor": "nl-bp-095"
+    },
+    {
+      "id": "NL-BP-096",
+      "title": "No duplicate runtimes/dependencies beyond one runtime plus one candidate payload",
+      "area": "hygiene",
+      "priority": "P2",
+      "bp_priority": "P2 (03_MASTER_CHECKLIST P2-14; SPEC-23)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-092"
+      ],
+      "acceptance": [
+        "exactly one embedded development runtime; release candidate contains at most one independent runtime",
+        "vendor checkouts excluded from distributions; crewAI-tools absent unless needed",
+        "measured duplication report and planned consolidation without destructive action"
+      ],
+      "evidence": [
+        "docs/DISTRIBUTION_AUDIT.md: python/ 1,720,029,750 B, crewAI/ 489,781,821 B; crewAI-tools absent",
+        "dist/portable-release/payload_manifest.json: python payload 1,506,844,135 B",
+        "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md"
+      ],
+      "source_refs": [
+        "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
+        "specifiche/14_STORAGE_E_MODEL_LIFECYCLE.md",
+        "03_MASTER_CHECKLIST.md#P2-14"
+      ],
+      "primary_source": "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
+      "note": "Measured duplication: 1.72 GB development runtime + 1.51 GB runtime inside the stale dist payload + 490 MB vendor crewAI checkout.",
+      "backlog_anchor": "nl-bp-096"
+    },
+    {
+      "id": "NL-BP-097",
+      "title": "Retention and naming policy for dist/build/logs/recovery visible in product",
+      "area": "hygiene",
+      "priority": "P3",
+      "bp_priority": "P3 (SPEC-23 acceptance)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-094"
+      ],
+      "acceptance": [
+        "versioned naming and retention policy for builds/logs/recovery/configurable and visible in GUI/CLI",
+        "no duplicate final/really-final naming; at most one verified candidate",
+        "policy tests and documentation"
+      ],
+      "evidence": [
+        "AGENTS.md policy text only; no retention implementation",
+        "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md acceptance list"
+      ],
+      "source_refs": [
+        "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md"
+      ],
+      "primary_source": "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
+      "note": "Only workspace rules exist; no product-side retention/naming policy is implemented or exposed.",
+      "backlog_anchor": "nl-bp-097"
+    },
+    {
+      "id": "NL-BP-110",
+      "title": "Portable payload staging script with manifest and safety refusals",
+      "area": "distribution",
+      "priority": "P0",
+      "bp_priority": "P3 (03_MASTER_CHECKLIST P3-02, P3-03)",
+      "status": "verified",
+      "dependencies": [
+        "NL-BP-002",
+        "NL-BP-091"
+      ],
+      "acceptance": [
+        "dry-run and real staging produce file counts, sizes and payload_manifest.json",
+        "script refuses source-internal or non-empty output and skips symlinks",
+        "tests cover exclusions and refusals"
+      ],
+      "evidence": [
+        "scripts/stage_portable.py; docs/PORTABLE_BUILD.md",
+        "tests/test_stage_portable.py 6 tests PASS (16-test batch)",
+        "dist/portable-release/payload_manifest.json exists (23,638 files / 1,507,676,008 B)"
+      ],
+      "source_refs": [
+        "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
+        "03_MASTER_CHECKLIST.md#P3-02",
+        "03_MASTER_CHECKLIST.md#P3-03",
+        "docs/PORTABLE_BUILD.md"
+      ],
+      "primary_source": "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
+      "note": "This is staging, not an installer; it copies the development runtime rather than building a clean one.",
+      "backlog_anchor": "nl-bp-110"
+    },
+    {
+      "id": "NL-BP-111",
+      "title": "Release payload validated independently from the source tree",
+      "area": "distribution",
+      "priority": "P0",
+      "bp_priority": "P3 (03_MASTER_CHECKLIST P3-08)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-110"
+      ],
+      "acceptance": [
+        "payload built from current HEAD is copied to a managed temp directory and run with data outside the payload",
+        "doctor exits 0, GUI constructs, project opens and persists across restart; no source-tree dependency",
+        "evidence recorded with HEAD, manifest hashes and cleanup path"
+      ],
+      "evidence": [
+        "docs/09_DISTRIBUTION.md and docs/PORTABLE_BUILD.md record historical validation of K:/AI/nl-coding-agent-portable-final (no longer present)",
+        "current dist/portable-release manifest source is K:/AI/Coding Agent (pre-relocation) and predates C1/C2",
+        "tests do not cover a real payload run"
+      ],
+      "source_refs": [
+        "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
+        "specifiche/19_TEST_MATRIX_E_GATE.md",
+        "03_MASTER_CHECKLIST.md#P3-08",
+        "docs/09_DISTRIBUTION.md"
+      ],
+      "primary_source": "docs/09_DISTRIBUTION.md",
+      "note": "Historical validation exists (doctor + offscreen GUI + project persistence from a temp copy), but it predates the relocation and current HEAD; the in-tree dist payload is stale.",
+      "backlog_anchor": "nl-bp-111"
+    },
+    {
+      "id": "NL-BP-112",
+      "title": "App-data override NL_DATA_DIR for portable/installed builds",
+      "area": "distribution",
+      "priority": "P0",
+      "bp_priority": "P3 (03_MASTER_CHECKLIST P3-03; SPEC-14)",
+      "status": "verified",
+      "dependencies": [],
+      "acceptance": [
+        "SQLite and self-build state follow NL_DATA_DIR when set; default behavior unchanged",
+        "directory is created if needed; tests cover default/override/state placement",
+        "documented for portable use"
+      ],
+      "evidence": [
+        "nl_coding_agent/persistence/database.py (NL_DATA_DIR); tests/test_user_data_path.py 3 tests PASS (68-test batch)",
+        "docs/PORTABLE_BUILD.md user-data override section; mission #39 completed/APPROVE"
+      ],
+      "source_refs": [
+        "specifiche/14_STORAGE_E_MODEL_LIFECYCLE.md",
+        "specifiche/02A_RECOVERY_POINTS_ROLLBACK_CACHE.md#5",
+        "03_MASTER_CHECKLIST.md#P3-03"
+      ],
+      "primary_source": "specifiche/14_STORAGE_E_MODEL_LIFECYCLE.md",
+      "note": "Database and self-build state follow NL_DATA_DIR; launchers do not set it yet.",
+      "backlog_anchor": "nl-bp-112"
+    },
+    {
+      "id": "NL-BP-113",
+      "title": "Launchers/installer set app-data location by default, with data migration policy",
+      "area": "distribution",
+      "priority": "P0",
+      "bp_priority": "P3 (03_MASTER_CHECKLIST P3-03; docs/PORTABLE_BUILD next steps)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-112",
+        "NL-BP-114"
+      ],
+      "acceptance": [
+        "portable/installer launcher sets NL_DATA_DIR outside the installation by default",
+        "existing development data migration is defined and dry-run tested",
+        "uninstall preserves user data unless a separate confirmed action is chosen"
+      ],
+      "evidence": [
+        "launchers are .bat files without NL_DATA_DIR (documents/PORTABLE_BUILD.md states they do not set it yet)",
+        "no migration code for installed data"
+      ],
+      "source_refs": [
+        "specifiche/14_STORAGE_E_MODEL_LIFECYCLE.md",
+        "docs/PORTABLE_BUILD.md",
+        "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md"
+      ],
+      "primary_source": "docs/PORTABLE_BUILD.md",
+      "note": "Requires the installer/bootstrapper; launchers currently inherit the in-tree data directory.",
+      "backlog_anchor": "nl-bp-113"
+    },
+    {
+      "id": "NL-BP-114",
+      "title": "Lightweight native bootstrapper per OS/arch with manifest, checksum and rollback",
+      "area": "distribution",
+      "priority": "P0",
+      "bp_priority": "P3 (03_MASTER_CHECKLIST P3-03, P3-04)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-110",
+        "NL-BP-112"
+      ],
+      "acceptance": [
+        "small native launcher downloads verified platform bundles into a user-selected directory with progress/repair/uninstall",
+        "manifest/checksum verification, resumable download, atomic install and rollback to the previous bundle",
+        "offline package option; no global Python/pip/uv required"
+      ],
+      "evidence": [
+        "no installer/bootstrap code (grep installer absent); docs/09_DISTRIBUTION.md and SPEC-16 are design only",
+        "dist/portable-release is a one-folder payload, not an installer"
+      ],
+      "source_refs": [
+        "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
+        "specifiche/20_RELEASE_UPDATE_DIAGNOSTICA.md",
+        "03_MASTER_CHECKLIST.md#P3-03",
+        "03_MASTER_CHECKLIST.md#P3-04",
+        "FINAL-REQ/area-5"
+      ],
+      "primary_source": "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
+      "note": "Nonexistent: no installer, bootstrapper or update channel code in the repository.",
+      "backlog_anchor": "nl-bp-114"
+    },
+    {
+      "id": "NL-BP-115",
+      "title": "No global Python/pip/uv/conda requirement; private runtime in a user-selected location",
+      "area": "distribution",
+      "priority": "P0",
+      "bp_priority": "P3 (03_MASTER_CHECKLIST P3-03)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-114"
+      ],
+      "acceptance": [
+        "end user never installs Python/pip/uv/conda; the app uses its private runtime",
+        "install directory is user-selectable and may be non-default",
+        "verified on a clean Windows machine without global toolchains"
+      ],
+      "evidence": [
+        "pyproject.toml has no uv/pipx dependency; payload includes python/ runtime (1.51 GB)",
+        "no installer/path selection (absent); clean-machine verification not performed"
+      ],
+      "source_refs": [
+        "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
+        "specifiche/17_WINDOWS_LINUX_MACOS.md",
+        "FINAL-REQ/area-5"
+      ],
+      "primary_source": "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
+      "note": "Design property is already true for the payload (bundled runtime, no uv dependency), but installation path selection and a clean-machine proof do not exist.",
+      "backlog_anchor": "nl-bp-115"
+    },
+    {
+      "id": "NL-BP-116",
+      "title": "Optional components/models installed on demand with no forced downloads",
+      "area": "distribution",
+      "priority": "P1",
+      "bp_priority": "P3 (03_MASTER_CHECKLIST P3-05)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-114"
+      ],
+      "acceptance": [
+        "components and models are selectable; unselected items are never downloaded",
+        "downloads are resumable, checksummed and show real size before consent",
+        "existing local Ollama/model directories can be reused with consent"
+      ],
+      "evidence": [
+        "no installer/component-selection code (grep)",
+        "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md; specifiche/10_SPEECH_ASR_MODELS.md"
+      ],
+      "source_refs": [
+        "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
+        "specifiche/10_SPEECH_ASR_MODELS.md",
+        "03_MASTER_CHECKLIST.md#P3-05"
+      ],
+      "primary_source": "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
+      "note": "Requires installer + speech/model lifecycle; nothing implemented.",
+      "backlog_anchor": "nl-bp-116"
+    },
+    {
+      "id": "NL-BP-117",
+      "title": "Repair, update and verify-installation flows with cache management",
+      "area": "distribution",
+      "priority": "P1",
+      "bp_priority": "P3 (03_MASTER_CHECKLIST P3-04; SPEC-20)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-114"
+      ],
+      "acceptance": [
+        "repair works even when the main runtime is broken, without manual pip",
+        "verify installation reports component state; update applies atomically with rollback to previous working bundle",
+        "no update while a mission is active; cache management is app-owned only"
+      ],
+      "evidence": [
+        "nl_agent.py doctor exists (read-only diagnostics); no repair/update code",
+        "specifiche/20_RELEASE_UPDATE_DIAGNOSTICA.md"
+      ],
+      "source_refs": [
+        "specifiche/20_RELEASE_UPDATE_DIAGNOSTICA.md",
+        "03_MASTER_CHECKLIST.md#P3-04"
+      ],
+      "primary_source": "specifiche/20_RELEASE_UPDATE_DIAGNOSTICA.md",
+      "note": "Only the read-only doctor CLI exists; no repair/update/verify-installation flow.",
+      "backlog_anchor": "nl-bp-117"
+    },
+    {
+      "id": "NL-BP-118",
+      "title": "Clean-runtime build instead of duplicating the 1.44 GB development runtime",
+      "area": "distribution",
+      "priority": "P1",
+      "bp_priority": "P2/P3 (SPEC-16; docs/PORTABLE_BUILD next steps)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-110"
+      ],
+      "acceptance": [
+        "runtime packaging approach evaluated (PyInstaller/Nuitka/clean venv) with measured size and compatibility",
+        "clean-runtime artifact starts the app and passes smoke tests from a clean directory",
+        "size reduction vs current payload documented"
+      ],
+      "evidence": [
+        "dist/portable-release manifest: python payload 1,506,844,135 B of 1,507,676,008 B total",
+        "docs/PORTABLE_BUILD.md next steps item 3; docs/DISTRIBUTION_AUDIT.md size plan"
+      ],
+      "source_refs": [
+        "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
+        "docs/PORTABLE_BUILD.md",
+        "docs/DISTRIBUTION_AUDIT.md"
+      ],
+      "primary_source": "docs/DISTRIBUTION_AUDIT.md",
+      "note": "The staged payload is 1.51 GB, almost entirely the copied development python/ tree.",
+      "backlog_anchor": "nl-bp-118"
+    },
+    {
+      "id": "NL-BP-119",
+      "title": "Windows/Linux/macOS native builds with native smoke tests",
+      "area": "distribution",
+      "priority": "P2",
+      "bp_priority": "P3 (03_MASTER_CHECKLIST P3-02, P3-07)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-114",
+        "NL-BP-118"
+      ],
+      "acceptance": [
+        "platform-specific private runtimes built on real target OSes; no Windows Python on Linux/Mac",
+        "native smoke tests: startup, project open, provider discovery, tool call, SQLite, shutdown/recovery, installer",
+        "support declared only after native test evidence"
+      ],
+      "evidence": [
+        "no CI/config for cross-platform builds; no artifacts (repository inspection)",
+        "specifiche/17_WINDOWS_LINUX_MACOS.md; docs/09_DISTRIBUTION.md"
+      ],
+      "source_refs": [
+        "specifiche/17_WINDOWS_LINUX_MACOS.md",
+        "03_MASTER_CHECKLIST.md#P3-02",
+        "03_MASTER_CHECKLIST.md#P3-07"
+      ],
+      "primary_source": "specifiche/17_WINDOWS_LINUX_MACOS.md",
+      "note": "Only the Windows development runtime exists; no Linux/macOS artifacts or CI. Qt multiplatform alone is not evidence.",
+      "backlog_anchor": "nl-bp-119"
+    },
+    {
+      "id": "NL-BP-120",
+      "title": "OS adapter layer: no Windows-only assumptions in shared logic",
+      "area": "distribution",
+      "priority": "P2",
+      "bp_priority": "P2 (SPEC-17)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-119"
+      ],
+      "acceptance": [
+        "process/shell/paths/IPC/GPU/update behavior behind OS adapters",
+        "no hardcoded PowerShell/CUDA/Windows paths in shared business logic",
+        "per-adapter tests and a cross-platform smoke path"
+      ],
+      "evidence": [
+        "tools/shell.py handles Windows OEM decoding only; .bat launchers are Windows-only; main.py has Windows-oriented config paths",
+        "no adapters module (grep); specifiche/17_WINDOWS_LINUX_MACOS.md"
+      ],
+      "source_refs": [
+        "specifiche/17_WINDOWS_LINUX_MACOS.md",
+        "specifiche/01_ARCHITETTURA_E_RUNTIME.md"
+      ],
+      "primary_source": "specifiche/17_WINDOWS_LINUX_MACOS.md",
+      "note": "Some OS-aware handling exists in tools (encoding, protected paths), but there is no adapter boundary and Windows assumptions remain.",
+      "backlog_anchor": "nl-bp-120"
+    },
+    {
+      "id": "NL-BP-121",
+      "title": "License/NOTICE/SBOM audit and secret-free payload",
+      "area": "distribution",
+      "priority": "P1",
+      "bp_priority": "P3 (03_MASTER_CHECKLIST P3-01)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-110"
+      ],
+      "acceptance": [
+        "licenses audited for CrewAI, PySide6/Qt, Python, bundled tools and model weights",
+        "NOTICE and dependency manifest/SBOM generated and shipped",
+        "no credentials, personal SQLite records, logs, private projects or checkpoints in the payload"
+      ],
+      "evidence": [
+        "docs/CREWAI_RUNTIME.md license follow-up section",
+        "dist payload excludes data/, logs/, config/voicebridge.yaml; no NOTICE/SBOM files in payload",
+        "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md section Legal/supply chain"
+      ],
+      "source_refs": [
+        "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
+        "03_MASTER_CHECKLIST.md#P3-01",
+        "docs/CREWAI_RUNTIME.md"
+      ],
+      "primary_source": "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
+      "note": "CrewAI license follow-up is documented and the payload excludes user data/config; no NOTICE/SBOM generation or complete audit exists.",
+      "backlog_anchor": "nl-bp-121"
+    },
+    {
+      "id": "NL-BP-122",
+      "title": "Reproducible builds: pins, lockfile and immutable build manifest",
+      "area": "distribution",
+      "priority": "P1",
+      "bp_priority": "P3 (03_MASTER_CHECKLIST P3-08; SPEC-20)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-110"
+      ],
+      "acceptance": [
+        "dependency lockfile and build toolchain versions recorded",
+        "build produces an immutable manifest with hashes and reproducible steps",
+        "a clean rebuild reproduces the verified candidate (or differences are explained)"
+      ],
+      "evidence": [
+        "pyproject.toml pins crewai==1.15.32 only; no lockfile",
+        "dist/portable-release/payload_manifest.json lists paths/sizes but no content hashes; build steps are manual docs",
+        "specifiche/20_RELEASE_UPDATE_DIAGNOSTICA.md"
+      ],
+      "source_refs": [
+        "specifiche/20_RELEASE_UPDATE_DIAGNOSTICA.md",
+        "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
+        "03_MASTER_CHECKLIST.md#P3-08"
+      ],
+      "primary_source": "specifiche/20_RELEASE_UPDATE_DIAGNOSTICA.md",
+      "note": "crewai is pinned and a payload manifest exists, but there is no lockfile, hash manifest or scripted reproducible build.",
+      "backlog_anchor": "nl-bp-122"
+    },
+    {
+      "id": "NL-BP-123",
+      "title": "Optional full offline package",
+      "area": "distribution",
+      "priority": "P3",
+      "bp_priority": "P3 (03_MASTER_CHECKLIST P3-06)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-114",
+        "NL-BP-118"
+      ],
+      "acceptance": [
+        "offline installer/portable contains private runtime and dependencies (models optional)",
+        "works without network on a clean machine",
+        "documented and tested"
+      ],
+      "evidence": [
+        "absent (no installer); specifiche/16 and 03_MASTER_CHECKLIST P3-06"
+      ],
+      "source_refs": [
+        "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
+        "03_MASTER_CHECKLIST.md#P3-06"
+      ],
+      "primary_source": "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
+      "note": "Optional channel; online lightweight bootstrapper is the primary distribution.",
+      "backlog_anchor": "nl-bp-123"
+    },
+    {
+      "id": "NL-BP-124",
+      "title": "Shared model downloads/cache reuse without isolation loss",
+      "area": "distribution",
+      "priority": "P2",
+      "bp_priority": "P3 (03_MASTER_CHECKLIST P3-05; SPEC-10/16)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-116"
+      ],
+      "acceptance": [
+        "existing model directories are detected and reused with consent; no automatic copy",
+        "optional isolated runtime only for incompatible optional modules, with reason",
+        "cleanup never deletes shared checkpoints; ownership audit shown"
+      ],
+      "evidence": [
+        "no installer/model-management code; specifiche/10_SPEECH_ASR_MODELS.md and specifiche/16"
+      ],
+      "source_refs": [
+        "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
+        "specifiche/10_SPEECH_ASR_MODELS.md",
+        "03_MASTER_CHECKLIST.md#P3-05"
+      ],
+      "primary_source": "specifiche/10_SPEECH_ASR_MODELS.md",
+      "note": "Requires installer + speech/model management; shared Hugging Face/Ollama caches must never be deleted or duplicated blindly.",
+      "backlog_anchor": "nl-bp-124"
+    },
+    {
+      "id": "NL-BP-140",
+      "title": "Release acceptance matrix runner with recorded evidence and manual-pending labels",
+      "area": "release",
+      "priority": "P1",
+      "bp_priority": "P1 (03_MASTER_CHECKLIST P3-08; SPEC-19)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-090"
+      ],
+      "acceptance": [
+        "one documented command/checklist records gate ID, requirement ID, exact command, OS/hardware, env, exit/result, artifacts, timestamp and reviewer",
+        "hardware/native items are labelled NEEDS_NATIVE_TEST, never PASS",
+        "release audit template filled for each candidate"
+      ],
+      "evidence": [
+        "scripts/verify_relocation.py (read-only gate, 30 checks PASS in build/relocation/verify_relocation_final_lead.json); scripts/verify_handoff_and_resume.py exists",
+        "docs/product-blueprint/templates/RELEASE_AUDIT_TEMPLATE.md exists (template, not executed)",
+        "no unified acceptance runner; specifiche/19_TEST_MATRIX_E_GATE.md"
+      ],
+      "source_refs": [
+        "specifiche/19_TEST_MATRIX_E_GATE.md",
+        "03_MASTER_CHECKLIST.md#P3-08",
+        "templates/RELEASE_AUDIT_TEMPLATE.md"
+      ],
+      "primary_source": "specifiche/19_TEST_MATRIX_E_GATE.md",
+      "note": "Two read-only gates exist (relocation, handoff/resume); there is no single acceptance runner covering the release criteria.",
+      "backlog_anchor": "nl-bp-140"
+    },
+    {
+      "id": "NL-BP-141",
+      "title": "Accepted install on a non-default path",
+      "area": "release",
+      "priority": "P0",
+      "bp_priority": "new (final release acceptance criterion 1)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-114",
+        "NL-BP-115"
+      ],
+      "acceptance": [
+        "installer installs to a user-chosen non-default directory on Windows",
+        "application starts, opens a project and persists state from that path",
+        "uninstall preserves user projects/data; evidence recorded"
+      ],
+      "evidence": [
+        "no installer/path selection (absent)",
+        "FINAL-REQ/area-6 criterion 1"
+      ],
+      "source_refs": [
+        "FINAL-REQ/area-6",
+        "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md"
+      ],
+      "primary_source": "FINAL-REQ/area-6 (release acceptance criterion 1)",
+      "note": "No installer exists, so this release criterion cannot be evaluated.",
+      "backlog_anchor": "nl-bp-141"
+    },
+    {
+      "id": "NL-BP-142",
+      "title": "Accepted run on clean Windows without global Python",
+      "area": "release",
+      "priority": "P0",
+      "bp_priority": "new (final release acceptance criterion 2)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-114",
+        "NL-BP-115"
+      ],
+      "acceptance": [
+        "clean Windows machine/VM without system Python, uv, conda or pip runs install+startup+project+mission",
+        "all required runtime components come from the bundle",
+        "evidence recorded with machine description and commands"
+      ],
+      "evidence": [
+        "docs/PORTABLE_BUILD.md historical payload check (doctor/GUI/project persistence) - not clean-machine and not current HEAD",
+        "FINAL-REQ/area-6 criterion 2"
+      ],
+      "source_refs": [
+        "FINAL-REQ/area-6",
+        "specifiche/19_TEST_MATRIX_E_GATE.md",
+        "docs/09_DISTRIBUTION.md#6"
+      ],
+      "primary_source": "FINAL-REQ/area-6 (release acceptance criterion 2)",
+      "note": "Historical payload validation was not a clean-machine acceptance and the payload is stale.",
+      "backlog_anchor": "nl-bp-142"
+    },
+    {
+      "id": "NL-BP-143",
+      "title": "Relocation survival for repository and application data",
+      "area": "release",
+      "priority": "P0",
+      "bp_priority": "new (final release acceptance criterion 3; SPEC-14)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-112"
+      ],
+      "acceptance": [
+        "repository relocation gate passes read-only with zero failed checks and no stale root in operational paths",
+        "installed/portable app survives moving its directory or data directory with SQLite identity preserved",
+        "regression tests cover migration and rollback"
+      ],
+      "evidence": [
+        "build/relocation/verify_relocation_final_lead.json ok=true, 30 checks PASS, canonical root K:/AI/NL Coding Agent (2026-10-28T15:48)",
+        "docs/WORKSPACE_MIGRATION.md completed record; tests/test_verify_relocation.py and tests/test_project_root_migration.py exist",
+        "installed-app relocation absent (no installer/data migration)"
+      ],
+      "source_refs": [
+        "FINAL-REQ/area-6",
+        "docs/WORKSPACE_MIGRATION.md",
+        "specifiche/14_STORAGE_E_MODEL_LIFECYCLE.md"
+      ],
+      "primary_source": "docs/WORKSPACE_MIGRATION.md",
+      "note": "Repository relocation is verified by a read-only 30-check gate; installed-app data relocation/migration is not implemented.",
+      "backlog_anchor": "nl-bp-143"
+    },
+    {
+      "id": "NL-BP-144",
+      "title": "Accepted clipboard screenshot + drag-and-drop attachments end-to-end",
+      "area": "release",
+      "priority": "P0",
+      "bp_priority": "new (final release acceptance criterion 4)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-027",
+        "NL-BP-028",
+        "NL-BP-031"
+      ],
+      "acceptance": [
+        "Windows screenshot copied to clipboard and pasted with Ctrl+V appears as a preview attachment",
+        "drag-and-drop of multiple files works; attachments are sent to a capability-verified model",
+        "persisted across restart; evidence captured"
+      ],
+      "evidence": [
+        "absent (no chat/attachment/clipboard code)",
+        "FINAL-REQ/area-6 criterion 4"
+      ],
+      "source_refs": [
+        "FINAL-REQ/area-6",
+        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md"
+      ],
+      "primary_source": "FINAL-REQ/area-6 (release acceptance criterion 4)",
+      "note": "Depends on Studio multimodal chat; nothing implemented.",
+      "backlog_anchor": "nl-bp-144"
+    },
+    {
+      "id": "NL-BP-145",
+      "title": "Accepted microphone + local transcription end-to-end",
+      "area": "release",
+      "priority": "P0",
+      "bp_priority": "new (final release acceptance criterion 5)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-033",
+        "NL-BP-035"
+      ],
+      "acceptance": [
+        "microphone recording transcribes locally (Qwen3-ASR or Vosk class) and the text is usable in a mission",
+        "no cloud/network required; disabled ASR does not break the app",
+        "hardware test recorded with microphone model and OS"
+      ],
+      "evidence": [
+        "absent (no ASR/audio code)",
+        "FINAL-REQ/area-6 criterion 5"
+      ],
+      "source_refs": [
+        "FINAL-REQ/area-6",
+        "specifiche/10_SPEECH_ASR_MODELS.md"
+      ],
+      "primary_source": "FINAL-REQ/area-6 (release acceptance criterion 5)",
+      "note": "Depends on the optional speech manager; at least one local engine is required for acceptance.",
+      "backlog_anchor": "nl-bp-145"
+    },
+    {
+      "id": "NL-BP-146",
+      "title": "Accepted CrewAI workflows and autonomous missions execute end-to-end",
+      "area": "release",
+      "priority": "P0",
+      "bp_priority": "new (final release acceptance criterion 6)",
+      "status": "blocked",
+      "dependencies": [
+        "NL-BP-003",
+        "NL-BP-007",
+        "NL-BP-055",
+        "NL-BP-056",
+        "NL-BP-057",
+        "NL-BP-058",
+        "NL-BP-059",
+        "NL-BP-061",
+        "NL-BP-062"
+      ],
+      "acceptance": [
+        "a CrewAI workflow modifies a real project, runs tests, passes review and persists evidence",
+        "an autonomous mission sequence executes from the indexed backlog without new prompts",
+        "evidence captured for both; failures remain blocked, not completed"
+      ],
+      "evidence": [
+        "docs/CURRENT_STATE.md historical missions #16/#24/#36-#41 completed/APPROVE",
+        "SQLite: missions #44/#45 blocked REJECT (measured); no current end-to-end run",
+        "docs/PHASE2_HARNESS_INTEGRATION_PLAN.md: staging not wired; final criterion 6 not met"
+      ],
+      "source_refs": [
+        "FINAL-REQ/area-6",
+        "specifiche/19_TEST_MATRIX_E_GATE.md",
+        "specifiche/28_SELF_HEALING_AGENT_HARNESS.md"
+      ],
+      "primary_source": "FINAL-REQ/area-6 (release acceptance criterion 6)",
+      "note": "BLOCKED: historical cycles ran, but the safety foundation is not wired into the runtime and the latest supervisor missions #44/#45 are blocked.",
+      "backlog_anchor": "nl-bp-146"
+    },
+    {
+      "id": "NL-BP-147",
+      "title": "Accepted guarantee: invalid agent edits cannot corrupt verified sources",
+      "area": "release",
+      "priority": "P0",
+      "bp_priority": "new (final release acceptance criterion 7; SPEC-28)",
+      "status": "blocked",
+      "dependencies": [
+        "NL-BP-055",
+        "NL-BP-056",
+        "NL-BP-057",
+        "NL-BP-058",
+        "NL-BP-059"
+      ],
+      "acceptance": [
+        "adversarial SH-01..SH-07 evidence on a real/isolated workspace: stub+weakened-test patch blocked before any live write",
+        "dirty/untracked user edits preserved; crash/resume adds no duplicate write",
+        "repair/rollback succeeds without manual external correction; evidence in SQLite/logs"
+      ],
+      "evidence": [
+        "tests/test_staging_broker_adversarial.py SH-01/SH-04 PASS at broker level (68-test batch)",
+        "SQLite mission #45 blocked after agent overwrote planner/test; post-hoc rollback from baseline (result summary)",
+        "data/selfbuild_state.json audit_note_42/43 manual restore; AUDIT_REALE_E_LIMITI.md items 1-4"
+      ],
+      "source_refs": [
+        "FINAL-REQ/area-6",
+        "specifiche/28_SELF_HEALING_AGENT_HARNESS.md#5",
+        "specifiche/27_SELF_CHANGE_GATES_AND_DEPLOY.md"
+      ],
+      "primary_source": "FINAL-REQ/area-6 (release acceptance criterion 7)",
+      "note": "BLOCKED: broker-level SH-01/SH-04 tests pass, but the live pipeline still writes directly to the working tree before the post-hoc gate; mission #45 is a real live overwrite incident.",
+      "backlog_anchor": "nl-bp-147"
+    },
+    {
+      "id": "NL-BP-148",
+      "title": "Accepted local model discovery + evidence-based model selection",
+      "area": "release",
+      "priority": "P0",
+      "bp_priority": "new (final release acceptance criterion 8)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-008",
+        "NL-BP-009",
+        "NL-BP-068",
+        "NL-BP-069"
+      ],
+      "acceptance": [
+        "models are discovered dynamically from local providers with capability probes",
+        "selection of model/role/params is backed by persisted evidence and confidence, never by name/reputation",
+        "a comparison of two models on a real task is recorded and reproducible"
+      ],
+      "evidence": [
+        "nl_coding_agent/models/providers.py + Ollama registry; 21 models discovered via Ollama API in relocation gate (2026-10-28T15:48); tests/test_model_hub.py 7 PASS",
+        "no capability/evidence selection: orchestrator uses DEFAULT_*_MODEL constants; no benchmarks DB"
+      ],
+      "source_refs": [
+        "FINAL-REQ/area-6",
+        "specifiche/05_MODEL_HUB_PROVIDERS.md",
+        "specifiche/06_MODEL_ADVISOR_E_PARAMETRI.md",
+        "specifiche/22_MODEL_AGENT_COMPETENCE_INDEX.md"
+      ],
+      "primary_source": "FINAL-REQ/area-6 (release acceptance criterion 8)",
+      "note": "Discovery is verified; capability probes, advisor and competence evidence are missing, so selection is still static defaults.",
+      "backlog_anchor": "nl-bp-148"
+    },
+    {
+      "id": "NL-BP-149",
+      "title": "Accepted reproducible, organized builds from a clean environment",
+      "area": "release",
+      "priority": "P0",
+      "bp_priority": "new (final release acceptance criterion 9)",
+      "status": "blocked",
+      "dependencies": [
+        "NL-BP-110",
+        "NL-BP-114",
+        "NL-BP-122",
+        "NL-BP-111"
+      ],
+      "acceptance": [
+        "a documented clean-checkout build reproduces the verified candidate (manifest/hashes match or differences explained)",
+        "exactly one organized candidate remains; build directories contain no stray duplicates",
+        "acceptance evidence recorded with HEAD and toolchain versions"
+      ],
+      "evidence": [
+        "dist/portable-release/payload_manifest.json source K:/AI/Coding Agent (pre-relocation), no hashes",
+        "no lockfile/CI/build script beyond stage_portable.py",
+        "docs/DISTRIBUTION_AUDIT.md size plan is arithmetic, not a verified build"
+      ],
+      "source_refs": [
+        "FINAL-REQ/area-6",
+        "specifiche/20_RELEASE_UPDATE_DIAGNOSTICA.md",
+        "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md"
+      ],
+      "primary_source": "FINAL-REQ/area-6 (release acceptance criterion 9)",
+      "note": "BLOCKED: no installer/lockfile/CI; the only candidate payload is stale and was built before the relocation and harness commits.",
+      "backlog_anchor": "nl-bp-149"
+    },
+    {
+      "id": "NL-BP-150",
+      "title": "Full pytest baseline green with documented measured count",
+      "area": "release",
+      "priority": "P1",
+      "bp_priority": "P0 (03_MASTER_CHECKLIST P0-02; SPEC-19 Gate A)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-001"
+      ],
+      "acceptance": [
+        "python/python.exe -m pytest runs the full suite green (with documented offscreen/no-cache flags if required)",
+        "count, command, environment and date recorded in CURRENT_STATE and release evidence",
+        "no test skipped silently to obtain green"
+      ],
+      "evidence": [
+        "measured 2026-10-28 at HEAD 7e778da (16:12 Europe/Rome): pytest tests --collect-only = 134 collected; harness component batch 24 passed; key regression batch 37 passed; earlier safe batches 68 + 16 passed at HEAD 8871145",
+        "docs/CURRENT_STATE.md still reports 65/69 tests (stale); docs/PHASE2_HARNESS_INTEGRATION_PLAN.md expected 103 after C1b (superseded by C3-C5 additions)",
+        "full-suite run deliberately not performed by this consolidation (mission restrictions)"
+      ],
+      "source_refs": [
+        "specifiche/19_TEST_MATRIX_E_GATE.md",
+        "03_MASTER_CHECKLIST.md#P0-02",
+        "docs/CURRENT_STATE.md"
+      ],
+      "primary_source": "specifiche/19_TEST_MATRIX_E_GATE.md",
+      "note": "Measured at snapshot: 106 tests collected, 84 targeted tests passed; the full suite was deliberately not run by this consolidation (restricted safe-test scope).",
+      "backlog_anchor": "nl-bp-150"
+    },
+    {
+      "id": "NL-BP-151",
+      "title": "Honest, evidence-based current-state documentation with consistent history",
+      "area": "release",
+      "priority": "P1",
+      "bp_priority": "P0 (03_MASTER_CHECKLIST P0-11)",
+      "status": "partial",
+      "dependencies": [
+        "NL-BP-150"
+      ],
+      "acceptance": [
+        "CURRENT_STATE.md states measured evidence, exact commands and unresolved manual checks; no agent-report-only claims",
+        "NEXT_SELF_BUILD_MISSION.md matches durable state and the indexed backlog; no contradictory title/goal",
+        "test counts and mission history consistent across docs, SQLite and selfbuild_state.json"
+      ],
+      "evidence": [
+        "docs/CURRENT_STATE.md test counts 65/69 vs measured 106 collected; missing missions #42-#45",
+        "docs/NEXT_SELF_BUILD_MISSION.md title says Supervisor Persistente while its goal describes P1-01 project discovery",
+        "data/selfbuild_state.json last_completed_mission_id=43 with audit notes; SQLite has completed #42/#43 and blocked #44/#45",
+        "this consolidation: docs/PRODUCT_BACKLOG.md, docs/BLUEPRINT_INDEX.md, docs/product-blueprint/INDEX.json"
+      ],
+      "source_refs": [
+        "specifiche/02_SELF_BUILD_E_RECOVERY.md",
+        "specifiche/19_TEST_MATRIX_E_GATE.md",
+        "02_STATO_REALE_DA_VERIFICARE.md",
+        "03_MASTER_CHECKLIST.md#P0-11"
+      ],
+      "primary_source": "02_STATO_REALE_DA_VERIFICARE.md",
+      "note": "This consolidation supplies the indexed backlog; CURRENT_STATE.md and NEXT_SELF_BUILD_MISSION.md remain stale/inconsistent and must be realigned after Phase 2.",
+      "backlog_anchor": "nl-bp-151"
+    }
+  ],
+  "counts": {
+    "total": 103,
+    "by_status": {
+      "verified": 12,
+      "partial": 39,
+      "planned": 45,
+      "blocked": 7
+    },
+    "by_priority": {
+      "P0": 47,
+      "P1": 39,
+      "P2": 15,
+      "P3": 2
+    },
+    "by_area": {
+      "core": 13,
+      "studio": 27,
+      "autonomy": 28,
+      "hygiene": 8,
+      "distribution": 15,
+      "release": 12
+    },
+    "by_area_status": {
+      "core": {
+        "verified": 5,
+        "partial": 5,
+        "planned": 3,
+        "blocked": 0
+      },
+      "studio": {
+        "verified": 1,
+        "partial": 7,
+        "planned": 19,
+        "blocked": 0
+      },
+      "autonomy": {
+        "verified": 2,
+        "partial": 13,
+        "planned": 9,
+        "blocked": 4
+      },
+      "hygiene": {
+        "verified": 2,
+        "partial": 4,
+        "planned": 2,
+        "blocked": 0
+      },
+      "distribution": {
+        "verified": 2,
+        "partial": 5,
+        "planned": 8,
+        "blocked": 0
+      },
+      "release": {
+        "verified": 0,
+        "partial": 5,
+        "planned": 4,
+        "blocked": 3
+      }
+    },
+    "by_priority_status": {
+      "P0": {
+        "verified": 5,
+        "partial": 15,
+        "planned": 20,
+        "blocked": 7
+      },
+      "P1": {
+        "verified": 7,
+        "partial": 22,
+        "planned": 10,
+        "blocked": 0
+      },
+      "P2": {
+        "verified": 0,
+        "partial": 2,
+        "planned": 13,
+        "blocked": 0
+      },
+      "P3": {
+        "verified": 0,
+        "partial": 0,
+        "planned": 2,
+        "blocked": 0
+      }
+    },
+    "status_order": [
+      "verified",
+      "partial",
+      "planned",
+      "blocked"
+    ],
+    "priority_order": [
+      "P0",
+      "P1",
+      "P2",
+      "P3"
+    ],
+    "area_order": [
+      "core",
+      "studio",
+      "autonomy",
+      "hygiene",
+      "distribution",
+      "release"
+    ],
+    "sources": 79,
+    "dedup_groups": 98,
+    "conflicts": 11
+  },
+  "source_inventory": [
+    {
+      "path": "docs/product-blueprint/00_MASTER_INDEX.md",
+      "role": "primary",
+      "used_for": "source map, SPEC list",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/01_DECISIONI_E_PRIORITA.md",
+      "role": "primary",
+      "used_for": "constraints, priority philosophy",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/02_STATO_REALE_DA_VERIFICARE.md",
+      "role": "primary",
+      "used_for": "evidence discipline, historical state",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/03_MASTER_CHECKLIST.md",
+      "role": "primary",
+      "used_for": "P0-P3 requirement IDs, dedup map",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/04_HANDOFF_MINIMO.md",
+      "role": "primary",
+      "used_for": "handoff policy, active priority",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/05_TRACCIABILITA.md",
+      "role": "primary",
+      "used_for": "traceability model, valid-evidence list",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/06_UNICO_HANDOFF_AUTONOMIA.md",
+      "role": "primary",
+      "used_for": "autonomy contract, safeguards",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/07_HANDOFF_SELF_HEALING.md",
+      "role": "primary",
+      "used_for": "self-healing scope",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/MANIFEST.json",
+      "role": "primary",
+      "used_for": "file inventory (incomplete; see C2)",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/README_IMPORTANTE.md",
+      "role": "primary",
+      "used_for": "precedence rules, versioning",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/NOTE_SULLE_SPECIFICHE_PRECEDENTI.md",
+      "role": "primary",
+      "used_for": "legacy context policy",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/AUDIT_E_MIGRAZIONE_SENZA_RISCHI.md",
+      "role": "primary",
+      "used_for": "read-only audit runbook",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/V2_CHANGELOG.md",
+      "role": "primary",
+      "used_for": "source history",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/V3_CHANGELOG.md",
+      "role": "primary",
+      "used_for": "source history",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/V4_CHANGELOG.md",
+      "role": "primary",
+      "used_for": "source history",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/V5_CHANGELOG.md",
+      "role": "primary",
+      "used_for": "source history",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/V6_CHANGELOG.md",
+      "role": "primary",
+      "used_for": "self-healing addition (conflict C1)",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/V6_INDEX_CHECKLIST_PATCH.md",
+      "role": "primary",
+      "used_for": "self-healing addition (conflict C1)",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/Prompt.txt",
+      "role": "primary",
+      "used_for": "handoff intent",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/01_ARCHITETTURA_E_RUNTIME.md",
+      "role": "spec",
+      "used_for": "SPEC-01 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/02_SELF_BUILD_E_RECOVERY.md",
+      "role": "spec",
+      "used_for": "SPEC-02 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/02A_RECOVERY_POINTS_ROLLBACK_CACHE.md",
+      "role": "spec",
+      "used_for": "SPEC-02A requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/03_GOALS_MILESTONES_TASKS.md",
+      "role": "spec",
+      "used_for": "SPEC-03 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/04_AGENT_FACTORY_E_TEAM_DINAMICI.md",
+      "role": "spec",
+      "used_for": "SPEC-04 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/05_MODEL_HUB_PROVIDERS.md",
+      "role": "spec",
+      "used_for": "SPEC-05 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/06_MODEL_ADVISOR_E_PARAMETRI.md",
+      "role": "spec",
+      "used_for": "SPEC-06 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/07_QUALITY_GATES_E_BENCHMARK.md",
+      "role": "spec",
+      "used_for": "SPEC-07 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
+      "role": "spec",
+      "used_for": "SPEC-08 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
+      "role": "spec",
+      "used_for": "SPEC-09 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/10_SPEECH_ASR_MODELS.md",
+      "role": "spec",
+      "used_for": "SPEC-10 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
+      "role": "spec",
+      "used_for": "SPEC-11 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/12_PROJECT_DISCOVERY.md",
+      "role": "spec",
+      "used_for": "SPEC-12 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/13_RESOURCE_SCHEDULER.md",
+      "role": "spec",
+      "used_for": "SPEC-13 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/13A_GPU_CONTENTION_CLOUD_FALLBACK.md",
+      "role": "spec",
+      "used_for": "SPEC-13A requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/14_STORAGE_E_MODEL_LIFECYCLE.md",
+      "role": "spec",
+      "used_for": "SPEC-14 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/15_SICUREZZA_E_PRIVACY.md",
+      "role": "spec",
+      "used_for": "SPEC-15 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
+      "role": "spec",
+      "used_for": "SPEC-16 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/17_WINDOWS_LINUX_MACOS.md",
+      "role": "spec",
+      "used_for": "SPEC-17 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/18_SQLITE_SCHEMA_E_STATI.md",
+      "role": "spec",
+      "used_for": "SPEC-18 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/19_TEST_MATRIX_E_GATE.md",
+      "role": "spec",
+      "used_for": "SPEC-19 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/20_RELEASE_UPDATE_DIAGNOSTICA.md",
+      "role": "spec",
+      "used_for": "SPEC-20 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md",
+      "role": "spec",
+      "used_for": "SPEC-21 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/22_MODEL_AGENT_COMPETENCE_INDEX.md",
+      "role": "spec",
+      "used_for": "SPEC-22 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
+      "role": "spec",
+      "used_for": "SPEC-23 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/24_OPERATIONS_SUPERVISION_HEALTH_AND_DIAGNOSTICS.md",
+      "role": "spec",
+      "used_for": "SPEC-24 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/25_PERMISSIONS_AND_EXTERNAL_TOOLS.md",
+      "role": "spec",
+      "used_for": "SPEC-25 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md",
+      "role": "spec",
+      "used_for": "SPEC-26 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/27_SELF_CHANGE_GATES_AND_DEPLOY.md",
+      "role": "spec",
+      "used_for": "SPEC-27 requirements",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
+      "role": "spec",
+      "used_for": "SPEC-28 requirements (SH-01..SH-07)",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/templates/GOAL_TEMPLATE.md",
+      "role": "template",
+      "used_for": "goal record shape (advisory)",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/templates/TASK_MISSION_TEMPLATE.md",
+      "role": "template",
+      "used_for": "mission record shape (advisory)",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/templates/RELEASE_AUDIT_TEMPLATE.md",
+      "role": "template",
+      "used_for": "release audit shape (advisory)",
+      "exists": true
+    },
+    {
+      "path": "docs/product-blueprint/tools/audit_external_builds.ps1",
+      "role": "tool",
+      "used_for": "read-only external build audit (inventory)",
+      "exists": true
+    },
+    {
+      "path": "docs/PRODUCT_BACKLOG.md",
+      "role": "deliverable",
+      "used_for": "previous mission #42 content replaced by this consolidation; old entries mapped in dedup_map (C8)",
+      "exists": true
+    },
+    {
+      "path": "docs/CURRENT_STATE.md",
+      "role": "state",
+      "used_for": "historical verified capabilities, stale counts (C4/C5)",
+      "exists": true
+    },
+    {
+      "path": "docs/COMPLETED_MISSIONS.md",
+      "role": "state",
+      "used_for": "mission history evidence #16-#41",
+      "exists": true
+    },
+    {
+      "path": "docs/NEXT_SELF_BUILD_MISSION.md",
+      "role": "state",
+      "used_for": "stale roadmap view (C4)",
+      "exists": true
+    },
+    {
+      "path": "docs/PHASE2_HARNESS_INTEGRATION_PLAN.md",
+      "role": "design",
+      "used_for": "Phase 2 design, measured prototypes, harness gap evidence",
+      "exists": true
+    },
+    {
+      "path": "docs/WORKSPACE_MIGRATION.md",
+      "role": "state",
+      "used_for": "relocation evidence, gate results, rollback procedure",
+      "exists": true
+    },
+    {
+      "path": "docs/09_DISTRIBUTION.md",
+      "role": "history",
+      "used_for": "distribution history and claims (C9)",
+      "exists": true
+    },
+    {
+      "path": "docs/08_ACCEPTANCE_GATES.md",
+      "role": "history",
+      "used_for": "legacy gate mapping (C10)",
+      "exists": true
+    },
+    {
+      "path": "docs/07_SAFETY.md",
+      "role": "history",
+      "used_for": "safety policy mapping",
+      "exists": true
+    },
+    {
+      "path": "docs/02_SELF_BUILD_ROADMAP.md",
+      "role": "history",
+      "used_for": "phase mapping, future phases 11-18",
+      "exists": true
+    },
+    {
+      "path": "docs/03_GUI_SPEC.md",
+      "role": "history",
+      "used_for": "GUI/design mapping",
+      "exists": true
+    },
+    {
+      "path": "docs/04_PROJECT_MANAGER.md",
+      "role": "history",
+      "used_for": "project discovery mapping",
+      "exists": true
+    },
+    {
+      "path": "docs/05_ORCHESTRATION.md",
+      "role": "history",
+      "used_for": "orchestration/handoff/reviewer mapping",
+      "exists": true
+    },
+    {
+      "path": "docs/06_RESOURCE_SCHEDULER.md",
+      "role": "history",
+      "used_for": "resource scheduler mapping",
+      "exists": true
+    },
+    {
+      "path": "docs/00_VISION.md",
+      "role": "history",
+      "used_for": "product intent context",
+      "exists": true
+    },
+    {
+      "path": "docs/01_ARCHITECTURE.md",
+      "role": "history",
+      "used_for": "architecture context",
+      "exists": true
+    },
+    {
+      "path": "docs/09_ANTIGRAVITY_EXECUTION_MISSION.md",
+      "role": "history",
+      "used_for": "historical bootstrap context (not authoritative)",
+      "exists": true
+    },
+    {
+      "path": "docs/README_AGGIUNTA.md",
+      "role": "history",
+      "used_for": "SPEC-13A import note",
+      "exists": true
+    },
+    {
+      "path": "docs/DISTRIBUTION_AUDIT.md",
+      "role": "evidence",
+      "used_for": "measured sizes, duplicate/dependency audit",
+      "exists": true
+    },
+    {
+      "path": "docs/PORTABLE_BUILD.md",
+      "role": "evidence",
+      "used_for": "staging and NL_DATA_DIR evidence",
+      "exists": true
+    },
+    {
+      "path": "docs/CREWAI_RUNTIME.md",
+      "role": "evidence",
+      "used_for": "CrewAI pin/import/license evidence",
+      "exists": true
+    },
+    {
+      "path": "AUDIT_REALE_E_LIMITI.md",
+      "role": "evidence",
+      "used_for": "safety foundation audit and gaps",
+      "exists": true
+    },
+    {
+      "path": "HANDOFF_DEEPSEEK_HARNESS.md",
+      "role": "evidence",
+      "used_for": "stub incidents #43/#45, harness objective",
+      "exists": true
+    },
+    {
+      "path": "AGENTS.md",
+      "role": "governance",
+      "used_for": "workspace rules, containment, verification invariant",
+      "exists": true
+    },
+    {
+      "path": "FINAL-PRODUCT-REQUIREMENTS (task brief areas 1-6)",
+      "role": "external-brief",
+      "used_for": "6 product areas and 9 release acceptance criteria",
+      "exists": null
+    },
+    {
+      "path": "Team task board (task-8..task-14)",
+      "role": "external-brief",
+      "used_for": "area ownership mapping",
+      "exists": null
+    }
+  ],
+  "dedup_map": {
+    "03_MASTER_CHECKLIST.md#P0-01": [
+      "NL-BP-150",
+      "NL-BP-151"
+    ],
+    "03_MASTER_CHECKLIST.md#P0-02": [
+      "NL-BP-150",
+      "NL-BP-013"
+    ],
+    "03_MASTER_CHECKLIST.md#P0-03": [
+      "NL-BP-074",
+      "NL-BP-072"
+    ],
+    "03_MASTER_CHECKLIST.md#P0-04": [
+      "NL-BP-004",
+      "NL-BP-003",
+      "NL-BP-075"
+    ],
+    "03_MASTER_CHECKLIST.md#P0-05": [
+      "NL-BP-003",
+      "NL-BP-001"
+    ],
+    "03_MASTER_CHECKLIST.md#P0-06": [
+      "NL-BP-004",
+      "NL-BP-005",
+      "NL-BP-054"
+    ],
+    "03_MASTER_CHECKLIST.md#P0-07": [
+      "NL-BP-051",
+      "NL-BP-012"
+    ],
+    "03_MASTER_CHECKLIST.md#P0-08": [
+      "NL-BP-051",
+      "NL-BP-056"
+    ],
+    "03_MASTER_CHECKLIST.md#P0-09": [
+      "NL-BP-003"
+    ],
+    "03_MASTER_CHECKLIST.md#P0-10": [
+      "NL-BP-013"
+    ],
+    "03_MASTER_CHECKLIST.md#P0-11": [
+      "NL-BP-151"
+    ],
+    "03_MASTER_CHECKLIST.md#P0-12": [
+      "NL-BP-061",
+      "NL-BP-003"
+    ],
+    "03_MASTER_CHECKLIST.md#P0-13": [
+      "NL-BP-056"
+    ],
+    "03_MASTER_CHECKLIST.md#P0-14": [
+      "NL-BP-061",
+      "NL-BP-062"
+    ],
+    "03_MASTER_CHECKLIST.md#P0-15": [
+      "NL-BP-064",
+      "NL-BP-024"
+    ],
+    "03_MASTER_CHECKLIST.md#P0-16": [
+      "NL-BP-072",
+      "NL-BP-074"
+    ],
+    "03_MASTER_CHECKLIST.md#P0-17": [
+      "NL-BP-055",
+      "NL-BP-057"
+    ],
+    "03_MASTER_CHECKLIST.md#P0-18": [
+      "NL-BP-061",
+      "NL-BP-062",
+      "NL-BP-063"
+    ],
+    "03_MASTER_CHECKLIST.md#P1-01": [
+      "NL-BP-077",
+      "NL-BP-043"
+    ],
+    "03_MASTER_CHECKLIST.md#P1-02": [
+      "NL-BP-050",
+      "NL-BP-053",
+      "NL-BP-046"
+    ],
+    "03_MASTER_CHECKLIST.md#P1-03": [
+      "NL-BP-050",
+      "NL-BP-046",
+      "NL-BP-025"
+    ],
+    "03_MASTER_CHECKLIST.md#P1-04": [
+      "NL-BP-008"
+    ],
+    "03_MASTER_CHECKLIST.md#P1-05": [
+      "NL-BP-008",
+      "NL-BP-009",
+      "NL-BP-010"
+    ],
+    "03_MASTER_CHECKLIST.md#P1-06": [
+      "NL-BP-076"
+    ],
+    "03_MASTER_CHECKLIST.md#P1-07": [
+      "NL-BP-020",
+      "NL-BP-021",
+      "NL-BP-022",
+      "NL-BP-045"
+    ],
+    "03_MASTER_CHECKLIST.md#P1-08": [
+      "NL-BP-022",
+      "NL-BP-023",
+      "NL-BP-024"
+    ],
+    "03_MASTER_CHECKLIST.md#P1-09": [
+      "NL-BP-072"
+    ],
+    "03_MASTER_CHECKLIST.md#P1-10": [
+      "NL-BP-091"
+    ],
+    "03_MASTER_CHECKLIST.md#P1-11": [
+      "NL-BP-056",
+      "NL-BP-117"
+    ],
+    "03_MASTER_CHECKLIST.md#P1-12": [
+      "NL-BP-090",
+      "NL-BP-092",
+      "NL-BP-093",
+      "NL-BP-096",
+      "NL-BP-097"
+    ],
+    "03_MASTER_CHECKLIST.md#P1-13": [
+      "NL-BP-090",
+      "NL-BP-091",
+      "NL-BP-095"
+    ],
+    "03_MASTER_CHECKLIST.md#P1-14": [
+      "NL-BP-075"
+    ],
+    "03_MASTER_CHECKLIST.md#P1-15": [
+      "NL-BP-073",
+      "NL-BP-072"
+    ],
+    "03_MASTER_CHECKLIST.md#P1-16": [
+      "NL-BP-023",
+      "NL-BP-024",
+      "NL-BP-046"
+    ],
+    "03_MASTER_CHECKLIST.md#P2-01": [
+      "NL-BP-066"
+    ],
+    "03_MASTER_CHECKLIST.md#P2-02": [
+      "NL-BP-066",
+      "NL-BP-067"
+    ],
+    "03_MASTER_CHECKLIST.md#P2-03": [
+      "NL-BP-068"
+    ],
+    "03_MASTER_CHECKLIST.md#P2-04": [
+      "NL-BP-068"
+    ],
+    "03_MASTER_CHECKLIST.md#P2-05": [
+      "NL-BP-070"
+    ],
+    "03_MASTER_CHECKLIST.md#P2-06": [
+      "NL-BP-026",
+      "NL-BP-027",
+      "NL-BP-028",
+      "NL-BP-029"
+    ],
+    "03_MASTER_CHECKLIST.md#P2-07": [
+      "NL-BP-030",
+      "NL-BP-031",
+      "NL-BP-032"
+    ],
+    "03_MASTER_CHECKLIST.md#P2-08": [
+      "NL-BP-035",
+      "NL-BP-033"
+    ],
+    "03_MASTER_CHECKLIST.md#P2-09": [
+      "NL-BP-036"
+    ],
+    "03_MASTER_CHECKLIST.md#P2-10": [
+      "NL-BP-037",
+      "NL-BP-038",
+      "NL-BP-039",
+      "NL-BP-040",
+      "NL-BP-041"
+    ],
+    "03_MASTER_CHECKLIST.md#P2-11": [
+      "NL-BP-043"
+    ],
+    "03_MASTER_CHECKLIST.md#P2-12": [
+      "NL-BP-068"
+    ],
+    "03_MASTER_CHECKLIST.md#P2-13": [
+      "NL-BP-071"
+    ],
+    "03_MASTER_CHECKLIST.md#P2-14": [
+      "NL-BP-094",
+      "NL-BP-036",
+      "NL-BP-097"
+    ],
+    "03_MASTER_CHECKLIST.md#P2-15": [
+      "NL-BP-094"
+    ],
+    "03_MASTER_CHECKLIST.md#P2-16": [
+      "NL-BP-069"
+    ],
+    "03_MASTER_CHECKLIST.md#P2-17": [
+      "NL-BP-069"
+    ],
+    "03_MASTER_CHECKLIST.md#P3-01": [
+      "NL-BP-121"
+    ],
+    "03_MASTER_CHECKLIST.md#P3-02": [
+      "NL-BP-110",
+      "NL-BP-119"
+    ],
+    "03_MASTER_CHECKLIST.md#P3-03": [
+      "NL-BP-110",
+      "NL-BP-112",
+      "NL-BP-113",
+      "NL-BP-114",
+      "NL-BP-115"
+    ],
+    "03_MASTER_CHECKLIST.md#P3-04": [
+      "NL-BP-114",
+      "NL-BP-117"
+    ],
+    "03_MASTER_CHECKLIST.md#P3-05": [
+      "NL-BP-116",
+      "NL-BP-035",
+      "NL-BP-124"
+    ],
+    "03_MASTER_CHECKLIST.md#P3-06": [
+      "NL-BP-123"
+    ],
+    "03_MASTER_CHECKLIST.md#P3-07": [
+      "NL-BP-119"
+    ],
+    "03_MASTER_CHECKLIST.md#P3-08": [
+      "NL-BP-140",
+      "NL-BP-142",
+      "NL-BP-111",
+      "NL-BP-149"
+    ],
+    "03_MASTER_CHECKLIST.md#P3-09": [
+      "NL-BP-143"
+    ],
+    "V6_INDEX_CHECKLIST_PATCH.md#P0-19..P0-22 (declared only)": [
+      "NL-BP-055",
+      "NL-BP-056",
+      "NL-BP-057",
+      "NL-BP-058",
+      "NL-BP-059",
+      "NL-BP-063"
+    ],
+    "V6_INDEX_CHECKLIST_PATCH.md#P1-17 (declared only)": [
+      "NL-BP-066",
+      "NL-BP-067"
+    ],
+    "docs/PRODUCT_BACKLOG.md (previous consolidation attempt, mission #42)": [
+      "NL-BP-001",
+      "NL-BP-003",
+      "NL-BP-004",
+      "NL-BP-008",
+      "NL-BP-020",
+      "NL-BP-021",
+      "NL-BP-051",
+      "NL-BP-054",
+      "NL-BP-056",
+      "NL-BP-066",
+      "NL-BP-067",
+      "NL-BP-070",
+      "NL-BP-077",
+      "NL-BP-090",
+      "NL-BP-094"
+    ],
+    "docs/02_SELF_BUILD_ROADMAP.md#Phase-0": [
+      "NL-BP-090",
+      "NL-BP-150"
+    ],
+    "docs/02_SELF_BUILD_ROADMAP.md#Phase-1": [
+      "NL-BP-077"
+    ],
+    "docs/02_SELF_BUILD_ROADMAP.md#Phase-2": [
+      "NL-BP-008",
+      "NL-BP-070"
+    ],
+    "docs/02_SELF_BUILD_ROADMAP.md#Phase-3": [
+      "NL-BP-020",
+      "NL-BP-021",
+      "NL-BP-046"
+    ],
+    "docs/02_SELF_BUILD_ROADMAP.md#Phase-4": [
+      "NL-BP-074",
+      "NL-BP-072"
+    ],
+    "docs/02_SELF_BUILD_ROADMAP.md#Phase-5": [
+      "NL-BP-004",
+      "NL-BP-065"
+    ],
+    "docs/02_SELF_BUILD_ROADMAP.md#Phase-6": [
+      "NL-BP-053"
+    ],
+    "docs/02_SELF_BUILD_ROADMAP.md#Phase-7": [
+      "NL-BP-055",
+      "NL-BP-056",
+      "NL-BP-057",
+      "NL-BP-059",
+      "NL-BP-063"
+    ],
+    "docs/02_SELF_BUILD_ROADMAP.md#Phase-8": [
+      "NL-BP-037",
+      "NL-BP-038",
+      "NL-BP-039"
+    ],
+    "docs/02_SELF_BUILD_ROADMAP.md#Phase-9": [
+      "NL-BP-068",
+      "NL-BP-069"
+    ],
+    "docs/02_SELF_BUILD_ROADMAP.md#Phase-10": [
+      "NL-BP-110",
+      "NL-BP-111",
+      "NL-BP-114",
+      "NL-BP-117"
+    ],
+    "docs/02_SELF_BUILD_ROADMAP.md#Phase-11": [
+      "NL-BP-008",
+      "NL-BP-009",
+      "NL-BP-036"
+    ],
+    "docs/02_SELF_BUILD_ROADMAP.md#Phase-12": [
+      "NL-BP-068"
+    ],
+    "docs/02_SELF_BUILD_ROADMAP.md#Phase-13": [
+      "NL-BP-066",
+      "NL-BP-067"
+    ],
+    "docs/02_SELF_BUILD_ROADMAP.md#Phase-14": [
+      "NL-BP-050",
+      "NL-BP-051",
+      "NL-BP-053"
+    ],
+    "docs/02_SELF_BUILD_ROADMAP.md#Phase-15": [
+      "NL-BP-033",
+      "NL-BP-034",
+      "NL-BP-035"
+    ],
+    "docs/02_SELF_BUILD_ROADMAP.md#Phase-16": [
+      "NL-BP-037",
+      "NL-BP-038",
+      "NL-BP-039",
+      "NL-BP-040",
+      "NL-BP-041",
+      "NL-BP-042",
+      "NL-BP-043",
+      "NL-BP-044"
+    ],
+    "docs/02_SELF_BUILD_ROADMAP.md#Phase-17": [
+      "NL-BP-119",
+      "NL-BP-120"
+    ],
+    "docs/02_SELF_BUILD_ROADMAP.md#Phase-18": [
+      "NL-BP-114",
+      "NL-BP-116",
+      "NL-BP-117",
+      "NL-BP-123"
+    ],
+    "docs/08_ACCEPTANCE_GATES.md#Gate-A": [
+      "NL-BP-001",
+      "NL-BP-150"
+    ],
+    "docs/08_ACCEPTANCE_GATES.md#Gate-B": [
+      "NL-BP-077",
+      "NL-BP-046"
+    ],
+    "docs/08_ACCEPTANCE_GATES.md#Gate-C": [
+      "NL-BP-008",
+      "NL-BP-070"
+    ],
+    "docs/08_ACCEPTANCE_GATES.md#Gate-D": [
+      "NL-BP-020",
+      "NL-BP-021",
+      "NL-BP-044"
+    ],
+    "docs/08_ACCEPTANCE_GATES.md#Gate-E": [
+      "NL-BP-090",
+      "NL-BP-140"
+    ],
+    "docs/08_ACCEPTANCE_GATES.md#Gate-F": [
+      "NL-BP-003",
+      "NL-BP-004",
+      "NL-BP-012",
+      "NL-BP-072",
+      "NL-BP-074"
+    ],
+    "docs/08_ACCEPTANCE_GATES.md#Gate-G": [
+      "NL-BP-055",
+      "NL-BP-056",
+      "NL-BP-057",
+      "NL-BP-059",
+      "NL-BP-063"
+    ],
+    "docs/09_DISTRIBUTION.md": [
+      "NL-BP-110",
+      "NL-BP-111",
+      "NL-BP-114",
+      "NL-BP-115",
+      "NL-BP-117",
+      "NL-BP-121",
+      "NL-BP-122",
+      "NL-BP-140",
+      "NL-BP-142"
+    ],
+    "docs/03_GUI_SPEC.md": [
+      "NL-BP-020",
+      "NL-BP-021",
+      "NL-BP-024",
+      "NL-BP-044",
+      "NL-BP-045",
+      "NL-BP-046"
+    ],
+    "docs/04_PROJECT_MANAGER.md": [
+      "NL-BP-077",
+      "NL-BP-043"
+    ],
+    "docs/05_ORCHESTRATION.md": [
+      "NL-BP-003",
+      "NL-BP-005",
+      "NL-BP-012",
+      "NL-BP-066"
+    ],
+    "docs/06_RESOURCE_SCHEDULER.md": [
+      "NL-BP-070",
+      "NL-BP-071"
+    ],
+    "docs/07_SAFETY.md": [
+      "NL-BP-072",
+      "NL-BP-074",
+      "NL-BP-076"
+    ],
+    "docs/01_ARCHITECTURE.md": [
+      "NL-BP-001",
+      "NL-BP-013",
+      "NL-BP-020",
+      "NL-BP-072"
+    ],
+    "specifiche/* (all 30 spec files)": [
+      "NL-BP-001",
+      "NL-BP-003",
+      "NL-BP-004",
+      "NL-BP-008",
+      "NL-BP-026",
+      "NL-BP-050",
+      "NL-BP-055",
+      "NL-BP-072",
+      "NL-BP-090",
+      "NL-BP-110",
+      "NL-BP-140"
+    ],
+    "FINAL-PRODUCT-REQUIREMENTS (areas 1-6 from the task brief)": [
+      "NL-BP-006",
+      "NL-BP-007",
+      "NL-BP-026",
+      "NL-BP-027",
+      "NL-BP-028",
+      "NL-BP-033",
+      "NL-BP-034",
+      "NL-BP-042",
+      "NL-BP-044",
+      "NL-BP-050",
+      "NL-BP-055",
+      "NL-BP-061",
+      "NL-BP-062",
+      "NL-BP-068",
+      "NL-BP-069",
+      "NL-BP-114",
+      "NL-BP-115",
+      "NL-BP-141",
+      "NL-BP-142",
+      "NL-BP-143",
+      "NL-BP-144",
+      "NL-BP-145",
+      "NL-BP-146",
+      "NL-BP-147",
+      "NL-BP-148",
+      "NL-BP-149"
+    ]
+  },
+  "conflicts": [
+    {
+      "id": "C1",
+      "topic": "v6 checklist/index patch not applied",
+      "sources": [
+        "03_MASTER_CHECKLIST.md (ends at P0-18 / P1-16)",
+        "00_MASTER_INDEX.md (no SPEC-28 row)",
+        "V6_CHANGELOG.md / V6_INDEX_CHECKLIST_PATCH.md (announce P0-19..P0-22, P1-17, SPEC-28)"
+      ],
+      "observation": "The v6 changelog claims new checklist IDs P0-19..P0-22 and P1-17 plus a SPEC-28 index row, but the actual checklist/index in the repository do not contain them.",
+      "resolution": "SPEC-28 self-healing requirements were enumerated directly from specifiche/28_SELF_HEALING_AGENT_HARNESS.md (SH-01..SH-07 gates) and mapped to NL-BP-055..059, 063, 065, 074, 146, 147. No P0-19..P0-22 IDs were minted as authority. Blueprint maintainers should apply the v6 patch or retire the changelog claim.",
+      "affected": [
+        "NL-BP-055",
+        "NL-BP-056",
+        "NL-BP-057",
+        "NL-BP-058",
+        "NL-BP-059",
+        "NL-BP-063"
+      ]
+    },
+    {
+      "id": "C2",
+      "topic": "MANIFEST.json is incomplete (v5 only)",
+      "sources": [
+        "MANIFEST.json",
+        "specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
+        "07_HANDOFF_SELF_HEALING.md",
+        "V6_CHANGELOG.md",
+        "V6_INDEX_CHECKLIST_PATCH.md",
+        "Prompt.txt"
+      ],
+      "observation": "Measured: 53 files exist under docs/product-blueprint but MANIFEST.json lists 47; missing entries are 07_HANDOFF_SELF_HEALING.md, Prompt.txt, specifiche/28_SELF_HEALING_AGENT_HARNESS.md, V6_CHANGELOG.md, V6_INDEX_CHECKLIST_PATCH.md (MANIFEST.json itself is not self-listed).",
+      "resolution": "docs/product-blueprint/INDEX.json now records the complete source inventory and supersedes MANIFEST.json as the backlog source index. MANIFEST.json was not modified (out of this task's write scope).",
+      "affected": []
+    },
+    {
+      "id": "C3",
+      "topic": "External portable directories claimed but absent",
+      "sources": [
+        "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
+        "02_STATO_REALE_DA_VERIFICARE.md",
+        "docs/09_DISTRIBUTION.md"
+      ],
+      "observation": "Blueprint/history claims three sibling portables (~1.46 GB each) plus K:\\AI\\portable-smoke-project. Read-only inspection of K:\\AI on 2026-10-28 shows none of those four paths; only the internal dist/portable-release payload exists.",
+      "resolution": "Current measurement wins for status. The external-artifact requirement (NL-BP-093) is partial: the audit/authorization record for the removal is not in the repository, so the history cannot be reconstructed from repo evidence. No deletion action was taken by this task.",
+      "affected": [
+        "NL-BP-092",
+        "NL-BP-093",
+        "NL-BP-096"
+      ]
+    },
+    {
+      "id": "C4",
+      "topic": "Self-build state and history disagree across docs/DB/state",
+      "sources": [
+        "docs/CURRENT_STATE.md",
+        "docs/NEXT_SELF_BUILD_MISSION.md",
+        "docs/COMPLETED_MISSIONS.md",
+        "data/selfbuild_state.json",
+        "SQLite missions"
+      ],
+      "observation": "CURRENT_STATE ends at mission #41 (65/69 test claims) and says next = new mission; selfbuild_state.json records last_completed=#43 with audit notes; SQLite has completed #42/#43, blocked #44/#45; NEXT_SELF_BUILD_MISSION.md title says 'Supervisor Persistente' while its goal is P1-01 project discovery.",
+      "resolution": "Durable DB + state JSON are treated as the historical record; docs are stale views (NL-BP-151). Mission #44 (continuous supervisor execution) and #45 (project discovery) are blocked/REJECT and are evidence that unattended autonomy is not achieved (NL-BP-063). This backlog is the new durable specification.",
+      "affected": [
+        "NL-BP-061",
+        "NL-BP-062",
+        "NL-BP-063",
+        "NL-BP-151"
+      ]
+    },
+    {
+      "id": "C5",
+      "topic": "Test-count claims disagree",
+      "sources": [
+        "docs/CURRENT_STATE.md (65/69)",
+        "data/selfbuild_state.json audit notes (72)",
+        "docs/PHASE2_HARNESS_INTEGRATION_PLAN.md (97 collected at 338def0; 103 after C1b)"
+      ],
+      "observation": "Test counts in docs are 65/69/72/97/103; measured at final snapshot HEAD 7e778da (2026-10-28 16:12) the collection is 134 tests, with 24 harness component tests and 37 key regression tests passing (plus two earlier safe batches of 68+16 at HEAD 8871145). The full suite was intentionally not run by this consolidation.",
+      "resolution": "Reported as measured, not claimed as full-green: NL-BP-150 is partial until a documented full-suite run. Stale counts in state docs must be updated after Phase 2 (NL-BP-151).",
+      "affected": [
+        "NL-BP-150",
+        "NL-BP-151"
+      ]
+    },
+    {
+      "id": "C6",
+      "topic": "Safety harness applied but not wired",
+      "sources": [
+        "commit cb5184e (C1a)",
+        "commit 451211c (C1b)",
+        "docs/PHASE2_HARNESS_INTEGRATION_PLAN.md section 1.3",
+        "SQLite mission #45",
+        "data/selfbuild_state.json audit_note_43"
+      ],
+      "observation": "The safety modules are applied and tested standalone: staging_broker/recovery_store/code_integrity_gate v2 (C1a), promotion lifecycle (C3), candidate+oracle verification (C4) and harness schema/preflight (C5) landed during consolidation; 24 harness tests pass. However grep still shows no staging/promotion/candidate-verification calls from agents/orchestrator.py, so model writes still reach the live tree before any gate. Mission #45 shows a live stub overwrite followed by rollback. Some docs/audit notes read as if the protections were verified end-to-end.",
+      "resolution": "Status is blocked for the integration requirements NL-BP-055/056/057/147 and partial for NL-BP-058/059 (modules + tests landed, orchestrator wiring pending) and NL-BP-060. Module-level tests are evidence of components only, never of end-to-end protection. This matches audit AUDIT_REALE_E_LIMITI.md and the Phase 2 plan (C6/C7 pending at snapshot).",
+      "affected": [
+        "NL-BP-055",
+        "NL-BP-056",
+        "NL-BP-057",
+        "NL-BP-058",
+        "NL-BP-059",
+        "NL-BP-060",
+        "NL-BP-147"
+      ]
+    },
+    {
+      "id": "C7",
+      "topic": "Blueprint priorities vs final-product release criteria",
+      "sources": [
+        "01_DECISIONI_E_PRIORITA.md",
+        "03_MASTER_CHECKLIST.md",
+        "FINAL-PRODUCT-REQUIREMENTS (areas 1-6)"
+      ],
+      "observation": "The blueprint puts multimodal attachments/ASR in P2 and distribution in P3 while the final release acceptance criteria make them mandatory. Conversely the blueprint's P0 self-build items are prerequisites for the release criterion 'invalid agent edits cannot corrupt verified sources'.",
+      "resolution": "Priority semantics are explicitly redefined in this backlog: P0 = release acceptance criterion or hard safety/prerequisite; P1 = coherent product; P2 = advanced blueprint evolution; P3 = polish/extras. Both BP priority and backlog priority are recorded per requirement.",
+      "affected": []
+    },
+    {
+      "id": "C8",
+      "topic": "Prior PRODUCT_BACKLOG.md consolidation was incomplete",
+      "sources": [
+        "docs/PRODUCT_BACKLOG.md (951 B, mission #42 output)"
+      ],
+      "observation": "The previous file lists 13 checklist IDs without acceptance gates, evidence, dependencies, status classification or machine-readable index, and claims 'No duplicates' while covering only part of the checklist.",
+      "resolution": "It is replaced by this consolidated backlog (103 atomic requirements with evidence). Its entries are mapped in the dedup map; mission #42's completion does not prove backlog quality.",
+      "affected": []
+    },
+    {
+      "id": "C9",
+      "topic": "Docs say autonomous priority gate is met/verified",
+      "sources": [
+        "docs/09_DISTRIBUTION.md",
+        "docs/02_SELF_BUILD_ROADMAP.md#Phase-10",
+        "docs/CURRENT_STATE.md handoff gate 'verified'"
+      ],
+      "observation": "Those claims predate the Phase 2 safety audit and the blocked missions #44/#45; they are historical, not current.",
+      "resolution": "Final requirements and current measured evidence override them. NL-BP-146/147 blocked; NL-BP-063 blocked; completion claims are not treated as evidence.",
+      "affected": [
+        "NL-BP-061",
+        "NL-BP-063",
+        "NL-BP-146",
+        "NL-BP-147"
+      ]
+    },
+    {
+      "id": "C10",
+      "topic": "Old Antigravity Gate A-E claim",
+      "sources": [
+        "docs/08_ACCEPTANCE_GATES.md",
+        "02_STATO_REALE_DA_VERIFICARE.md",
+        "03_MASTER_CHECKLIST.md"
+      ],
+      "observation": "The legacy handoff criterion (Gates A-E) was explicitly declared insufficient by the blueprint; SPEC-19 requires operational self-build gates (D-J) plus native tests.",
+      "resolution": "Legacy gates are mapped to requirements but are not acceptance evidence. Release acceptance uses NL-BP-140..151 and SPEC-19.",
+      "affected": [
+        "NL-BP-140",
+        "NL-BP-150"
+      ]
+    },
+    {
+      "id": "C11",
+      "topic": "GUI feature expectations vs placeholders",
+      "sources": [
+        "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
+        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
+        "nl_coding_agent/gui/widgets/models_panel.py"
+      ],
+      "observation": "The Model Hub Speech tab and read-only status panels could be mistaken for implemented functionality; they are placeholders/summary surfaces.",
+      "resolution": "Anything with no callable backend is status partial/planned; e.g. speech tab placeholder -> NL-BP-035 planned; read-only model panels -> NL-BP-036 partial.",
+      "affected": [
+        "NL-BP-035",
+        "NL-BP-036"
+      ]
+    }
+  ],
+  "verification": [
+    {
+      "command": "git rev-parse --short HEAD ; git status --porcelain",
+      "result": "8871145; clean working tree"
+    },
+    {
+      "command": "python/python.exe -m pytest tests --collect-only -q -p no:cacheprovider",
+      "result": "134 tests collected in 2.66s at HEAD 7e778da (C5)"
+    },
+    {
+      "command": "python/python.exe -m pytest tests/test_promotion_stage.py tests/test_candidate_verification.py tests/test_harness_schema.py -q -p no:cacheprovider",
+      "result": "24 passed in 4.44s at HEAD 7e778da (C3 promotion 14 + C4 candidate 7 + C5 harness schema 3)"
+    },
+    {
+      "command": "python/python.exe -m pytest tests/test_selfbuild_runner.py tests/test_staging_broker_adversarial.py tests/test_rollback_stub.py tests/test_operational_tools.py tests/test_model_hub.py -q -p no:cacheprovider",
+      "result": "37 passed in 2.90s at HEAD 7e778da"
+    },
+    {
+      "command": "python/python.exe -m pytest tests/test_crewai_runtime.py tests/test_operational_tools.py tests/test_orchestrator_seam.py tests/test_scope_permission.py tests/test_rollback_stub.py tests/test_staging_broker_adversarial.py tests/test_model_hub.py tests/test_cli_config.py tests/test_user_data_path.py tests/test_version.py tests/test_missions_graph.py tests/test_roadmap.py tests/test_selfbuild_runner.py tests/test_foundation.py -q -p no:cacheprovider",
+      "result": "68 passed in 9.39s at HEAD 8871145"
+    },
+    {
+      "command": "python/python.exe -m pytest tests/test_gui_smoke.py tests/test_gui_panels.py tests/test_system_status.py tests/test_distribution_audit.py tests/test_stage_portable.py tests/test_selfbuild_mode.py -q -p no:cacheprovider",
+      "result": "16 passed in 20.14s at HEAD 8871145"
+    },
+    {
+      "command": "read-only SQLite probe (sqlite3 URI mode=ro) against data/nl_coding_agent.sqlite3",
+      "result": "1 project; 45 missions total (13 completed, 29 pending, 2 blocked, 1 interrupted; 15 owned by project 1, 30 legacy unowned); tables: projects, project_facts, model_inventory, missions, tasks, task_attempts, app_settings, events, handoffs, verification_runs; no goals/milestones/attachments/benchmarks tables; 151 handoffs, 58 verification_runs, 107 tasks, 77 events, 59 task_attempts"
+    },
+    {
+      "command": "read-only manifest completeness probe over docs/product-blueprint",
+      "result": "53 files on disk vs 47 listed in MANIFEST.json; 6 not listed (MANIFEST.json, 07_HANDOFF_SELF_HEALING.md, Prompt.txt, SPEC-28, V6_CHANGELOG.md, V6_INDEX_CHECKLIST_PATCH.md)"
+    },
+    {
+      "command": "read-only filesystem inventory: dist/, data/, build/, config/, logs/, K:\\AI siblings",
+      "result": "dist/portable-release manifest: 23,638 files / 1,507,676,008 B / source K:\\AI\\Coding Agent / created 2026-10-28T07:41:13; data/staging/999 leftover; data/recovery/99.json; 16 mission baselines; no nl-coding-agent-portable* or portable-smoke-project directories under K:\\AI"
+    },
+    {
+      "command": "targeted source inspections (grep / read-only)",
+      "result": "no Flow usage in app; no staging/promotion calls in orchestrator; selfbuild_runner post-hoc gate at lines 308-310; no multimodal/ASR/LSP/DAP/MCP/goals/benchmarks/tool-registry/installer code; model-facing tools = 4 (C2 commit); tracked temp_*.py scripts at repo root"
+    },
+    {
+      "command": "read-only docs: build/relocation/verify_relocation_final_lead.json",
+      "result": "ok=true, 30 checks PASS, canonical root verified, 21 Ollama models listed (2026-10-28T15:48)"
+    }
+  ],
+  "caveats": [
+    "The full pytest suite was intentionally not run by this consolidation (mission restriction: safe/targeted tests only). NL-BP-150 stays partial.",
+    "Historical mission results are recorded in SQLite/docs; they were not replayed. They are accepted only as historical evidence, never as current verification.",
+    "GUI/multimodal/audio absence was established from source inspection and dependency inventory, not from an exhaustive runtime trace.",
+    "Local-model quality and hardware behaviour (audio, GPU, ASR accuracy) cannot be verified in this consolidation.",
+    "The removal of external portable directories (C3) happened outside the repository; authorization/provenance is not recorded in the repo.",
+    "Phase 2 (task-6) was in progress concurrently: statuses are a snapshot at HEAD 7e778da; commits after C5 (C6/C7) may advance NL-BP-055..059/061. Re-verify against the current HEAD before relying on those statuses.",
+    "CrewAI import requires a Windows user profile environment (USERPROFILE/APPDATA): a deliberately stripped environment fails at import inside crewai_core token manager. The documented test commands therefore set the standard Windows env; clean-install acceptance must cover this."
+  ],
+  "changelog": {
+    "version": "1.0",
+    "date": "2026-10-28",
+    "supersedes": [
+      "docs/PRODUCT_BACKLOG.md (previous 22-line consolidation attempt from mission #42)",
+      "03_MASTER_CHECKLIST.md as the de-facto backlog (retained as a source specification and mapped by dedup_map)",
+      "all duplicate requirement lists in docs/product-blueprint/ (index, TODOs, handoffs and legacy phases are now mapped to stable NL-BP IDs)"
+    ],
+    "not_superseded": [
+      "docs/product-blueprint/ specification documents remain the authoritative design sources; they were not modified",
+      "docs/CURRENT_STATE.md, docs/COMPLETED_MISSIONS.md and SQLite remain the historical evidence record; the backlog status is derived from them plus code/tests",
+      "AGENTS.md workspace rules remain authoritative for containment and verification"
+    ],
+    "write_scope": [
+      "docs/BLUEPRINT_INDEX.md",
+      "docs/PRODUCT_BACKLOG.md",
+      "docs/product-blueprint/INDEX.json",
+      "build/backlog/ (working notes and generator)"
+    ]
+  }
+}
