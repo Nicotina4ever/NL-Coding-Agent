@@ -27,7 +27,7 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
 
     app = QApplication.instance() or QApplication([])
     window = MainWindow(services)
-    assert window._stack.count() == 8
+    assert window._stack.count() == 9
     assert window._page_index == {
         "projects": 0,
         "files": 1,
@@ -37,9 +37,25 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
         "models": 5,
         "autonomy": 6,
         "chat": 7,
+        "ide": 8,
     }
     from nl_coding_agent.gui.widgets.chat_panel import ChatPanel
     assert isinstance(window._stack.widget(7), ChatPanel)
+    from PySide6.QtWidgets import QTabWidget
+    from nl_coding_agent.gui.widgets.editor_panel import EditorPanel
+    from nl_coding_agent.gui.widgets.terminal_panel import TerminalPanel
+    from nl_coding_agent.gui.widgets.git_panel import GitPanel
+    from nl_coding_agent.gui.widgets.problems_panel import ProblemsPanel
+    ide = window._stack.widget(8)
+    assert isinstance(ide, QTabWidget) and ide.count() == 4
+    assert isinstance(ide.widget(0), EditorPanel)
+    assert isinstance(ide.widget(1), TerminalPanel)
+    assert isinstance(ide.widget(2), GitPanel)
+    assert isinstance(ide.widget(3), ProblemsPanel)
+    assert window._editor_panel._tabs_widget.accessibleName() == "Open editor tabs"
+    assert window._terminal_panel._output.isReadOnly() is True
+    assert window._git_panel._diff.isReadOnly() is True
+    assert window._problems_panel._table.rowCount() == 0
     # F2 voice controls are present and honest about their state (no hardware touched).
     assert window._chat_panel._mic_btn.accessibleName() == "Start or stop dictation"
     assert window._chat_panel._voice_stop_btn.isEnabled() is False

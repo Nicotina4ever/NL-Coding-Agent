@@ -308,6 +308,306 @@ class AppServices:
         return self.speech_manager().speak(text)
 
 
+    # ------------------------------------------------------- Studio IDE (F3a)
+    _EDITABLE_SUFFIXES = {".py", ".md", ".txt", ".json", ".yaml", ".yml", ".toml",
+                          ".ini", ".cfg", ".csv", ".log", ".js", ".ts", ".css",
+                          ".html", ".xml", ".sql", ".sh", ".bat", ".ps1", ".c",
+                          ".h", ".cpp", ".java", ".cs", ".go", ".rs", ".rb", ".vue"}
+    _MAX_EDITOR_BYTES = 2 * 1024 * 1024
+
+    @staticmethod
+    def _resolve_project_rel(project_root, rel_path):
+        from pathlib import Path
+        root = Path(project_root).resolve()
+        target = (root / str(rel_path or "")).resolve()
+        try:
+            target.relative_to(root)
+        except ValueError as exc:
+            raise ValueError("Path escapes the open project: " + repr(rel_path)) from exc
+        return root, target
+
+    def load_editor_file(self, project_root, rel_path):
+        import hashlib
+        root, target = self._resolve_project_rel(project_root, rel_path)
+        if not target.is_file():
+            return {"rel_path": str(rel_path), "error": "File not found",
+                    "error_code": "not-found", "read_only": True}
+        size = target.stat().st_size
+        read_only = target.suffix.lower() not in self._EDITABLE_SUFFIXES or size > self._MAX_EDITOR_BYTES
+        reason = "" if not read_only else ("File type/size is read-only in the editor (preview only).")
+        raw = target.read_bytes()
+        if b"\x00" in raw[:4096]:
+            read_only = True
+            reason = "Binary content cannot be edited as text."
+        content = ""
+        for encoding in ("utf-8-sig", "utf-16", "latin-1"):
+            try:
+                content = raw.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        return {"rel_path": target.relative_to(root).as_posix(), "content": content,
+                "sha256": hashlib.sha256(raw).hexdigest(), "size_bytes": size,
+                "read_only": read_only, "read_only_reason": reason,
+                "suffix": target.suffix.lower()}
+
+    def save_editor_file(self, project_root, rel_path, content, *, expected_sha256=None):
+        import hashlib, json
+        from nl_coding_agent.persistence import database
+        root, target = self._resolve_project_rel(project_root, rel_path)
+        if target.suffix.lower() not in self._EDITABLE_SUFFIXES:
+            return {"ok": False, "error": "File type is read-only in the editor.",
+                    "error_code": "read-only"}
+        if not target.is_file():
+            return {"ok": False, "error": "File not found", "error_code": "not-found"}
+        current = hashlib.sha256(target.read_bytes()).hexdigest()
+        if expected_sha256 and expected_sha256 != current:
+            return {"ok": False, "error_code": "stale-content",
+                    "error": "The file changed on disk. Reload before saving.", "sha256": current}
+        data = str(content).encode("utf-8")
+        if len(data) > self._MAX_EDITOR_BYTES:
+            return {"ok": False, "error_code": "file-too-large"}
+        target.write_bytes(data)
+        digest = hashlib.sha256(data).hexdigest()
+        try:
+            database.log_event(self._db, "Saved editor file: " + str(rel_path),
+                               source="editor", event_kind="file-save",
+                               payload=json.dumps({"rel_path": str(rel_path), "sha256": digest}))
+        except Exception:
+            pass
+        return {"ok": True, "sha256": digest, "size_bytes": len(data)}
+
+    # --------------------------------------------------------- terminal policy
+    _NETWORK_COMMANDS = {"curl", "wget", "ssh", "scp", "sftp", "ftp", "telnet",
+                         "nc", "ncat", "ping", "tracert", "nslookup", "dig",
+                         "invoke-webrequest", "invoke-restmethod", "iwr", "irm", "pip"}
+    _DESTRUCTIVE_COMMANDS = {"rm", "del", "erase", "rmdir", "rd", "format", "mkfs",
+                             "fdisk", "diskpart", "dd", "shutdown", "reboot", "taskkill",
+                             "stop-process", "kill", "killall", "cipher", "takeown",
+                             "icacls", "reg", "bcdedit", "schtasks", "wmic", "mklink",
+                             "chmod", "chown", "sudo", "runas", "su"}
+    _SHELL_COMMANDS = {"cmd", "powershell", "pwsh", "bash", "sh", "zsh", "fish", "csh"}
+    _DESTRUCTIVE_GIT = {"reset", "clean", "rebase", "filter-branch", "checkout",
+                        "restore", "branch", "tag", "worktree"}
+    _SAFE_READ_GIT = {"status", "diff", "log", "show", "branch", "rev-parse"}
+    _NETWORK_GIT = {"push", "fetch", "pull", "clone", "remote", "ls-remote", "submodule"}
+
+    def terminal_policy(self, project_id, argv):
+        from nl_coding_agent.core import permissions
+        policy = permissions.get_policy(project_id)
+        parts = [str(item) for item in (argv or []) if str(item or "").strip()]
+        result = {"allowed": False, "argv": parts, "reason": "", "error_code": ""}
+        if not parts:
+            result.update(error_code="empty-command", reason="No command was provided.")
+            return result
+        if not policy.get(permissions.EXECUTE):
+            result.update(error_code="execute-denied",
+                          reason="The EXECUTE permission is not granted for this project.")
+            return result
+        command = parts[0].lower()
+        if command in self._SHELL_COMMANDS or any(ch in " ".join(parts) for ch in ";|&$><"):
+            result.update(error_code="shell-unsafe",
+                          reason="Shell interpreters and shell metacharacters are not allowed.")
+            return result
+        if command in self._DESTRUCTIVE_COMMANDS:
+            result.update(error_code="destructive-denied",
+                          reason="Destructive command is denied by the terminal policy.")
+            return result
+        if command == "git" and len(parts) > 1:
+            sub = parts[1].lower()
+            if sub in self._DESTRUCTIVE_GIT:
+                result.update(error_code="destructive-git-denied",
+                              reason="Destructive git subcommand is denied.")
+                return result
+            if sub in self._NETWORK_GIT:
+                if not policy.get(permissions.NETWORK):
+                    result.update(error_code="network-denied",
+                                  reason="Network command requires an explicit NETWORK grant "
+                                         "(denied by default).")
+                    return result
+                result.update(error_code="network-explicit",
+                              reason="This command requires NETWORK; an explicit grant is present.")
+                return result
+            if sub not in self._SAFE_READ_GIT and sub not in {"add", "commit"}:
+                result.update(error_code="git-not-allowlisted",
+                              reason="Only read-only/allowlisted git subcommands are permitted.")
+                return result
+        network = command in self._NETWORK_COMMANDS
+        if network:
+            if not policy.get(permissions.NETWORK):
+                result.update(error_code="network-denied",
+                              reason="Network command requires an explicit NETWORK grant "
+                                     "(denied by default).")
+                return result
+            result.update(error_code="network-explicit",
+                          reason="This command requires NETWORK; an explicit grant is present.")
+        result.update(allowed=True, reason="allowed")
+        return result
+
+    def run_terminal_command(self, project_id, project_root, argv, *, cwd_rel=".",
+                             timeout=30, runner=None):
+        import json, shlex, subprocess
+        from pathlib import Path
+        from nl_coding_agent.persistence import database
+        root = Path(project_root).resolve()
+        parts = shlex.split(argv) if isinstance(argv, str) else [str(item) for item in (argv or [])]
+        policy = self.terminal_policy(project_id, parts)
+        cwd = (root / str(cwd_rel or ".")).resolve()
+        try:
+            cwd.relative_to(root)
+        except ValueError:
+            policy = {"allowed": False, "error_code": "cwd-escape",
+                      "reason": "Working directory must stay inside the open project.",
+                      "argv": parts}
+        audit = {"argv": parts, "allowed": policy["allowed"], "project_id": project_id}
+        if not policy["allowed"]:
+            try:
+                database.log_event(self._db, "Terminal command refused: " + " ".join(parts)[:500],
+                                   source="terminal", level="warning",
+                                   event_kind="terminal-refused",
+                                   payload=json.dumps(audit, default=str))
+            except Exception:
+                pass
+            return {"ok": False, "error_code": policy["error_code"], "error": policy["reason"],
+                    "argv": parts, "stdout": "", "stderr": "", "exit_code": None,
+                    "audited": True}
+        try:
+            database.log_event(self._db, "Terminal command started: " + " ".join(parts)[:500],
+                               source="terminal", event_kind="terminal-start",
+                               payload=json.dumps(audit, default=str))
+        except Exception:
+            pass
+        try:
+            if runner is not None:
+                captured = runner(parts, cwd, timeout)
+            else:
+                captured = subprocess.run(parts, cwd=str(cwd), shell=False,
+                                          capture_output=True, text=True, timeout=int(timeout),
+                                          encoding="utf-8", errors="replace")
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "error_code": "timeout", "error": "Command timed out.",
+                    "argv": parts, "stdout": "", "stderr": "", "exit_code": None, "audited": True}
+        except FileNotFoundError as exc:
+            return {"ok": False, "error_code": "command-not-found", "error": str(exc),
+                    "argv": parts, "stdout": "", "stderr": "", "exit_code": None, "audited": True}
+        except Exception as exc:
+            return {"ok": False, "error_code": "execution-failed", "error": str(exc),
+                    "argv": parts, "stdout": "", "stderr": "", "exit_code": None, "audited": True}
+        if isinstance(captured, dict):
+            stdout = str(captured.get("stdout") or "")
+            stderr = str(captured.get("stderr") or "")
+            code = captured.get("returncode", captured.get("exit_code"))
+        else:
+            stdout, stderr = str(captured.stdout or ""), str(captured.stderr or "")
+            code = captured.returncode
+        limit = 100000
+        try:
+            database.log_event(self._db, "Terminal command finished (exit " + str(code) + "): "
+                               + " ".join(parts)[:400], source="terminal",
+                               event_kind="terminal-end",
+                               payload=json.dumps({**audit, "exit_code": code}, default=str))
+        except Exception:
+            pass
+        return {"ok": int(code or 0) == 0, "exit_code": code, "stdout": stdout[:limit],
+                "stderr": stderr[:limit], "stdout_truncated": len(stdout) > limit,
+                "stderr_truncated": len(stderr) > limit, "argv": parts, "audited": True}
+
+    @staticmethod
+    def _run_git_readonly(project_root, args):
+        import subprocess
+        from pathlib import Path
+        root = Path(project_root).resolve()
+        try:
+            completed = subprocess.run(["git", "-C", str(root), *args],
+                                       capture_output=True, text=True, timeout=20,
+                                       encoding="utf-8", errors="replace", shell=False)
+        except FileNotFoundError:
+            return {"ok": False, "error_code": "git-not-installed",
+                    "error": "git executable not found", "output": ""}
+        except Exception as exc:
+            return {"ok": False, "error_code": "git-failed", "error": str(exc), "output": ""}
+        return {"ok": completed.returncode == 0, "output": completed.stdout or "",
+                "error": completed.stderr.strip(),
+                "error_code": None if completed.returncode == 0 else "git-error"}
+
+    def git_status(self, project_root):
+        branch = self._run_git_readonly(project_root, ["rev-parse", "--abbrev-ref", "HEAD"])
+        status = self._run_git_readonly(project_root, ["status", "--porcelain=v1"])
+        log = self._run_git_readonly(project_root, ["log", "-1", "--oneline"])
+        if not status["ok"]:
+            return {"ok": False, "error_code": status["error_code"],
+                    "error": status["error"], "branch": None, "changes": []}
+        changes = []
+        for line in status["output"].splitlines():
+            if line.strip():
+                changes.append({"code": line[:2].strip() or "?", "path": line[3:]})
+        return {"ok": True, "branch": branch["output"].strip() if branch["ok"] else None,
+                "changes": changes, "last_commit": log["output"].strip() if log["ok"] else None}
+
+    def git_diff(self, project_root, *, staged=False):
+        args = ["diff", "--cached"] if staged else ["diff"]
+        result = self._run_git_readonly(project_root, args)
+        return {"ok": result["ok"], "diff": result["output"], "error": result.get("error") or ""}
+
+    def git_log(self, project_root, *, limit=20):
+        result = self._run_git_readonly(project_root,
+                                        ["log", "--oneline", "--decorate", "-n", str(int(limit))])
+        return {"ok": result["ok"], "log": result["output"], "error": result.get("error") or ""}
+
+    def verification_problems(self, project_id=None):
+        from nl_coding_agent.persistence import missions
+        rows = []
+        for mission in missions.list_missions(project_id)[:50]:
+            mission_id = int(mission["id"])
+            for run in missions.get_verification_runs(mission_id):
+                if int(run.get("passed") or 0):
+                    continue
+                rows.append({"severity": "error", "source": "verification",
+                             "mission_id": mission_id,
+                             "message": str(run.get("command") or "verification failed")
+                                        + " (exit " + str(run.get("exit_code")) + ")",
+                             "created_at": run.get("created_at")})
+        return rows
+
+    def scan_project_problems(self, project_root, *, limit=50):
+        import ast
+        from pathlib import Path
+        root = Path(project_root).resolve()
+        findings = []
+        py_files = sorted(path for path in root.rglob("*.py")
+                          if ".git" not in path.parts and "build" not in path.parts
+                          and "__pycache__" not in path.parts)[:200]
+        for path in py_files:
+            try:
+                ast.parse(path.read_text(encoding="utf-8", errors="replace"),
+                          filename=str(path))
+            except SyntaxError as exc:
+                findings.append({"severity": "error", "source": "scan",
+                                 "message": "Syntax error in "
+                                            + path.relative_to(root).as_posix()
+                                            + ": " + str(exc.msg) + " (line "
+                                            + str(exc.lineno) + ")",
+                                 "path": path.relative_to(root).as_posix()})
+            except OSError as exc:
+                findings.append({"severity": "warning", "source": "scan",
+                                 "message": "Unreadable file " + path.name + ": " + str(exc)})
+            if len(findings) >= limit:
+                break
+        if not (root / "README.md").is_file():
+            findings.append({"severity": "info", "source": "scan",
+                             "message": "Project has no README.md; documentation discovery is limited."})
+        return findings[:limit]
+
+    def project_problems(self, project_id, project_root):
+        verification = self.verification_problems(project_id)
+        scan = self.scan_project_problems(project_root)
+        problems = verification + scan
+        return {"problems": problems,
+                "counts": {"errors": sum(1 for row in problems
+                                         if row.get("severity") == "error"),
+                           "warnings": sum(1 for row in problems
+                                           if row.get("severity") == "warning")}}
+
     def list_missions(self, project_id: int | None = None) -> list[dict]:
         from nl_coding_agent.persistence.missions import list_missions as _list_m
         return _list_m(project_id)

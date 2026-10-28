@@ -7,7 +7,7 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QSplitter, QLabel, QStackedWidget, QStatusBar,
-    QPushButton, QFrame, QSizePolicy,
+    QPushButton, QFrame, QSizePolicy, QTabWidget,
 )
 from PySide6.QtCore import Qt, QTimer, QThread, Signal, Slot
 from PySide6.QtGui import QIcon
@@ -25,6 +25,10 @@ from nl_coding_agent.gui.widgets.agents_panel import AgentsPanel
 from nl_coding_agent.gui.widgets.settings_panel import SettingsPanel
 from nl_coding_agent.gui.widgets.autonomy_panel import AutonomyPanel
 from nl_coding_agent.gui.widgets.chat_panel import ChatPanel
+from nl_coding_agent.gui.widgets.editor_panel import EditorPanel
+from nl_coding_agent.gui.widgets.terminal_panel import TerminalPanel
+from nl_coding_agent.gui.widgets.git_panel import GitPanel
+from nl_coding_agent.gui.widgets.problems_panel import ProblemsPanel
 
 
 _LOGO_PATH = Path(__file__).resolve().parents[2] / "assets" / "LogoMio.svg"
@@ -186,6 +190,20 @@ class MainWindow(QMainWindow):
         self._chat_panel.submitted.connect(self._on_chat_submitted)
         self._stack.addWidget(self._chat_panel)  # index 7 = chat
 
+        # Studio IDE (F3a): editor / terminal / read-only Git / problems.
+        self._editor_panel = EditorPanel(self._services)
+        self._terminal_panel = TerminalPanel(self._services)
+        self._git_panel = GitPanel(self._services)
+        self._problems_panel = ProblemsPanel(self._services)
+        self._ide_tabs = QTabWidget()
+        self._ide_tabs.setObjectName("ideTabs")
+        self._ide_tabs.setAccessibleName("Studio IDE tabs")
+        self._ide_tabs.addTab(self._editor_panel, "Editor")
+        self._ide_tabs.addTab(self._terminal_panel, "Terminal")
+        self._ide_tabs.addTab(self._git_panel, "Git")
+        self._ide_tabs.addTab(self._problems_panel, "Problems")
+        self._stack.addWidget(self._ide_tabs)  # index 8 = IDE
+
         main_splitter.addWidget(self._stack)
 
         # Inspector panel
@@ -255,10 +273,20 @@ class MainWindow(QMainWindow):
             "models":   5,
             "autonomy": 6,
             "chat":     7,
+            "ide":      8,
         }
         self._settings_panel.autonomy_requested.connect(
             lambda: self._switch_page("autonomy")
         )
+        # Command-palette stub: visible affordance for the F3b palette.
+        from PySide6.QtGui import QKeySequence, QShortcut
+        QShortcut(QKeySequence("Ctrl+Shift+P"), self,
+                  activated=self._show_command_palette_stub)
+
+    def _show_command_palette_stub(self):
+        self.statusBar().showMessage(
+            "Command palette is planned for F3b; current shortcuts: Ctrl+S save, "
+            "Ctrl+Enter terminal, Ctrl+Shift+M dictation.", 6000)
 
     def _connect_event_bus(self):
         bus = get_event_bus()
@@ -295,6 +323,10 @@ class MainWindow(QMainWindow):
         self._settings_panel.set_project(project)
         self._autonomy_panel.set_project(project)
         self._chat_panel.set_project(project)
+        self._editor_panel.set_project(project)
+        self._terminal_panel.set_project(project)
+        self._git_panel.set_project(project)
+        self._problems_panel.set_project(project)
         self._update_supervisor_status()
         self._log_panel.append_log("projects", "info", f"Project opened: {project['name']}")
 
@@ -309,6 +341,9 @@ class MainWindow(QMainWindow):
             except Exception as exc:
                 content = f"[unreadable] {exc}"
         self._inspector.show_file(rel_path, content)
+        if self._current_project:
+            self._editor_panel.set_project(self._current_project)
+            self._editor_panel.open_file(rel_path)
         self._log_panel.append_log("files", "info", f"Opened file: {rel_path}")
 
     @Slot(dict)
