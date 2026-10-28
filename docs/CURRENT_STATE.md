@@ -769,3 +769,25 @@ Research injection verified and findings attached (2026-10-28)
 
 No network/model/interactive-GUI run occurred; counts are 34 verified / 82 partial / 69 planned /
 3 blocked (188 total).
+
+Goal approval/inspection and GUI completion work (2026-10-29)
+
+- Goal Mode G8 (NL-BP-212/216 services): plan versions now carry additive approval metadata
+  (approved/approved_at/by/note) and GoalService.approve_plan supports current/explicit version
+  selection, rationale/approver validation, idempotent approval, plan_approved audit and a new
+  unapproved version on replan while preserving historical approvals. Read-only inspection APIs
+  return linked missions and their tasks, mission_queue entries and active/assigned work with
+  project-scoped supervisor runs and explicit connected/idle/not-connected states. AppServices and
+  the CLI expose goal approve/tasks/workers with JSON/text output and no execution flags.
+- Goal Mode G9 (NL-BP-216 GUI): the Goals page now has an eighth section, Tasks & Active Workers,
+  showing linked task/queue/run/assignment data with empty/not-connected states and read-only
+  refresh, plus an Approve plan control with confirmation/rationale/current-or-selected version.
+  GUI adapters were aligned to the real goal facade methods (goal_mission_tasks,
+  goal_queue_entries, goal_active_work, goal_approve_plan) and the headless smoke now checks the
+  eight sections and task/approval controls. 23 targeted GUI tests pass.
+- Remaining for NL-BP-216: permission-policy gating of lifecycle/approval actions and fully
+  non-blocking GUI refresh plus real project/supervisor lifecycle acceptance. NL-BP-213 remains
+  partial for objective/evidence-driven task/mission derivation and autonomous replan triggering.
+- Verification: full integration suite 1081 passed in 147.8 s wall time after a broad cross-layer
+  change (database, goals service, AppServices, CLI, GUI); goal suite 98 passed; targeted GUI 23
+  passed. No network/model/mission execution run occurred.
