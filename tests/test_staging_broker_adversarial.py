@@ -1,56 +1,93 @@
-"""Adversarial SH-01 / SH-04 / SH-03 integration for SPEC-28 harness."""
+"""Independent destructive-edit simulations; NEVER modify actual repository files."""
 from __future__ import annotations
-import unittest, sys, tempfile, shutil
+
+import tempfile
+import unittest
 from pathlib import Path
-sys.path.insert(0, '.')
-from nl_coding_agent.core.staging_broker import stage_candidate, validate_candidate, rollback_from_staged
-from nl_coding_agent.core.code_integrity_gate import detect_stub, detect_weak_test
-from nl_coding_agent.core.recovery_store import save_snapshot, rollback_from_snapshot
 
-class TestAdversarialHarness(unittest.TestCase):
-    def test_sh01_stub_planner_blocked_and_rolled_back(self):
-        # Use real planner as baseline
-        planner_path = Path("nl_coding_agent/core/autonomous_roadmap_planner.py")
-        real = planner_path.read_text(encoding="utf-8")
-        # Stage real files first
-        with tempfile.TemporaryDirectory() as tmp:
-            stage_dir = stage_candidate(".", 999, ["nl_coding_agent/core/autonomous_roadmap_planner.py", "tests/test_rollback_stub.py"])
-            # Simulate agent stub overwrite (bad developer)
-            planner_path.write_text("def select_next_task(): pass\n", encoding="utf-8")
-            # Validate staged candidate (should be valid because stage is real)
-            result = validate_candidate(stage_dir, "data/mission_baselines/42.json", ["nl_coding_agent/core/autonomous_roadmap_planner.py"])
-            # Staged real is valid; current workspace is stub — rollback must restore
-            rollback_result = rollback_from_staged(stage_dir, ".", "data/mission_baselines/42.json")
-            restored_text = planner_path.read_text(encoding="utf-8")
-            # After rollback, file must be real again (compare-and-swap from baseline)
-            self.assertIn("select_next_task", restored_text)
-            self.assertNotIn("def consolidate_backlog", restored_text)
-            # Verify stub detection on bad content
-            self.assertTrue(detect_stub("def select_next_task(): pass\n", real))
-            # Restore after test (already restored by rollback, but ensure)
-            planner_path.write_text(real, encoding="utf-8")
+from nl_coding_agent.core.staging_broker import (
+    StagingRejected, stage_candidate, validate_candidate, mark_verified,
+    promote_staged, rollback_from_staged,
+)
 
-    def test_sh04_weak_test_detected(self):
-        # Real test content
-        real_test = Path("tests/test_rollback_stub.py").read_text(encoding="utf-8")
-        weak = "import unittest\nclass T(unittest.TestCase):\n    def test(self):\n        assert True\n"
-        self.assertTrue(detect_weak_test(real_test, weak))
-        # Restore if overwritten
-        Path("tests/test_rollback_stub.py").write_text(real_test, encoding="utf-8")
 
-    def test_sh03_interruption_resume_safe(self):
-        # Verify that removing a mission result and resuming with same mission id does not duplicate
-        # We rely on DB/state; just confirm planner selects same mission if not completed
-        from nl_coding_agent.core.autonomous_roadmap_planner import select_next_task
-        task = select_next_task(".")
-        self.assertIsNotNone(task)
-        # Must not duplicate a completed mission by title/code match
-        from nl_coding_agent.persistence.missions import get_mission, list_missions
-        completed_titles = {m.get("title") for m in list_missions() if m.get("status") == "completed"}
-        if task:
-            if task["title"] in completed_titles:
-                # If planner selects completed, duplicate guard failed; fail test
-                self.fail(f"Duplicate selection detected for completed mission: {task['title']}")
+class TestStagingBroker(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.planner = self.root / 'nl_coding_agent/core/planner.py'
+        self.planner.parent.mkdir(parents=True)
+        self.original = 'def select_next_task():\n    return [1, 2, 3]\n'
+        self.planner.write_text(self.original, encoding='utf-8')
+        self.test = self.root / 'tests/test_planner.py'
+        self.test.parent.mkdir()
+        self.test.write_text('def test_planner():\n    assert [1, 2, 3] == [1, 2, 3]\n', encoding='utf-8')
+        self.scope = ['nl_coding_agent/core/planner.py', 'tests/test_planner.py']
+        self.stage = stage_candidate(self.root, 42, self.scope)
+        self.staged_planner = self.stage / 'workspace/nl_coding_agent/core/planner.py'
 
-if __name__ == "__main__":
+    def test_sh01_stub_never_touches_live_source(self):
+        self.staged_planner.write_text('def select_next_task():\n    pass\n', encoding='utf-8')
+        verdict = validate_candidate(self.stage)
+        self.assertFalse(verdict['valid'])
+        self.assertTrue(verdict['stub_files'])
+        with self.assertRaises(StagingRejected):
+            promote_staged(self.stage, self.root)
+        self.assertEqual(self.planner.read_text(encoding='utf-8'), self.original)
+
+    def test_sh04_weak_test_rejected(self):
+        (self.stage / 'workspace/tests/test_planner.py').write_text(
+            'def test_planner():\n    assert True\n', encoding='utf-8')
+        verdict = validate_candidate(self.stage)
+        self.assertFalse(verdict['valid'])
+        self.assertTrue(verdict['weak_tests'])
+        self.assertEqual(self.test.read_text(encoding='utf-8').count('assert'), 1)
+
+    def test_unverified_candidate_cannot_promote(self):
+        self.staged_planner.write_text('def select_next_task():\n    return [1, 2, 3, 4]\n', encoding='utf-8')
+        self.assertTrue(validate_candidate(self.stage)['valid'])
+        with self.assertRaises(StagingRejected):
+            promote_staged(self.stage, self.root)
+        mark_verified(self.stage, passed=True, evidence='independent pytest fixture: pass')
+        self.assertEqual(promote_staged(self.stage, self.root)['blocked'], [])
+        self.assertIn('4', self.planner.read_text(encoding='utf-8'))
+
+    def test_sh02_human_edit_blocks_promotion(self):
+        self.staged_planner.write_text('def select_next_task():\n    return [1, 2, 3, 4]\n', encoding='utf-8')
+        self.assertTrue(validate_candidate(self.stage)['valid'])
+        mark_verified(self.stage, passed=True, evidence='independent test result')
+        self.planner.write_text('def select_next_task():\n    return "human"\n', encoding='utf-8')
+        with self.assertRaises(StagingRejected):
+            promote_staged(self.stage, self.root)
+        self.assertIn('human', self.planner.read_text(encoding='utf-8'))
+
+    def test_sh02_cas_rollback_preserves_newer_human_edit(self):
+        self.staged_planner.write_text('def select_next_task():\n    return [1, 2, 3, 4]\n', encoding='utf-8')
+        self.assertTrue(validate_candidate(self.stage)['valid'])
+        mark_verified(self.stage, passed=True, evidence='independent test result')
+        promote_staged(self.stage, self.root)
+        self.planner.write_text('def select_next_task():\n    return "human"\n', encoding='utf-8')
+        result = rollback_from_staged(self.stage, self.root)
+        self.assertIn('nl_coding_agent/core/planner.py', result['blocked'])
+        self.assertIn('human', self.planner.read_text(encoding='utf-8'))
+
+    def test_sh03_recovery_from_promoted_candidate(self):
+        self.staged_planner.write_text('def select_next_task():\n    return [1, 2, 3, 4]\n', encoding='utf-8')
+        self.assertTrue(validate_candidate(self.stage)['valid'])
+        mark_verified(self.stage, passed=True, evidence='independent test result')
+        promote_staged(self.stage, self.root)
+        self.assertIn('nl_coding_agent/core/planner.py', rollback_from_staged(self.stage, self.root)['restored'])
+        self.assertEqual(self.planner.read_text(encoding='utf-8'), self.original)
+
+    def test_changed_staged_file_after_validation_rejected(self):
+        self.staged_planner.write_text('def select_next_task():\n    return [1, 2, 3, 4]\n', encoding='utf-8')
+        self.assertTrue(validate_candidate(self.stage)['valid'])
+        self.staged_planner.write_text('def select_next_task():\n    pass\n', encoding='utf-8')
+        with self.assertRaises(StagingRejected):
+            mark_verified(self.stage, passed=True, evidence='stale test')
+        self.assertEqual(self.planner.read_text(encoding='utf-8'), self.original)
+
+
+if __name__ == '__main__':
     unittest.main()
