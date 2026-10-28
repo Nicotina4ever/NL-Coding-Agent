@@ -1,6 +1,6 @@
 # Goal Mode (Stage 8) - Goals, Milestones and Decomposition
 
-**Status:** G1/G2/G3/G5 foundation implemented. Durable goals and milestones, lifecycle,
+**Status:** G1/G2/G3/G5/G6 foundation implemented. Durable goals and milestones, lifecycle,
 dependency validation, structured decomposition, independent completion verification and a
 non-executing `goal` CLI are available. Completion is **verification-gated**: source-backed
 evidence is verified first and a goal can never complete from a checklist, plan, progress or
@@ -10,10 +10,11 @@ and no agent/model runs.
 **Implementation:** `nl_coding_agent/persistence/goal_store.py` (SQL persistence),
 `nl_coding_agent/core/goals.py` (GoalService), `nl_coding_agent/core/goal_verification.py`
 (independent verifier), `nl_coding_agent/app/services.py` (lazy goal facade + completion
-gate), `nl_coding_agent/cli.py` (`goal` command group).
+gate + replan/links/activity/queue), `nl_coding_agent/cli.py` (`goal` command group).
 **Tests:** `tests/test_goals_core.py`, `tests/test_goal_verification.py`,
 `tests/test_app_services_goals.py`, `tests/test_goals_cli.py`,
-`tests/test_goal_completion_gate.py` (targeted tests; temp `NL_DATA_DIR`).
+`tests/test_goal_completion_gate.py`, `tests/test_goal_replanning.py`
+(targeted tests; temp `NL_DATA_DIR`).
 
 ---
 
@@ -168,6 +169,43 @@ Exit codes: `goal verify` 0 verified, 1 unverified/partial/contradicted/missing 
 2 usage/malformed JSON; `goal complete` 0 verified+completed (or dry-run verified), 1 refusal/
 completion rejected, 2 usage/missing evidence.
 
+## 4c. Versioned replanning, links, activity and queue (G6)
+
+Replanning replaces the **current milestone set** without rewriting the original goal
+objective/title. Each replan appends a `goal_plan_versions` snapshot (objective snapshot,
+full milestone snapshot with dependency ids, rationale, trigger, evidence refs, diff) and
+marks only the newest version current; prior versions are preserved. First replan is
+version 1; later replans increment.
+
+Triggers: `manual` (default), `evidence`, `failure`, `constraint`. A
+non-empty `rationale` is always required; `evidence` requires non-empty
+`evidence_refs`. Plan schema is the decomposition schema plus optional
+`risk`, `validation_strategy` and `mission_intent` per milestone. Validation is
+strict (empty plan, unknown fields, duplicate keys/titles, missing existing ids,
+self/cyclic dependencies are refused). Items matching an existing milestone title are
+updated in place (milestone id and existing mission link preserved); other current
+milestones are removed and new ones created in plan order. `goal_plan_versions`,
+`goal_current_plan`, `goal_plan_diff` expose snapshots/diffs without model/network.
+
+Mission links are **existing missions only** (`goal_links` returns mission id/title/status/
+role; no mission is created/started). `goal_activity` returns goal-scoped
+`source='goals'` audit events (create/lifecycle/decompose/replan/verification/completion/
+milestone/link). `goal_queue` is read-only: `not_connected` when no mission is linked,
+`linked_not_queued` when links have no supervisor queue row, or `available` with the
+linked `mission_queue` entries. No execution flags exist.
+
+```powershell
+python\nl_agent.py goal replan 1 --plan plan.json --rationale "evidence changed" --trigger evidence --evidence evidence.json --json
+python\nl_agent.py goal versions 1 --diff --json
+python\nl_agent.py goal links 1 --json
+python\nl_agent.py goal activity 1 --json
+python\nl_agent.py goal queue 1 --json
+```
+
+CLI exit codes follow the other goal commands: 0 success, 1 validation/not-found/lifecycle/
+dependency/decomposition, 2 usage/argparse/malformed JSON. Goal commands dispatch before
+model config and use `NL_DATA_DIR` isolation.
+
 ## 5. AppServices facade
 
 `services.goal_*` is a thin lazy wrapper over GoalService (no duplicated logic):
@@ -186,6 +224,10 @@ completion rejected, 2 usage/missing evidence.
 | `goal_verifications` / `goal_verification_outstanding` | append-only records/outstanding |
 | `goal_false_completions` | read-only false-completion detection |
 | `goal_complete` | verification-gated explicit completion (dry-run supported) |
+| `goal_replan` / `goal_plan_versions` / `goal_current_plan` / `goal_plan_diff` | versioned replan snapshots and diffs |
+| `goal_links` | linked existing missions (id/title/status/role) |
+| `goal_activity` | goal-scoped source=goals audit timeline |
+| `goal_queue` | read-only linked mission queue/status or explicit not-connected state |
 
 All methods return `{"ok": bool, ...}` envelopes; failures return
 `{"ok": false, "error": {"code": "validation|not_found|lifecycle|dependency|decomposition|verification|error", "type": ..., "message": ...}}`.
@@ -207,10 +249,12 @@ config file and never touch the live mission execution path; tests use a temp
 - No dependency-aware scheduling, execution FSM or autonomous goal runner. Verification
   judges only supplied/recorded evidence; it does not execute tests/commands, create
   artifacts or prove absolute product correctness (human/external evidence is still required).
+- Replanning/model intent does not execute missions: goals/links/queue are read-only
+  planning surfaces; a future runner must still enqueue/start missions explicitly.
 - No goal templates/import UI, no reset/delete command, no multi-user concurrency controls
   beyond SQLite, no cross-project scheduler.
 - Completion is available through CLI/facade only with verified evidence; the verifier does
   not execute anything and GUI completion remains unwired.
 - No GUI editing in this increment; the GUI Goal Mode remains a future increment.
-- Real autonomous goal execution, GUI Goal Mode, scheduling and external-evidence collection
-  remain **MANUAL-PENDING** and outside G1/G2/G3/G5.
+- Real autonomous goal execution, GUI Goal Mode replan/queue editing, scheduling and
+  external-evidence collection remain **MANUAL-PENDING** and outside G1/G2/G3/G5/G6.

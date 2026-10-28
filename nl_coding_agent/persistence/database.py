@@ -381,6 +381,9 @@ CREATE TABLE IF NOT EXISTS milestones (
     dependencies_json      TEXT NOT NULL DEFAULT '[]',
     acceptance_criteria_json TEXT NOT NULL DEFAULT '[]',
     evidence_refs_json     TEXT NOT NULL DEFAULT '[]',
+    risk                   TEXT NOT NULL DEFAULT '',
+    validation_strategy    TEXT NOT NULL DEFAULT '',
+    mission_intent         TEXT NOT NULL DEFAULT '',
     created_at             TEXT NOT NULL,
     updated_at             TEXT NOT NULL
 );
@@ -410,6 +413,23 @@ CREATE TABLE IF NOT EXISTS goal_verifications (
     self_declared_mismatch INTEGER NOT NULL DEFAULT 0,
     goal_status           TEXT NOT NULL DEFAULT '',
     created_at            TEXT NOT NULL
+);
+
+-- Stage-8 G6 versioned goal plans (append-only snapshots - goal objective is immutable).
+CREATE TABLE IF NOT EXISTS goal_plan_versions (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    goal_id           INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+    version           INTEGER NOT NULL,
+    objective_snapshot TEXT NOT NULL,
+    milestones_json   TEXT NOT NULL DEFAULT '[]',
+    rationale         TEXT NOT NULL,
+    trigger           TEXT NOT NULL DEFAULT 'manual',
+    evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    diff_json         TEXT NOT NULL DEFAULT '{}',
+    supersedes        INTEGER,
+    is_current        INTEGER NOT NULL DEFAULT 0,
+    created_at        TEXT NOT NULL,
+    UNIQUE(goal_id, version)
 );
 """
 
@@ -441,6 +461,10 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("events", "event_kind", "TEXT"),
     # Stage-4 Flow run link (C4b, additive; NULL for sequential missions).
     ("missions", "flow_id", "TEXT"),
+    # Stage-8 G6 milestone replan metadata (additive; existing rows default empty).
+    ("milestones", "risk", "TEXT NOT NULL DEFAULT ''"),
+    ("milestones", "validation_strategy", "TEXT NOT NULL DEFAULT ''"),
+    ("milestones", "mission_intent", "TEXT NOT NULL DEFAULT ''"),
 ]
 
 _INDEXES = """
@@ -483,6 +507,10 @@ CREATE INDEX IF NOT EXISTS idx_goal_missions_goal
     ON goal_missions(goal_id, milestone_id, mission_id);
 CREATE INDEX IF NOT EXISTS idx_goal_verifications_goal
     ON goal_verifications(goal_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_goal_plan_versions_goal
+    ON goal_plan_versions(goal_id, version DESC);
+CREATE INDEX IF NOT EXISTS idx_goal_plan_versions_current
+    ON goal_plan_versions(goal_id, is_current);
 """
 
 

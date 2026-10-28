@@ -1059,6 +1059,140 @@ def _dispatch_goal_with(args, services) -> int:
             + str(item.get("milestone_id")) + " " + str(item.get("title"))
             for item in work] if work else ["Next work: none eligible."])
 
+    if command == "replan":
+        plan_path = getattr(args, "plan", None)
+        if not plan_path and sys.stdin.isatty():
+            print("ERROR: goal replan requires --plan FILE or --plan - (stdin)",
+                  file=sys.stderr)
+            return 2
+        plan, error = _read_goal_plan(plan_path or "-")
+        if error:
+            print("ERROR: " + error, file=sys.stderr)
+            return 2
+        evidence, error = _goal_json_input(
+            getattr(args, "evidence", None), getattr(args, "evidence_json", None),
+            "evidence")
+        if error:
+            print("ERROR: " + error, file=sys.stderr)
+            return 2
+        if isinstance(evidence, dict) and "evidence_refs" in evidence:
+            evidence = evidence.get("evidence_refs")
+        result = services.goal_replan(
+            args.goal_id, plan, getattr(args, "rationale", ""),
+            trigger=getattr(args, "trigger", "manual") or "manual",
+            evidence_refs=evidence)
+        version = result.get("version") or {}
+        diff = result.get("diff") or {}
+        if as_json:
+            print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+        elif result.get("ok"):
+            print("Goal #" + str(args.goal_id) + " replanned: version "
+                  + str(version.get("version")) + " (" + str(version.get("trigger"))
+                  + ")")
+            print("Diff: " + json.dumps(diff.get("counts") or {}, sort_keys=True))
+        if not result.get("ok"):
+            error_payload = _goal_error_payload(result)
+            print("ERROR [" + str(error_payload.get("code")) + "]: "
+                  + str(error_payload.get("message")), file=sys.stderr)
+            return 1
+        return 0
+
+    if command == "versions":
+        result = services.goal_plan_versions(args.goal_id)
+        if not result.get("ok"):
+            if as_json:
+                print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+            print("ERROR: " + str(_goal_error_payload(result).get("message")),
+                  file=sys.stderr)
+            return 1
+        versions = result.get("versions") or []
+        current = result.get("current") or {}
+        diff = {}
+        if getattr(args, "diff", False):
+            selected = getattr(args, "version", None)
+            if selected is None:
+                selected = current.get("version")
+            diff_payload = services.goal_plan_diff(args.goal_id, selected)
+            diff = diff_payload.get("diff") if diff_payload.get("ok") else {}
+        if as_json:
+            print(json.dumps({**result, "diff": diff}, indent=2,
+                             ensure_ascii=False, default=str))
+        else:
+            if not versions:
+                print("Goal #" + str(args.goal_id) + ": no plan versions yet.")
+            for version in versions:
+                print("v" + str(version.get("version"))
+                      + (" [current]" if version.get("is_current") else "")
+                      + " trigger=" + str(version.get("trigger"))
+                      + " " + str(version.get("rationale"))[:120])
+            if getattr(args, "diff", False):
+                print("Diff: " + json.dumps(diff, indent=2, ensure_ascii=False,
+                                              default=str))
+        return 0
+
+    if command == "links":
+        result = services.goal_links(args.goal_id)
+        if not result.get("ok"):
+            if as_json:
+                print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+            print("ERROR: " + str(_goal_error_payload(result).get("message")),
+                  file=sys.stderr)
+            return 1
+        links = result.get("links") or []
+        if as_json:
+            print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+        elif not links:
+            print("Goal #" + str(args.goal_id) + ": no linked missions.")
+        else:
+            for link in links:
+                print("#" + str(link.get("mission_id")) + " ["
+                      + str(link.get("mission_status")) + "] "
+                      + str(link.get("mission_title")) + " role="
+                      + str(link.get("role")))
+        return 0
+
+    if command == "activity":
+        result = services.goal_activity(args.goal_id,
+                                        limit=getattr(args, "limit", 100))
+        if not result.get("ok"):
+            if as_json:
+                print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+            print("ERROR: " + str(_goal_error_payload(result).get("message")),
+                  file=sys.stderr)
+            return 1
+        activity = result.get("activity") or []
+        if as_json:
+            print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+        elif not activity:
+            print("Goal #" + str(args.goal_id) + ": no activity.")
+        else:
+            for item in activity:
+                print(str(item.get("created_at")) + " ["
+                      + str(item.get("event_kind") or item.get("level")) + "] "
+                      + str(item.get("message")))
+        return 0
+
+    if command == "queue":
+        result = services.goal_queue(args.goal_id)
+        if not result.get("ok"):
+            if as_json:
+                print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+            print("ERROR: " + str(_goal_error_payload(result).get("message")),
+                  file=sys.stderr)
+            return 1
+        if as_json:
+            print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+        else:
+            print("Goal #" + str(args.goal_id) + " queue: "
+                  + str(result.get("state")))
+            for item in result.get("queue") or []:
+                print("  mission #" + str(item.get("mission_id"))
+                      + " [" + str(item.get("queue_state")) + "] "
+                      + str(item.get("title")))
+            if result.get("message"):
+                print(str(result.get("message")))
+        return 0
+
     if command == "verify":
         evidence, criteria, error = _goal_verification_inputs(args)
         if error:
@@ -1354,6 +1488,44 @@ def main(argv: list[str] | None = None) -> int:
     complete_p.add_argument("--dry-run", action="store_true",
                             help="Verify without changing goal status")
     complete_p.add_argument("--json", action="store_true")
+
+    replan_p = gs.add_parser(
+        "replan", help="Versioned replan of current milestones (no execution)",
+        description="Replace current milestones from a structured plan, preserving "
+                    "prior plan versions and keeping the goal objective immutable. "
+                    "This command never creates/executes missions or models.")
+    replan_p.add_argument("goal_id", type=int)
+    replan_p.add_argument("--plan", default=None,
+                          help="JSON plan file, or - for stdin (required)")
+    replan_p.add_argument("--rationale", required=True,
+                          help="Why the plan is changing (required)")
+    replan_p.add_argument("--trigger", choices=["manual", "evidence", "failure",
+                                                "constraint"], default="manual")
+    replan_p.add_argument("--evidence", "--evidence-file", default=None,
+                          help="JSON evidence refs file, or - for stdin")
+    replan_p.add_argument("--evidence-json", default=None,
+                          help="Inline JSON evidence refs")
+    replan_p.add_argument("--json", action="store_true")
+
+    versions_p = gs.add_parser("versions", help="List plan versions and their diff")
+    versions_p.add_argument("goal_id", type=int)
+    versions_p.add_argument("--diff", action="store_true",
+                            help="Print the selected/current plan diff")
+    versions_p.add_argument("--version", type=int, default=None)
+    versions_p.add_argument("--json", action="store_true")
+
+    links_p = gs.add_parser("links", help="List linked missions (read-only)")
+    links_p.add_argument("goal_id", type=int)
+    links_p.add_argument("--json", action="store_true")
+
+    activity_p = gs.add_parser("activity", help="Show goal-scoped audit activity")
+    activity_p.add_argument("goal_id", type=int)
+    activity_p.add_argument("--limit", type=int, default=100)
+    activity_p.add_argument("--json", action="store_true")
+
+    queue_p = gs.add_parser("queue", help="Linked mission queue/status (read-only)")
+    queue_p.add_argument("goal_id", type=int)
+    queue_p.add_argument("--json", action="store_true")
 
     # GUI subcommand
     sub.add_parser("gui")

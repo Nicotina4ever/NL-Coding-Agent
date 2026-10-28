@@ -26,6 +26,7 @@ MILESTONE_STATUSES: tuple[str, ...] = ("pending", "active", "paused", "blocked",
 PRIORITIES: tuple[str, ...] = ("P0", "P1", "P2", "P3")
 PRIORITY_RANK = {priority: rank for rank, priority in enumerate(PRIORITIES)}
 ORIGINS: tuple[str, ...] = ("user", "import", "template")
+GOAL_TRIGGERS: tuple[str, ...] = ("manual", "evidence", "failure", "constraint")
 TERMINAL_GOAL_STATUSES: tuple[str, ...] = ("completed", "cancelled")
 GOAL_TRANSITIONS: dict[str, tuple[str, ...]] = {
     "planned": ("active", "blocked", "cancelled"),
@@ -36,7 +37,8 @@ GOAL_TRANSITIONS: dict[str, tuple[str, ...]] = {
     "cancelled": (),
 }
 PLAN_ITEM_FIELDS = ("key", "title", "description", "priority", "dependencies",
-                    "acceptance_criteria", "evidence_refs")
+                    "acceptance_criteria", "evidence_refs", "risk",
+                    "validation_strategy", "mission_intent")
 
 
 class GoalError(RuntimeError):
@@ -420,6 +422,8 @@ class GoalService:
                          dependencies: Iterable[int] = (),
                          acceptance_criteria: Iterable[str] = (),
                          evidence_refs: Iterable = (),
+                         risk: str = "", validation_strategy: str = "",
+                         mission_intent: str = "",
                          ordering: int | None = None) -> dict:
         goal = self.get_goal(goal_id)
         if goal["status"] in TERMINAL_GOAL_STATUSES:
@@ -438,7 +442,10 @@ class GoalService:
             acceptance_criteria=_string_list(acceptance_criteria,
                                              "acceptance_criteria"),
             evidence_refs=_string_list(evidence_refs, "evidence_refs",
-                                       max_items=500))
+                                       max_items=500),
+            risk=str(risk or "")[:1000],
+            validation_strategy=str(validation_strategy or "")[:2000],
+            mission_intent=str(mission_intent or "")[:2000])
         _audit("milestone_created", "Milestone created",
                {"goal_id": goal_id, "milestone_id": milestone_id,
                 "priority": priority_text})
@@ -462,7 +469,8 @@ class GoalService:
         if goal["status"] in TERMINAL_GOAL_STATUSES:
             raise GoalLifecycleError("cannot update milestones of a terminal goal")
         allowed = {"title", "description", "priority", "status", "ordering",
-                   "dependencies", "acceptance_criteria", "evidence_refs"}
+                   "dependencies", "acceptance_criteria", "evidence_refs",
+                   "risk", "validation_strategy", "mission_intent"}
         unknown = sorted(set(fields) - allowed)
         if unknown:
             raise GoalValidationError("unsupported milestone fields: "
@@ -498,6 +506,10 @@ class GoalService:
         if "evidence_refs" in fields:
             changes["evidence_refs"] = _string_list(
                 fields["evidence_refs"], "evidence_refs", max_items=500)
+        for name, limit in (("risk", 1000), ("validation_strategy", 2000),
+                            ("mission_intent", 2000)):
+            if name in fields:
+                changes[name] = str(fields[name] or "")[:limit]
         updated = goal_store.update_milestone(milestone_id, changes)
         _audit("milestone_updated", "Milestone updated",
                {"goal_id": milestone["goal_id"], "milestone_id": milestone_id,
@@ -575,6 +587,9 @@ class GoalService:
                 "evidence_refs": _decomp(lambda: _string_list(
                     raw.get("evidence_refs"), "evidence_refs", max_items=500),
                     "evidence_refs"),
+                "risk": str(raw.get("risk") or "")[:1000],
+                "validation_strategy": str(raw.get("validation_strategy") or "")[:2000],
+                "mission_intent": str(raw.get("mission_intent") or "")[:2000],
                 "raw_dependencies": list(raw.get("dependencies") or []),
             })
         existing_ids = set(existing_by_id)
@@ -628,6 +643,9 @@ class GoalService:
                 "ordering": ordering + index, "dependencies": existing_deps,
                 "acceptance_criteria": spec["acceptance_criteria"],
                 "evidence_refs": spec["evidence_refs"],
+                "risk": spec["risk"],
+                "validation_strategy": spec["validation_strategy"],
+                "mission_intent": spec["mission_intent"],
             })
         created = goal_store.create_milestones_bulk(goal_id, bulk_specs)
         created_by_key = {keys[index]: created[index]["id"]
@@ -645,6 +663,311 @@ class GoalService:
         _audit("goal_decomposed", "Goal decomposed into milestones",
                {"goal_id": goal_id, "milestone_ids": [item["id"] for item in created]})
         return goal_store.list_milestones(goal_id)
+
+    # ------------------------------------------------------------- replanning
+    @staticmethod
+    def _plan_milestone_snapshot(milestone: Mapping) -> dict:
+        fields = ("id", "title", "description", "priority", "status", "ordering",
+                  "dependencies", "acceptance_criteria", "evidence_refs", "risk",
+                  "validation_strategy", "mission_intent")
+        return {name: milestone.get(name) for name in fields}
+
+    @staticmethod
+    def _replan_evidence(evidence_refs) -> list:
+        if evidence_refs is None:
+            return []
+        if not isinstance(evidence_refs, (list, tuple)):
+            raise GoalValidationError("evidence_refs must be a list")
+        result = []
+        for item in evidence_refs:
+            if isinstance(item, Mapping):
+                result.append({str(key)[:100]: str(value)[:1000]
+                               for key, value in item.items()})
+            elif isinstance(item, str):
+                text = item.strip()
+                if text:
+                    result.append(text[:1000])
+            else:
+                raise GoalValidationError(
+                    "evidence_refs contain only strings or objects")
+        if len(result) > 100:
+            raise GoalValidationError("too many evidence_refs")
+        return result
+
+    @staticmethod
+    def _replan_trigger(trigger) -> str:
+        value = str(trigger or "manual").strip().lower()
+        if value not in GOAL_TRIGGERS:
+            raise GoalValidationError(
+                "trigger must be one of " + ", ".join(GOAL_TRIGGERS))
+        return value
+
+    def _parse_replan_plan(self, goal: dict, plan: Sequence[Mapping]) -> tuple[list[dict], dict]:
+        if not isinstance(plan, (list, tuple)):
+            raise GoalDecompositionError("plan must be a non-empty list")
+        if not plan:
+            raise GoalDecompositionError("plan must not be empty")
+        existing = goal_store.list_milestones(goal["id"])
+        existing_by_title = {str(item["title"]).strip().casefold(): item
+                             for item in existing}
+        existing_by_id = {int(item["id"]): item for item in existing}
+
+        def _decomp(call, field_name: str):
+            try:
+                return call()
+            except GoalValidationError as exc:
+                raise GoalDecompositionError(
+                    field_name + ": " + str(exc)) from exc
+
+        keys: list[str] = []
+        titles: list[str] = []
+        specs: list[dict] = []
+        for index, raw in enumerate(plan):
+            if not isinstance(raw, Mapping):
+                raise GoalDecompositionError("plan item #" + str(index + 1)
+                                             + " must be an object")
+            unknown = sorted(set(raw) - set(PLAN_ITEM_FIELDS))
+            if unknown:
+                raise GoalDecompositionError("unknown plan fields: "
+                                             + ", ".join(str(item) for item in unknown))
+            key = str(raw.get("key") or ("m" + str(index + 1))).strip()
+            if not key or len(key) > 100:
+                raise GoalDecompositionError("plan key is invalid")
+            if key.casefold() in {item.casefold() for item in keys}:
+                raise GoalDecompositionError("duplicate plan key: " + key)
+            keys.append(key)
+            title = _decomp(lambda: _text(raw.get("title"), "title", max_len=300), "title")
+            if title.casefold() in {item.casefold() for item in titles}:
+                raise GoalDecompositionError("duplicate milestone title: " + title)
+            titles.append(title)
+            specs.append({
+                "key": key,
+                "title": title,
+                "description": _decomp(lambda: _text(
+                    raw.get("description"), "description", max_len=4000,
+                    allow_empty=True), "description"),
+                "priority": _decomp(lambda: _priority(
+                    raw.get("priority") or "P1"), "priority"),
+                "acceptance_criteria": _decomp(lambda: _string_list(
+                    raw.get("acceptance_criteria"), "acceptance_criteria"),
+                    "acceptance_criteria"),
+                "evidence_refs": _decomp(lambda: _string_list(
+                    raw.get("evidence_refs"), "evidence_refs", max_items=500),
+                    "evidence_refs"),
+                "risk": str(raw.get("risk") or "")[:1000],
+                "validation_strategy": str(raw.get("validation_strategy") or "")[:2000],
+                "mission_intent": str(raw.get("mission_intent") or "")[:2000],
+                "raw_dependencies": list(raw.get("dependencies") or []),
+            })
+        key_index = {key: index for index, key in enumerate(keys)}
+        title_index = {title.casefold(): index for index, title in enumerate(titles)}
+        for spec in specs:
+            targets: list[int] = []
+            for item in spec["raw_dependencies"]:
+                if isinstance(item, str) and item in key_index:
+                    target = key_index[item]
+                    if target == key_index[spec["key"]]:
+                        raise GoalDecompositionError(
+                            "milestone cannot depend on itself: " + spec["key"])
+                elif isinstance(item, int) and not isinstance(item, bool):
+                    existing_item = existing_by_id.get(int(item))
+                    if existing_item is None:
+                        raise GoalDecompositionError(
+                            "plan references missing existing milestone: " + str(item))
+                    folded = str(existing_item["title"]).strip().casefold()
+                    if folded not in title_index:
+                        raise GoalDecompositionError(
+                            "plan dependency references a milestone removed by this "
+                            "plan: " + str(item))
+                    target = title_index[folded]
+                else:
+                    raise GoalDecompositionError(
+                        "plan dependency must be an existing milestone id or plan key: "
+                        + repr(item))
+                targets.append(target)
+            if len(targets) != len(set(targets)):
+                raise GoalDecompositionError("duplicate dependency in plan key: "
+                                             + spec["key"])
+            spec["dependency_titles"] = [titles[index] for index in sorted(set(targets))]
+        graph = {index: set() for index in range(len(specs))}
+        for index, spec in enumerate(specs):
+            for title in spec["dependency_titles"]:
+                graph[index].add(title_index[title.casefold()])
+        cycle = _cycle(graph)
+        if cycle:
+            readable = [titles[index] for index in cycle]
+            raise GoalDecompositionError("plan dependency cycle: "
+                                         + " -> ".join(readable))
+        return specs, {"existing": existing, "existing_by_id": existing_by_id}
+
+    @staticmethod
+    def _diff_plan(old_milestones: list, new_milestones: list) -> dict:
+        old_by_title = {str(item["title"]).strip().casefold(): item
+                        for item in old_milestones}
+        new_by_title = {str(item["title"]).strip().casefold(): item
+                        for item in new_milestones}
+        added = [item["title"] for item in new_milestones
+                 if str(item["title"]).strip().casefold() not in old_by_title]
+        removed = [item["title"] for item in old_milestones
+                   if str(item["title"]).strip().casefold() not in new_by_title]
+        changed = []
+        unchanged = []
+        for new_item in new_milestones:
+            folded = str(new_item["title"]).strip().casefold()
+            old_item = old_by_title.get(folded)
+            if old_item is None:
+                continue
+            fields = {}
+            for name in ("description", "priority", "acceptance_criteria",
+                         "evidence_refs", "risk", "validation_strategy",
+                         "mission_intent"):
+                if old_item.get(name) != new_item.get(name):
+                    fields[name] = {"from": old_item.get(name),
+                                    "to": new_item.get(name)}
+            if old_item.get("ordering") != new_item.get("ordering"):
+                fields["ordering"] = {"from": old_item.get("ordering"),
+                                      "to": new_item.get("ordering")}
+            old_deps = sorted(str(item) for item in old_item.get("dependencies") or [])
+            new_deps = sorted(str(item) for item in new_item.get("dependencies") or [])
+            if old_deps != new_deps:
+                fields["dependencies"] = {"from": old_deps, "to": new_deps}
+            if fields:
+                changed.append({"title": new_item["title"], "fields": fields})
+            else:
+                unchanged.append(new_item["title"])
+        return {
+            "added": added,
+            "removed": removed,
+            "changed": changed,
+            "unchanged": unchanged,
+            "counts": {"added": len(added), "removed": len(removed),
+                       "changed": len(changed), "unchanged": len(unchanged)},
+        }
+
+    def replan_goal(self, goal_id: int, plan: Sequence[Mapping], rationale: str,
+                    trigger: str = "manual", evidence_refs=None) -> dict:
+        """Versioned replanning: replace current milestones, preserve prior versions.
+
+        The goal objective/title are immutable here. Only existing mission links are
+        retained/created elsewhere; no mission is created or executed.
+        """
+        goal = self.get_goal(goal_id)
+        if goal["status"] in TERMINAL_GOAL_STATUSES:
+            raise GoalLifecycleError("cannot replan a terminal goal")
+        rationale_text = _text(rationale, "rationale", max_len=4000)
+        trigger_text = self._replan_trigger(trigger)
+        evidence = self._replan_evidence(evidence_refs)
+        if trigger_text == "evidence" and not evidence:
+            raise GoalValidationError(
+                "an evidence-triggered replan requires non-empty evidence_refs")
+        specs, context = self._parse_replan_plan(goal, plan)
+        existing = context["existing"]
+        existing_by_title = {str(item["title"]).strip().casefold(): item
+                             for item in existing}
+        old_snapshot = [self._plan_milestone_snapshot(item) for item in existing]
+        versions = goal_store.list_plan_versions(goal_id, limit=500)
+        if versions:
+            next_version = max(int(item["version"]) for item in versions) + 1
+            previous_current = versions[0] if versions else None
+        else:
+            next_version = 1
+            previous_current = None
+        # Provisional orderings avoid the unique(goal_id, ordering) index while
+        # matching/creating/deleting the new current set.
+        matched: dict[str, dict] = {}
+        for index, spec in enumerate(specs):
+            folded = spec["title"].casefold()
+            current = existing_by_title.get(folded)
+            if current is not None:
+                matched[folded] = current
+                goal_store.update_milestone(current["id"], {"ordering": 10000 + index})
+        kept_titles = {spec["title"].casefold() for spec in specs}
+        for item in existing:
+            if str(item["title"]).strip().casefold() not in kept_titles:
+                goal_store.delete_milestone(item["id"])
+        created_by_title: dict[str, int] = {}
+        for index, spec in enumerate(specs):
+            if spec["title"].casefold() in matched:
+                created_by_title[spec["title"].casefold()] = matched[
+                    spec["title"].casefold()]["id"]
+                continue
+            milestone_id = goal_store.create_milestone(
+                goal_id, spec["title"], description=spec["description"],
+                priority=spec["priority"], status="pending",
+                ordering=10000 + index, dependencies=[],
+                acceptance_criteria=spec["acceptance_criteria"],
+                evidence_refs=spec["evidence_refs"], risk=spec["risk"],
+                validation_strategy=spec["validation_strategy"],
+                mission_intent=spec["mission_intent"])
+            created_by_title[spec["title"].casefold()] = milestone_id
+        title_to_id = dict(created_by_title)
+        for spec in specs:
+            milestone_id = title_to_id[spec["title"].casefold()]
+            dependencies = sorted({title_to_id[title.casefold()]
+                                   for title in spec["dependency_titles"]})
+            goal_store.update_milestone(milestone_id, {
+                "description": spec["description"], "priority": spec["priority"],
+                "ordering": specs.index(spec), "dependencies": dependencies,
+                "acceptance_criteria": spec["acceptance_criteria"],
+                "evidence_refs": spec["evidence_refs"], "risk": spec["risk"],
+                "validation_strategy": spec["validation_strategy"],
+                "mission_intent": spec["mission_intent"]})
+        current_milestones = goal_store.list_milestones(goal_id)
+        new_snapshot = [self._plan_milestone_snapshot(item)
+                        for item in current_milestones]
+        diff = self._diff_plan(old_snapshot, new_snapshot)
+        version = goal_store.create_plan_version(
+            goal_id, next_version, str(goal["objective"]), new_snapshot,
+            rationale_text, trigger_text, evidence, diff,
+            supersedes=(int(previous_current["version"])
+                        if previous_current is not None else None),
+            is_current=True)
+        _audit("goal_replanned", "Goal replanned to version " + str(next_version),
+               {"goal_id": goal_id, "version": next_version,
+                "trigger": trigger_text, "rationale": rationale_text[:500],
+                "diff": diff["counts"]}, project_id=goal.get("project_id"))
+        return {
+            "goal": self.get_goal(goal_id),
+            "version": version,
+            "current_plan": version,
+            "milestones": current_milestones,
+            "diff": diff,
+            "versions": goal_store.list_plan_versions(goal_id, limit=500),
+        }
+
+    def list_plan_versions(self, goal_id: int, *, limit: int = 100) -> list[dict]:
+        self.get_goal(goal_id)
+        return goal_store.list_plan_versions(goal_id, limit=limit)
+
+    def current_plan(self, goal_id: int) -> dict:
+        goal = self.get_goal(goal_id)
+        current = goal_store.get_current_plan_version(goal_id)
+        if current is not None:
+            return current
+        milestones = goal_store.list_milestones(goal_id)
+        return {
+            "goal_id": goal_id, "version": None,
+            "objective_snapshot": str(goal["objective"]),
+            "milestones": [self._plan_milestone_snapshot(item)
+                           for item in milestones],
+            "rationale": "", "trigger": "baseline", "evidence_refs": [],
+            "diff": {}, "supersedes": None, "is_current": True,
+            "created_at": goal.get("created_at"),
+        }
+
+    def plan_diff(self, goal_id: int, version: int | None = None) -> dict:
+        goal = self.get_goal(goal_id)
+        if version is None:
+            current = self.current_plan(goal_id)
+            return current.get("diff") or {}
+        record = goal_store.get_plan_version(goal_id, version)
+        if record is None:
+            raise GoalNotFoundError("plan version not found: " + str(version))
+        return record.get("diff") or {}
+
+    def list_goal_links(self, goal_id: int) -> list[dict]:
+        self.get_goal(goal_id)
+        return goal_store.list_goal_links(goal_id)
 
     # ------------------------------------------------------------- progress
     def _goal_dependencies_met(self, goal: dict, all_goals: Mapping[int, dict]) -> bool:

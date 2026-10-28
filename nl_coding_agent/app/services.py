@@ -1712,6 +1712,13 @@ class AppServices:
             "record_id": report.get("record_id"),
             "status_mutated": False,
         }
+        self._goal_audit(
+            "goal_verified" if report["verdict"] == verifier.VERIFIED
+            else "goal_verification_refused",
+            "Goal verification " + str(report["verdict"]),
+            {"goal_id": int(goal_id), "verdict": report["verdict"],
+             "record_id": report.get("record_id")},
+            project_id=goal.get("project_id"))
         if report["verdict"] != verifier.VERIFIED:
             return {**base, "ok": False, "outcome": "refused",
                     "error": {
@@ -1805,6 +1812,163 @@ class AppServices:
         try:
             return {"ok": True, "summary": self._goal_service().progress_summary(
                 project_id=project_id)}
+        except Exception as exc:
+            return self._goal_error(exc)
+
+
+    # ------------------------------------------------------ replan/activity
+    @staticmethod
+    def _goal_audit(event_kind: str, message: str, payload: dict, *,
+                    project_id: int | None = None) -> None:
+        try:
+            from nl_coding_agent.persistence.database import init_db, log_event
+            conn = init_db()
+            try:
+                log_event(conn, message, source="goals",
+                          payload=json.dumps(payload, ensure_ascii=False,
+                                             sort_keys=True, default=str),
+                          project_id=project_id, event_kind=event_kind)
+            finally:
+                conn.close()
+        except Exception:
+            # Audit must not mask the operation result.
+            pass
+
+    def goal_replan(self, goal_id: int, plan, rationale: str,
+                    trigger: str = "manual", evidence_refs=None) -> dict:
+        try:
+            result = self._goal_service().replan_goal(
+                goal_id, plan, rationale, trigger=trigger,
+                evidence_refs=evidence_refs)
+        except Exception as exc:
+            return self._goal_error(exc)
+        return {"ok": True, **result}
+
+    def goal_plan_versions(self, goal_id: int, *, limit: int = 100) -> dict:
+        try:
+            versions = self._goal_service().list_plan_versions(
+                goal_id, limit=limit)
+            current = self._goal_service().current_plan(goal_id)
+        except Exception as exc:
+            return self._goal_error(exc)
+        return {"ok": True, "versions": versions, "total": len(versions),
+                "current": current}
+
+    def goal_current_plan(self, goal_id: int) -> dict:
+        try:
+            return {"ok": True,
+                    "plan": self._goal_service().current_plan(goal_id)}
+        except Exception as exc:
+            return self._goal_error(exc)
+
+    def goal_plan_diff(self, goal_id: int, version: int | None = None) -> dict:
+        try:
+            return {"ok": True,
+                    "diff": self._goal_service().plan_diff(goal_id, version)}
+        except Exception as exc:
+            return self._goal_error(exc)
+
+    def goal_links(self, goal_id: int) -> dict:
+        try:
+            links = self._goal_service().list_goal_links(goal_id)
+        except Exception as exc:
+            return self._goal_error(exc)
+        return {"ok": True, "links": links, "total": len(links)}
+
+    def goal_activity(self, goal_id: int, *, limit: int = 100) -> dict:
+        try:
+            self._goal_service().get_goal(goal_id)
+            from nl_coding_agent.persistence.database import init_db
+            limit = max(1, min(int(limit or 100), 1000))
+            conn = init_db()
+            try:
+                rows = conn.execute(
+                    "SELECT id, source, level, message, payload, project_id, "
+                    "mission_id, correlation_id, event_kind, created_at "
+                    "FROM events WHERE source='goals' "
+                    "ORDER BY id DESC LIMIT ?", (max(limit * 5, 500),)).fetchall()
+            finally:
+                conn.close()
+            activity = []
+            for row in rows:
+                payload = dict(row)
+                raw_payload = payload.get("payload") or "{}"
+                try:
+                    parsed = json.loads(raw_payload)
+                except (TypeError, ValueError):
+                    parsed = {}
+                if int(parsed.get("goal_id", -1)) != int(goal_id):
+                    continue
+                payload["payload"] = parsed
+                activity.append(payload)
+                if len(activity) >= limit:
+                    break
+            activity.reverse()
+            return {"ok": True, "goal_id": goal_id, "activity": activity,
+                    "total": len(activity)}
+        except Exception as exc:
+            return self._goal_error(exc)
+
+    def goal_queue(self, goal_id: int) -> dict:
+        try:
+            service = self._goal_service()
+            links = service.list_goal_links(goal_id)
+            if not links:
+                return {
+                    "ok": True, "goal_id": goal_id, "linked": False,
+                    "connected": False, "state": "not_connected",
+                    "queue": [], "missions": [],
+                    "message": "No missions are linked to this goal.",
+                }
+            from nl_coding_agent.persistence.database import init_db
+            mission_ids = sorted({int(link["mission_id"]) for link in links})
+            conn = init_db()
+            try:
+                placeholders = ",".join("?" for _ in mission_ids)
+                queues = conn.execute(
+                    "SELECT id, mission_id, state, priority, attempts, max_attempts, "
+                    "created_at, updated_at, failure_class, scheduled_at "
+                    "FROM mission_queue WHERE mission_id IN (" + placeholders + ") "
+                    "ORDER BY id ASC", mission_ids).fetchall()
+            finally:
+                conn.close()
+            queue_by_mission: dict[int, list] = {}
+            for row in queues:
+                item = dict(row)
+                queue_by_mission.setdefault(int(item["mission_id"]), []).append(item)
+            queue = []
+            missions = []
+            for link in links:
+                mission_id = int(link["mission_id"])
+                mission = {
+                    "mission_id": mission_id,
+                    "title": link.get("mission_title"),
+                    "status": link.get("mission_status"),
+                    "role": link.get("role"),
+                    "milestone_id": link.get("milestone_id"),
+                }
+                missions.append(mission)
+                entries = queue_by_mission.get(mission_id, [])
+                if not entries:
+                    queue.append({**mission, "queue_id": None,
+                                  "queue_state": "not_queued"})
+                else:
+                    for entry in entries:
+                        queue.append({**mission, "queue_id": entry["id"],
+                                      "queue_state": entry["state"],
+                                      "priority": entry["priority"],
+                                      "attempts": entry["attempts"],
+                                      "max_attempts": entry["max_attempts"],
+                                      "created_at": entry["created_at"],
+                                      "updated_at": entry["updated_at"],
+                                      "failure_class": entry["failure_class"]})
+            return {
+                "ok": True, "goal_id": goal_id, "linked": True,
+                "connected": bool(queues), "state": "available" if queues
+                else "linked_not_queued", "queue": queue, "missions": missions,
+                "message": "" if queues else
+                "Linked missions are not currently in the supervisor queue.",
+            }
         except Exception as exc:
             return self._goal_error(exc)
 

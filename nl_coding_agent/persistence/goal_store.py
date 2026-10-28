@@ -35,8 +35,10 @@ GOAL_UPDATABLE = frozenset({
 MILESTONE_JSON_FIELDS = ("dependencies", "acceptance_criteria", "evidence_refs")
 MILESTONE_UPDATABLE = frozenset({
     "title", "description", "priority", "status", "ordering", "dependencies",
-    "acceptance_criteria", "evidence_refs", "updated_at",
+    "acceptance_criteria", "evidence_refs", "risk", "validation_strategy",
+    "mission_intent", "updated_at",
 })
+PLAN_VERSION_JSON_FIELDS = ("milestones", "evidence_refs", "diff")
 
 
 class GoalStoreError(RuntimeError):
@@ -222,18 +224,22 @@ def create_milestone(goal_id: int, title: str, *, description: str = "",
                      ordering: int | None = None,
                      dependencies: Iterable[int] = (),
                      acceptance_criteria: Iterable[str] = (),
-                     evidence_refs: Iterable = (), created_at: str | None = None) -> int:
+                     evidence_refs: Iterable = (), risk: str = "",
+                     validation_strategy: str = "", mission_intent: str = "",
+                     created_at: str | None = None) -> int:
     now = created_at or _now()
     order = next_milestone_order(goal_id) if ordering is None else int(ordering)
     with _db() as conn, conn:
         cursor = conn.execute(
             "INSERT INTO milestones (goal_id, title, description, priority, status, "
             "ordering, dependencies_json, acceptance_criteria_json, evidence_refs_json, "
-            "created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "risk, validation_strategy, mission_intent, created_at, updated_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (int(goal_id), str(title), str(description or ""), str(priority),
              str(status), order, _json_dump(sorted({int(item) for item in dependencies})),
              _json_dump(list(acceptance_criteria)), _json_dump(list(evidence_refs)),
-             now, now))
+             str(risk or ""), str(validation_strategy or ""),
+             str(mission_intent or ""), now, now))
         return int(cursor.lastrowid)
 
 
@@ -246,13 +252,17 @@ def create_milestones_bulk(goal_id: int, specs: list[dict]) -> list[dict]:
             cursor = conn.execute(
                 "INSERT INTO milestones (goal_id, title, description, priority, status, "
                 "ordering, dependencies_json, acceptance_criteria_json, "
-                "evidence_refs_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                "evidence_refs_json, risk, validation_strategy, mission_intent, "
+                "created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (int(goal_id), str(spec["title"]), str(spec.get("description") or ""),
                  str(spec.get("priority") or "P1"), str(spec.get("status") or "pending"),
                  int(spec["ordering"]),
                  _json_dump(sorted({int(item) for item in spec.get("dependencies") or ()})),
                  _json_dump(list(spec.get("acceptance_criteria") or ())),
-                 _json_dump(list(spec.get("evidence_refs") or ())), created_at, created_at))
+                 _json_dump(list(spec.get("evidence_refs") or ())),
+                 str(spec.get("risk") or ""),
+                 str(spec.get("validation_strategy") or ""),
+                 str(spec.get("mission_intent") or ""), created_at, created_at))
             ids.append(int(cursor.lastrowid))
     return [get_milestone(mid) for mid in ids]
 
@@ -362,6 +372,90 @@ def list_goal_missions(goal_id: int) -> list[dict]:
         return [dict(row) for row in rows]
 
 
+# ------------------------------------------------------ plan versions (G6)
+def next_plan_version(goal_id: int) -> int:
+    with _db() as conn:
+        row = conn.execute("SELECT MAX(version) AS value FROM goal_plan_versions "
+                           "WHERE goal_id=?", (int(goal_id),)).fetchone()
+        return (int(row["value"]) if row and row["value"] is not None else 0) + 1
+
+
+def create_plan_version(goal_id: int, version: int, objective_snapshot: str,
+                        milestones: list, rationale: str, trigger: str,
+                        evidence_refs: list, diff: dict, *,
+                        supersedes: int | None = None,
+                        is_current: bool = True,
+                        created_at: str | None = None) -> dict:
+    now = created_at or _now()
+    with _db() as conn, conn:
+        if is_current:
+            conn.execute("UPDATE goal_plan_versions SET is_current=0 WHERE goal_id=?",
+                         (int(goal_id),))
+        cursor = conn.execute(
+            "INSERT INTO goal_plan_versions (goal_id, version, objective_snapshot, "
+            "milestones_json, rationale, trigger, evidence_refs_json, diff_json, "
+            "supersedes, is_current, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (int(goal_id), int(version), str(objective_snapshot),
+             _json_dump(list(milestones)), str(rationale), str(trigger),
+             _json_dump(list(evidence_refs)), _json_dump(dict(diff)),
+             int(supersedes) if supersedes is not None else None,
+             1 if is_current else 0, now))
+        version_id = int(cursor.lastrowid)
+    return get_plan_version(goal_id, version)
+
+
+def _plan_version_from_row(row) -> dict | None:
+    if row is None:
+        return None
+    data = dict(row)
+    for column, key in (("milestones_json", "milestones"),
+                        ("evidence_refs_json", "evidence_refs"),
+                        ("diff_json", "diff")):
+        raw = data.pop(column, "[]" if key != "diff" else "{}")
+        try:
+            data[key] = json.loads(raw)
+        except (TypeError, ValueError):
+            data[key] = [] if key != "diff" else {}
+    data["is_current"] = bool(data.get("is_current"))
+    return data
+
+
+def get_plan_version(goal_id: int, version: int) -> dict | None:
+    with _db() as conn:
+        row = conn.execute(
+            "SELECT * FROM goal_plan_versions WHERE goal_id=? AND version=?",
+            (int(goal_id), int(version))).fetchone()
+        return _plan_version_from_row(row)
+
+
+def list_plan_versions(goal_id: int, *, limit: int = 100,
+                       current_only: bool = False) -> list[dict]:
+    clause = " AND is_current=1" if current_only else ""
+    with _db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM goal_plan_versions WHERE goal_id=?" + clause
+            + " ORDER BY version DESC LIMIT ?",
+            (int(goal_id), max(1, min(int(limit), 500)))).fetchall()
+        return [_plan_version_from_row(row) for row in rows]
+
+
+def get_current_plan_version(goal_id: int) -> dict | None:
+    rows = list_plan_versions(goal_id, limit=1, current_only=True)
+    return rows[0] if rows else None
+
+
+# ------------------------------------------------------- mission links (G6)
+def list_goal_links(goal_id: int) -> list[dict]:
+    with _db() as conn:
+        rows = conn.execute(
+            "SELECT gm.id AS link_id, gm.goal_id, gm.milestone_id, gm.mission_id, "
+            "gm.role, m.title AS mission_title, m.status AS mission_status, "
+            "m.project_id AS mission_project_id "
+            "FROM goal_missions gm LEFT JOIN missions m ON m.id=gm.mission_id "
+            "WHERE gm.goal_id=? ORDER BY gm.id ASC", (int(goal_id),)).fetchall()
+        return [dict(row) for row in rows]
+
+
 def counts() -> dict:
     with _db() as conn:
         return {
@@ -369,4 +463,6 @@ def counts() -> dict:
             "milestones": int(conn.execute("SELECT COUNT(1) FROM milestones").fetchone()[0]),
             "goal_missions": int(conn.execute(
                 "SELECT COUNT(1) FROM goal_missions").fetchone()[0]),
+            "goal_plan_versions": int(conn.execute(
+                "SELECT COUNT(1) FROM goal_plan_versions").fetchone()[0]),
         }

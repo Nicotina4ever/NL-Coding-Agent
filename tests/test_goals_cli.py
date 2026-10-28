@@ -209,6 +209,53 @@ class GoalCliTests(unittest.TestCase):
         finally:
             os.environ["NL_DATA_DIR"] = old
 
+    def test_goal_replan_versions_links_activity_queue_cli(self):
+        from nl_coding_agent.app.services import AppServices
+        from nl_coding_agent.persistence import missions
+        services = AppServices()
+        try:
+            goal = services.goal_create("CLI G6", title="CLI G6",
+                                        acceptance_criteria=["works"])["goal"]
+            goal_id = goal["id"]
+            services.goal_activate(goal_id)
+            services.goal_decompose(goal_id, [
+                {"key": "a", "title": "Alpha"},
+                {"key": "b", "title": "Beta", "dependencies": ["a"]},
+            ])
+            mission_id = missions.create_mission(None, "Existing mission", "work")
+            services._goal_service().link_goal_mission(goal_id, mission_id)
+        finally:
+            services._db.close()
+        plan_path = self.root / "g6-plan.json"
+        plan_path.write_text(json.dumps([{"title": "Alpha", "risk": "low"},
+                                         {"title": "Gamma"}]), encoding="utf-8")
+        code, out, err = self.run_cli(["goal", "replan", str(goal_id),
+                                       "--plan", str(plan_path),
+                                       "--rationale", "evidence changed",
+                                       "--trigger", "evidence",
+                                       "--evidence-json", json.dumps(["test:x::1"]),
+                                       "--json"])
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)["version"]["version"], 1)
+        code, out, err = self.run_cli(["goal", "versions", str(goal_id),
+                                       "--diff", "--json"])
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)["diff"]["added"], ["Gamma"])
+        code, out, err = self.run_cli(["goal", "links", str(goal_id), "--json"])
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["links"][0]["mission_id"], mission_id)
+        code, out, err = self.run_cli(["goal", "activity", str(goal_id), "--json"])
+        self.assertEqual(code, 0)
+        self.assertIn("goal_replanned",
+                      [item["event_kind"] for item in json.loads(out)["activity"]])
+        code, out, err = self.run_cli(["goal", "queue", str(goal_id), "--json"])
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["state"], "linked_not_queued")
+        code, out, err = self.run_cli(["goal", "replan", str(goal_id),
+                                       "--plan", str(plan_path)])
+        self.assertEqual(code, 2)  # rationale required
+
+
     def test_static_no_execution_or_network_imports_in_goal_cli(self):
         source = (REPO_ROOT / "nl_coding_agent" / "cli.py").read_text(encoding="utf-8")
         start = source.index("def _dispatch_goal(")

@@ -154,6 +154,41 @@ class AppGoalsTests(unittest.TestCase):
         self.assertEqual(after, before)
         self.assertEqual(goal_row["status"], "active")
 
+    def test_replan_versions_links_activity_and_queue(self):
+        from nl_coding_agent.persistence import missions
+        goal = self.create(title="G6", acceptance_criteria=["works"])["goal"]
+        self.services.goal_activate(goal["id"])
+        self.services.goal_decompose(goal["id"], [
+            {"key": "a", "title": "Alpha"},
+            {"key": "b", "title": "Beta", "dependencies": ["a"]},
+        ])
+        mission_id = missions.create_mission(None, "Existing mission", "work")
+        self.services._goal_service().link_goal_mission(goal["id"], mission_id)
+        result = self.services.goal_replan(goal["id"], [
+            {"key": "a", "title": "Alpha", "risk": "low",
+             "validation_strategy": "tests", "mission_intent": "build"},
+            {"key": "c", "title": "Gamma", "dependencies": ["a"]},
+        ], "new evidence", trigger="evidence", evidence_refs=["test:pytest::1"])
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["version"]["version"], 1)
+        self.assertEqual(result["diff"]["counts"]["added"], 1)
+        versions = self.services.goal_plan_versions(goal["id"])
+        self.assertEqual(versions["total"], 1)
+        self.assertEqual(self.services.goal_current_plan(goal["id"])["plan"]["version"],
+                         1)
+        links = self.services.goal_links(goal["id"])["links"]
+        self.assertEqual(links[0]["mission_id"], mission_id)
+        self.assertEqual(links[0]["mission_title"], "Existing mission")
+        queue = self.services.goal_queue(goal["id"])
+        self.assertEqual(queue["state"], "linked_not_queued")
+        activity = self.services.goal_activity(goal["id"])["activity"]
+        self.assertIn("goal_replanned",
+                      [item["event_kind"] for item in activity])
+        bad = self.services.goal_replan(goal["id"], [], "no plan")
+        self.assertFalse(bad["ok"])
+        self.assertEqual(bad["error"]["code"], "decomposition")
+
+
     def test_facade_is_thin_and_import_safe(self):
         source = (REPO_ROOT / "nl_coding_agent" / "app" / "services.py").read_text(
             encoding="utf-8")
