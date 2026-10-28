@@ -23,9 +23,10 @@ Workspace root on the user's machine:
 Existing paths:
 - `python\` — dedicated disposable Python 3.12 embedded runtime. Use this Python. Do not create
   venv/conda/uv environments unless explicitly requested.
-- `crewAI\` — vendor/reference source checkout only. It is **not imported** by the application
-  (the installed `crewai` package inside `python\` is used); treat it as reference/vendor, do not
-  rewrite it and never ship it.
+- `da_eliminare\crewAI\` — staged vendor/reference source checkout (moved out of the root by the
+  root-reorganization Phase C; review-only staging). It is **not imported** by the application
+  (the installed `crewai` package inside `python\` is used); treat it as protected reference/vendor,
+  do not rewrite it, never ship it, and do not delete it without explicit owner authorization.
 - `crewAI-tools\` — legacy/vendor checkout; currently absent. Same protected-vendor policy if it is
   ever restored.
 - `nl_coding_agent\` — existing bootstrap application. Refactor incrementally; do not throw away
@@ -126,7 +127,7 @@ The application should choose reliability over raw concurrency.
 
 Do not edit:
 - `python\` runtime internals except installing packages through its `python.exe -m pip`;
-- `crewAI\`;
+- `da_eliminare\crewAI\` (staged vendor reference; deletion requires explicit owner authorization);
 - `crewAI-tools\`;
 - user backup archives;
 unless the user explicitly asks.
