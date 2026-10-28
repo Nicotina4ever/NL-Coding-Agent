@@ -318,8 +318,21 @@ Do not declare tests run.
             ollama_stop(rev_cfg["model"])
 
 
-def status(project_cfg: dict) -> int:
-    project = project_cfg["project"]["name"]
+def status(project_cfg: dict, config_path: Path | None = None) -> int:
+    """Show legacy per-project CLI state; works without a machine-local project config.
+
+    A portable install intentionally does not ship ``config/voicebridge.yaml`` (it
+    contains a machine-local external project root). Status must therefore degrade
+    gracefully instead of raising KeyError when no project is configured.
+    """
+    configured = (project_cfg or {}).get("project") or {}
+    project = configured.get("name")
+    if not project:
+        print("Project: not configured")
+        if config_path is not None:
+            print(f"Project config: {config_path} (missing or has no project entry)")
+        print("No state created yet. Open a project in the GUI or pass --project-config <file>.")
+        return 0
     safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in project)
     folder = STATE_ROOT / safe_name
     print(f"Project: {project}")
@@ -1061,7 +1074,7 @@ def main() -> int:
     if args.command == "work":
         return work(models_cfg, project_cfg, args.goal)
     if args.command == "status":
-        return status(project_cfg)
+        return status(project_cfg, Path(args.project_config))
     return 1
 
 

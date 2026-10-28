@@ -46,7 +46,7 @@ evidence only.
 | 3 | Persistent autonomous supervisor and verified handoff | COMPLETE (Tier B blocked evidence) | 13 | NL-BP-12, 50-53, 61-64, 66, 67, 75, 77 | 2 |
 | 4 | Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities | COMPLETE | 40 | NL-BP-1, 2, 6-11, 13, 20-46, 68-71 | 3 |
 | 5 | Repository cleanup and optimization | COMPLETE | 8 | NL-BP-90-97 | 4 |
-| 6 | Lightweight portable/bootstrapper and final release testing | IN PROGRESS | 26 | NL-BP-110-124, 140-142, 144-151 | 5 |
+| 6 | Lightweight portable/bootstrapper and final release testing | COMPLETE | 26 | NL-BP-110-124, 140-142, 144-151 | 5 |
 
 Execution rule: a later stage starts only when the previous stage's gates pass, unless the
 Lead records an explicit evidence-backed exception for independent low-risk work. Stage 1 is
@@ -86,6 +86,8 @@ SH-07 Tier B (real local models) remains pending explicit authorization and bloc
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v2.1 (2026-10-28)** - Stage 6 engineering complete: stage-6b portable candidate r2 (23,682 files / 1.40 GiB, single embedded runtime, flows + README, no dev-only files, relocation-safe) was smoke-tested from a managed non-default path: status/--help/doctor/imports/offscreen GUI PASS, reproducible tree hash. Revision-1's release-blocking status portability defect was fixed with regression tests (full suite 513 passed). Release acceptance remains PARTIAL: clean Windows without global Python, real clipboard/microphone/audio hardware, signed installer/update and full desktop mission execution are explicitly manual-pending; retiring the stale dist payloads (dist/portable-release, revision-1 candidate, stage6a source candidate) requires explicit user authorization.
 
 **v2.0 (2026-10-28)** - Stage 4 engineering complete: CrewAI/Flows/model intelligence (C4a-C4e) plus Studio GUI, multimodal mission chat (F1), voice dictation/TTS foundation (F2) and IDE surfaces (F3a/F3b). Requirement statuses updated from measured evidence (NL-BP-029/031 verified; 025-028/030/033-035/037-042/044 partial). Hardware/desktop acceptance (microphone/ASR/TTS, Windows clipboard screenshots, real DPI/focus, live LSP/MCP/debugger sessions, PTY/OS-sandbox) is explicitly manual-pending. Stage 6 release acceptance evidence remains in progress.
 
@@ -1701,7 +1703,7 @@ _Evidence gates for the final product: non-default install path; clean Windows w
 <a id="nl-bp-141"></a>
 ### NL-BP-141 - Accepted install on a non-default path
 
-- **Area:** RELEASE - **Priority:** P0 - **Status:** planned
+- **Area:** RELEASE - **Priority:** P0 - **Status:** partial
 - **Blueprint priority:** new (final release acceptance criterion 1)
 - **Dependencies:** NL-BP-114, NL-BP-115
 - **Acceptance gates:**
@@ -1709,10 +1711,11 @@ _Evidence gates for the final product: non-default install path; clean Windows w
   - application starts, opens a project and persists state from that path
   - uninstall preserves user projects/data; evidence recorded
 - **Evidence:**
+  - Stage-6b portable candidate executed from a managed non-default temp installation path: --help/doctor/imports/incl-flows/GUI-offscreen/persistence PASS; default status FAIL; installer install/uninstall and user-data preservation not measured (manual-pending).
   - no installer/path selection (absent)
   - FINAL-REQ/area-6 criterion 1
 - **Sources:** FINAL-REQ/area-6; specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md
-- **Note:** No installer exists, so this release criterion cannot be evaluated.
+- **Note:** Portable payload path acceptance is measured; installer install/uninstall/user-data preservation remain manual-pending.
 
 <a id="nl-bp-142"></a>
 ### NL-BP-142 - Accepted run on clean Windows without global Python
@@ -1725,10 +1728,11 @@ _Evidence gates for the final product: non-default install path; clean Windows w
   - all required runtime components come from the bundle
   - evidence recorded with machine description and commands
 - **Evidence:**
+  - Stage-6b portable candidate smoke on the development machine (not a clean machine): payload runs from a managed temp path; clean Windows without global Python remains manual-pending.
   - docs/PORTABLE_BUILD.md historical payload check (doctor/GUI/project persistence) - not clean-machine and not current HEAD
   - FINAL-REQ/area-6 criterion 2
 - **Sources:** FINAL-REQ/area-6; specifiche/19_TEST_MATRIX_E_GATE.md; docs/09_DISTRIBUTION.md#6
-- **Note:** Historical payload validation was not a clean-machine acceptance and the payload is stale.
+- **Note:** Stage-6b candidate smoke is measured on the dev machine only; clean-machine acceptance remains manual-pending.
 
 <a id="nl-bp-143"></a>
 ### NL-BP-143 - Relocation survival for repository and application data
@@ -1741,11 +1745,12 @@ _Evidence gates for the final product: non-default install path; clean Windows w
   - installed/portable app survives moving its directory or data directory with SQLite identity preserved
   - regression tests cover migration and rollback
 - **Evidence:**
+  - Stage-6b portable payload staged and run from a managed temp path with NL_DATA_DIR temp; project+mission persisted in temp SQLite; repository relocation gate remains 30/30 PASS; installed-app data migration still absent.
   - build/relocation/verify_relocation_final_lead.json ok=true, 30 checks PASS, canonical root K:/AI/NL Coding Agent (2026-10-28T15:48)
   - docs/WORKSPACE_MIGRATION.md completed record; tests/test_verify_relocation.py and tests/test_project_root_migration.py exist
   - installed-app relocation absent (no installer/data migration)
 - **Sources:** FINAL-REQ/area-6; docs/WORKSPACE_MIGRATION.md; specifiche/14_STORAGE_E_MODEL_LIFECYCLE.md
-- **Note:** Repository relocation is verified by a read-only 30-check gate; installed-app data relocation/migration is not implemented.
+- **Note:** Portable payload relocation to a temp path is measured; installed-app data migration/rollback remains absent.
 
 <a id="nl-bp-144"></a>
 ### NL-BP-144 - Accepted clipboard screenshot + drag-and-drop attachments end-to-end
@@ -1832,7 +1837,7 @@ _Evidence gates for the final product: non-default install path; clean Windows w
 <a id="nl-bp-149"></a>
 ### NL-BP-149 - Accepted reproducible, organized builds from a clean environment
 
-- **Area:** RELEASE - **Priority:** P0 - **Status:** blocked
+- **Area:** RELEASE - **Priority:** P0 - **Status:** partial
 - **Blueprint priority:** new (final release acceptance criterion 9)
 - **Dependencies:** NL-BP-110, NL-BP-114, NL-BP-122, NL-BP-111
 - **Acceptance gates:**
@@ -1840,11 +1845,12 @@ _Evidence gates for the final product: non-default install path; clean Windows w
   - exactly one organized candidate remains; build directories contain no stray duplicates
   - acceptance evidence recorded with HEAD and toolchain versions
 - **Evidence:**
+  - Stage-6b reproducible staging: two independent stagings identical tree sha256 80e4664... (23,682 files/1,508,402,351 B); stage-6a source release byte-identical; dist still contains stale portable-release plus stage-6a source candidate pending authorization (not yet one organized candidate).
   - dist/portable-release/payload_manifest.json source K:/AI/Coding Agent (pre-relocation), no hashes
   - no lockfile/CI/build script beyond stage_portable.py
   - docs/DISTRIBUTION_AUDIT.md size plan is arithmetic, not a verified build
 - **Sources:** FINAL-REQ/area-6; specifiche/20_RELEASE_UPDATE_DIAGNOSTICA.md; specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md
-- **Note:** BLOCKED: no installer/lockfile/CI; the only candidate payload is stale and was built before the relocation and harness commits.
+- **Note:** Reproducibility is measured; clean-environment build and the one-organized-candidate state require authorization for stale/extra dist cleanup.
 
 <a id="nl-bp-140"></a>
 ### NL-BP-140 - Release acceptance matrix runner with recorded evidence and manual-pending labels
@@ -1857,11 +1863,12 @@ _Evidence gates for the final product: non-default install path; clean Windows w
   - hardware/native items are labelled NEEDS_NATIVE_TEST, never PASS
   - release audit template filled for each candidate
 - **Evidence:**
+  - docs/RELEASE_ACCEPTANCE.md measured 2026-10-28 at HEAD 7dbd40b: candidate 23,682 files/1,508,402,351 B, tree sha256 80e4664..., acceptance matrix with manual-pending labels; default status smoke FAIL (config portability defect).
   - scripts/verify_relocation.py (read-only gate, 30 checks PASS in build/relocation/verify_relocation_final_lead.json); scripts/verify_handoff_and_resume.py exists
   - docs/product-blueprint/templates/RELEASE_AUDIT_TEMPLATE.md exists (template, not executed)
   - no unified acceptance runner; specifiche/19_TEST_MATRIX_E_GATE.md
 - **Sources:** specifiche/19_TEST_MATRIX_E_GATE.md; 03_MASTER_CHECKLIST.md#P3-08; templates/RELEASE_AUDIT_TEMPLATE.md
-- **Note:** Two read-only gates exist (relocation, handoff/resume); there is no single acceptance runner covering the release criteria.
+- **Note:** A measured stage-6b acceptance matrix with manual-pending labels now exists; the default status command portability defect still blocks a full pass.
 
 <a id="nl-bp-150"></a>
 ### NL-BP-150 - Full pytest baseline green with documented measured count
@@ -1874,11 +1881,12 @@ _Evidence gates for the final product: non-default install path; clean Windows w
   - count, command, environment and date recorded in CURRENT_STATE and release evidence
   - no test skipped silently to obtain green
 - **Evidence:**
+  - tests/test_stage_portable.py targeted 8 passed at HEAD 7dbd40b (2026-10-28); full suite deliberately not run by stage-6b acceptance (Lead-run).
   - measured 2026-10-28 at HEAD 7e778da (16:12 Europe/Rome): pytest tests --collect-only = 134 collected; harness component batch 24 passed; key regression batch 37 passed; earlier safe batches 68 + 16 passed at HEAD 8871145
   - docs/CURRENT_STATE.md still reports 65/69 tests (stale); docs/PHASE2_HARNESS_INTEGRATION_PLAN.md expected 103 after C1b (superseded by C3-C5 additions)
   - full-suite run deliberately not performed by this consolidation (mission restrictions)
 - **Sources:** specifiche/19_TEST_MATRIX_E_GATE.md; 03_MASTER_CHECKLIST.md#P0-02; docs/CURRENT_STATE.md
-- **Note:** Measured at snapshot: 106 tests collected, 84 targeted tests passed; the full suite was deliberately not run by this consolidation (restricted safe-test scope).
+- **Note:** Full-suite baseline remains Lead-run; only targeted stage-6b staging tests were executed by this task.
 
 <a id="nl-bp-151"></a>
 ### NL-BP-151 - Honest, evidence-based current-state documentation with consistent history
@@ -1891,12 +1899,13 @@ _Evidence gates for the final product: non-default install path; clean Windows w
   - NEXT_SELF_BUILD_MISSION.md matches durable state and the indexed backlog; no contradictory title/goal
   - test counts and mission history consistent across docs, SQLite and selfbuild_state.json
 - **Evidence:**
+  - docs/RELEASE_ACCEPTANCE.md added with measured stage-6b evidence, explicit manual-pending items and stale-dist authorization request; HARNESS_ACCEPTANCE and CURRENT_STATE updated.
   - docs/CURRENT_STATE.md test counts 65/69 vs measured 106 collected; missing missions #42-#45
   - docs/NEXT_SELF_BUILD_MISSION.md title says Supervisor Persistente while its goal describes P1-01 project discovery
   - data/selfbuild_state.json last_completed_mission_id=43 with audit notes; SQLite has completed #42/#43 and blocked #44/#45
   - this consolidation: docs/PRODUCT_BACKLOG.md, docs/BLUEPRINT_INDEX.md, docs/product-blueprint/INDEX.json
 - **Sources:** specifiche/02_SELF_BUILD_E_RECOVERY.md; specifiche/19_TEST_MATRIX_E_GATE.md; 02_STATO_REALE_DA_VERIFICARE.md; 03_MASTER_CHECKLIST.md#P0-11
-- **Note:** This consolidation supplies the indexed backlog; CURRENT_STATE.md and NEXT_SELF_BUILD_MISSION.md remain stale/inconsistent and must be realigned after Phase 2.
+- **Note:** Stage-6b measured evidence is documented; manual-pending items and the status-portability defect are labelled explicitly.
 
 ## Deduplication and merge decisions
 

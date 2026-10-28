@@ -1,41 +1,64 @@
-"""Stage an inspectable one-folder portable payload.
+"""Stage an inspectable one-folder portable payload (stage 6b allowlist).
 
 The source tree is read-only. Files are written only inside the requested output
-directory. This is staging, not an installer and not a clean-directory acceptance
-test.
+directory (a NEW or EMPTY directory; existing payloads are never replaced).
+This is staging, not an installer and not a clean-directory acceptance test.
+
+Stage-6b allowlist (intentionally narrow):
+  * README.md - user-facing overview/quick start;
+  * nl_agent.py and the supported launchers (main GUI/self-build + doctor/status);
+  * nl_coding_agent/ - full current application source, including flows/;
+  * python/ - exactly one embedded runtime copy (no Scripts/, caches, bytecode);
+  * assets/, config/models.yaml, pyproject.toml.
+
+Everything development-only is excluded: tests/, scripts/, installer/, docs/,
+build/, dist/ (self-nesting), AGENTS.md, PATCH/ historical evidence, data/,
+logs/, state/, caches, vendor checkouts (crewAI*, .git) and machine-local config.
+The payload is validated for a single runtime copy and for the absence of
+absolute workspace paths before the manifest is written.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+PAYLOAD_MANIFEST_VERSION = 1
 INCLUDED_ROOTS = (
+    "README.md",
     "nl_agent.py",
     "nl_coding_agent",
     "python",
     "assets",
-    "config",
+    "config/models.yaml",
     "pyproject.toml",
-    "Self-Build Mode.bat",
     "NL Coding Agent.bat",
+    "Self-Build Mode.bat",
+    "doctor.bat",
+    "status.bat",
 )
 EXCLUDED_ROOTS = (
-    ".git",
     ".agents",
+    ".git",
+    "AGENTS.md",
+    "PATCH",
     "build",
     "crewAI",
     "crewAI-tools",
     "data",
     "dist",
     "docs",
+    "installer",
     "logs",
     "scripts",
     "state",
+    "temp",
     "tests",
 )
 EXCLUDED_DIR_NAMES = {
@@ -50,18 +73,43 @@ EXCLUDED_DIR_NAMES = {
 }
 EXCLUDED_SUFFIXES = {".pyc", ".pyo"}
 EXCLUDED_FILES = {
+    "AGENTS.md",
     "config/voicebridge.yaml",
     "config/voicebridge.local.yaml",
+    "SHA256_MANIFEST.json",
 }
+TEXT_SUFFIXES = {
+    ".py", ".md", ".txt", ".yaml", ".yml", ".json", ".toml", ".bat", ".ps1",
+    ".ini", ".cfg",
+}
+OLD_ROOT_PATTERN = re.compile(r"K:/+AI/+Coding[ ]+Agent", re.IGNORECASE)
+MAX_ABSOLUTE_PATH_SCAN_BYTES = 2 * 1024 * 1024
 
 
 def _human_size(size: int) -> str:
     value = float(size)
     for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
         if value < 1024 or unit == "TiB":
+            if unit == "B":
+                return str(int(value)) + " B"
             return f"{value:.2f} {unit}"
         value /= 1024
     return f"{size} B"
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while True:
+            block = handle.read(1024 * 1024)
+            if not block:
+                break
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _normalise(text: str) -> str:
+    return text.replace(chr(92), "/")
 
 
 def _is_excluded_file(source: Path, path: Path) -> bool:
@@ -108,30 +156,117 @@ def _top_level_entries(source: Path, files: list[Path]) -> list[dict]:
     return [entries[key] for key in sorted(entries)]
 
 
+def _tree_sha256(source: Path, files: list[Path]) -> str:
+    digest = hashlib.sha256()
+    for path in sorted(files, key=lambda item: item.relative_to(source).as_posix()):
+        relative = _normalise(path.relative_to(source).as_posix())
+        digest.update(relative.encode("utf-8"))
+        digest.update(chr(0).encode("utf-8"))
+        digest.update(_sha256_file(path).encode("utf-8"))
+        digest.update(chr(0).encode("utf-8"))
+    return digest.hexdigest()
+
+
+def _runtime_checks(source: Path, files: list[Path]) -> dict:
+    python_copies = sorted(
+        _normalise(path.relative_to(source).as_posix())
+        for path in files
+        if path.name.lower() == "python.exe"
+    )
+    crewai_packages = sorted({
+        _normalise(path.relative_to(source).as_posix()).split("/site-packages/crewai/")[0]
+        + "/site-packages/crewai"
+        for path in files
+        if "/site-packages/crewai/" in _normalise(path.relative_to(source).as_posix())
+    })
+    return {
+        "python_runtime_copies": len(python_copies),
+        "python_runtime_paths": python_copies,
+        "crewai_package_copies": len(crewai_packages),
+        "crewai_package_paths": crewai_packages,
+        "single_runtime_copy": len(python_copies) == 1,
+    }
+
+
+def _absolute_path_hits(source: Path, files: list[Path]) -> list[dict]:
+    source_text = _normalise(str(source)).casefold()
+    hits: list[dict] = []
+    for path in files:
+        relative = _normalise(path.relative_to(source).as_posix())
+        if relative.startswith("python/"):
+            continue
+        if path.suffix.lower() not in TEXT_SUFFIXES:
+            continue
+        try:
+            if path.stat().st_size > MAX_ABSOLUTE_PATH_SCAN_BYTES:
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        normalised = _normalise(text)
+        if source_text in normalised.casefold() or OLD_ROOT_PATTERN.search(normalised):
+            hits.append({"path": relative})
+    return hits
+
+
+def _validate_payload(source: Path, files: list[Path]) -> dict:
+    runtime = _runtime_checks(source, files)
+    if not runtime["single_runtime_copy"]:
+        raise ValueError(
+            "payload must contain exactly one embedded Python runtime copy; found "
+            + str(runtime["python_runtime_copies"]) + ": "
+            + ", ".join(runtime["python_runtime_paths"][:5])
+        )
+    absolute_hits = _absolute_path_hits(source, files)
+    if absolute_hits:
+        raise ValueError(
+            "payload contains absolute workspace paths: "
+            + ", ".join(hit["path"] for hit in absolute_hits[:5])
+        )
+    top_level = {path.relative_to(source).parts[0] for path in files}
+    excluded_present = sorted(top_level.intersection(EXCLUDED_ROOTS))
+    if excluded_present:
+        raise ValueError("payload contains excluded top-level paths: "
+                         + ", ".join(excluded_present))
+    return {
+        "runtime": runtime,
+        "absolute_path_hits": absolute_hits,
+        "excluded_top_level_present": excluded_present,
+        "checked": True,
+    }
+
+
 def _manifest(
     source: Path,
     output: Path,
     files: list[Path],
     dry_run: bool,
+    tree_sha256: str,
+    checks: dict,
 ) -> dict:
     total_size = sum(path.stat().st_size for path in files)
+    output_location = "dist" if output.parent == source / "dist" else "external"
     return {
-        "source": str(source),
-        "output": str(output),
+        "payload_manifest_version": PAYLOAD_MANIFEST_VERSION,
+        "source_name": source.name,
+        "output_name": output.name,
+        "output_location": output_location,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "dry_run": dry_run,
         "file_count": len(files),
         "total_size": total_size,
+        "tree_sha256": tree_sha256,
         "included_roots": list(INCLUDED_ROOTS),
         "excluded_roots": list(EXCLUDED_ROOTS),
         "excluded_directory_names": sorted(EXCLUDED_DIR_NAMES),
         "excluded_suffixes": sorted(EXCLUDED_SUFFIXES),
         "excluded_files": sorted(EXCLUDED_FILES),
         "top_level": _top_level_entries(source, files),
+        "payload_checks": checks,
     }
 
 
-def _validate_output(source: Path, output: Path) -> None:
+def _validate_output(source: Path, output: Path, dry_run: bool = False) -> None:
     if output == source:
         raise ValueError("output directory must not be the source tree")
     if output.is_relative_to(source) and not output.is_relative_to(source / "dist"):
@@ -139,7 +274,7 @@ def _validate_output(source: Path, output: Path) -> None:
     if output.exists():
         if not output.is_dir():
             raise ValueError("output path exists and is not a directory")
-        if any(output.iterdir()):
+        if any(output.iterdir()) and not dry_run:
             raise ValueError("output directory is not empty")
 
 
@@ -154,10 +289,12 @@ def _stage(source: Path, output: Path, files: list[Path]) -> None:
 
 def _print_summary(manifest: dict) -> None:
     print("Portable payload staging plan")
-    print(f"Source: {manifest['source']}")
-    print(f"Output: {manifest['output']}")
+    print(f"Source name: {manifest['source_name']}")
+    print(f"Output name: {manifest['output_name']} ({manifest['output_location']})")
     print(f"Files: {manifest['file_count']}")
     print(f"Size: {_human_size(manifest['total_size'])}")
+    print(f"Tree sha256: {manifest['tree_sha256']}")
+    print(f"Single runtime copy: {manifest['payload_checks']['runtime']['single_runtime_copy']}")
     print(f"Dry run: {'yes' if manifest['dry_run'] else 'no'}")
     print("Top-level entries:")
     for entry in manifest["top_level"]:
@@ -186,21 +323,18 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
-        _validate_output(source, output)
-    except ValueError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
-
-    try:
+        _validate_output(source, output, dry_run=args.dry_run)
         files = _iter_source_files(source)
-        manifest = _manifest(source, output, files, args.dry_run)
+        checks = _validate_payload(source, files)
+        tree_sha256 = "" if args.dry_run else _tree_sha256(source, files)
+        manifest = _manifest(source, output, files, args.dry_run, tree_sha256, checks)
         if not args.dry_run:
             _stage(source, output, files)
             (output / "payload_manifest.json").write_text(
                 json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
                 encoding="utf-8",
             )
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 

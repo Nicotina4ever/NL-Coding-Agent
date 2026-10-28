@@ -166,3 +166,43 @@ Stage-4 closure statement: the stage is engineering-complete, and requirement st
 partial wherever acceptance depends on the manual-pending items above. No claim is made that
 microphone, clipboard, DPI, language servers, MCP servers, debugger sessions or an OS sandbox were
 verified. The release acceptance matrix (NL-BP-140/141/142) remains in progress in stage 6.
+
+
+## Stage-6b portable release acceptance (2026-10-28) - PARTIAL
+
+Measured evidence for the stage-6b portable candidate is recorded in docs/RELEASE_ACCEPTANCE.md.
+Candidate: dist/stage6b-portable-candidate, 23,682 payload files / 1,508,402,351 B, tree sha256 80e4664618a165d49e7375fc1441a27e1b8416be1eb7206cda8bbe347ffa7b03.
+
+- Allowlist: scripts/stage_portable.py updated to ship README.md, nl_agent.py, the supported launchers
+  (main GUI/self-build + doctor/status), nl_coding_agent (including flows/), one embedded python runtime,
+  assets/, config/models.yaml and pyproject.toml; tests/scripts/installer/docs/build/dist/AGENTS/PATCH/
+  data/logs/caches/vendor are excluded. The script fails closed for duplicate runtime copies and absolute
+  workspace paths; a native .pyd extension-module regression was found and fixed during this task.
+- Reproducibility: two independent stagings have identical file_count/total_size/tree_sha256
+  (80e4664618a165d49e7375fc1441a27e1b8416be1eb7206cda8bbe347ffa7b03); stage-6a source-release reproducibility is recorded in docs/BOOTSTRAPPER.md.
+- Smoke from a managed non-default temp installation path: --help PASS, doctor PASS (read-only ollama
+  list, CrewAI import), imports incl. flows PASS (all from the temp payload), offscreen GUI construction
+  PASS, mission persistence in temp SQLite PASS (create + second-process read), no-dev-only-files PASS,
+  single-runtime PASS, relocation-safe payload scan 0 absolute-path hits PASS, payload not mutated PASS.
+- FAIL: default status/status.bat exits 1 with KeyError 'project' because cli.status assumes the
+  machine-local config/voicebridge.yaml (correctly not shipped). Release acceptance is PARTIAL; the
+  small cli.py fix is outside this task's write scope and is requested in docs/RELEASE_ACCEPTANCE.md.
+- Manual-pending: clean Windows without global Python, clipboard screenshot/drag-drop, microphone/ASR/TTS
+  hardware, real multimodal latency, signed installer/published downloads, runtime provenance,
+  uninstall/OS integration, GUI full interaction, full pytest baseline (Lead-run).
+- Authorization pending: replacing/removing the stale dist/portable-release (23,639 files / 1,507,677,689 B)
+  and retiring the extra stage-6a source candidate; no deletion/replacement was performed.
+- Commands: scripts/stage_portable.py; targeted tests/test_stage_portable.py 8 passed; no network, model,
+  autonomous or destructive run; live data/ untouched.
+
+### Stage-6b revision 2 (status portability fix)
+
+Revision 1's default status failure (KeyError: 'project' for a payload without the machine-local
+config) is fixed: cli.status() degrades gracefully with exit 0 and a --project-config pointer,
+covered by two regression tests; full suite 513 passed. The rebuilt candidate
+dist/stage6b-portable-candidate-r2 (23,682 files / 1,508,403,109 B, tree sha256
+606462d3...6dcd) was re-staged into a fresh managed temp path and re-smoked: status PASS,
+--help PASS, doctor PASS, imports PASS, offscreen GUI PASS, candidate/temp tree hashes identical,
+temp payload cleaned up. Release acceptance remains PARTIAL: clean-Windows/no-global-Python,
+real clipboard/mic/audio hardware, signed installer/update and full desktop mission execution are
+manual-pending; stale distribution retirement needs explicit authorization.

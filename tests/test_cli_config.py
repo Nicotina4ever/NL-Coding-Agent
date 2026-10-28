@@ -61,6 +61,31 @@ class TestCliConfig(unittest.TestCase):
             root = Path(tmp)
             self.assertEqual(ensure_project({"project": {"root": str(root)}}), root.resolve())
 
+    def test_status_without_project_config_degrades_gracefully(self):
+        import contextlib
+        import io
+
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            exit_code = cli.status({}, Path("missing-voicebridge.yaml"))
+        self.assertEqual(exit_code, 0)
+        text = buffer.getvalue()
+        self.assertIn("Project: not configured", text)
+        self.assertIn("No state created yet", text)
+
+    def test_status_from_portable_install_without_project_config_cli(self):
+        import contextlib
+        import io
+
+        buffer = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = str(Path(tmp) / "voicebridge.yaml")
+            argv = ["nl_agent.py", "--project-config", missing, "status"]
+            with patch.object(sys, "argv", argv), contextlib.redirect_stdout(buffer):
+                exit_code = cli.main()
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Project: not configured", buffer.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

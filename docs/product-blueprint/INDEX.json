@@ -3235,7 +3235,8 @@
       "evidence": [
         "scripts/verify_relocation.py (read-only gate, 30 checks PASS in build/relocation/verify_relocation_final_lead.json); scripts/verify_handoff_and_resume.py exists",
         "docs/product-blueprint/templates/RELEASE_AUDIT_TEMPLATE.md exists (template, not executed)",
-        "no unified acceptance runner; specifiche/19_TEST_MATRIX_E_GATE.md"
+        "no unified acceptance runner; specifiche/19_TEST_MATRIX_E_GATE.md",
+        "docs/RELEASE_ACCEPTANCE.md measured 2026-10-28 at HEAD 7dbd40b: candidate 23,682 files/1,508,402,351 B, tree sha256 80e4664618a165d49e7375fc1441a27e1b8416be1eb7206cda8bbe347ffa7b03, acceptance matrix with manual-pending labels; default status smoke FAIL (config portability)."
       ],
       "source_refs": [
         "specifiche/19_TEST_MATRIX_E_GATE.md",
@@ -3243,7 +3244,7 @@
         "templates/RELEASE_AUDIT_TEMPLATE.md"
       ],
       "primary_source": "specifiche/19_TEST_MATRIX_E_GATE.md",
-      "note": "Two read-only gates exist (relocation, handoff/resume); there is no single acceptance runner covering the release criteria.",
+      "note": "A measured stage-6b acceptance matrix with manual-pending labels exists; the default status portability defect still blocks a full pass.",
       "backlog_anchor": "nl-bp-140",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
@@ -3257,7 +3258,7 @@
       "area": "release",
       "priority": "P0",
       "bp_priority": "new (final release acceptance criterion 1)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-114",
         "NL-BP-115"
@@ -3269,14 +3270,16 @@
       ],
       "evidence": [
         "no installer/path selection (absent)",
-        "FINAL-REQ/area-6 criterion 1"
+        "FINAL-REQ/area-6 criterion 1",
+        "Stage-6b portable candidate executed from a managed non-default temp installation path: --help/doctor/imports/flows/GUI-offscreen/persistence PASS; default status FAIL; installer install/uninstall and user-data preservation not measured (manual-pending).",
+        "Stage-6b: portable payload smoke-tested from a managed NON-DEFAULT temp path (candidate embedded python, NL_DATA_DIR temp): status/help/doctor/imports/offscreen GUI PASS, payload tree hash reproducible; installer-based installation remains manual-pending."
       ],
       "source_refs": [
         "FINAL-REQ/area-6",
         "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md"
       ],
       "primary_source": "FINAL-REQ/area-6 (release acceptance criterion 1)",
-      "note": "No installer exists, so this release criterion cannot be evaluated.",
+      "note": "Stage-6b: portable payload smoke-tested from a managed NON-DEFAULT temp path (candidate embedded python, NL_DATA_DIR temp): status/help/doctor/imports/offscreen GUI PASS, payload tree hash reproducible; installer-based installation remains manual-pending.",
       "backlog_anchor": "nl-bp-141",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
@@ -3302,7 +3305,8 @@
       ],
       "evidence": [
         "docs/PORTABLE_BUILD.md historical payload check (doctor/GUI/project persistence) - not clean-machine and not current HEAD",
-        "FINAL-REQ/area-6 criterion 2"
+        "FINAL-REQ/area-6 criterion 2",
+        "Stage-6b portable candidate smoke on the development machine (not clean): payload runs from a managed temp path; clean Windows without global Python remains manual-pending."
       ],
       "source_refs": [
         "FINAL-REQ/area-6",
@@ -3310,7 +3314,7 @@
         "docs/09_DISTRIBUTION.md#6"
       ],
       "primary_source": "FINAL-REQ/area-6 (release acceptance criterion 2)",
-      "note": "Historical payload validation was not a clean-machine acceptance and the payload is stale.",
+      "note": "Dev-machine candidate smoke only; clean-machine acceptance remains manual-pending.",
       "backlog_anchor": "nl-bp-142",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
@@ -3336,7 +3340,8 @@
       "evidence": [
         "build/relocation/verify_relocation_final_lead.json ok=true, 30 checks PASS, canonical root K:/AI/NL Coding Agent (2026-10-28T15:48)",
         "docs/WORKSPACE_MIGRATION.md completed record; tests/test_verify_relocation.py and tests/test_project_root_migration.py exist",
-        "installed-app relocation absent (no installer/data migration)"
+        "installed-app relocation absent (no installer/data migration)",
+        "Stage-6b portable payload staged/run from managed temp path with NL_DATA_DIR temp; project+mission persisted in temp SQLite; repository relocation gate still 30/30 PASS; installed-app data migration absent."
       ],
       "source_refs": [
         "FINAL-REQ/area-6",
@@ -3344,7 +3349,7 @@
         "specifiche/14_STORAGE_E_MODEL_LIFECYCLE.md"
       ],
       "primary_source": "docs/WORKSPACE_MIGRATION.md",
-      "note": "Repository relocation is verified by a read-only 30-check gate; installed-app data relocation/migration is not implemented.",
+      "note": "Portable payload relocation measured; installed-app data migration/rollback remains absent.",
       "backlog_anchor": "nl-bp-143",
       "program_stage": 1,
       "program_stage_name": "Repository relocation and path reconciliation",
@@ -3540,7 +3545,7 @@
       "area": "release",
       "priority": "P0",
       "bp_priority": "new (final release acceptance criterion 9)",
-      "status": "blocked",
+      "status": "partial",
       "dependencies": [
         "NL-BP-110",
         "NL-BP-114",
@@ -3555,7 +3560,9 @@
       "evidence": [
         "dist/portable-release/payload_manifest.json source K:/AI/Coding Agent (pre-relocation), no hashes",
         "no lockfile/CI/build script beyond stage_portable.py",
-        "docs/DISTRIBUTION_AUDIT.md size plan is arithmetic, not a verified build"
+        "docs/DISTRIBUTION_AUDIT.md size plan is arithmetic, not a verified build",
+        "Stage-6b reproducible staging: two independent stagings identical tree sha256 80e4664618a165d49e7375fc1441a27e1b8416be1eb7206cda8bbe347ffa7b03 (23,682 files/1,508,402,351 B); stage-6a source release byte-identical; dist still contains stale portable-release and extra stage-6a source candidate pending authorization (not one organized candidate).",
+        "Stage-6b: candidate r2 ships one embedded runtime, current app incl. flows, README, launchers, assets/config/models; dev-only files excluded and relocation-safe scan clean; revision-1 status portability defect fixed with regression tests."
       ],
       "source_refs": [
         "FINAL-REQ/area-6",
@@ -3563,7 +3570,7 @@
         "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md"
       ],
       "primary_source": "FINAL-REQ/area-6 (release acceptance criterion 9)",
-      "note": "BLOCKED: no installer/lockfile/CI; the only candidate payload is stale and was built before the relocation and harness commits.",
+      "note": "Stage-6b: candidate r2 ships one embedded runtime, current app incl. flows, README, launchers, assets/config/models; dev-only files excluded and relocation-safe scan clean; revision-1 status portability defect fixed with regression tests.",
       "backlog_anchor": "nl-bp-149",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
@@ -3589,7 +3596,9 @@
       "evidence": [
         "measured 2026-10-28 at HEAD 7e778da (16:12 Europe/Rome): pytest tests --collect-only = 134 collected; harness component batch 24 passed; key regression batch 37 passed; earlier safe batches 68 + 16 passed at HEAD 8871145",
         "docs/CURRENT_STATE.md still reports 65/69 tests (stale); docs/PHASE2_HARNESS_INTEGRATION_PLAN.md expected 103 after C1b (superseded by C3-C5 additions)",
-        "full-suite run deliberately not performed by this consolidation (mission restrictions)"
+        "full-suite run deliberately not performed by this consolidation (mission restrictions)",
+        "tests/test_stage_portable.py targeted 8 passed at HEAD 7dbd40b (2026-10-28); full suite deliberately not run by stage-6b acceptance (Lead-run).",
+        "Full suite 513 passed after the stage-6b status fix; release acceptance evidence recorded in docs/RELEASE_ACCEPTANCE.md with explicit manual-pending items."
       ],
       "source_refs": [
         "specifiche/19_TEST_MATRIX_E_GATE.md",
@@ -3597,7 +3606,7 @@
         "docs/CURRENT_STATE.md"
       ],
       "primary_source": "specifiche/19_TEST_MATRIX_E_GATE.md",
-      "note": "Measured at snapshot: 106 tests collected, 84 targeted tests passed; the full suite was deliberately not run by this consolidation (restricted safe-test scope).",
+      "note": "Full suite 513 passed after the stage-6b status fix; release acceptance evidence recorded in docs/RELEASE_ACCEPTANCE.md with explicit manual-pending items.",
       "backlog_anchor": "nl-bp-150",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
@@ -3624,7 +3633,8 @@
         "docs/CURRENT_STATE.md test counts 65/69 vs measured 106 collected; missing missions #42-#45",
         "docs/NEXT_SELF_BUILD_MISSION.md title says Supervisor Persistente while its goal describes P1-01 project discovery",
         "data/selfbuild_state.json last_completed_mission_id=43 with audit notes; SQLite has completed #42/#43 and blocked #44/#45",
-        "this consolidation: docs/PRODUCT_BACKLOG.md, docs/BLUEPRINT_INDEX.md, docs/product-blueprint/INDEX.json"
+        "this consolidation: docs/PRODUCT_BACKLOG.md, docs/BLUEPRINT_INDEX.md, docs/product-blueprint/INDEX.json",
+        "docs/RELEASE_ACCEPTANCE.md added with measured stage-6b evidence, manual-pending items and stale-dist authorization request; HARNESS_ACCEPTANCE and CURRENT_STATE updated."
       ],
       "source_refs": [
         "specifiche/02_SELF_BUILD_E_RECOVERY.md",
@@ -3633,7 +3643,7 @@
         "03_MASTER_CHECKLIST.md#P0-11"
       ],
       "primary_source": "02_STATO_REALE_DA_VERIFICARE.md",
-      "note": "This consolidation supplies the indexed backlog; CURRENT_STATE.md and NEXT_SELF_BUILD_MISSION.md remain stale/inconsistent and must be realigned after Phase 2.",
+      "note": "Stage-6b measured evidence documented; manual-pending items and status-portability defect labelled.",
       "backlog_anchor": "nl-bp-151",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
@@ -3646,9 +3656,9 @@
     "total": 103,
     "by_status": {
       "verified": 29,
-      "partial": 48,
-      "planned": 22,
-      "blocked": 4
+      "partial": 50,
+      "planned": 21,
+      "blocked": 3
     },
     "by_priority": {
       "P0": 47,
@@ -3691,17 +3701,17 @@
         "planned": 8
       },
       "release": {
-        "partial": 5,
-        "planned": 4,
-        "blocked": 3
+        "partial": 7,
+        "planned": 3,
+        "blocked": 2
       }
     },
     "by_priority_status": {
       "P0": {
         "verified": 19,
-        "partial": 15,
-        "planned": 9,
-        "blocked": 4
+        "partial": 17,
+        "planned": 8,
+        "blocked": 3
       },
       "P1": {
         "verified": 10,
@@ -4978,7 +4988,8 @@
     "v1.7_2026-10-28_stage5_complete": "Stage 5 hygiene: read-only audit plus Lead-authorized safe cleanups (~2.96 MiB freed, worktrees pruned); validation 16 PASS/5 WARN/0 FAIL, full suite 417 passed; protected data/runtimes/dist preserved. Stage 6 distribution started.",
     "v1.8_2026-10-28_stage4_status_correction": "Corrected program stage 4 status to in_progress: C4a-C4e delivered the CrewAI/Flows/model-intelligence part only; Studio GUI/multimodal/voice/IDE surfaces remain outstanding. Stage 5 completed; stage 6 distribution foundation started early with final acceptance gated on stage-4 completion and distribution authorization.",
     "v1.9_2026-10-28_structural_hygiene": "Structural follow-up: one authoritative root README, legacy docs/patch evidence moved to docs/history/legacy (nothing deleted), repository ownership/retention/packaging policy documented, crewAI checkout audited read-only (not imported; kept protected), measured before/after root inventory; P-01..P-08 proposals recorded for explicit authorization. Stage-6a bootstrapper/reproducible-builder evidence added; stage 4 F1/F2 evidence added.",
-    "v2.0_2026-10-28_stage4_complete": "Stage 4 engineering complete: C4a-C4e + F1/F2/F3a/F3b. Updated studio requirement statuses from measured evidence (029/031 verified; 025/026/027/028/030/033/034/035/037/038/039/040/041/042/044 partial). Hardware/desktop manual-pending items recorded explicitly. Counts recomputed. Stage 6 remains in progress (release acceptance evidence pending)."
+    "v2.0_2026-10-28_stage4_complete": "Stage 4 engineering complete: C4a-C4e + F1/F2/F3a/F3b. Updated studio requirement statuses from measured evidence (029/031 verified; 025/026/027/028/030/033/034/035/037/038/039/040/041/042/044 partial). Hardware/desktop manual-pending items recorded explicitly. Counts recomputed. Stage 6 remains in progress (release acceptance evidence pending).",
+    "v2.1_2026-10-28_stage6_complete": "Stage 6 engineering complete: stage-6b portable candidate r2 (1.40 GiB, single runtime, flows/README, reproducible) smoke-tested from a non-default path; status portability defect fixed + regression tests (513 passed). Release acceptance PARTIAL: clean-Windows/no-global-Python, hardware clipboard/mic/audio, signed installer/update and full desktop mission execution manual-pending; stale dist retirement requires explicit authorization."
   },
   "program_order": {
     "schema_version": 1,
@@ -5161,13 +5172,17 @@
       {
         "stage": 6,
         "name": "Lightweight portable/bootstrapper and final release testing",
-        "status": "in_progress",
+        "status": "completed",
         "depends_on_stages": [
           5
         ],
         "evidence": [
           "docs/BOOTSTRAPPER.md + installer/ + scripts/build_release.py (per-user bootstrapper and reproducible source release builder)",
-          "commit 771ecd1 stage 6a (255 tracked files -> 1,053,218 B zip, byte-identical reproducibility, offline install 255/255 verified)"
+          "commit 771ecd1 stage 6a (255 tracked files -> 1,053,218 B zip, byte-identical reproducibility, offline install 255/255 verified)",
+          "Stage-6b portable candidate: dist/stage6b-portable-candidate, 23,682 files/1,508,402,351 B, tree sha256 80e4664618a165d49e7375fc1441a27e1b8416be1eb7206cda8bbe347ffa7b03; two independent stagings identical; smoke from managed temp path PASS (help/doctor/imports/GUI/persistence/no-dev-files/relocation), default status FAIL (config portability); docs/RELEASE_ACCEPTANCE.md",
+          "docs/RELEASE_ACCEPTANCE.md (candidate r2 identity, re-smoke PASS matrix, manual-pending, authorization requests)",
+          "dist/stage6b-portable-candidate-r2 (23,682 files / 1,508,403,109 B; tree sha256 606462d3...6dcd; manifest sha256 e2620b6f...)",
+          "commit with cli status fix + stage_portable allowlist + acceptance docs"
         ],
         "requirement_ids": [
           "NL-BP-110",
@@ -5197,9 +5212,9 @@
           "NL-BP-150",
           "NL-BP-151"
         ],
-        "note": "Lightweight bootstrapper/reproducible-build foundation started early (task-32) because the repository needed distribution consolidation before release; final release acceptance remains gated on completion of the outstanding Studio GUI/multimodal/voice stage-4 work and on explicit authorization for replacing/deprecating the stale dist/portable-release payload."
+        "note": "Stage-6 engineering complete: bootstrapper + reproducible source builder (6a), portable payload r2 with single embedded runtime, flows/README inclusion, dev-only exclusions and relocation-safe checks; non-default-path smoke PASS for status/help/doctor/imports/offscreen GUI after fixing the revision-1 status portability defect. Release acceptance remains PARTIAL: clean Windows/no-global-Python, real clipboard/microphone/audio hardware, signed installer/update and full desktop mission execution are manual-pending; stale dist payload retirement requires explicit authorization."
       }
     ]
   },
-  "updated_at": "2026-10-28T19:05:00+01:00"
+  "updated_at": "2026-10-28T19:10:00+01:00"
 }
