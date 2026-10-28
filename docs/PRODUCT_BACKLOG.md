@@ -72,8 +72,8 @@ forbidden without explicit owner authorization.
 
 | Status | P0 | P1 | P2 | P3 | Total |
 |---|---|---|---|---|---|
-| verified | 20 | 13 | 0 | 0 | 33 |
-| partial | 43 | 28 | 11 | 1 | 83 |
+| verified | 21 | 13 | 0 | 0 | 34 |
+| partial | 42 | 28 | 11 | 1 | 82 |
 | planned | 40 | 19 | 9 | 1 | 69 |
 | blocked | 3 | 0 | 0 | 0 | 3 |
 | **Total** | 106 | 60 | 20 | 2 | 188 |
@@ -99,6 +99,8 @@ forbidden without explicit owner authorization.
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v5.0 (2026-10-28)** - Stage-7 R7/R8: prompt-injection resistance completed and verified (bounded passive scanner with redacted evidence, untrusted markers, research_injection audit, independent permission gate, no execution/following; 12 injection + 3 service tests, research suite 154) and saved findings can be attached to missions with permission-gated revocable links plus non-destructive stale/expired retention and GUI attach/detach/retention controls (60 targeted tests). Full integration suite 1053 passed in 136.5 s; counts 34 verified / 82 partial / 69 planned / 3 blocked. NL-BP-210 remains partial only for live-network preview/provider and live-approval acceptance (MANUAL-PENDING).
 
 **v4.9 (2026-10-28)** - Goal Mode G6/G7 vertical slice: versioned replanning (goal_plan_versions snapshots/diffs, rationale/trigger/evidence validation, immutable objective, in-place milestones preserving mission links, plan-version/current APIs, replan audit and CLI/API replan/versions/links/activity/queue) and seven-section Goals GUI (missions/queue, activity/decisions, plan versions, evidence/verification, replan dialog, verify-before-complete evidence dialog) with 19 targeted GUI/service tests. Pre-push R2/R3: hook interpreter/quoting fix, real temp-remote push-blocking integration tests, fail-closed Git errors, bounded-history robustness, CI assertions and runtime-assembled synthetic fixtures; canonical scan-all remains blocked by historical synthetic-fixture commits, so no clean-pre-push verified claim is made. Full suite 1031 passed; counts unchanged at 33 verified / 83 partial / 69 planned / 3 blocked.
 

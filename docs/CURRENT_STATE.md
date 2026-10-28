@@ -743,3 +743,29 @@ Counts remain 188 requirements: 33 verified / 83 partial / 69 planned / 3 blocke
 still needs task/mission derivation from objectives/evidence, autonomous scheduling/triggering,
 active-agent/approve GUI, real project lifecycle acceptance; document planning, autonomy profiles,
 open provider ecosystem and final release items remain pending.
+
+Research injection verified and findings attached (2026-10-28)
+
+- Prompt-injection resistance (NL-BP-175) is complete and verified: a bounded deterministic
+  passive scanner in research/injection.py detects system/role overrides, tool/command execution,
+  secret exfiltration, URL-assisted instructions, hidden HTML/markdown and zero-width obfuscation,
+  returning immutable redacted signals; ResearchService scans fetched pages, search results, GitHub
+  and Hugging Face payloads, always keeps content untrusted, adds bounded warnings and writes
+  source=research audit events with URL/ref/kind/hash only. The scanner/service never execute,
+  evaluate, follow or sanitize content; network permission remains an independent earlier gate and
+  denied/needs-approval paths leak no content or audit. 12 scanner tests + 3 service integration
+  tests; research suite 154 passed.
+- Research workspace (NL-BP-210 partial): saved findings can be attached to existing missions via a
+  permission-gated, reversible research_finding_attachments link (idempotent attach, detach
+  preserves finding/provenance, mission/project isolation, audit on attach/detach), and retention
+  marks stale/expired without hard-deleting sources/findings/citations/hashes/URLs/links. GUI adds
+  attach-to-mission for the current scope, mission findings with refresh/detach, and retention
+  status/action with confirmation and stale-not-deleted wording. Remains partial only for live
+  network/provider preview and live approval acceptance (MANUAL-PENDING).
+- Test execution was optimized per the latest directive: targeted affected suites were run during
+  development (research target batch 60 passed) and the complete suite was run once at this broad
+  integration checkpoint: 1053 passed in 136.5 s, measured wall time. No unchanged-suite reruns were
+  performed merely for round boundaries.
+
+No network/model/interactive-GUI run occurred; counts are 34 verified / 82 partial / 69 planned /
+3 blocked (188 total).
