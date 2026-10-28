@@ -435,6 +435,19 @@ CREATE TABLE IF NOT EXISTS goal_plan_versions (
     created_at        TEXT NOT NULL,
     UNIQUE(goal_id, version)
 );
+
+-- Stage-8 document planning D2: deterministic reconciliation run history.
+CREATE TABLE IF NOT EXISTS doc_reconciliation_runs (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id   INTEGER,
+    project_ref  TEXT NOT NULL DEFAULT '',
+    corpus_hash  TEXT NOT NULL,
+    report_hash  TEXT NOT NULL,
+    report_json  TEXT NOT NULL,
+    created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_doc_reconciliation_runs_project
+    ON doc_reconciliation_runs(project_id, id DESC);
 """
 
 # Columns added after the first operational baseline.  Migrations are additive
