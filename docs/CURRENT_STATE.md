@@ -599,3 +599,24 @@ no network transports, no GUI/tool-registry/execution wiring, no embeddings/retr
 research or autonomy end-to-end use. Full suite 877 passed; relocation/supervisor gates green;
 real-network acceptance (NL-BP-203/211) and end-to-end Trusted Auto Review/Full Autonomy remain
 MANUAL-PENDING.
+
+Stage-7 third implementation increments (2026-10-28)
+
+- Research R4 (NL-BP-170/174/205/207 evidence): ResearchService combines provider routing,
+  policy/reader/store and GitHub/HF investigators behind a permission + auto-review boundary that
+  evaluates web-search/web-fetch/download/local/cloud capabilities before any network-capable work
+  and returns explicit allowed/needs-approval/denied/unavailable results. An explicit stdlib HTTP
+  transport exists only when constructed with a permission gate (no implicit network), redirects are
+  re-authorized per hop, fetched and investigator results persist canonical URL/redirect chain/hash/
+  title/excerpt/scope links/citations, and four typed read-only research tools are defined. 26 tests.
+- Research R5 (NL-BP-210 partial): Studio Research workspace as the 10th page with query/provider-
+  route and permission/offline status, untrusted result markers, read-only source preview with
+  provenance/redirects/stale/conflict details, project/mission-scoped history and saved findings, and
+  URL/GitHub/HF/attachment intake through an injected research-service adapter. 8 offscreen tests.
+- CI headless GUI smoke updated for the 10-page shell; full suite 910 passed.
+
+All of this remains fixture/foundation-level: no live provider/network/API authentication, no real
+AppServices research facade, no model/tool-execution wiring for the new tools, no embeddings, and no
+browser/PDF/Office support. Real-network research acceptance (NL-BP-203/211) and end-to-end
+Trusted Auto Review/Full Autonomy are MANUAL-PENDING; no research reliability or platform-support
+claim is made.

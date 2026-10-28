@@ -67,8 +67,8 @@ relaxed by either input.
 | Status | P0 | P1 | P2 | P3 | Total |
 |---|---|---|---|---|---|
 | verified | 20 | 13 | 0 | 0 | 33 |
-| partial | 37 | 27 | 11 | 1 | 76 |
-| planned | 23 | 18 | 9 | 1 | 51 |
+| partial | 37 | 28 | 11 | 1 | 77 |
+| planned | 23 | 17 | 9 | 1 | 50 |
 | blocked | 3 | 0 | 0 | 0 | 3 |
 | **Total** | 83 | 58 | 20 | 2 | 163 |
 
@@ -93,6 +93,8 @@ relaxed by either input.
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v4.1 (2026-10-28)** - Stage-7 R4/R5: ResearchService permission + auto-review boundary before any network-capable work, explicit permission-gated stdlib transport (no implicit network), provenance/citation persistence in the research store and typed read-only research tools; Studio Research workspace as the 10th page (provider/permission/offline status, previews, history, saved findings, URL/GitHub/HF/attachment intake); CI headless smoke updated for 10 pages. 34 new tests; full suite 910 passed. Live network/providers, real AppServices research facade, tool-execution/model wiring and real-network acceptance remain MANUAL-PENDING; no research-reliability or platform-support claim.
 
 **v4.0 (2026-10-28)** - Stage-7 second implementation increments: independent auto-review policy engine + autonomy profiles foundation (166/167 partial) and research provider registry/router, local SQLite research store and read-only GitHub/Hugging Face investigators over injected transports (169/171/172/174/205/207 partial). 63 new tests this batch; full suite 877 passed. All of it is fixture/foundation-only: no live provider/network calls, GUI/tool-registry/execution wiring, embeddings/retrieval, live API authentication or real-network acceptance; these remain MANUAL-PENDING.
 
