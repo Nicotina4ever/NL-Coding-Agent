@@ -367,3 +367,15 @@ default (Flow opt-in).
 - **Accessibility/responsiveness**: accessible names/tooltips/shortcuts, loading/empty/error
   states and non-blocking refresh paths. DPI scaling and real keyboard focus order remain
   manual-pending on the reference machine.
+
+Stage-4 engineering closure (2026-10-28)
+
+Stage 4 is engineering-complete: CrewAI runtime/Flows/model intelligence (C4a-C4e), multimodal
+mission chat with attachments and capability-aware routing (F1), local speech dictation/TTS
+foundation (F2), and Studio IDE surfaces (F3a editor/terminal/Git/problems, F3b LSP/MCP/debug
+readiness/command palette). Requirements remain partial where acceptance needs real hardware or a
+real desktop session: microphone/ASR/TTS hardware, Windows clipboard screenshots, real DPI/focus,
+live language-server/MCP/debugger sessions, PTY/OS-sandbox claims. Those items are manual-pending and
+must be verified by the user before any release claim; automated evidence (offscreen Qt, fake
+transports, temp SQLite) is recorded in docs/HARNESS_ACCEPTANCE.md and the tests. Stage 6 release
+acceptance evidence is still in progress.

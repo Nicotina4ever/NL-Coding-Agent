@@ -147,3 +147,22 @@ Rollout decision (also in INDEX/PRODUCT_BACKLOG): sequential default; Flow opt-i
 no real-model Flow acceptance exists. Gates were not weakened; promotion stays last; HITL and
 memory remain opt-in/off. Limitations: no OS sandbox/network isolation; SBOM is an
 installed-environment snapshot; CrewAI metadata License=None is a measured legal-review gap.
+
+
+## Stage 4 - Studio GUI, multimodal and voice (F1/F2/F3)
+
+Engineering scope for the Studio portion of stage 4 landed after the CrewAI/Flows portion (C4a-C4e).
+All evidence below is automated and local (offscreen Qt, fake transports, fake probes, temporary
+NL_DATA_DIR/files); nothing in this section is a hardware or real-desktop verification.
+
+| Block | Commit | Implemented | Automated evidence | Manual-pending |
+|---|---|---|---|---|
+| F1 multimodal mission chat | 4787c30 | Mission Chat page; drag-and-drop files/folders; Ctrl+V text/files/images incl. Windows screenshots; previews/removal/explicit submit; app-owned attachment store with sha256 provenance; text/code/JSON/CSV/log extraction, XLSX, PDF when pdfplumber present, DOCX/PPTX fail-closed; capability-aware image routing (measured/declared opt-in only) | tests/test_attachments.py (7), tests/test_chat_panel.py (7), GUI smoke/panels; full suite green | Real desktop drag-and-drop, real Windows clipboard screenshot capture, real PDF/Office extraction with installed libraries |
+| F2 voice | 8040022 | Local-first speech manager (engine/model-dir detection, no downloads), bounded mic recording abstraction, editable transcript, dictation controls Ctrl+Shift+M, optional local TTS detection/speak/unload, cloud ASR denied by permission gate | tests/test_speech.py (8), tests/test_chat_voice.py (6), GUI smoke; full suite green | Microphone capture, device enumeration, WAV quality/latency, real ASR and TTS audio (no local engine installed in this runtime) |
+| F3a IDE surfaces | 1425ff7 | Tabbed editor (highlighting, CAS save, unsaved guard, read-only previews), human-only permission-gated terminal (no shell, audited, non-interactive), read-only Git panel, problems panel | tests/test_editor_panel.py, test_terminal_policy.py, test_git_panel.py, test_problems_panel.py + GUI smoke; full suite green | Real desktop focus/DPI/dialogs; terminal is a policy guard, not a PTY or OS sandbox |
+| F3b language/tooling | 38252ff | LSP detection + JSON-RPC diagnostics client and Problems merge; MCP config discovery + human-approval-gated invocation; debugger/DAP adapter readiness (fail-closed); real command palette (safe actions only) | tests/test_lsp_client.py, test_mcp_integration.py, test_debug_adapter.py, test_command_palette.py + GUI smoke; full suite green | Live language-server sessions, real MCP server/tools, real debugger/DAP session (none installed here) |
+
+Stage-4 closure statement: the stage is engineering-complete, and requirement statuses are marked
+partial wherever acceptance depends on the manual-pending items above. No claim is made that
+microphone, clipboard, DPI, language servers, MCP servers, debugger sessions or an OS sandbox were
+verified. The release acceptance matrix (NL-BP-140/141/142) remains in progress in stage 6.

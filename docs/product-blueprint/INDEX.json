@@ -712,7 +712,8 @@
       "evidence": [
         "nl_coding_agent/gui/widgets/projects_panel.py New Mission QInputDialog + create_mission",
         "nl_coding_agent/gui/widgets/task_board.py mission list, Run/Resume action, roadmap mission creation",
-        "no GUI automation for mission execution; only read-only panel tests (16-test batch)"
+        "no GUI automation for mission execution; only read-only panel tests (16-test batch)",
+        "GUI mission creation via Mission Chat (app side creates mission + attaches prepared attachments); task board refresh; manual GUI run/resume acceptance remains pending."
       ],
       "source_refs": [
         "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
@@ -720,7 +721,7 @@
         "03_MASTER_CHECKLIST.md#P1-03"
       ],
       "primary_source": "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
-      "note": "Project panel can create a mission from a single-line goal dialog and the task board can run/resume; no GUI test covers a mission run.",
+      "note": "GUI mission creation via Mission Chat (app side creates mission + attaches prepared attachments); task board refresh; manual GUI run/resume acceptance remains pending.",
       "backlog_anchor": "nl-bp-025",
       "program_stage": 4,
       "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
@@ -734,7 +735,7 @@
       "area": "studio",
       "priority": "P0",
       "bp_priority": "P2 (03_MASTER_CHECKLIST P2-06)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-021"
       ],
@@ -745,7 +746,8 @@
       ],
       "evidence": [
         "grep: no chat widget, no drag/drop handlers, no attachment model (GUI has dialogs, file viewer, task board only)",
-        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md expected experiences"
+        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md expected experiences",
+        "Implemented Mission Chat (gui/widgets/chat_panel.py): multi-file picker, drag-and-drop files/folders, explicit submit; tested offscreen (tests/test_chat_panel.py). Real-desktop drag/drop and interactive dialog verification manual-pending."
       ],
       "source_refs": [
         "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
@@ -754,7 +756,7 @@
         "FINAL-REQ/area-6 (criterion 4)"
       ],
       "primary_source": "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
-      "note": "There is no chat surface at all today: only a single-line goal dialog.",
+      "note": "Implemented Mission Chat (gui/widgets/chat_panel.py): multi-file picker, drag-and-drop files/folders, explicit submit; tested offscreen (tests/test_chat_panel.py). Real-desktop drag/drop and interactive dialog verification manual-pending.",
       "backlog_anchor": "nl-bp-026",
       "program_stage": 4,
       "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
@@ -768,7 +770,7 @@
       "area": "studio",
       "priority": "P0",
       "bp_priority": "P2 (03_MASTER_CHECKLIST P2-06)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-026"
       ],
@@ -779,7 +781,8 @@
       ],
       "evidence": [
         "no clipboard handling code (grep clipboard/QClipboard absent)",
-        "FINAL-REQ/area-6 criterion 4; specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md"
+        "FINAL-REQ/area-6 criterion 4; specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
+        "Ctrl+V clipboard image paste incl. Windows screenshots via QClipboard image (chat_panel); offscreen tests cover pasted image attachment. Real Windows screenshot/clipboard behavior manual-pending."
       ],
       "source_refs": [
         "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
@@ -787,7 +790,7 @@
         "FINAL-REQ/area-6"
       ],
       "primary_source": "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
-      "note": "Release acceptance criterion 4 explicitly requires Windows screenshot paste.",
+      "note": "Ctrl+V clipboard image paste incl. Windows screenshots via QClipboard image (chat_panel); offscreen tests cover pasted image attachment. Real Windows screenshot/clipboard behavior manual-pending.",
       "backlog_anchor": "nl-bp-027",
       "program_stage": 4,
       "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
@@ -801,7 +804,7 @@
       "area": "studio",
       "priority": "P0",
       "bp_priority": "P2 (03_MASTER_CHECKLIST P2-06)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-026"
       ],
@@ -812,14 +815,15 @@
       ],
       "evidence": [
         "no attachment UI (grep)",
-        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md"
+        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
+        "Attachment previews (image thumbnails), removal (Delete), type/size explanations, explicit submit and no auto-submit (tests/test_chat_panel.py). Real-desktop interaction manual-pending."
       ],
       "source_refs": [
         "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
         "FINAL-REQ/area-2"
       ],
       "primary_source": "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
-      "note": "Atomic UX requirement from final area 2; nothing implemented.",
+      "note": "Attachment previews (image thumbnails), removal (Delete), type/size explanations, explicit submit and no auto-submit (tests/test_chat_panel.py). Real-desktop interaction manual-pending.",
       "backlog_anchor": "nl-bp-028",
       "program_stage": 4,
       "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
@@ -833,7 +837,7 @@
       "area": "studio",
       "priority": "P0",
       "bp_priority": "P2 (03_MASTER_CHECKLIST P2-06; SPEC-09/18)",
-      "status": "planned",
+      "status": "verified",
       "dependencies": [
         "NL-BP-026",
         "NL-BP-028"
@@ -845,7 +849,8 @@
       ],
       "evidence": [
         "SQLite tables measured: no media_attachments, assets or attachments tables",
-        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md; specifiche/18_SQLITE_SCHEMA_E_STATI.md"
+        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md; specifiche/18_SQLITE_SCHEMA_E_STATI.md",
+        "tests/test_attachments.py: mission_attachments table persists canonical stored path, sha256, media type, size, source, project/mission refs and extraction status; restart-safe list/get/attach/delete verified across process restarts (temp NL_DATA_DIR)."
       ],
       "source_refs": [
         "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
@@ -853,7 +858,7 @@
         "03_MASTER_CHECKLIST.md#P2-06"
       ],
       "primary_source": "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
-      "note": "Requires a media_attachments table and content-addressed storage in app data, not project source.",
+      "note": "tests/test_attachments.py: mission_attachments table persists canonical stored path, sha256, media type, size, source, project/mission refs and extraction status; restart-safe list/get/attach/delete verified across process restarts (temp NL_DATA_DIR).",
       "backlog_anchor": "nl-bp-029",
       "program_stage": 4,
       "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
@@ -867,7 +872,7 @@
       "area": "studio",
       "priority": "P1",
       "bp_priority": "P2 (03_MASTER_CHECKLIST P2-07)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-026"
       ],
@@ -878,14 +883,15 @@
       ],
       "evidence": [
         "no document/media parser modules (only an extension allowlist in file_viewer.py)",
-        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md"
+        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
+        "Text/code/JSON/CSV/log/markdown extraction built in; XLSX via openpyxl; PDF via pdfplumber when installed (currently unavailable -> explicit fail-closed); DOCX/PPTX fail-closed with clear messages; no archive extraction yet (tests/test_attachments.py)."
       ],
       "source_refs": [
         "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
         "03_MASTER_CHECKLIST.md#P2-07"
       ],
       "primary_source": "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
-      "note": "Separate adapters per media family; archive extraction must be traversal/zip-bomb safe.",
+      "note": "Text/code/JSON/CSV/log/markdown extraction built in; XLSX via openpyxl; PDF via pdfplumber when installed (currently unavailable -> explicit fail-closed); DOCX/PPTX fail-closed with clear messages; no archive extraction yet (tests/test_attachments.py).",
       "backlog_anchor": "nl-bp-030",
       "program_stage": 4,
       "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
@@ -899,7 +905,7 @@
       "area": "studio",
       "priority": "P1",
       "bp_priority": "P2 (03_MASTER_CHECKLIST P2-07)",
-      "status": "planned",
+      "status": "verified",
       "dependencies": [
         "NL-BP-009",
         "NL-BP-026",
@@ -912,7 +918,8 @@
       ],
       "evidence": [
         "no capability-aware routing (grep vision/attachment absent)",
-        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md; specifiche/05_MODEL_HUB_PROVIDERS.md"
+        "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md; specifiche/05_MODEL_HUB_PROVIDERS.md",
+        "app/attachments.py route_image_attachments: only measured vision capability routes images; declared requires explicit opt-in; unknown/refused excluded; optional ModelRouter permission gate; tests/test_attachments.py covers measured/declared/unknown/refused; no cloud/network."
       ],
       "source_refs": [
         "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
@@ -920,7 +927,7 @@
         "03_MASTER_CHECKLIST.md#P2-07"
       ],
       "primary_source": "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
-      "note": "Vision support must come from the capability registry, never from 'OpenAI-compatible' assumptions.",
+      "note": "app/attachments.py route_image_attachments: only measured vision capability routes images; declared requires explicit opt-in; unknown/refused excluded; optional ModelRouter permission gate; tests/test_attachments.py covers measured/declared/unknown/refused; no cloud/network.",
       "backlog_anchor": "nl-bp-031",
       "program_stage": 4,
       "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
@@ -967,7 +974,7 @@
       "area": "studio",
       "priority": "P0",
       "bp_priority": "P2 (03_MASTER_CHECKLIST P2-08) elevated by release criterion 5",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-035"
       ],
@@ -978,7 +985,8 @@
       ],
       "evidence": [
         "no microphone/audio capture code (grep)",
-        "specifiche/10_SPEECH_ASR_MODELS.md speech-to-mission section"
+        "specifiche/10_SPEECH_ASR_MODELS.md speech-to-mission section",
+        "app/speech.py SpeechManager + chat dictation controls (Ctrl+Shift+M) record/stop and insert editable transcript, never auto-submit; tests/test_speech.py, tests/test_chat_voice.py with fake recorder. Microphone/ASR hardware verification manual-pending (no local engine installed)."
       ],
       "source_refs": [
         "specifiche/10_SPEECH_ASR_MODELS.md",
@@ -986,7 +994,7 @@
         "FINAL-REQ/area-6 (criterion 5)"
       ],
       "primary_source": "specifiche/10_SPEECH_ASR_MODELS.md",
-      "note": "Release acceptance criterion 5: mic + local transcription must work.",
+      "note": "app/speech.py SpeechManager + chat dictation controls (Ctrl+Shift+M) record/stop and insert editable transcript, never auto-submit; tests/test_speech.py, tests/test_chat_voice.py with fake recorder. Microphone/ASR hardware verification manual-pending (no local engine installed).",
       "backlog_anchor": "nl-bp-033",
       "program_stage": 4,
       "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
@@ -1000,7 +1008,7 @@
       "area": "studio",
       "priority": "P2",
       "bp_priority": "new (final product requirement area 2)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-035"
       ],
@@ -1011,14 +1019,15 @@
       ],
       "evidence": [
         "no TTS code (grep tts/speech absent outside a placeholder label)",
-        "FINAL-REQ/area-2"
+        "FINAL-REQ/area-2",
+        "app/speech.py detects local TTS (Piper/local NL_TTS_COMMAND), install plan is explicit-human-action only (refuses silently absent), speak/unload lifecycle persisted; fake local speak tested. No TTS engine installed -> real audio manual-pending."
       ],
       "source_refs": [
         "FINAL-REQ/area-2",
         "specifiche/10_SPEECH_ASR_MODELS.md"
       ],
       "primary_source": "FINAL-REQ/area-2 (direct final-product requirement)",
-      "note": "Optional capability; must never block text/mic operation when absent.",
+      "note": "app/speech.py detects local TTS (Piper/local NL_TTS_COMMAND), install plan is explicit-human-action only (refuses silently absent), speak/unload lifecycle persisted; fake local speak tested. No TTS engine installed -> real audio manual-pending.",
       "backlog_anchor": "nl-bp-034",
       "program_stage": 4,
       "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
@@ -1032,7 +1041,7 @@
       "area": "studio",
       "priority": "P0",
       "bp_priority": "P2 (03_MASTER_CHECKLIST P2-08) elevated by release criterion 5",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [],
       "acceptance": [
         "optional engines with catalog showing languages, source, size, hardware, latency, license",
@@ -1042,7 +1051,8 @@
       "evidence": [
         "nl_coding_agent/gui/widgets/models_panel.py Speech tab is a placeholder label ('No speech engine is installed')",
         "no ASR/audio modules or dependencies (grep whisper/vosk/asr absent)",
-        "specifiche/10_SPEECH_ASR_MODELS.md acceptance list"
+        "specifiche/10_SPEECH_ASR_MODELS.md acceptance list",
+        "app/speech.py catalog/detection/lifecycle for faster-whisper/vosk/qwen3-asr via import probes or configured local model dirs (no downloads), cloud ASR denied by permission gate, device probing graceful; fake-engine tests only; no engine/model installed, transcription adapters need explicit local configuration."
       ],
       "source_refs": [
         "specifiche/10_SPEECH_ASR_MODELS.md",
@@ -1051,7 +1061,7 @@
         "FINAL-REQ/area-2"
       ],
       "primary_source": "specifiche/10_SPEECH_ASR_MODELS.md",
-      "note": "Only a static placeholder tab exists; at minimum one local engine must back mic transcription for release.",
+      "note": "app/speech.py catalog/detection/lifecycle for faster-whisper/vosk/qwen3-asr via import probes or configured local model dirs (no downloads), cloud ASR denied by permission gate, device probing graceful; fake-engine tests only; no engine/model installed, transcription adapters need explicit local configuration.",
       "backlog_anchor": "nl-bp-035",
       "program_stage": 4,
       "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
@@ -1099,7 +1109,7 @@
       "area": "studio",
       "priority": "P2",
       "bp_priority": "P2 (03_MASTER_CHECKLIST P2-10)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-021"
       ],
@@ -1110,7 +1120,8 @@
       ],
       "evidence": [
         "nl_coding_agent/gui/widgets/file_viewer.py is read-only QFileSystemModel + QPlainTextEdit",
-        "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md"
+        "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
+        "gui/widgets/editor_panel.py: tabbed QPlainTextEdit editor with Python/JS highlighting, explicit Ctrl+S save with CAS expected_sha256, unsaved-change guard, read-only preview for binary/oversized files and path-escape refusal; tests/test_editor_panel.py. Uses Qt built-in widgets (licensing = PySide6 already in payload); real desktop performance/DPI manual-pending."
       ],
       "source_refs": [
         "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
@@ -1118,7 +1129,7 @@
         "docs/02_SELF_BUILD_ROADMAP.md#Phase-8"
       ],
       "primary_source": "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
-      "note": "Current Files panel is a read-only viewer; editor component choice (Monaco/WebEngine vs CodeMirror 6) must be evaluated on size, performance, licensing.",
+      "note": "gui/widgets/editor_panel.py: tabbed QPlainTextEdit editor with Python/JS highlighting, explicit Ctrl+S save with CAS expected_sha256, unsaved-change guard, read-only preview for binary/oversized files and path-escape refusal; tests/test_editor_panel.py. Uses Qt built-in widgets (licensing = PySide6 already in payload); real desktop performance/DPI manual-pending.",
       "backlog_anchor": "nl-bp-037",
       "program_stage": 4,
       "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
@@ -1132,7 +1143,7 @@
       "area": "studio",
       "priority": "P2",
       "bp_priority": "P2 (03_MASTER_CHECKLIST P2-10)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-072"
       ],
@@ -1143,14 +1154,15 @@
       ],
       "evidence": [
         "no terminal widget (grep); backend scoped_run_command uses shell=True with cwd only",
-        "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md"
+        "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
+        "gui/widgets/terminal_panel.py + AppServices policy/run_terminal_command: EXECUTE permission gate, destructive/shell/network/destructive-git refusals, no shell=True, project-scoped cwd, output capture, audit events, non-blocking QProcess + injectable runner; tests/test_terminal_policy.py. Not a PTY and not an OS sandbox; human-only, non-interactive commands."
       ],
       "source_refs": [
         "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
         "03_MASTER_CHECKLIST.md#P2-10"
       ],
       "primary_source": "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
-      "note": "Backend shell helper exists but is not a sandbox; terminal UI must be policy-gated.",
+      "note": "gui/widgets/terminal_panel.py + AppServices policy/run_terminal_command: EXECUTE permission gate, destructive/shell/network/destructive-git refusals, no shell=True, project-scoped cwd, output capture, audit events, non-blocking QProcess + injectable runner; tests/test_terminal_policy.py. Not a PTY and not an OS sandbox; human-only, non-interactive commands.",
       "backlog_anchor": "nl-bp-038",
       "program_stage": 4,
       "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
@@ -1164,7 +1176,7 @@
       "area": "studio",
       "priority": "P2",
       "bp_priority": "P2 (03_MASTER_CHECKLIST P2-10)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-053"
       ],
@@ -1175,14 +1187,15 @@
       ],
       "evidence": [
         "nl_coding_agent/tools/git_tools.py provides get_git_status/get_git_diff; no GUI module references it",
-        "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md"
+        "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
+        "gui/widgets/git_panel.py + read-only services: branch/status/changes/diff/log with explicit refresh on a temp repo; strictly read-only (no staging/commit/push). Selective staging not implemented; tests/test_git_panel.py."
       ],
       "source_refs": [
         "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
         "03_MASTER_CHECKLIST.md#P2-10"
       ],
       "primary_source": "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
-      "note": "git_tools backend exists for status/diff; no GUI.",
+      "note": "gui/widgets/git_panel.py + read-only services: branch/status/changes/diff/log with explicit refresh on a temp repo; strictly read-only (no staging/commit/push). Selective staging not implemented; tests/test_git_panel.py.",
       "backlog_anchor": "nl-bp-039",
       "program_stage": 4,
       "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
@@ -1196,7 +1209,7 @@
       "area": "studio",
       "priority": "P2",
       "bp_priority": "P2 (03_MASTER_CHECKLIST P2-10)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-011",
         "NL-BP-039"
@@ -1208,14 +1221,15 @@
       ],
       "evidence": [
         "task_board.py shows verification runs/handoffs only; no problems/test/debug panels",
-        "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md"
+        "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
+        "problems panel shows failed verification runs from SQLite plus bounded project scan, with LSP diagnostics merge; debugger integration is an explicit DebugAdapter interface + fail-closed manager (app/debug.py) with fake-adapter tests, not a full DAP UI. tests/test_problems_panel.py, tests/test_debug_adapter.py."
       ],
       "source_refs": [
         "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
         "03_MASTER_CHECKLIST.md#P2-10"
       ],
       "primary_source": "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
-      "note": "No test explorer/problems/debugger surface exists; mission evidence is visible in the task board.",
+      "note": "problems panel shows failed verification runs from SQLite plus bounded project scan, with LSP diagnostics merge; debugger integration is an explicit DebugAdapter interface + fail-closed manager (app/debug.py) with fake-adapter tests, not a full DAP UI. tests/test_problems_panel.py, tests/test_debug_adapter.py.",
       "backlog_anchor": "nl-bp-040",
       "program_stage": 4,
       "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
@@ -1229,7 +1243,7 @@
       "area": "studio",
       "priority": "P2",
       "bp_priority": "P2 (03_MASTER_CHECKLIST P2-10)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-037"
       ],
@@ -1240,14 +1254,15 @@
       ],
       "evidence": [
         "grep LSP: only false positives inside Qt class names; no protocol client",
-        "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md"
+        "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
+        "app/lsp.py: read-only local server detection (pylsp/pyright/basedpyright/clangd/typescript/gopls), JSON-RPC stdio client with initialize/hover/completion/symbols/diagnostics, explicit LspManager; fake-transport tests/test_lsp_client.py. No language server installed here -> real server session manual-pending."
       ],
       "source_refs": [
         "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
         "03_MASTER_CHECKLIST.md#P2-10"
       ],
       "primary_source": "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
-      "note": "No LSP client or language-server management exists.",
+      "note": "app/lsp.py: read-only local server detection (pylsp/pyright/basedpyright/clangd/typescript/gopls), JSON-RPC stdio client with initialize/hover/completion/symbols/diagnostics, explicit LspManager; fake-transport tests/test_lsp_client.py. No language server installed here -> real server session manual-pending.",
       "backlog_anchor": "nl-bp-041",
       "program_stage": 4,
       "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
@@ -1261,7 +1276,7 @@
       "area": "studio",
       "priority": "P2",
       "bp_priority": "new (final product requirement area 2; SPEC-11)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-073"
       ],
@@ -1272,14 +1287,15 @@
       ],
       "evidence": [
         "no MCP code (grep only finds a ctypes cp call)",
-        "FINAL-REQ/area-2; specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md"
+        "FINAL-REQ/area-2; specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
+        "app/mcp.py: local JSON MCP config (stdio-only), read-only server discovery/tools list, human-approval-gated invocation with audit and NETWORK-grant requirement for network servers; fake-transport tests/test_mcp_integration.py. No real MCP server started; registration UI still minimal."
       ],
       "source_refs": [
         "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
         "FINAL-REQ/area-2"
       ],
       "primary_source": "FINAL-REQ/area-2 (direct final-product requirement)",
-      "note": "MCP appears in the final area 2 list; no client/registry exists.",
+      "note": "app/mcp.py: local JSON MCP config (stdio-only), read-only server discovery/tools list, human-approval-gated invocation with audit and NETWORK-grant requirement for network servers; fake-transport tests/test_mcp_integration.py. No real MCP server started; registration UI still minimal.",
       "backlog_anchor": "nl-bp-042",
       "program_stage": 4,
       "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
@@ -1326,7 +1342,7 @@
       "area": "studio",
       "priority": "P1",
       "bp_priority": "P1 (SPEC-08; final area 2 'accessible')",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-020"
       ],
@@ -1337,14 +1353,15 @@
       ],
       "evidence": [
         "gui/theme.py defines focus styles; no accessibility tests or command palette code",
-        "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md; final area 2 wording"
+        "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md; final area 2 wording",
+        "Command palette (Ctrl+Shift+P) with keyboard navigation, accessible names and disabled reasons, plus labels/tooltips on new panels; tests/test_command_palette.py and GUI smoke. Real DPI scaling, focus order and interactive-dialog verification manual-pending."
       ],
       "source_refs": [
         "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
         "FINAL-REQ/area-2"
       ],
       "primary_source": "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
-      "note": "Theme defines focus states, but no accessibility verification or command palette exists.",
+      "note": "Command palette (Ctrl+Shift+P) with keyboard navigation, accessible names and disabled reasons, plus labels/tooltips on new panels; tests/test_command_palette.py and GUI smoke. Real DPI scaling, focus order and interactive-dialog verification manual-pending.",
       "backlog_anchor": "nl-bp-044",
       "program_stage": 4,
       "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
@@ -3628,9 +3645,9 @@
   "counts": {
     "total": 103,
     "by_status": {
-      "verified": 25,
-      "partial": 32,
-      "planned": 42,
+      "verified": 29,
+      "partial": 48,
+      "planned": 22,
       "blocked": 4
     },
     "by_priority": {
@@ -3650,19 +3667,18 @@
     "by_area_status": {
       "core": {
         "verified": 6,
-        "partial": 4,
-        "planned": 3
+        "partial": 7
       },
       "studio": {
-        "verified": 1,
-        "partial": 7,
-        "planned": 19
+        "verified": 3,
+        "partial": 21,
+        "planned": 3
       },
       "autonomy": {
-        "partial": 7,
-        "verified": 14,
-        "blocked": 1,
-        "planned": 6
+        "verified": 16,
+        "partial": 6,
+        "planned": 5,
+        "blocked": 1
       },
       "hygiene": {
         "verified": 2,
@@ -3682,19 +3698,19 @@
     },
     "by_priority_status": {
       "P0": {
-        "verified": 16,
-        "partial": 8,
-        "planned": 19,
+        "verified": 19,
+        "partial": 15,
+        "planned": 9,
         "blocked": 4
       },
       "P1": {
-        "partial": 22,
-        "verified": 9,
-        "planned": 8
+        "verified": 10,
+        "partial": 24,
+        "planned": 5
       },
       "P2": {
-        "planned": 13,
-        "partial": 2
+        "partial": 9,
+        "planned": 6
       },
       "P3": {
         "planned": 2
@@ -4961,7 +4977,8 @@
     "v1.6_2026-10-28_stage4_complete": "Stage 4 complete (C4a-C4e): CrewRuntime seam/specs, app-owned Flow foundation, opt-in supervisor Flow executor, HITL/memory-policy/capability routing, SBOM/compat gate; sequential stays default, Flow opt-in only (no real-model Flow evidence). Stage 5 repository hygiene started.",
     "v1.7_2026-10-28_stage5_complete": "Stage 5 hygiene: read-only audit plus Lead-authorized safe cleanups (~2.96 MiB freed, worktrees pruned); validation 16 PASS/5 WARN/0 FAIL, full suite 417 passed; protected data/runtimes/dist preserved. Stage 6 distribution started.",
     "v1.8_2026-10-28_stage4_status_correction": "Corrected program stage 4 status to in_progress: C4a-C4e delivered the CrewAI/Flows/model-intelligence part only; Studio GUI/multimodal/voice/IDE surfaces remain outstanding. Stage 5 completed; stage 6 distribution foundation started early with final acceptance gated on stage-4 completion and distribution authorization.",
-    "v1.9_2026-10-28_structural_hygiene": "Structural follow-up: one authoritative root README, legacy docs/patch evidence moved to docs/history/legacy (nothing deleted), repository ownership/retention/packaging policy documented, crewAI checkout audited read-only (not imported; kept protected), measured before/after root inventory; P-01..P-08 proposals recorded for explicit authorization. Stage-6a bootstrapper/reproducible-builder evidence added; stage 4 F1/F2 evidence added."
+    "v1.9_2026-10-28_structural_hygiene": "Structural follow-up: one authoritative root README, legacy docs/patch evidence moved to docs/history/legacy (nothing deleted), repository ownership/retention/packaging policy documented, crewAI checkout audited read-only (not imported; kept protected), measured before/after root inventory; P-01..P-08 proposals recorded for explicit authorization. Stage-6a bootstrapper/reproducible-builder evidence added; stage 4 F1/F2 evidence added.",
+    "v2.0_2026-10-28_stage4_complete": "Stage 4 engineering complete: C4a-C4e + F1/F2/F3a/F3b. Updated studio requirement statuses from measured evidence (029/031 verified; 025/026/027/028/030/033/034/035/037/038/039/040/041/042/044 partial). Hardware/desktop manual-pending items recorded explicitly. Counts recomputed. Stage 6 remains in progress (release acceptance evidence pending)."
   },
   "program_order": {
     "schema_version": 1,
@@ -5054,7 +5071,7 @@
       {
         "stage": 4,
         "name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
-        "status": "in_progress",
+        "status": "completed",
         "depends_on_stages": [
           3
         ],
@@ -5112,7 +5129,7 @@
           "NL-BP-070",
           "NL-BP-071"
         ],
-        "note": "CrewAI/Flows/model-intelligence portion complete (C4a-C4e: CrewRuntime seam + typed specs, app-owned Flow state/persistence, opt-in supervisor Flow executor, HITL approvals + memory/delegation policy + capability router, SBOM/compat gate). The Studio GUI, multimodal chat/attachments, voice/ASR/TTS and IDE surfaces mapped to program stage 4 (NL-BP-020..046 etc.) are still planned/pending; stage 4 therefore remains in progress. Sequential pipeline stays the default; Flow is opt-in only."
+        "note": "Stage-4 engineering complete: CrewAI runtime/Flows/model intelligence (C4a-C4e) plus Studio GUI, multimodal mission chat, voice dictation/TTS foundation and IDE surfaces (F1 chat attachments/clipboard/drag-drop; F2 local speech manager/dictation; F3a editor/terminal policy/read-only Git/problems; F3b LSP/MCP/debug-readiness/command palette). Many requirements remain partial where real hardware/desktop verification cannot be automated: microphone/ASR/TTS hardware, Windows clipboard screenshots, real DPI/focus, language-server/MCP/debugger sessions with locally installed engines, and PTY/OS-sandbox claims. Docs record these as manual-pending; no completion claim is made for unmeasured hardware behavior."
       },
       {
         "stage": 5,
@@ -5184,5 +5201,5 @@
       }
     ]
   },
-  "updated_at": "2026-10-28T18:45:00+01:00"
+  "updated_at": "2026-10-28T19:05:00+01:00"
 }

@@ -15,7 +15,7 @@ Single index of every consolidated product requirement. Each row has a stable ID
 - **Stage 1 - Repository relocation and path reconciliation**: completed (1 requirements; IDs in INDEX.json program_order)
 - **Stage 2 - Transactional staging, safety and self-healing**: completed (15 requirements; IDs in INDEX.json program_order)
 - **Stage 3 - Persistent autonomous supervisor and verified handoff**: completed (engineering; Tier B blocked evidence - docs/SH07_TIERB_EVIDENCE.md) (13 requirements; IDs in INDEX.json program_order; C3a-C3d implemented, SH-07 Tier A verified, Tier B pending)
-- **Stage 4 - Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities**: in_progress (CrewAI/Flows/model-intelligence portion complete via C4a-C4e; Studio GUI, multimodal chat/attachments, voice/ASR/TTS and IDE surfaces outstanding) (40 requirements; IDs in INDEX.json program_order)
+- **Stage 4 - Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities**: completed (engineering; C4a-C4e + F1/F2/F3a/F3b; hardware/desktop acceptance manual-pending - docs/HARNESS_ACCEPTANCE.md) (40 requirements; IDs in INDEX.json program_order)
 - **Stage 5 - Repository cleanup and optimization**: completed (audit + Lead-authorized safe cleanups; protected data preserved - docs/REPOSITORY_HYGIENE.md) (8 requirements; IDs in INDEX.json program_order)
 - **Stage 6 - Lightweight portable/bootstrapper and final release testing**: in_progress (26 requirements; IDs in INDEX.json program_order)
 

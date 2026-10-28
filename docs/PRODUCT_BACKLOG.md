@@ -44,7 +44,7 @@ evidence only.
 | 1 | Repository relocation and path reconciliation | COMPLETE | 1 | NL-BP-143 | - |
 | 2 | Transactional staging, safety and self-healing | COMPLETE | 15 | NL-BP-3-5, 54-60, 65, 72-74, 76 | 1 |
 | 3 | Persistent autonomous supervisor and verified handoff | COMPLETE (Tier B blocked evidence) | 13 | NL-BP-12, 50-53, 61-64, 66, 67, 75, 77 | 2 |
-| 4 | Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities | IN PROGRESS | 40 | NL-BP-1, 2, 6-11, 13, 20-46, 68-71 | 3 |
+| 4 | Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities | COMPLETE | 40 | NL-BP-1, 2, 6-11, 13, 20-46, 68-71 | 3 |
 | 5 | Repository cleanup and optimization | COMPLETE | 8 | NL-BP-90-97 | 4 |
 | 6 | Lightweight portable/bootstrapper and final release testing | IN PROGRESS | 26 | NL-BP-110-124, 140-142, 144-151 | 5 |
 
@@ -59,11 +59,11 @@ SH-07 Tier B (real local models) remains pending explicit authorization and bloc
 
 | Status | P0 | P1 | P2 | P3 | Total |
 |---|---|---|---|---|---|
-| verified | 18 | 9 | 0 | 0 | 27 |
-| partial | 10 | 22 | 2 | 0 | 34 |
-| planned | 15 | 8 | 13 | 2 | 38 |
+| verified | 19 | 10 | 0 | 0 | 29 |
+| partial | 15 | 24 | 9 | 0 | 48 |
+| planned | 9 | 5 | 6 | 2 | 22 |
 | blocked | 4 | 0 | 0 | 0 | 4 |
-| **Total** | **47** | **39** | **15** | **2** | **103** |
+| **Total** | 47 | 39 | 15 | 2 | 103 |
 
 | Area | Requirements | verified | partial | planned | blocked |
 |---|---|---|---|---|---|
@@ -86,6 +86,8 @@ SH-07 Tier B (real local models) remains pending explicit authorization and bloc
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v2.0 (2026-10-28)** - Stage 4 engineering complete: CrewAI/Flows/model intelligence (C4a-C4e) plus Studio GUI, multimodal mission chat (F1), voice dictation/TTS foundation (F2) and IDE surfaces (F3a/F3b). Requirement statuses updated from measured evidence (NL-BP-029/031 verified; 025-028/030/033-035/037-042/044 partial). Hardware/desktop acceptance (microphone/ASR/TTS, Windows clipboard screenshots, real DPI/focus, live LSP/MCP/debugger sessions, PTY/OS-sandbox) is explicitly manual-pending. Stage 6 release acceptance evidence remains in progress.
 
 **v1.9 (2026-10-28)** - Structural hygiene pass: one authoritative root README.md; legacy handoff/readme/patch evidence moved (git mv, nothing deleted) to docs/history/legacy/ with an index; docs/REPOSITORY_STRUCTURE.md ownership/retention/packaging policy; crewAI checkout audited read-only (not imported; kept protected); measured before/after root inventory; P-01..P-08 authorization-gated proposals recorded. Stage-6a bootstrapper/reproducible release builder evidence added; stage-4 F1 (multimodal chat) and F2 (voice) evidence added; stage 4 remains in progress (F3 IDE surfaces).
 
