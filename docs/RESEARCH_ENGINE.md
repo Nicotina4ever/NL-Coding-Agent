@@ -1,8 +1,8 @@
-# Universal Web Research engine - foundation, R2 providers/store and R3 investigators (stage 7 research)
+# Universal Web Research engine - R1 foundation, R2 providers/store, R3 investigators, R4 service/transport (stage 7 research)
 
-**Status:** FOUNDATION + R2 PROVIDERS/STORE + R3 READ-ONLY INVESTIGATORS (fixtures/fake providers only). This is **not** a complete web-research engine. The core retrieval foundation is implemented; R2 adds a declarative search-provider registry/router (no real transport/SDK) and an additive local research knowledge store; R3 adds read-only GitHub and Hugging Face Hub investigator clients with injected transports. There is still no real provider transport, browser automation, PDF/Office extraction, GUI or model/agent integration, and provider capabilities are declarative, not network-verified. Real-network acceptance remains **MANUAL-PENDING** (NL-BP-203/211); fixture tests never count as real-network verification.
+**Status:** R1 FOUNDATION + R2 PROVIDERS/STORE + R3 READ-ONLY INVESTIGATORS + R4 SERVICE/TRANSPORT (fixtures/fake transports only). This is **not** a complete web-research engine. R4 adds an explicitly constructed, permission-gated stdlib HTTP transport, the ResearchService permission/auto-review boundary and typed read-only research tool descriptors. There is still no implicit/default network transport, no live provider adapter, no real-network acceptance, browser automation, PDF/Office extraction, GUI or full model/agent integration. Provider capabilities remain declarative; live provider/network acceptance remains **MANUAL-PENDING** (NL-BP-203/211), and fixture tests never count as real-network verification.
 
-**Implemented requirements:** retrieval foundations for **NL-BP-170** (web page/document reader), **NL-BP-175** (untrusted-source handling) and **NL-BP-206** (retrieval safety policy); R2 declarative provider registry/router and offline known-URL path for **NL-BP-169/205**, and the additive local research knowledge store/citations for **NL-BP-174**; R3 read-only investigator contracts for **NL-BP-171/172/207** (GitHub REST and Hugging Face Hub through injected transports). Remaining: real provider transports/adapters and real-network acceptance (NL-BP-203/211), research planning (NL-BP-176), research GUI (NL-BP-210), remaining ecosystem connectors (NL-BP-208/209) and the research cache/embeddings extensions of NL-BP-174/206.
+**Implemented requirements:** retrieval foundations for **NL-BP-170** (web page/document reader), **NL-BP-175** (untrusted-source handling) and **NL-BP-206** (retrieval safety policy); R2 provider registry/router and local knowledge store for **NL-BP-169/205/174**; R3 read-only GitHub/HF investigator contracts for **NL-BP-171/172/207**; R4 permission-bounded ResearchService, explicit stdlib HTTP transport path and typed read-only research tool descriptors for **NL-BP-170/174/175/205/207**. Remaining: live provider adapters/live network acceptance (NL-BP-203/211), research planning (NL-BP-176), research GUI (NL-BP-210), remaining ecosystem connectors (NL-BP-208/209), GUI/model wiring of the tool descriptors and the cache/embeddings extensions.
 
 **Package:** `nl_coding_agent/research/` (standard library only). It imports no GUI, CrewAI, model or network library; R2's store uses the existing application SQLite database additively (new `research_*` tables only).
 
@@ -18,6 +18,9 @@
 | `reader.py` | Standard-library `HTMLParser` readable extraction: title, metadata, headings, paragraphs, lists, code/pre, links (resolved), basic tables, deterministic text + Markdown; plain text/markdown/JSON passthrough; PDF/Office/unknown formats return an explicit `UnsupportedDocument`. Scripts/iframes/styles are never executed and their content is dropped. |
 | `providers.py` | Declarative search-provider contract: validated `CapabilityMatrix` (search types, coverage/languages/recency, auth, cost, rate, latency, privacy, reliability, limitations), `SearchProvider`/`NoKeySearchAdapter` protocols, config+injected `ProviderRegistry`, offline known-URL provider, honest unavailability statuses, deterministic policy routing with explanations/refusals and multi-source corroboration/disagreement verification. No real network transport or provider SDK exists. |
 | `store.py` | Additive, idempotent SQLite research store through the application database: bounded `research_sources` (canonical URL/redirect chain/provider/title/excerpt/content sha256/metadata/retrieved timestamps/scope/confidence/stale state), `research_findings`, `research_citations` and `research_conflicts`. Dedupe by canonical URL/content hash, stale/expiry/refresh queries, bounded project/mission/text search. No secrets, credentials or wholesale project content. |
+| `transport.py` | Explicit stdlib urllib transport implementing the injected HttpTransport contract: permission gate required at construction, GET/HEAD only, https default (http only if explicitly enabled), URL credentials rejected, no CR/LF headers, bounded timeout/bytes, redirects returned as 3xx (never followed) for the fetcher to re-evaluate. No module-level opener and no implicit network use. |
+| `service.py` | Permission-bounded ResearchService: provider routing, policy fetcher, reader, store, GitHub/HF investigators. Every network-capable operation calls permissions.check_capability and auto_review.evaluate_action first and returns explicit allowed/needs_approval/denied/error results (no exception leakage for normal policy decisions). Search/fetch/lookups store provenance + citations; save/list/search/mark-stale/refresh findings are exposed. No default transport, cloud call, secret logging or silent fallback. |
+| `tools.py` | Typed read-only descriptors for web_search/web_fetch/github_lookup/huggingface_lookup with capability/scope mapping, bounded input/output schemas, citation/provenance requirements and a register function. Explicitly no write/install/publish/upload/download tool; descriptors contain no execution or network implementation. |
 | `github.py` | Read-only GitHub REST investigator through an injected `HttpTransport`: repo metadata/README/license, branches/tags, commits, issues+comments, PRs+reviews, releases, workflows, file contents at a pinned ref, repository search. Every result carries canonical API URL, repo full name, requested ref, resolved commit SHA (when resolvable), timestamp and untrusted marker. Optional token is injected/env and never logged; bounded pagination/size; typed auth/rate-limit/not-found/response errors; GET-only, no repository copy/execution/writes. |
 | `huggingface.py` | Read-only Hub API investigator through the same injected transport: model/dataset/Space search+metadata, model card text, revision/sha, files (paths/sizes/formats/quantizations), license/gated/private flags and pipeline/tags. Coarse RAM/VRAM/disk estimates derive from file metadata and are explicitly marked estimates with uncertainty. No checkpoint retrieval, no license acceptance, no code execution; bounded/typed errors; optional token never logged. |
 
@@ -121,13 +124,54 @@ The production URLLIB (or other) transport is deliberately **not** part of this 
   cookie/authorization/credential) and invalid confidence/scope ids. There is no
   deletion API and no whole-project source ingestion.
 
+
+## 4d. ResearchService and permission boundary (R4, NL-BP-170/174/175/205/207 foundation)
+
+- `ResearchService` combines `ProviderRegistry` routing, the policy fetcher,
+  the reader, the research store and the GitHub/Hugging Face investigators.
+- Before any network-capable operation it calls both
+  `permissions.check_capability` (web-search/web-fetch/download/model-inference-
+  local/cloud mapping as applicable) and `auto_review.evaluate_action` with the
+  capability/scope/action descriptor. Normal policy outcomes are explicit
+  `ResearchResult` objects: allowed, needs_approval, denied, unavailable or
+  error; they are not raised past the boundary.
+- `fetch_read` wires the fetcher permission gate to the same boundary for every
+  URL/redirect hop, returns the boundary decision when approval/denial stops the
+  fetch, then reads the page with the existing reader and stores canonical URL/
+  redirect chain/provider/fetched-at/content sha256/title/metadata/bounded excerpt/
+  project/mission/task links plus a citation. Unsupported formats are stored as
+  explicit unsupported sources, never silently converted.
+- `search` routes through declared providers (offline known-URL provider in this
+  increment); `github_lookup`/`huggingface_lookup` call the read-only
+  investigators only through an injected explicit HTTP transport and persist
+  their provenance/citations. `save_finding`, `list_findings`,
+  `search_saved`, `mark_stale` and `refresh_source` wrap the local store.
+- No fetch or HTTP transport is created by default; service construction with no
+  transport reports honest unavailability. Tokens are optional explicit
+  constructor inputs and never appear in `repr`, results or errors.
+
+## 4e. Explicit HTTP transport and typed tools (R4)
+
+- `StdlibHttpTransport` is urllib-based, but construction requires an explicit
+  permission gate and an injected opener is supported for tests. It is read-only
+  (GET/HEAD), rejects credentials/non-allowed schemes/unsafe headers, caps
+  timeout/bytes, calls the gate before I/O and returns 3xx responses instead of
+  following redirects (the policy fetcher handles redirects).
+- `tools.py` declares web_search/web_fetch/github_lookup/huggingface_lookup as
+  read-only descriptors with capability/scope mapping, input/output schemas,
+  citation/provenance requirements and a small registry/register helper. There is
+  no write/install/publish/upload/download tool, and descriptors do not execute
+  anything or import a provider SDK.
+- These tools are not yet wired to the GUI/model-facing tool surface; that
+  integration remains future work and must preserve the same boundary.
+
 ## 5. Tests and evidence
 
 Targeted tests (fixtures/fake transports only):
 
 ```
-python -m pytest -q tests/test_research_policy.py tests/test_research_fetch.py tests/test_research_reader.py tests/test_research_github.py tests/test_research_huggingface.py tests/test_research_providers.py tests/test_research_store.py
-# 110 passed (69 foundation + 15 R3 investigator + 26 R2 provider/store tests)
+python -m pytest -q tests/test_research_policy.py tests/test_research_fetch.py tests/test_research_reader.py tests/test_research_github.py tests/test_research_huggingface.py tests/test_research_providers.py tests/test_research_store.py tests/test_research_transport.py tests/test_research_service.py tests/test_research_tools.py
+# 136 passed (69 foundation + 15 R3 + 26 R2 + 26 R4 transport/service/tools)
 ```
 
 Coverage:
@@ -136,6 +180,9 @@ Coverage:
 - reader: local HTML fixture (title/metadata/headings/paragraphs/lists/code/links/tables), script/style/iframe dropped and not executed, Markdown structure, plain/Markdown/JSON passthrough, invalid JSON/PDF/Office/unknown fail-closed, title fallbacks, determinism/truncation and a static no-exec/third-party guard.
 - providers: capability validation, config/injected registry and statuses, offline known-URL provider, no-key adapter honesty, deterministic routing/explanation/policy filters, explicit selection/refusal/no fallback, multi-source corroboration/disagreement/unavailability and static no-network/SDK guards;
 - store: idempotent additive schema+legacy table preservation, restart persistence, canonical URL/content-hash dedupe and refresh, project/mission isolation, bounded text search/list, stale/expiry/mark-stale/refresh, citations/findings dedupe, conflicts, unsafe/secret/oversized-content rejection and static no-network/no-file-read guards.
+- transport: explicit permission-gate requirement, GET/HEAD-only, scheme/credential/header validation before I/O, response byte caps, redirect-not-followed, fake opener only and static no-implicit-network guards;
+- service: allowed/needs-approval/denied/auto-review outcomes, no default transport, fetch permission gate per hop, reader+store provenance/citations, GitHub/HF provenance persistence, finding/store wrappers, token redaction and no secret logging;
+- tools: descriptor uniqueness/read-only/capability-scope/schema mapping, registry/register compatibility, forbidden write/install/publish/download names and static no-exec/no-network guards.
 
 No test opens a socket, performs DNS, runs a model or touches the GUI.
 
@@ -151,6 +198,13 @@ The following are explicitly not verified by this increment and must not be clai
 - **Store acceptance**: tables/citations persist locally with fixture data only;
   encryption-at-rest, retention/GC policy, cross-process contention and real
   provenance acceptance are NOT verified.
+- **Live network acceptance (R4)**: the explicit StdlibHttpTransport exists but is
+  never exercised against a real socket in this increment; real TLS/DNS/redirects/
+  rate limits, live provider adapters and real permission grants remain
+  MANUAL-PENDING (NL-BP-203/211). Fixture tests prove wiring only.
+- **Tool-surface integration**: research tool descriptors are typed but not yet
+  wired to the model/GUI tool surface, so no end-to-end agent research action is
+  claimed.
 - **Platform behaviour** on real machines is unaffected by these pure-Python modules.
 - **No platform support, release acceptance or research-quality claim** is made.
 
@@ -168,13 +222,21 @@ Any future evidence must label cases fixture-verified vs real-network-verified v
 - The research store is local SQLite only: no encryption at rest, retention policy,
   dedupe across databases or provenance signature; excerpts are bounded but the
   database still contains research evidence the owner may consider sensitive.
+- The service deliberately calls both the capability boundary and auto-review; a
+  consumed allow-once grant can make a second real permission evaluation fail, so
+  durable mission/project grants (not one-shot grants) should be used for research
+  workflows until the boundary is consolidated.
+- The stdlib transport is not a security sandbox: policy/redirect/size checks are
+  application-level, real DNS rebinding/TLS pinning/peer-IP verification are not
+  implemented and the transport must only be constructed by trusted service code
+  with a real permission gate.
 - The allowed-domain/exception semantics are exact host/subdomain matching; wildcard/glob patterns and wildcard ports are intentionally not implemented.
 
 ## 8. Next increments (queued, not implemented)
 
 1. Permission-broker integration: a NETWORK/web-fetch capability gate wired to the existing `core.permissions` broker and app services (read-only, fail-closed, audited).
 2. Real transport adapter (stdlib opener or approved HTTP client) with connect-time SSRF re-check, TLS verification, compression, bounded streaming and cancellation.
-3. Real provider adapters/transports (with permission/NETWORK gating and capability verification), store UI/retention/encryption and cache/embeddings extensions (NL-BP-169/205/174/206), PDF/Office extraction via the existing local attachment pipeline only, and browser/JS automation under a separate grant (NL-BP-170 browser part).
+3. Live provider adapters using the R4 explicit transport (permission/NETWORK gating, capability verification, real rate limits), tool-surface integration of the R4 descriptors, store UI/retention/encryption and cache/embeddings extensions (NL-BP-169/205/174/206), PDF/Office extraction via the existing local attachment pipeline only, and browser/JS automation under a separate grant (NL-BP-170 browser part).
 4. Remaining ecosystem connectors (NL-BP-208/209), real-network transport/permission integration for the GitHub/HF clients and real-network acceptance (NL-BP-203/211), research-aware planning (NL-BP-176), Studio research workspace (NL-BP-210) and the fixture-vs-real-network acceptance matrix.
 
 ## 9. Files
@@ -195,3 +257,9 @@ Any future evidence must label cases fixture-verified vs real-network-verified v
 | `nl_coding_agent/research/store.py` | additive research sources/citations/findings/conflicts SQLite store, dedupe/staleness/search |
 | `tests/test_research_providers.py` | capability/selection/routing/refusal/offline/multi-source/static tests (15) |
 | `tests/test_research_store.py` | schema/dedupe/citation/isolation/staleness/search/persistence/static tests (11) |
+| `nl_coding_agent/research/transport.py` | explicit permission-gated stdlib urllib HttpTransport; no implicit network |
+| `nl_coding_agent/research/service.py` | ResearchService permission/auto-review boundary, search/fetch/read/store/investigators |
+| `nl_coding_agent/research/tools.py` | typed read-only research tool descriptors and registry (no execution) |
+| `tests/test_research_transport.py` | fake-opener transport/scheme/credential/limit/redirect/static tests (8) |
+| `tests/test_research_service.py` | boundary/allowed/approval/denied/fetch/store/investigator/static tests (11) |
+| `tests/test_research_tools.py` | descriptor/capability/schema/registry/static tests (7) |

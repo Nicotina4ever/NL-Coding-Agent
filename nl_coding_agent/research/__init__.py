@@ -158,6 +158,29 @@ from .store import (
     ResearchStoreError,
 )
 
+from .transport import (
+    StdlibHttpTransport,
+    TransportError,
+    TransportLimitError,
+    TransportPermissionError,
+    TransportRequestError,
+)
+from .service import (
+    CAPABILITY_BY_OPERATION,
+    ResearchResult,
+    ResearchService,
+)
+from .tools import (
+    READ_ONLY_TOOL_NAMES,
+    RESEARCH_TOOL_DESCRIPTORS,
+    ResearchToolDescriptor,
+    ResearchToolError,
+    ResearchToolRegistry,
+    describe_research_tools,
+    register_research_tools,
+    research_tool,
+)
+
 __all__ = [
     "KIND_BINARY", "KIND_HTML", "KIND_JSON", "KIND_MARKDOWN", "KIND_TEXT",
     "KIND_UNSUPPORTED", "RESEARCH_SCHEMA_VERSION", "TRUST_MARKER", "Citation",
@@ -196,4 +219,10 @@ __all__ = [
     "multi_source_search", "ResearchStore", "ResearchStoreError",
     "STORE_SCHEMA_VERSION", "RESEARCH_STORE_MAX_EXCERPT_CHARS",
     "RESEARCH_STORE_MAX_LIMIT", "RESEARCH_STORE_DEFAULT_LIMIT",
+    "StdlibHttpTransport", "TransportError", "TransportPermissionError",
+    "TransportRequestError", "TransportLimitError", "ResearchService",
+    "ResearchResult", "CAPABILITY_BY_OPERATION", "ResearchToolDescriptor",
+    "ResearchToolError", "ResearchToolRegistry", "RESEARCH_TOOL_DESCRIPTORS",
+    "READ_ONLY_TOOL_NAMES", "research_tool", "register_research_tools",
+    "describe_research_tools",
 ]
