@@ -73,8 +73,8 @@ forbidden without explicit owner authorization.
 | Status | P0 | P1 | P2 | P3 | Total |
 |---|---|---|---|---|---|
 | verified | 20 | 13 | 0 | 0 | 33 |
-| partial | 41 | 28 | 11 | 1 | 81 |
-| planned | 42 | 19 | 9 | 1 | 71 |
+| partial | 43 | 28 | 11 | 1 | 83 |
+| planned | 40 | 19 | 9 | 1 | 69 |
 | blocked | 3 | 0 | 0 | 0 | 3 |
 | **Total** | 106 | 60 | 20 | 2 | 188 |
 
@@ -99,6 +99,8 @@ forbidden without explicit owner authorization.
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v4.7 (2026-10-28)** - Stage-8 G2/G3: non-executing Goal CLI group and lazy AppServices goal facade (create/list/show/lifecycle/decompose/next/progress, JSON/text, stable errors, no model config/execution, 30 targeted tests) and independent GoalVerifier (test/command/artifact/reviewer/user/file evidence, required-type enforcement, append-only goal_verifications, explicit false-completion detection, no status mutation; 20 tests). Full suite 987 passed; counts 33 verified / 83 partial / 69 planned / 3 blocked. Goals GUI page, scheduler/continuation, adaptive replanning, document reconciliation/extraction/plan approval, verifier integration and end-to-end acceptance remain pending.
 
 **v4.6 (2026-10-28)** - Stage-8 first implementation increments: G1 Universal Goal Mode foundation (durable goals/milestones tables linked to existing missions, GoalService lifecycle/dependencies/structured decomposition/next-work/progress/audit, 17 tests) and D1 document corpus discovery/ingestion (bounded read-only project/archive/Git/injected-URL document discovery with provenance, authority flags and immutable untrusted marking, 8 tests). Counts 33 verified / 81 partial / 71 planned / 3 blocked; full suite 954 passed. GUI/CLI/API goal surfaces, multi-goal execution/continuation, replanning, reconciliation/extraction/planning, independent verification and acceptance remain pending.
 

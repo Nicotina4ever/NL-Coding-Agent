@@ -661,3 +661,27 @@ Stage-8 first implementation increments (2026-10-28)
   persistence of derived plans remain pending.
 
 Full suite 954 passed; relocation/supervisor gates green; no network/model/GUI/autonomous run.
+
+Stage-8 second implementation increment (2026-10-28)
+
+- Goal CLI/API (NL-BP-212/216 partial): a lazy AppServices goal facade and a non-executing CLI
+  goal group expose the GoalService: create with acceptance criteria/priority/dependencies/
+  attachments/reference metadata, list/show/update, activate/pause/resume/block/unblock/cancel,
+  structured-plan decompose, milestone CRUD, next-work and progress, with JSON/text output and
+  stable exit codes. Goal commands reject execution flags, work without a models config, dispatch
+  before model loading, isolate via NL_DATA_DIR and never create or execute missions. The Goals
+  GUI page is still pending.
+- Independent goal verification (NL-BP-215 partial): GoalVerifier evaluates original objectives/
+  acceptance criteria against source-backed test/command/artifact/reviewer/user/file evidence plus
+  read-only stored verification/mission evidence; it enforces required evidence types, rejects
+  untrusted/model/self-attestation evidence, treats non-zero exit codes as failures, reports
+  verified/partial/missing/unknown/stale/contradicted criteria and verified/partial/contradicted/
+  unverified goal verdicts, persists append-only goal_verifications records, summarizes outstanding
+  criteria and detects false completion for completed goals without verified or with contradicted
+  evidence. It never mutates goal status and is not yet integrated into completion transitions,
+  CLI/API or GUI; human/real external evidence remains required.
+- 20 new verification tests and 13 new CLI/facade tests; full suite 987 passed.
+
+No network/model/GUI/autonomous run occurred. Scheduler/continuation, Goals GUI, adaptive
+replanning, document reconciliation/extraction/plan approval and end-to-end acceptance remain
+pending; stage-6 external acceptance is unchanged.
