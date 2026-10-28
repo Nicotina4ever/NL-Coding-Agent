@@ -17,6 +17,11 @@ Honesty rules (see docs/PLATFORM_COMPATIBILITY_MATRIX.md):
 * Optional backends (GPU telemetry, ASR/TTS, audio capture, language servers,
   debuggers) are probed read-only and fail closed with deterministic codes.
   CUDA, ROCm, Metal and MLX are never required; no accelerator is forced.
+* Cross-platform foundations: the C2 six-target native runtime manifest/provisioner
+  declares runtimes and dependency pins but measures no artifact yet
+  (release_ready=false, no Windows runtime reuse off Windows); the committed C3 CI
+  workflow is a definition, not execution evidence. See
+  docs/PLATFORM_COMPATIBILITY_MATRIX.md section 10 for the evidence index.
 * The module performs **no network I/O, no model calls and no process
   execution by default**. The one bounded-telemetry probe accepts an injected
   runner callable so tests stay hardware-free. Callers that are allowed to run
@@ -241,49 +246,65 @@ _PLATFORM_DECLARATIONS: tuple[PlatformDeclaration, ...] = (
     PlatformDeclaration(
         "windows-x86_64", "Windows 11 x64", _WINDOWS, _X64,
         PLATFORM_STATUS_LOCAL_PARTIAL, True,
-        "developer embedded runtime present locally (python/python.exe); "
-        "release runtime is an external prebuilt archive",
-        "NL Coding Agent.bat",
-        "Only target with local runtime evidence. Real clean-machine/desktop "
-        "acceptance remains MANUAL-PENDING.",
+        "six-target runtime manifest declares python-runtime-windows-x86_64 "
+        "(unmeasured template); developer embedded runtime present locally "
+        "(python/python.exe, never shipped as source)",
+        "root NL Coding Agent.bat + CLI launchers under scripts/launchers/ "
+        "(payload-root remap)",
+        "Only target with local runtime evidence. C2 six-target manifest/provisioner "
+        "implemented but no measured runtime archive; clean-machine and real-desktop "
+        "acceptance remain MANUAL-PENDING.",
     ),
     PlatformDeclaration(
         "windows-arm64", "Windows 11 ARM64", _WINDOWS, _ARM64,
         PLATFORM_STATUS_MANIFEST_SCHEMA_ONLY, True,
-        "none (manifest schema accepts the key only)",
-        "NL Coding Agent.bat (Windows launcher; runtime missing)",
-        "No native runtime/wheels evidenced; CrewAI native dependencies "
-        "(chromadb/lancedb/onnxruntime) have no Windows ARM64 artifacts in this repo.",
+        "six-target runtime manifest declares python-runtime-windows-arm64 "
+        "(unmeasured template)",
+        "NL Coding Agent.bat layout (shipped; ARM64 runtime missing)",
+        "No native ARM64 runtime/wheels evidenced; CrewAI native dependencies "
+        "(chromadb/lancedb/onnxruntime) have no Windows ARM64 artifacts in this repo; "
+        "C2 declares the target but marks it unmeasured.",
     ),
     PlatformDeclaration(
         "linux-x86_64", "Linux x86_64", _LINUX, _X64,
         PLATFORM_STATUS_MANIFEST_SCHEMA_ONLY, True,
-        "template entry + build_release platform entry only (placeholder sha256/size)",
-        "NL Coding Agent.sh (planned; not shipped)",
-        "Bootstrapper schema supports it; no Linux runtime archive, launcher or "
-        "real run evidenced.",
+        "six-target runtime manifest declares python-runtime-linux-x86_64 "
+        "(unmeasured template, tar.gz)",
+        "NL Coding Agent.sh declared in installer/platform_targets.py; not shipped",
+        "C2 provisioner supports the target (measured-only hashes, native-host "
+        "install only, no Windows runtime reuse); no Linux runtime artifact, launcher "
+        "or clean-machine evidence yet.",
     ),
     PlatformDeclaration(
         "linux-aarch64", "Linux ARM64", _LINUX, _ARM64,
         PLATFORM_STATUS_MANIFEST_SCHEMA_ONLY, True,
-        "none (manifest schema accepts the key only)",
-        "NL Coding Agent.sh (planned; not shipped)",
-        "No native runtime/wheels evidenced; ARM64 wheel availability for the "
-        "CrewAI native stack must be verified by the release runner (C2).",
+        "six-target runtime manifest declares python-runtime-linux-aarch64 "
+        "(unmeasured template, tar.gz)",
+        "NL Coding Agent.sh declared in installer/platform_targets.py; not shipped",
+        "C2 declares the target but no ARM64 runtime/wheels are evidenced; the "
+        "CrewAI native stack must be verified on a real runner before any claim.",
     ),
     PlatformDeclaration(
         "macos-x86_64", "macOS Intel", _MACOS, _X64,
         PLATFORM_STATUS_MANIFEST_SCHEMA_ONLY, True,
-        "none (manifest schema accepts the key only)",
-        "NL Coding Agent.command (planned; not shipped)",
-        "No macOS runtime, launcher or notarization evidence; Universal 2 decision open.",
+        "six-target runtime manifest declares python-runtime-macos-x86_64 "
+        "(unmeasured template, tar.gz); Universal 2 not claimed "
+        "(separate-per-arch decision)",
+        "NL Coding Agent.sh declared in installer/platform_targets.py; not shipped",
+        "No macOS runtime, launcher or signing/notarization evidence; C2 records "
+        "separate per-architecture runtimes and makes no Universal 2 claim; "
+        "real-hardware acceptance MANUAL-PENDING.",
     ),
     PlatformDeclaration(
         "macos-arm64", "macOS Apple Silicon", _MACOS, _ARM64,
         PLATFORM_STATUS_MANIFEST_SCHEMA_ONLY, True,
-        "none (manifest schema accepts the key only)",
-        "NL Coding Agent.command (planned; not shipped)",
-        "No macOS runtime, launcher or notarization evidence; Universal 2 decision open.",
+        "six-target runtime manifest declares python-runtime-macos-arm64 "
+        "(unmeasured template, tar.gz); Universal 2 not claimed "
+        "(separate-per-arch decision)",
+        "NL Coding Agent.sh declared in installer/platform_targets.py; not shipped",
+        "No macOS ARM64 runtime/wheels or signing/notarization evidence; C2 records "
+        "separate per-architecture runtimes and makes no Universal 2 claim; "
+        "real-hardware acceptance MANUAL-PENDING.",
     ),
 )
 
@@ -354,9 +375,11 @@ _FEATURE_DECLARATIONS: tuple[FeatureDeclaration, ...] = (
         "crewai", dict(_WIN_ONLY_VERIFIED), True,
         "CrewAI 1.15.32 import/unit evidence exists on Windows x64 only; its native "
         "dependency wheels (chromadb, lancedb, onnxruntime, tokenizers, pydantic-core) "
-        "are unverified for ARM64/macOS targets and must be resolved by C2.",
+        "are declared as per-target pins in the C2 runtime manifest but remain "
+        "unverified for ARM64/macOS targets; a real release runner must confirm them.",
         "crewai 1.15.32 + litellm 1.100.4 installed in python/ (win_amd64 native "
-        "wheels); agents/crew_backend.py, flows/*; tests/test_crewai_compat.py, "
+        "wheels); installer/runtime_manifest.json per-target dependency pins; "
+        "agents/crew_backend.py, flows/*; tests/test_crewai_compat.py, "
         "test_crewai_runtime.py",
     ),
     FeatureDeclaration(
@@ -364,7 +387,7 @@ _FEATURE_DECLARATIONS: tuple[FeatureDeclaration, ...] = (
         "Per-target shell semantics: the policy is argv-based and refuses shells, but "
         "command allow/deny lists mention both POSIX and Windows names; POSIX "
         "behaviour is unverified.",
-        "app/services.py:443-576 terminal policy + shell=False runner; "
+        "app/services.py:458-576 terminal policy + shell=False runner; "
         "gui/widgets/terminal_panel.py QProcess; tests/test_terminal_policy.py",
     ),
     FeatureDeclaration(
@@ -393,7 +416,9 @@ _FEATURE_DECLARATIONS: tuple[FeatureDeclaration, ...] = (
         "GPU telemetry is NVIDIA-only and optional; AMD ROCm and Apple Metal/MLX are "
         "not queried and are never required. Real hardware measurements are MANUAL-PENDING.",
         "gui/main_window.py:503-518 `nvidia-smi` status bar probe (optional, "
-        "unknown reported as em dash); resource_gate.py is model/lease based, no CUDA import",
+        "unknown reported as em dash); installer/runtime_manifest.json declares all "
+        "GPU/ASR/TTS components optional with CPU fallback (no measured backend); "
+        "resource_gate.py is model/lease based, no CUDA import",
     ),
 )
 if len(_FEATURE_DECLARATIONS) != len(FEATURE_AREAS):  # pragma: no cover

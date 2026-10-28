@@ -27,6 +27,7 @@ def test_platform_ids_are_exactly_the_six_beta_targets():
 
 
 def test_platform_declarations_do_not_overclaim_support():
+    """C1c: declarations describe the post-C2/C3 reality without upgrading support."""
     for item in ps.platform_declarations():
         assert item.ci_verifiable is True
         assert item.notes
@@ -34,22 +35,32 @@ def test_platform_declarations_do_not_overclaim_support():
             ps.PLATFORM_STATUS_LOCAL_PARTIAL,
             ps.PLATFORM_STATUS_MANIFEST_SCHEMA_ONLY,
         }
+        assert "pre-C2" not in item.runtime_manifest
         if item.platform_id == "windows-x86_64":
             assert item.status == ps.PLATFORM_STATUS_LOCAL_PARTIAL
             assert "developer embedded runtime" in item.runtime_manifest
+            assert "NL Coding Agent.bat" in item.default_launcher
+            assert "runtime manifest declares" in item.runtime_manifest
         else:
             assert item.status == ps.PLATFORM_STATUS_MANIFEST_SCHEMA_ONLY
-            assert "none" in item.runtime_manifest or "template" in item.runtime_manifest
+            # Every non-Windows target now has a declared-but-unmeasured runtime.
+            assert "six-target runtime manifest declares" in item.runtime_manifest
+            assert "unmeasured" in item.runtime_manifest
+            assert "developer embedded runtime" not in item.runtime_manifest
             if item.os_name == "windows":
+                assert ".bat" in item.default_launcher
                 assert "runtime missing" in item.default_launcher
             else:
+                assert item.default_launcher.startswith("NL Coding Agent.sh")
+                assert "declared in installer/platform_targets.py" in item.default_launcher
                 assert "not shipped" in item.default_launcher
     windows = ps.get_platform_declaration("windows-x86_64")
-    assert windows.default_launcher.endswith(".bat") and "shipped" not in windows.default_launcher
-    assert ps.get_platform_declaration("linux-x86_64").default_launcher.startswith(
-        "NL Coding Agent.sh")
-    assert "(planned; not shipped)" in ps.get_platform_declaration(
-        "macos-arm64").default_launcher
+    assert "NL Coding Agent.bat" in windows.default_launcher
+    assert "scripts/launchers/" in windows.default_launcher
+    for macos_id in ("macos-x86_64", "macos-arm64"):
+        declaration = ps.get_platform_declaration(macos_id)
+        assert "Universal 2 not claimed" in declaration.runtime_manifest
+        assert "separate-per-arch" in declaration.runtime_manifest
 
 
 def test_every_platform_declaration_is_json_safe():
@@ -147,6 +158,12 @@ def test_feature_table_is_complete_and_evidence_bound():
         if ps.feature_level(feature, "windows-x86_64") == ps.LEVEL_PARTIAL
     }
     assert {"clipboard", "microphone", "asr_tts", "lsp", "mcp", "gpu"} <= partial_on_windows
+    # C1c: feature-level evidence/statements reflect the committed C2-C5 artifacts.
+    assert "installer/runtime_manifest.json" in ps.feature_declaration("crewai").evidence
+    assert "unverified" in ps.feature_declaration("crewai").manual_pending
+    assert "installer/runtime_manifest.json" in ps.feature_declaration("gpu").evidence
+    assert "optional" in ps.feature_declaration("gpu").evidence
+    assert ":458-576" in ps.feature_declaration("terminal").evidence
 
 
 def test_feature_helpers_validate_names():
