@@ -13,10 +13,10 @@
     "mirrors": []
   },
   "platforms": {
-    "windows-x86_64": {
-      "display_name": "Windows 11 x64",
-      "launcher": "NL Coding Agent.bat",
-      "runtime_component": "python-runtime-windows-x86_64",
+    "linux-aarch64": {
+      "display_name": "Linux ARM64",
+      "launcher": "NL Coding Agent.sh",
+      "runtime_component": "python-runtime-linux-aarch64",
       "components": [
         "app-source"
       ]
@@ -25,6 +25,38 @@
       "display_name": "Linux x86_64",
       "launcher": "NL Coding Agent.sh",
       "runtime_component": "python-runtime-linux-x86_64",
+      "components": [
+        "app-source"
+      ]
+    },
+    "macos-arm64": {
+      "display_name": "macOS Apple Silicon (arm64)",
+      "launcher": "NL Coding Agent.sh",
+      "runtime_component": "python-runtime-macos-arm64",
+      "components": [
+        "app-source"
+      ]
+    },
+    "macos-x86_64": {
+      "display_name": "macOS Intel (x86_64)",
+      "launcher": "NL Coding Agent.sh",
+      "runtime_component": "python-runtime-macos-x86_64",
+      "components": [
+        "app-source"
+      ]
+    },
+    "windows-arm64": {
+      "display_name": "Windows 11 ARM64",
+      "launcher": "NL Coding Agent.bat",
+      "runtime_component": "python-runtime-windows-arm64",
+      "components": [
+        "app-source"
+      ]
+    },
+    "windows-x86_64": {
+      "display_name": "Windows 11 x64",
+      "launcher": "NL Coding Agent.bat",
+      "runtime_component": "python-runtime-windows-x86_64",
       "components": [
         "app-source"
       ]
@@ -42,8 +74,87 @@
       "url": "components/nl-coding-agent-0.2.0-source.zip",
       "platforms": [
         "windows-x86_64",
+        "windows-arm64",
+        "linux-x86_64",
+        "linux-aarch64",
+        "macos-x86_64",
+        "macos-arm64"
+      ],
+      "placeholder": true
+    },
+    {
+      "id": "python-runtime-linux-aarch64",
+      "kind": "runtime",
+      "version": "3.12.10",
+      "archive": "tar.gz",
+      "destination": "python",
+      "sha256": "",
+      "size": 0,
+      "url": "components/python-3.12.10-linux-aarch64.tar.gz",
+      "platforms": [
+        "linux-aarch64"
+      ],
+      "optional": true,
+      "placeholder": true
+    },
+    {
+      "id": "python-runtime-linux-x86_64",
+      "kind": "runtime",
+      "version": "3.12.10",
+      "archive": "tar.gz",
+      "destination": "python",
+      "sha256": "",
+      "size": 0,
+      "url": "components/python-3.12.10-linux-x86_64.tar.gz",
+      "platforms": [
         "linux-x86_64"
       ],
+      "optional": true,
+      "placeholder": true
+    },
+    {
+      "id": "python-runtime-macos-arm64",
+      "kind": "runtime",
+      "version": "3.12.10",
+      "archive": "tar.gz",
+      "destination": "python",
+      "sha256": "",
+      "size": 0,
+      "url": "components/python-3.12.10-macos-arm64.tar.gz",
+      "platforms": [
+        "macos-arm64"
+      ],
+      "optional": true,
+      "placeholder": true
+    },
+    {
+      "id": "python-runtime-macos-x86_64",
+      "kind": "runtime",
+      "version": "3.12.10",
+      "archive": "tar.gz",
+      "destination": "python",
+      "sha256": "",
+      "size": 0,
+      "url": "components/python-3.12.10-macos-x86_64.tar.gz",
+      "platforms": [
+        "macos-x86_64"
+      ],
+      "optional": true,
+      "placeholder": true
+    },
+    {
+      "id": "python-runtime-windows-arm64",
+      "kind": "runtime",
+      "version": "3.12.10",
+      "archive": "zip",
+      "destination": "python",
+      "sha256": "",
+      "size": 0,
+      "url": "components/python-3.12.10-windows-arm64.zip",
+      "platforms": [
+        "windows-arm64"
+      ],
+      "optional": true,
       "placeholder": true
     },
     {
@@ -57,21 +168,6 @@
       "url": "components/python-3.12.10-windows-x86_64.zip",
       "platforms": [
         "windows-x86_64"
-      ],
-      "optional": true,
-      "placeholder": true
-    },
-    {
-      "id": "python-runtime-linux-x86_64",
-      "kind": "runtime",
-      "version": "3.12.10",
-      "archive": "zip",
-      "destination": "python",
-      "sha256": "",
-      "size": 0,
-      "url": "components/python-3.12.10-linux-x86_64.zip",
-      "platforms": [
-        "linux-x86_64"
       ],
       "optional": true,
       "placeholder": true

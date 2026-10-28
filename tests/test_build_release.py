@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 import sys
+import tarfile
 import tempfile
 import unittest
 import zipfile
@@ -16,7 +17,10 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from installer import operations  # noqa: E402
+from installer import operations as installer_operations  # noqa: E402
+from installer import provision  # noqa: E402
 from installer.platform_manifest import load_manifest, validate_manifest  # noqa: E402
+from installer.runtime_manifest import load_runtime_manifest  # noqa: E402
 import scripts.build_release as release  # noqa: E402
 
 NL = chr(10)
@@ -312,7 +316,156 @@ class SafetyTests(unittest.TestCase):
             self.assertEqual(
                 sorted(path.name for path in Path(result["candidate"]).iterdir()),
                 ["nl-coding-agent-0.3.1-source.zip", "platform-manifest.json",
-                 "release-manifest.json"],
+                 "release-manifest.json", "runtime-manifest.json"],
+            )
+
+
+
+
+def tar_gz_bytes(files: dict[str, bytes]) -> bytes:
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+        for name in sorted(files):
+            payload = files[name]
+            info = tarfile.TarInfo(name)
+            info.size = len(payload)
+            archive.addfile(info, io.BytesIO(payload))
+    return buffer.getvalue()
+
+
+class CrossPlatformReleaseTests(ReleaseFixture):
+    def _runtime_archive(self, target_id: str) -> Path:
+        archive_kind = release.SUPPORTED_TARGETS[target_id]["archive"]
+        files = ({"python.exe": ("exe-" + target_id).encode()}
+                 if archive_kind == "zip"
+                 else {"bin/python3": ("bin-" + target_id).encode()})
+        payload = zip_bytes(files) if archive_kind == "zip" else tar_gz_bytes(files)
+        suffix = ".zip" if archive_kind == "zip" else ".tar.gz"
+        path = self.root / ("runtime-" + target_id + suffix)
+        path.write_bytes(payload)
+        return path
+
+    def test_default_release_declares_all_six_platforms_with_unmeasured_runtime_placeholders(self):
+        result = self.build()
+        candidate = Path(result["candidate"])
+        platform_manifest = load_manifest(candidate / "platform-manifest.json")
+        self.assertEqual(sorted(platform_manifest["platforms"]), sorted(release.TARGET_ORDER))
+        components = {item["id"]: item for item in platform_manifest["components"]}
+        for target_id in release.TARGET_ORDER:
+            entry = platform_manifest["platforms"][target_id]
+            runtime_id = entry["runtime_component"]
+            self.assertEqual(runtime_id, release.SUPPORTED_TARGETS[target_id]["runtime_id"])
+            self.assertEqual(components[runtime_id]["kind"], "runtime")
+            self.assertTrue(components[runtime_id]["optional"])
+            self.assertEqual(components[runtime_id]["sha256"], "")
+            self.assertEqual(components[runtime_id]["size"], 0)
+            self.assertEqual(entry["components"], ["app-source"])
+        runtime_manifest = load_runtime_manifest(candidate / "runtime-manifest.json")
+        self.assertFalse(runtime_manifest["release_ready"])
+        self.assertEqual(sorted(runtime_manifest["targets"]), sorted(release.TARGET_ORDER))
+        self.assertFalse(runtime_manifest["universal2"]["supported"])
+        self.assertEqual(runtime_manifest["universal2"]["decision"], "separate-per-arch")
+        for target_id, entry in runtime_manifest["targets"].items():
+            self.assertFalse(entry["runtime"]["measured"])
+            self.assertEqual(entry["runtime"]["sha256"], "")
+            self.assertEqual(entry["runtime"]["size"], 0)
+            self.assertTrue(entry["dependencies"])
+            self.assertTrue(all("==" in item["pinned"] for item in entry["dependencies"]))
+            optional = entry["optional_components"]
+            self.assertTrue(any(item["kind"] == "cpu" for item in optional))
+            self.assertTrue(any(item["kind"] == "asr" for item in optional))
+            self.assertTrue(any(item["kind"] == "tts" for item in optional))
+            self.assertFalse(any(item["kind"] in ("gpu",) and False for item in optional))
+
+    def test_partial_measured_runtime_archives_keep_release_not_ready(self):
+        windows = self._runtime_archive("windows-x86_64")
+        result = self.build(self.root / "out-partial",
+                            runtime_archives={"windows-x86_64": windows})
+        candidate = Path(result["candidate"])
+        runtime_manifest = load_runtime_manifest(candidate / "runtime-manifest.json")
+        self.assertFalse(runtime_manifest["release_ready"])
+        self.assertTrue(runtime_manifest["targets"]["windows-x86_64"]["runtime"]["measured"])
+        self.assertEqual(runtime_manifest["targets"]["windows-x86_64"]["runtime"]["sha256"],
+                         sha256_bytes(windows.read_bytes()))
+        for target_id in release.TARGET_ORDER:
+            if target_id == "windows-x86_64":
+                continue
+            entry = runtime_manifest["targets"][target_id]["runtime"]
+            self.assertFalse(entry["measured"])
+            self.assertEqual(entry["sha256"], "")
+            self.assertEqual(entry["size"], 0)
+        platform_manifest = load_manifest(candidate / "platform-manifest.json")
+        components = {item["id"]: item for item in platform_manifest["components"]}
+        windows_runtime = components["python-runtime-windows-x86_64"]
+        self.assertFalse(windows_runtime["optional"])
+        self.assertEqual(windows_runtime["sha256"], sha256_bytes(windows.read_bytes()))
+        self.assertEqual(platform_manifest["platforms"]["windows-x86_64"]["components"][0],
+                         "python-runtime-windows-x86_64")
+        self.assertEqual(platform_manifest["platforms"]["linux-x86_64"]["components"],
+                         ["app-source"])
+
+    def test_all_six_measured_runtime_archives_make_runtime_manifest_release_ready(self):
+        archives = {target_id: self._runtime_archive(target_id)
+                    for target_id in release.TARGET_ORDER}
+        result = self.build(self.root / "out-all", runtime_archives=archives)
+        candidate = Path(result["candidate"])
+        runtime_manifest = load_runtime_manifest(candidate / "runtime-manifest.json")
+        self.assertTrue(runtime_manifest["release_ready"])
+        platform_manifest = load_manifest(candidate / "platform-manifest.json")
+        components = {item["id"]: item for item in platform_manifest["components"]}
+        for target_id in release.TARGET_ORDER:
+            path = archives[target_id]
+            measured = runtime_manifest["targets"][target_id]["runtime"]
+            self.assertTrue(measured["measured"])
+            self.assertEqual(measured["sha256"], sha256_bytes(path.read_bytes()))
+            component = components[release.SUPPORTED_TARGETS[target_id]["runtime_id"]]
+            self.assertFalse(component["optional"])
+            self.assertEqual(component["sha256"], sha256_bytes(path.read_bytes()))
+            self.assertEqual(platform_manifest["platforms"][target_id]["components"][0],
+                             component["id"])
+            self.assertTrue((candidate / "runtime" / path.name).is_file())
+        target = self.root / "provisioned-linux"
+        installed = provision.provision_install(
+            runtime_manifest, target, platform_id="linux-aarch64",
+            host_target="linux-aarch64", offline_bundle=candidate,
+            cache_dir=self.root / "provision-cache",
+        )
+        self.assertEqual(installed["status"], "installed")
+        self.assertTrue((target / "runtime" / "bin" / "python3").is_file())
+
+    def test_cli_accepts_repeatable_runtime_archive_arguments_in_plan_mode(self):
+        import subprocess
+        subprocess.run(["git", "-C", str(self.source), "init", "-q"], check=True)
+        subprocess.run(["git", "-C", str(self.source), "add", "-A", "--", "."], check=True)
+        subprocess.run(
+            ["git", "-C", str(self.source), "-c", "user.email=test@example.invalid",
+             "-c", "user.name=Test", "commit", "-q", "-m", "fixture"],
+            check=True,
+        )
+        windows = self._runtime_archive("windows-x86_64")
+        linux = self._runtime_archive("linux-x86_64")
+        out = self.root / "cli-cross"
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = release.main([
+                "--source", str(self.source), "--output-parent", str(out),
+                "--name", "cross", "--head", HEAD, "--plan", "--json",
+                "--runtime-archive", "windows-x86_64=" + str(windows),
+                "--runtime-archive", "linux-x86_64=" + str(linux),
+            ])
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(sorted(payload["runtime_archives"]),
+                         ["linux-x86_64", "windows-x86_64"])
+        self.assertFalse(out.exists())
+
+    def test_runtime_archive_format_must_match_pinned_archive_kind(self):
+        wrong = self.root / "wrong.zip"
+        wrong.write_bytes(zip_bytes({"python.exe": b"exe"}))
+        with self.assertRaises(release.ReleaseError):
+            release.build_release(
+                self.source, self.root / "out-wrong", tracked=self.tracked, head=HEAD,
+                runtime_archives={"linux-x86_64": wrong},
             )
 
 

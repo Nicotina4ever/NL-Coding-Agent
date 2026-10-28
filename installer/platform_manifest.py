@@ -18,8 +18,9 @@ import sys
 from pathlib import Path
 
 SCHEMA_VERSION = 1
-ARCHIVE_FORMATS = ("zip", "file")
-COMPONENT_KINDS = ("app", "runtime", "assets", "config", "launcher", "offline")
+ARCHIVE_FORMATS = ("zip", "tar.gz", "tar", "file")
+COMPONENT_KINDS = ("app", "runtime", "assets", "config", "launcher", "offline",
+                   "cpu", "gpu", "asr", "tts")
 PLATFORM_KEYS = ("windows-x86_64", "windows-arm64", "linux-x86_64", "linux-aarch64",
                  "macos-x86_64", "macos-arm64")
 HEX = set("0123456789abcdef")

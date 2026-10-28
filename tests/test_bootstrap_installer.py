@@ -1,12 +1,14 @@
 """Tests for the lightweight bootstrapper (no network; fake/local artifacts only)."""
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import io
 import json
 import os
 import sys
 import tempfile
+import tarfile
 import time
 import unittest
 import zipfile
@@ -16,7 +18,18 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from installer import bootstrap, operations  # noqa: E402
+from installer import bootstrap, operations, provision  # noqa: E402
+from installer.platform_targets import (  # noqa: E402
+    SUPPORTED_TARGETS,
+    TARGET_ORDER,
+    UnsupportedTargetError,
+    detect_host_target,
+    ensure_native_target,
+)
+from installer.runtime_manifest import (  # noqa: E402
+    RuntimeManifestError,
+    load_runtime_manifest,
+)
 from installer.fetcher import (  # noqa: E402
     ArtifactError,
     DownloadError,
@@ -165,8 +178,12 @@ class ManifestTests(InstallerFixture):
         manifest = load_manifest(template_path)
         self.assertFalse(manifest["release_ready"])
         self.assertEqual(manifest["product"]["version"], "0.2.0")
-        self.assertIn("windows-x86_64", manifest["platforms"])
-        self.assertIn("linux-x86_64", manifest["platforms"])
+        self.assertEqual(sorted(manifest["platforms"]), sorted(TARGET_ORDER))
+        for target_id in TARGET_ORDER:
+            runtime_component = manifest["platforms"][target_id]["runtime_component"]
+            runtime_component_data = {item["id"]: item for item in manifest["components"]}[runtime_component]
+            self.assertEqual(runtime_component_data["kind"], "runtime")
+            self.assertTrue(runtime_component_data["archive"] in ("zip", "tar.gz"))
         runtime = manifest["platforms"]["windows-x86_64"]["runtime_component"]
         components = {item["id"]: item for item in manifest["components"]}
         self.assertEqual(components[runtime]["kind"], "runtime")
@@ -526,6 +543,14 @@ class SafetyTests(unittest.TestCase):
             self.assertNotIn(forbidden, combined,
                              "forbidden global-tooling token in installer: " + forbidden)
 
+    def test_provisioner_never_references_the_local_windows_runtime(self):
+        source = (REPO_ROOT / "installer" / "provision.py").read_text(encoding="utf-8")
+        for forbidden in ("REPO_ROOT", "python/python.exe", "python\\python.exe",
+                          "Coding Agent", "Path(__file__)"):
+            self.assertNotIn(forbidden, source)
+        targets_source = (REPO_ROOT / "installer" / "platform_targets.py").read_text(encoding="utf-8")
+        self.assertIn("never reused", targets_source)
+
     def test_install_does_not_write_outside_cache_or_target(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -544,6 +569,266 @@ class SafetyTests(unittest.TestCase):
                 path = Path(path_text).resolve()
                 self.assertTrue(any(path == item or item in path.parents for item in allowed_roots),
                                 "unexpected write outside cache/target: " + path_text)
+
+
+
+
+def tar_gz_bytes(files: dict[str, bytes]) -> bytes:
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+        for name in sorted(files):
+            payload = files[name]
+            info = tarfile.TarInfo(name)
+            info.size = len(payload)
+            archive.addfile(info, io.BytesIO(payload))
+    return buffer.getvalue()
+
+
+def make_runtime_manifest(root: Path, *, release_ready: bool = True,
+                          measured_targets: list[str] | None = None,
+                          version: str = "0.2.0") -> tuple[dict, Path]:
+    template = json.loads((REPO_ROOT / "installer" / "runtime_manifest.json")
+                          .read_text(encoding="utf-8"))
+    template["product"]["version"] = version
+    template["release_ready"] = release_ready
+    template["status"] = "release" if release_ready else "template"
+    bundle = root / "runtime-bundle"
+    bundle.mkdir(parents=True, exist_ok=True)
+    measured = measured_targets if measured_targets is not None else list(TARGET_ORDER)
+    for target_id in TARGET_ORDER:
+        entry = template["targets"][target_id]
+        archive_kind = entry["runtime"]["archive"]
+        files = ({"python.exe": ("runtime-exe-" + target_id).encode("utf-8")}
+                 if archive_kind == "zip"
+                 else {"bin/python3": ("runtime-bin-" + target_id).encode("utf-8")})
+        payload = zip_bytes(files) if archive_kind == "zip" else tar_gz_bytes(files)
+        url = "artifacts/python-runtime-" + target_id + (
+            ".zip" if archive_kind == "zip" else ".tar.gz")
+        artifact = bundle / url
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_bytes(payload)
+        entry["runtime"].update({
+            "url": url,
+            "measured": target_id in measured,
+            "sha256": sha256_bytes(payload) if target_id in measured else "",
+            "size": len(payload) if target_id in measured else 0,
+        })
+    if not release_ready:
+        template["release_ready"] = False
+        template["status"] = "template"
+    else:
+        # every required dependency remains declarative (pinned, bundled in runtime)
+        for target_id in TARGET_ORDER:
+            template["targets"][target_id]["runtime"]["measured"] = target_id in measured
+    return template, bundle
+
+
+class CrossPlatformProvisionerTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.template = load_runtime_manifest(REPO_ROOT / "installer" / "runtime_manifest.json")
+
+    def test_template_declares_all_six_targets_and_is_not_release_ready(self):
+        manifest = self.template
+        self.assertEqual(sorted(manifest["targets"]), sorted(TARGET_ORDER))
+        self.assertFalse(manifest["release_ready"])
+        self.assertFalse(manifest["universal2"]["supported"])
+        self.assertEqual(manifest["universal2"]["decision"], "separate-per-arch")
+        for target_id in TARGET_ORDER:
+            entry = manifest["targets"][target_id]
+            descriptor = SUPPORTED_TARGETS[target_id]
+            self.assertEqual(entry["runtime"]["id"], descriptor["runtime_id"])
+            self.assertFalse(entry["runtime"]["measured"])
+            self.assertEqual(entry["runtime"]["sha256"], "")
+            self.assertTrue(entry["dependencies"])
+            for dependency in entry["dependencies"]:
+                self.assertIn("==", dependency["pinned"])
+            optional = entry["optional_components"]
+            self.assertTrue(optional)
+            for component in optional:
+                self.assertTrue(component["optional"])
+                self.assertFalse(component["required"] if "required" in component else False)
+            kinds = {component["kind"] for component in optional}
+            self.assertIn("cpu", kinds)
+            self.assertIn("asr", kinds)
+            self.assertIn("tts", kinds)
+
+    def test_plan_selects_native_runtime_for_all_six_targets(self):
+        for target_id in TARGET_ORDER:
+            plan = provision.provision_plan(self.template, platform_id=target_id,
+                                            host_target=target_id)
+            self.assertEqual(plan["target"], target_id)
+            self.assertFalse(plan["installable"])
+            runtime = plan["native_runtime"]
+            self.assertEqual(runtime["id"], SUPPORTED_TARGETS[target_id]["runtime_id"])
+            self.assertFalse(runtime["measured"])
+            self.assertIn(target_id.split("-")[0], runtime["id"])
+            if target_id.startswith(("linux", "macos")):
+                self.assertNotIn("windows", runtime["id"])
+            components = plan["optional_components"]
+            self.assertTrue(any(item["kind"] == "asr" for item in components))
+            self.assertTrue(any(item["kind"] == "tts" for item in components))
+            self.assertTrue(any(item["kind"] == "cpu" for item in components))
+            for item in components:
+                self.assertFalse(item["required"])
+                self.assertTrue(item["optional"])
+            self.assertTrue(plan["degradation"])
+            for note in plan["degradation"]:
+                self.assertTrue(note)
+
+    def test_macos_has_separate_per_arch_runtimes_no_universal_claim(self):
+        arm = provision.provision_plan(self.template, platform_id="macos-arm64",
+                                       host_target="macos-arm64")
+        intel = provision.provision_plan(self.template, platform_id="macos-x86_64",
+                                         host_target="macos-x86_64")
+        self.assertNotEqual(arm["native_runtime"]["id"], intel["native_runtime"]["id"])
+        self.assertFalse(arm["universal2"]["supported"])
+        self.assertEqual(arm["universal2"]["decision"], "separate-per-arch")
+        self.assertFalse(intel["universal2"]["supported"])
+        self.assertTrue(arm["native_runtime"]["id"].endswith("macos-arm64"))
+        self.assertTrue(intel["native_runtime"]["id"].endswith("macos-x86_64"))
+
+    def test_unsupported_host_and_target_fail_closed_with_guidance(self):
+        with self.assertRaises(UnsupportedTargetError) as context:
+            detect_host_target("plan9", "sparc")
+        self.assertIn("Supported targets", str(context.exception))
+        with self.assertRaises(UnsupportedTargetError) as context:
+            detect_host_target("linux", "riscv64")
+        self.assertIn("never reused", str(context.exception))
+        with self.assertRaises(UnsupportedTargetError):
+            provision.provision_plan(self.template, platform_id="solaris-x86_64")
+        with self.assertRaises(UnsupportedTargetError):
+            provision.provision_install(self.template, self.root / "wrong-host",
+                                        platform_id="linux-x86_64",
+                                        host_target="windows-x86_64")
+
+    def test_windows_artifacts_are_refused_on_linux_and_macos(self):
+        foreign = {"id": "python-runtime-windows-x86_64",
+                   "url": "artifacts/python-runtime-windows-x86_64.zip",
+                   "platforms": ["linux-x86_64"]}
+        for target_id in ("linux-x86_64", "linux-aarch64", "macos-x86_64", "macos-arm64"):
+            foreign_for_target = dict(foreign, platforms=[target_id])
+            with self.assertRaises(UnsupportedTargetError):
+                ensure_native_target(foreign_for_target, target_id)
+        with self.assertRaises(UnsupportedTargetError):
+            ensure_native_target({"id": "python-runtime-linux-x86_64",
+                                  "url": "artifacts/linux.tar.gz",
+                                  "platforms": ["windows-x86_64"]},
+                                 "windows-x86_64")
+
+    def test_release_ready_manifest_installs_from_offline_bundle_for_all_six_targets(self):
+        manifest, bundle = make_runtime_manifest(self.root, release_ready=True)
+        cache = self.root / "shared-cache"
+        seen_hashes = set()
+        for index, target_id in enumerate(TARGET_ORDER):
+            target = self.root / ("runtime-" + target_id)
+            result = provision.provision_install(
+                manifest, target, platform_id=target_id, host_target=target_id,
+                offline_bundle=bundle, cache_dir=cache, )
+            self.assertEqual(result["status"], "installed")
+            self.assertEqual(result["target"], target_id)
+            self.assertTrue(result["native_runtime"]["measured"])
+            launcher = (target / "runtime" / "python.exe"
+                        if target_id.startswith("windows")
+                        else target / "runtime" / "bin" / "python3")
+            self.assertTrue(launcher.is_file(), str(launcher))
+            self.assertEqual(launcher.read_bytes(),
+                             ("runtime-exe-" + target_id).encode("utf-8")
+                             if target_id.startswith("windows")
+                             else ("runtime-bin-" + target_id).encode("utf-8"))
+            self.assertTrue(provision.provision_verify(target)["ok"])
+            seen_hashes.add(result["native_runtime"]["sha256"])
+        self.assertEqual(len(seen_hashes), 6)
+        cached = [path for path in (cache / "artifacts").iterdir() if path.is_dir()]
+        self.assertEqual(len(cached), 6)
+
+    def test_shared_cache_and_isolated_targets_for_one_target(self):
+        manifest, bundle = make_runtime_manifest(self.root, release_ready=True)
+        cache = self.root / "cache"
+        first = self.root / "first"
+        second = self.root / "second"
+        one = provision.provision_install(manifest, first, platform_id="linux-x86_64",
+                                          host_target="linux-x86_64",
+                                          offline_bundle=bundle, cache_dir=cache)
+        two = provision.provision_install(manifest, second, platform_id="linux-x86_64",
+                                          host_target="linux-x86_64",
+                                          offline_bundle=bundle, cache_dir=cache)
+        self.assertEqual(one["downloaded"], ["python-runtime-linux-x86_64"])
+        self.assertEqual(two["downloaded"], [])
+        self.assertEqual(two["cache_hits"], 1)
+        self.assertTrue((first / "runtime" / "bin" / "python3").is_file())
+        self.assertTrue((second / "runtime" / "bin" / "python3").is_file())
+
+    def test_hash_mismatch_fails_without_partial_install(self):
+        manifest, bundle = make_runtime_manifest(self.root, release_ready=True)
+        artifact = bundle / "artifacts" / "python-runtime-linux-x86_64.tar.gz"
+        artifact.write_bytes(b"tampered-bytes")
+        target = self.root / "hash-target"
+        with self.assertRaises(ArtifactError):
+            provision.provision_install(manifest, target, platform_id="linux-x86_64",
+                                        host_target="linux-x86_64",
+                                        offline_bundle=bundle,
+                                        cache_dir=self.root / "hash-cache")
+        self.assertFalse(target.exists())
+        leftovers = [path for path in self.root.glob(".hash-target.nlcoding-staging-*")]
+        self.assertEqual(leftovers, [])
+
+    def test_repair_restores_damaged_runtime_and_keeps_backup(self):
+        manifest, bundle = make_runtime_manifest(self.root, release_ready=True)
+        target = self.root / "repair-target"
+        cache = self.root / "repair-cache"
+        provision.provision_install(manifest, target, platform_id="windows-x86_64",
+                                    host_target="windows-x86_64",
+                                    offline_bundle=bundle, cache_dir=cache)
+        runtime_file = target / "runtime" / "python.exe"
+        runtime_file.write_bytes(b"damaged")
+        result = provision.provision_repair(manifest, target, platform_id="windows-x86_64",
+                                            host_target="windows-x86_64",
+                                            offline_bundle=bundle, cache_dir=cache)
+        self.assertEqual(result["status"], "repaired")
+        self.assertTrue(result["backup"])
+        self.assertEqual(runtime_file.read_bytes(), b"runtime-exe-windows-x86_64")
+
+    def test_update_keeps_previous_target_backup(self):
+        manifest, bundle = make_runtime_manifest(self.root, release_ready=True,
+                                                  version="0.2.0")
+        target = self.root / "update-target"
+        cache = self.root / "update-cache"
+        provision.provision_install(manifest, target, platform_id="linux-x86_64",
+                                    host_target="linux-x86_64",
+                                    offline_bundle=bundle, cache_dir=cache)
+        updated, _ = make_runtime_manifest(self.root / "v2", release_ready=True,
+                                           version="0.2.1")
+        result = provision.provision_update(updated, target, platform_id="linux-x86_64",
+                                            host_target="linux-x86_64",
+                                            offline_bundle=self.root / "v2" / "runtime-bundle",
+                                            cache_dir=cache)
+        self.assertEqual(result["status"], "updated")
+        backup = Path(str(result["backup"]))
+        self.assertTrue(backup.is_dir())
+        self.assertIn(".backup-", backup.name)
+
+    def test_provision_cli_plan_and_unsupported_platform(self):
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = bootstrap.main([
+                "provision", "plan",
+                "--runtime-manifest", str(REPO_ROOT / "installer" / "runtime_manifest.json"),
+                "--platform", "linux-x86_64", "--json",
+            ])
+        self.assertEqual(code, bootstrap.EXIT_OK)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["target"], "linux-x86_64")
+        self.assertFalse(payload["installable"])
+        with contextlib.redirect_stderr(io.StringIO()):
+            code = bootstrap.main([
+                "provision", "plan",
+                "--runtime-manifest", str(REPO_ROOT / "installer" / "runtime_manifest.json"),
+                "--platform", "solaris-x86_64",
+            ])
+        self.assertEqual(code, bootstrap.EXIT_UNSAFE)
 
 
 if __name__ == "__main__":

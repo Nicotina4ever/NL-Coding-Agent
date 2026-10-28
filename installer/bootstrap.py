@@ -27,9 +27,10 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from installer import TOOL_NAME, TOOL_VERSION
-from installer import operations
+from installer import operations, provision
 from installer.fetcher import ArtifactError, make_fetcher
 from installer.platform_manifest import ManifestError, load_manifest
+from installer.runtime_manifest import RuntimeManifestError, load_runtime_manifest
 
 EXIT_OK = 0
 EXIT_USAGE = 2
@@ -208,6 +209,53 @@ def cmd_cache(args: argparse.Namespace) -> int:
     return EXIT_USAGE
 
 
+
+def _runtime_manifest_path(args: argparse.Namespace) -> Path:
+    if not args.runtime_manifest:
+        raise RuntimeManifestError("--runtime-manifest is required for provision commands")
+    return Path(args.runtime_manifest).expanduser().resolve()
+
+
+def cmd_provision(args: argparse.Namespace) -> int:
+    runtime_manifest = load_runtime_manifest(_runtime_manifest_path(args))
+    action = str(getattr(args, "provision_action", "") or "plan")
+    common = {
+        "platform_id": args.platform,
+        "cache_dir": args.cache,
+        "offline_bundle": args.offline_bundle,
+    }
+    if action == "verify":
+        if not args.target:
+            print("error: --target is required for provision verify", file=sys.stderr)
+            return EXIT_USAGE
+        report = provision.provision_verify(args.target)
+        _print(report, args.json)
+        return EXIT_OK if report["ok"] else EXIT_VERIFICATION
+    if action == "plan":
+        result = provision.provision_plan(runtime_manifest, target=args.target, **common)
+    elif action == "install":
+        if not args.target:
+            print("error: --target is required for provision install", file=sys.stderr)
+            return EXIT_USAGE
+        result = provision.provision_install(runtime_manifest, args.target, **common)
+    elif action == "update":
+        if not args.target:
+            print("error: --target is required for provision update", file=sys.stderr)
+            return EXIT_USAGE
+        result = provision.provision_update(
+            runtime_manifest, args.target, allow_downgrade=bool(args.allow_downgrade),
+            **common)
+    elif action == "repair":
+        if not args.target:
+            print("error: --target is required for provision repair", file=sys.stderr)
+            return EXIT_USAGE
+        result = provision.provision_repair(runtime_manifest, args.target, **common)
+    else:
+        print("error: unknown provision action: " + action, file=sys.stderr)
+        return EXIT_USAGE
+    _print(result, args.json)
+    return EXIT_OK
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="nl-coding-agent-installer",
@@ -237,6 +285,27 @@ def build_parser() -> argparse.ArgumentParser:
     verify_parser = sub.add_parser("verify", help="verify installed files against install.json")
     verify_parser.add_argument("--target", required=True)
     verify_parser.add_argument("--json", action="store_true")
+
+
+    provision_parser = sub.add_parser(
+        "provision", help="provision the native cross-platform runtime (six OS/arch targets)"
+    )
+    provision_sub = provision_parser.add_subparsers(dest="provision_action", required=True)
+    for provision_action in ("plan", "install", "update", "repair", "verify"):
+        action_parser = provision_sub.add_parser(provision_action)
+        action_parser.add_argument("--runtime-manifest", required=True,
+                                   help="native runtime/dependency manifest JSON")
+        action_parser.add_argument("--platform", default=None,
+                                   help="target id override (default: detect host target)")
+        action_parser.add_argument("--cache", default=None,
+                                   help="shared content-addressed cache directory")
+        action_parser.add_argument("--offline-bundle", default=None,
+                                   help="directory with local measured artifacts (no network)")
+        action_parser.add_argument("--target", default=None,
+                                   help="install target (required for install/update/repair/verify; optional for plan)")
+        action_parser.add_argument("--json", action="store_true")
+        if provision_action == "update":
+            action_parser.add_argument("--allow-downgrade", action="store_true")
 
     cache_parser = sub.add_parser("cache", help="shared verified cache management")
     cache_sub = cache_parser.add_subparsers(dest="cache_action", required=True)
@@ -270,6 +339,7 @@ def main(argv: list[str] | None = None) -> int:
         "repair": cmd_repair,
         "verify": cmd_verify,
         "cache": cmd_cache,
+        "provision": cmd_provision,
     }
     handler = handlers.get(str(args.command))
     if handler is None:
@@ -284,6 +354,10 @@ def main(argv: list[str] | None = None) -> int:
             operations.InstallError) as exc:
         print("error: " + str(exc), file=sys.stderr)
         return EXIT_USAGE
+    except (RuntimeManifestError, provision.ProvisionError,
+            provision.UnsupportedTargetError) as exc:
+        print("provisioning error: " + str(exc), file=sys.stderr)
+        return EXIT_UNSAFE
     except ArtifactError as exc:
         print("artifact verification/download error: " + str(exc), file=sys.stderr)
         return EXIT_FETCH

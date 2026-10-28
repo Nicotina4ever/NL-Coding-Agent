@@ -17,6 +17,10 @@
 | Operations | `installer/operations.py` | plan/install/update/repair/verify, shared cache, install state, safe target rules |
 | Manifest template | `installer/platform_manifest.json` | schema + platform matrix example (status template, `release_ready: false`; not installable) |
 | Release builder | `scripts/build_release.py` | deterministic tracked-source zip + `release-manifest.json` + installer-compatible `platform-manifest.json` |
+| Target catalogue | `installer/platform_targets.py` | canonical six OS/arch targets, host detection, strict native guard (Windows runtime is never reused on Linux/macOS) |
+| Native runtime manifest | `installer/runtime_manifest.py` + `installer/runtime_manifest.json` | six-target runtime/dependency pins, per-target selectors, measured-only sha256/size, optional CPU/GPU/ASR/TTS declarations, release_ready gating, macOS universal2 decision |
+| Cross-platform provisioner | `installer/provision.py` | selects the native runtime per OS/arch, verifies hashes, reuses cache/atomic staging/offline bundle/repair/update, fails closed with guidance |
+| Archive support | `installer/operations.py` | safe `zip`, `tar.gz` and `tar` extraction with traversal/symlink rejection |
 | Tests | `tests/test_bootstrap_installer.py`, `tests/test_build_release.py` | 40 targeted tests, fake/local artifacts only, no network |
 
 Everything is standard library only (Python >= 3.10): no global Python/pip/uv/conda, no second environment, no third-party package, no admin/elevation.
@@ -163,16 +167,83 @@ Default exclusions: `.git`, `data/`, `logs/`, `dist/`, `build/`, `python/`, `cre
 
 ---
 
-## 7. Platform matrix
+## 7. Cross-platform native runtime provisioner (private beta)
 
-| Platform | Manifest support | Runtime bundle | Status |
-|---|---|---|---|
-| windows-x86_64 | schema + template + build_release output | optional external prebuilt zip (`--with-runtime-archive`) | source-only install tested locally; production runtime/manual acceptance pending |
-| linux-x86_64 | template + build_release platform entry | optional external prebuilt zip | schema only; no acceptance yet |
-| macos-x86_64 / macos-arm64 | platform keys accepted by schema | none | schema only |
-| windows-arm64 / linux-aarch64 | platform keys accepted by schema | none | schema only |
+The private beta targets six OS/architecture pairs. Target ids are shared by the
+manifests, the release builder and the provisioner:
 
----
+| Target | OS / arch | Runtime id | Runtime archive | Status |
+|---|---|---|---|---|
+| `windows-x86_64` | Windows 11 x64 | `python-runtime-windows-x86_64` | zip | manifest template; artifact not measured yet |
+| `windows-arm64` | Windows 11 ARM64 | `python-runtime-windows-arm64` | zip | manifest template; artifact not measured yet |
+| `linux-x86_64` | Linux x86_64 | `python-runtime-linux-x86_64` | tar.gz | manifest template; artifact not measured yet |
+| `linux-aarch64` | Linux ARM64 | `python-runtime-linux-aarch64` | tar.gz | manifest template; artifact not measured yet |
+| `macos-x86_64` | macOS Intel | `python-runtime-macos-x86_64` | tar.gz | manifest template; artifact not measured yet |
+| `macos-arm64` | macOS Apple Silicon | `python-runtime-macos-arm64` | tar.gz | manifest template; artifact not measured yet |
+
+### Native runtime selection and no Windows reuse
+
+- `installer/platform_targets.py` is the single source of truth for the six targets, host detection,
+  aliases and the strict native guard. On an unsupported OS/arch (for example Linux riscv64)
+  the provisioner fails closed with the list of supported targets and guidance.
+- `installer/provision.py` selects only the runtime declared for the detected (or explicitly
+  requested) target. The repository `python/` Windows x64 runtime is never referenced, copied or
+  reused by the provisioner; it consumes manifest-declared artifacts only. A Windows artifact is
+  rejected on Linux/macOS even if a manifest wrongly declares it for that target, and vice versa.
+- Install/update/repair require the selected target to match the native host; a cross-target plan is
+  allowed for release review, but cross-target installation fails closed.
+- Downloads are hash+size verified, staged atomically, stored in the shared content-addressed cache
+  and reused offline; the provisioner delegates this to the same `installer/operations.py` machinery
+  already used by the bootstrapper (cache isolation and repair/update included).
+
+### Manifest policy: measured hashes only, release_ready gating
+
+- `installer/runtime_manifest.json` is a template with `release_ready: false`. Every unmeasured runtime
+  has `sha256: ""` and `size: 0`; the validator rejects an unmeasured artifact that declares a
+  sha256/size (never fabricate hashes) and rejects a measured artifact without a real hash and
+  positive size.
+- A runtime manifest becomes `release_ready: true` only when all six native runtimes are measured.
+  The provisioner refuses install/update/repair from a template or partially measured manifest.
+- `scripts/build_release.py` emits `runtime-manifest.json` for the candidate. Measured archives are passed
+  as `--runtime-archive TARGET=PATH` (repeatable); unmeasured targets keep explicit empty
+  placeholders. The generated manifest is validated by the same schema.
+
+### Optional CPU/GPU/ASR/TTS components (graceful degradation)
+
+Each target declares optional components with `optional: true`, `required: false` and an explicit
+degradation message: CPU (always available), CUDA/ROCm/Metal/MLX GPU backends, ASR (whisper.cpp)
+and TTS (piper). None is mandatory: a missing GPU backend falls back to CPU, and missing ASR/TTS
+leaves text input and the rest of the application fully usable. The template marks all accelerator
+backends unavailable (not measured/not bundled); only the declarations and degradation paths are
+implemented, not GPU/ASR/TTS acceptance.
+
+### macOS Universal 2 decision
+
+Decision: `universal2.supported = false`, `decision = separate-per-arch`. Standalone Python runtimes
+(python-build-standalone and similar) are normally distributed per architecture; a Universal 2
+payload would need measured universal binaries for the interpreter, extension modules and every
+native dependency. No such measured artifacts exist for this beta, so no universal claim is made;
+separate `macos-x86_64` and `macos-arm64` runtimes are declared and provisioned. A future universal
+artifact is only allowed by the schema if it is measured and shared by both macOS targets.
+
+### Commands
+
+```powershell
+# Plan the native runtime for this host (default dry-run).
+python installer/bootstrap.py provision plan --runtime-manifest installer/runtime_manifest.json
+
+# Inspect another target explicitly (no install unless run on that native host).
+python installer/bootstrap.py provision plan --runtime-manifest installer/runtime_manifest.json --platform linux-aarch64
+
+# Install/verify/update/repair from measured artifacts (offline bundle = local artifacts only).
+python installer/bootstrap.py provision install --runtime-manifest release/runtime-manifest.json --target C:/Apps/NL/runtime --offline-bundle build/release-candidate
+python installer/bootstrap.py provision verify --target C:/Apps/NL/runtime
+python installer/bootstrap.py provision repair --runtime-manifest release/runtime-manifest.json --target C:/Apps/NL/runtime
+
+# Build a release candidate; measured native runtimes are pinned per target.
+python scripts/build_release.py --plan --json
+python scripts/build_release.py --runtime-archive windows-x86_64=C:/build/python-win64.zip --runtime-archive linux-x86_64=C:/build/python-linux.tar.gz
+```
 
 ## 8. Tests (targeted; no network)
 
@@ -181,7 +252,7 @@ $env:PYTHONDONTWRITEBYTECODE='1'; $env:QT_QPA_PLATFORM='offscreen'
 python -m pytest -q tests/test_bootstrap_installer.py tests/test_build_release.py -p no:cacheprovider
 ```
 
-Result: **40 passed**. Coverage:
+Result: **56 passed** (40 bootstrapper/provisioner + 16 release-builder tests). Coverage:
 
 - manifest validation (template, schema errors, unsafe destinations, missing hashes, unknown platforms);
 - plan writes nothing; install into empty target; shared cache + isolated second install; template/non-empty/root target refusals; hash and size mismatch leave no partial install; corrupt cache re-fetch;
@@ -190,6 +261,7 @@ Result: **40 passed**. Coverage:
 - cache list/verify/prune/clear and confirmation requirements;
 - CLI flow (install/plan/verify) and exit codes; no writes outside cache/target; static checks for stdlib-only/no global tooling;
 - release reproducibility (byte-identical two builds), manifest completeness/hashes/exclusions, platform-manifest validation + offline install integration, source-only zip excludes `python/`/`crewAI/`, version parsing, optional runtime archive bundling, CLI plan/build/refusal, no destructive operations.
+- cross-platform: six-target runtime manifest validation, selection per OS/arch, unsupported-host/target refusals with guidance, Windows-artifact rejection on Linux/macOS, measured-only hashes/release_ready gating, offline installs for all six targets with fake archives, cache isolation, hash-mismatch atomic failure, repair/update, macOS separate per-arch runtimes, optional component degradation.
 
 ---
 
@@ -205,6 +277,10 @@ Result: **40 passed**. Coverage:
 8. **GUI/agent acceptance from the installed payload** (GUI startup, project open, model detection, mission execution) was not executed in this task; the local smoke covers plan/install/verify integrity only.
 9. Linux/macOS behaviour is schema-level only; no cross-platform acceptance.
 10. Update/repair keep backup directories by design (no automatic cleanup); cache has no automatic size cap.
+11. **Cross-platform beta runtimes are not measured yet**: both `installer/runtime_manifest.json` and generated runtime manifests contain empty sha256/size placeholders for all six targets until the beta pipeline produces and measures real standalone Python archives. No real native runtime has been downloaded or executed on Linux/macOS/Windows ARM64 here; the provisioner tests use local fake zip/tar.gz artifacts only.
+12. **No clean/hardware acceptance for the six targets**: Windows ARM64, Linux x86_64/ARM64 and macOS Intel/Apple Silicon hosts, GPU backends (CUDA/ROCm/Metal/MLX), ASR/TTS hardware and real latency remain manual-pending; only CPU fallback/degradation declarations are implemented.
+13. **macOS Universal 2 is deliberately not claimed** (separate per-arch runtimes); no code signing/notarization, Linux distro/glibc matrix, Windows ARM64 toolchain or CI cross-build was validated.
+14. Runtime dependency pins (crewai==1.15.32, PySide6==6.12.0, psutil==7.2.2, Python 3.12.10) are the development-runtime pins; per-target native build/verification of those pins is a beta-pipeline task, not measured here.
 
 ---
 
@@ -217,3 +293,4 @@ Result: **40 passed**. Coverage:
 5. Add license/third-party notices to the payload.
 6. Run clean-Windows acceptance: install from the network, GUI startup, project open, Ollama discovery, agent execution, persistence, restart recovery, update/repair/rollback.
 7. Linux/macOS runtime and acceptance.
+8. Produce and measure all six native runtime archives; fill the runtime manifests with verified sha256/size and mark them release_ready, then run clean-host acceptance and GPU/ASR/TTS degradation checks.

@@ -1,0 +1,470 @@
+{
+  "schema_version": 1,
+  "status": "template",
+  "release_ready": false,
+  "generated_by": "installer/runtime_manifest.json (template)",
+  "product": {
+    "id": "nl-coding-agent",
+    "name": "NL Coding Agent",
+    "version": "0.2.0",
+    "channel": "beta"
+  },
+  "base_urls": {
+    "primary": "https://downloads.example.invalid/nl-coding-agent/0.2.0-beta"
+  },
+  "universal2": {
+    "supported": false,
+    "decision": "separate-per-arch",
+    "rationale": "Standalone Python runtimes (python-build-standalone and similar) are distributed per architecture. A Universal 2 payload would require measured universal binaries for the interpreter, extension modules and every native dependency; no such measured artifacts exist for this beta, so claiming universal2 would be unverified.",
+    "evidence": "docs/BOOTSTRAPPER.md#macos-universal-2-decision",
+    "artifact": null
+  },
+  "targets": {
+    "windows-x86_64": {
+      "selector": {
+        "os": "windows",
+        "arch": "x86_64"
+      },
+      "display_name": "Windows 11 x64",
+      "launcher": "NL Coding Agent.bat",
+      "runtime": {
+        "id": "python-runtime-windows-x86_64",
+        "version": "3.12.10",
+        "archive": "zip",
+        "url": "components/python-3.12.10-windows-x86_64.zip",
+        "measured": false,
+        "sha256": "",
+        "size": 0
+      },
+      "dependencies": [
+        {
+          "id": "crewai",
+          "kind": "python-package",
+          "version": "1.15.32",
+          "pinned": "crewai==1.15.32",
+          "optional": false
+        },
+        {
+          "id": "pyside6",
+          "kind": "python-package",
+          "version": "6.12.0",
+          "pinned": "PySide6==6.12.0",
+          "optional": false
+        },
+        {
+          "id": "psutil",
+          "kind": "python-package",
+          "version": "7.2.2",
+          "pinned": "psutil==7.2.2",
+          "optional": false
+        }
+      ],
+      "optional_components": [
+        {
+          "id": "accel-cpu",
+          "kind": "cpu",
+          "backend": "cpu",
+          "available": true,
+          "degradation": "CPU execution is always available; no accelerator backend is required."
+        },
+        {
+          "id": "asr-whisper",
+          "kind": "asr",
+          "backend": "whisper.cpp",
+          "available": false,
+          "degradation": "Dictation/ASR unavailable; text input and all non-voice features are unaffected."
+        },
+        {
+          "id": "tts-piper",
+          "kind": "tts",
+          "backend": "piper",
+          "available": false,
+          "degradation": "TTS unavailable; the UI and missions remain fully usable without voice output."
+        },
+        {
+          "id": "gpu-cuda",
+          "kind": "gpu",
+          "backend": "cuda",
+          "available": false,
+          "degradation": "Falls back to CPU inference; CUDA is never mandatory."
+        }
+      ],
+      "notes": [
+        "Native windows/x86_64 standalone Python runtime; the repository Windows x64 python/ runtime is never reused for this target.",
+        "shas/sizes are deliberately empty in this template; values are recorded only after measurement."
+      ]
+    },
+    "windows-arm64": {
+      "selector": {
+        "os": "windows",
+        "arch": "arm64"
+      },
+      "display_name": "Windows 11 ARM64",
+      "launcher": "NL Coding Agent.bat",
+      "runtime": {
+        "id": "python-runtime-windows-arm64",
+        "version": "3.12.10",
+        "archive": "zip",
+        "url": "components/python-3.12.10-windows-arm64.zip",
+        "measured": false,
+        "sha256": "",
+        "size": 0
+      },
+      "dependencies": [
+        {
+          "id": "crewai",
+          "kind": "python-package",
+          "version": "1.15.32",
+          "pinned": "crewai==1.15.32",
+          "optional": false
+        },
+        {
+          "id": "pyside6",
+          "kind": "python-package",
+          "version": "6.12.0",
+          "pinned": "PySide6==6.12.0",
+          "optional": false
+        },
+        {
+          "id": "psutil",
+          "kind": "python-package",
+          "version": "7.2.2",
+          "pinned": "psutil==7.2.2",
+          "optional": false
+        }
+      ],
+      "optional_components": [
+        {
+          "id": "accel-cpu",
+          "kind": "cpu",
+          "backend": "cpu",
+          "available": true,
+          "degradation": "CPU execution is always available; no accelerator backend is required."
+        },
+        {
+          "id": "asr-whisper",
+          "kind": "asr",
+          "backend": "whisper.cpp",
+          "available": false,
+          "degradation": "Dictation/ASR unavailable; text input and all non-voice features are unaffected."
+        },
+        {
+          "id": "tts-piper",
+          "kind": "tts",
+          "backend": "piper",
+          "available": false,
+          "degradation": "TTS unavailable; the UI and missions remain fully usable without voice output."
+        }
+      ],
+      "notes": [
+        "Native windows/arm64 standalone Python runtime; the repository Windows x64 python/ runtime is never reused for this target.",
+        "shas/sizes are deliberately empty in this template; values are recorded only after measurement."
+      ]
+    },
+    "linux-x86_64": {
+      "selector": {
+        "os": "linux",
+        "arch": "x86_64"
+      },
+      "display_name": "Linux x86_64",
+      "launcher": "NL Coding Agent.sh",
+      "runtime": {
+        "id": "python-runtime-linux-x86_64",
+        "version": "3.12.10",
+        "archive": "tar.gz",
+        "url": "components/python-3.12.10-linux-x86_64.tar.gz",
+        "measured": false,
+        "sha256": "",
+        "size": 0
+      },
+      "dependencies": [
+        {
+          "id": "crewai",
+          "kind": "python-package",
+          "version": "1.15.32",
+          "pinned": "crewai==1.15.32",
+          "optional": false
+        },
+        {
+          "id": "pyside6",
+          "kind": "python-package",
+          "version": "6.12.0",
+          "pinned": "PySide6==6.12.0",
+          "optional": false
+        },
+        {
+          "id": "psutil",
+          "kind": "python-package",
+          "version": "7.2.2",
+          "pinned": "psutil==7.2.2",
+          "optional": false
+        }
+      ],
+      "optional_components": [
+        {
+          "id": "accel-cpu",
+          "kind": "cpu",
+          "backend": "cpu",
+          "available": true,
+          "degradation": "CPU execution is always available; no accelerator backend is required."
+        },
+        {
+          "id": "asr-whisper",
+          "kind": "asr",
+          "backend": "whisper.cpp",
+          "available": false,
+          "degradation": "Dictation/ASR unavailable; text input and all non-voice features are unaffected."
+        },
+        {
+          "id": "tts-piper",
+          "kind": "tts",
+          "backend": "piper",
+          "available": false,
+          "degradation": "TTS unavailable; the UI and missions remain fully usable without voice output."
+        },
+        {
+          "id": "gpu-cuda",
+          "kind": "gpu",
+          "backend": "cuda",
+          "available": false,
+          "degradation": "Falls back to CPU inference; CUDA is never mandatory."
+        },
+        {
+          "id": "gpu-rocm",
+          "kind": "gpu",
+          "backend": "rocm",
+          "available": false,
+          "degradation": "Falls back to CPU inference; ROCm is never mandatory."
+        }
+      ],
+      "notes": [
+        "Native linux/x86_64 standalone Python runtime; the repository Windows x64 python/ runtime is never reused for this target.",
+        "shas/sizes are deliberately empty in this template; values are recorded only after measurement."
+      ]
+    },
+    "linux-aarch64": {
+      "selector": {
+        "os": "linux",
+        "arch": "aarch64"
+      },
+      "display_name": "Linux ARM64",
+      "launcher": "NL Coding Agent.sh",
+      "runtime": {
+        "id": "python-runtime-linux-aarch64",
+        "version": "3.12.10",
+        "archive": "tar.gz",
+        "url": "components/python-3.12.10-linux-aarch64.tar.gz",
+        "measured": false,
+        "sha256": "",
+        "size": 0
+      },
+      "dependencies": [
+        {
+          "id": "crewai",
+          "kind": "python-package",
+          "version": "1.15.32",
+          "pinned": "crewai==1.15.32",
+          "optional": false
+        },
+        {
+          "id": "pyside6",
+          "kind": "python-package",
+          "version": "6.12.0",
+          "pinned": "PySide6==6.12.0",
+          "optional": false
+        },
+        {
+          "id": "psutil",
+          "kind": "python-package",
+          "version": "7.2.2",
+          "pinned": "psutil==7.2.2",
+          "optional": false
+        }
+      ],
+      "optional_components": [
+        {
+          "id": "accel-cpu",
+          "kind": "cpu",
+          "backend": "cpu",
+          "available": true,
+          "degradation": "CPU execution is always available; no accelerator backend is required."
+        },
+        {
+          "id": "asr-whisper",
+          "kind": "asr",
+          "backend": "whisper.cpp",
+          "available": false,
+          "degradation": "Dictation/ASR unavailable; text input and all non-voice features are unaffected."
+        },
+        {
+          "id": "tts-piper",
+          "kind": "tts",
+          "backend": "piper",
+          "available": false,
+          "degradation": "TTS unavailable; the UI and missions remain fully usable without voice output."
+        }
+      ],
+      "notes": [
+        "Native linux/aarch64 standalone Python runtime; the repository Windows x64 python/ runtime is never reused for this target.",
+        "shas/sizes are deliberately empty in this template; values are recorded only after measurement."
+      ]
+    },
+    "macos-x86_64": {
+      "selector": {
+        "os": "macos",
+        "arch": "x86_64"
+      },
+      "display_name": "macOS Intel (x86_64)",
+      "launcher": "NL Coding Agent.sh",
+      "runtime": {
+        "id": "python-runtime-macos-x86_64",
+        "version": "3.12.10",
+        "archive": "tar.gz",
+        "url": "components/python-3.12.10-macos-x86_64.tar.gz",
+        "measured": false,
+        "sha256": "",
+        "size": 0
+      },
+      "dependencies": [
+        {
+          "id": "crewai",
+          "kind": "python-package",
+          "version": "1.15.32",
+          "pinned": "crewai==1.15.32",
+          "optional": false
+        },
+        {
+          "id": "pyside6",
+          "kind": "python-package",
+          "version": "6.12.0",
+          "pinned": "PySide6==6.12.0",
+          "optional": false
+        },
+        {
+          "id": "psutil",
+          "kind": "python-package",
+          "version": "7.2.2",
+          "pinned": "psutil==7.2.2",
+          "optional": false
+        }
+      ],
+      "optional_components": [
+        {
+          "id": "accel-cpu",
+          "kind": "cpu",
+          "backend": "cpu",
+          "available": true,
+          "degradation": "CPU execution is always available; no accelerator backend is required."
+        },
+        {
+          "id": "asr-whisper",
+          "kind": "asr",
+          "backend": "whisper.cpp",
+          "available": false,
+          "degradation": "Dictation/ASR unavailable; text input and all non-voice features are unaffected."
+        },
+        {
+          "id": "tts-piper",
+          "kind": "tts",
+          "backend": "piper",
+          "available": false,
+          "degradation": "TTS unavailable; the UI and missions remain fully usable without voice output."
+        },
+        {
+          "id": "gpu-metal",
+          "kind": "gpu",
+          "backend": "metal",
+          "available": false,
+          "degradation": "Falls back to CPU inference; Metal is never mandatory."
+        }
+      ],
+      "notes": [
+        "Native macos/x86_64 standalone Python runtime; the repository Windows x64 python/ runtime is never reused for this target.",
+        "shas/sizes are deliberately empty in this template; values are recorded only after measurement.",
+        "macOS Universal 2 is not claimed: separate per-arch runtime is provisioned (see universal2 decision below)."
+      ]
+    },
+    "macos-arm64": {
+      "selector": {
+        "os": "macos",
+        "arch": "arm64"
+      },
+      "display_name": "macOS Apple Silicon (arm64)",
+      "launcher": "NL Coding Agent.sh",
+      "runtime": {
+        "id": "python-runtime-macos-arm64",
+        "version": "3.12.10",
+        "archive": "tar.gz",
+        "url": "components/python-3.12.10-macos-arm64.tar.gz",
+        "measured": false,
+        "sha256": "",
+        "size": 0
+      },
+      "dependencies": [
+        {
+          "id": "crewai",
+          "kind": "python-package",
+          "version": "1.15.32",
+          "pinned": "crewai==1.15.32",
+          "optional": false
+        },
+        {
+          "id": "pyside6",
+          "kind": "python-package",
+          "version": "6.12.0",
+          "pinned": "PySide6==6.12.0",
+          "optional": false
+        },
+        {
+          "id": "psutil",
+          "kind": "python-package",
+          "version": "7.2.2",
+          "pinned": "psutil==7.2.2",
+          "optional": false
+        }
+      ],
+      "optional_components": [
+        {
+          "id": "accel-cpu",
+          "kind": "cpu",
+          "backend": "cpu",
+          "available": true,
+          "degradation": "CPU execution is always available; no accelerator backend is required."
+        },
+        {
+          "id": "asr-whisper",
+          "kind": "asr",
+          "backend": "whisper.cpp",
+          "available": false,
+          "degradation": "Dictation/ASR unavailable; text input and all non-voice features are unaffected."
+        },
+        {
+          "id": "tts-piper",
+          "kind": "tts",
+          "backend": "piper",
+          "available": false,
+          "degradation": "TTS unavailable; the UI and missions remain fully usable without voice output."
+        },
+        {
+          "id": "gpu-metal",
+          "kind": "gpu",
+          "backend": "metal",
+          "available": false,
+          "degradation": "Falls back to CPU inference; Metal is never mandatory."
+        },
+        {
+          "id": "gpu-mlx",
+          "kind": "gpu",
+          "backend": "mlx",
+          "available": false,
+          "degradation": "Falls back to CPU inference; MLX is never mandatory."
+        }
+      ],
+      "notes": [
+        "Native macos/arm64 standalone Python runtime; the repository Windows x64 python/ runtime is never reused for this target.",
+        "shas/sizes are deliberately empty in this template; values are recorded only after measurement.",
+        "macOS Universal 2 is not claimed: separate per-arch runtime is provisioned (see universal2 decision below)."
+      ]
+    }
+  }
+}

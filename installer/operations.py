@@ -18,6 +18,7 @@ import hashlib
 import json
 import os
 import shutil
+import tarfile
 import stat as stat_module
 import sys
 import time
@@ -234,6 +235,49 @@ def _safe_zip_member(member: zipfile.ZipInfo) -> str:
     return "/".join(parts)
 
 
+def _safe_tar_member(member: tarfile.TarInfo) -> str:
+    name = str(member.name).replace(chr(92), "/")
+    if not name or name.startswith("/") or name.startswith("./"):
+        raise InstallError("unsafe archive entry: " + name)
+    parts = [part for part in name.split("/") if part]
+    if not parts or any(part == ".." for part in parts):
+        raise InstallError("unsafe archive entry: " + name)
+    if member.issym() or member.islnk():
+        raise InstallError("refusing symlink/hardlink archive entry: " + name)
+    if member.isdev() or member.isfifo():
+        raise InstallError("refusing special archive entry: " + name)
+    if member.isdir():
+        return ""
+    return "/".join(parts)
+
+
+def _extract_tar_component(archive_path: Path, component: dict, staging: Path,
+                           files_out: dict[str, dict]) -> int:
+    destination_rel = component.get("destination") or "."
+    mode = "r:gz" if component["archive"] == "tar.gz" else "r:"
+    extracted = 0
+    with tarfile.open(archive_path, mode) as archive:
+        for member in sorted(archive.getmembers(), key=lambda item: item.name):
+            rel_name = _safe_tar_member(member)
+            if not rel_name:
+                continue
+            target_rel = rel_name if destination_rel == "." else destination_rel + "/" + rel_name
+            target = staging / target_rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            source = archive.extractfile(member)
+            if source is None:
+                continue
+            data = source.read()
+            target.write_bytes(data)
+            files_out[target_rel] = {
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "size": len(data),
+                "component": component["id"],
+            }
+            extracted += 1
+    return extracted
+
+
 def _extract_component(archive_path: Path, component: dict, staging: Path,
                        files_out: dict[str, dict]) -> int:
     destination_rel = component.get("destination") or "."
@@ -250,6 +294,8 @@ def _extract_component(archive_path: Path, component: dict, staging: Path,
         files_out[rel] = {"sha256": hashlib.sha256(data).hexdigest(),
                           "size": len(data), "component": component["id"]}
         return 1
+    if component["archive"] in ("tar.gz", "tar"):
+        return _extract_tar_component(archive_path, component, staging, files_out)
     extracted = 0
     with zipfile.ZipFile(archive_path) as archive:
         for member in sorted(archive.infolist(), key=lambda item: item.filename):

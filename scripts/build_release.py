@@ -35,6 +35,9 @@ import zipfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from installer.platform_targets import SUPPORTED_TARGETS, TARGET_ORDER  # noqa: E402
 TOOL_NAME = "build_release.py"
 TOOL_VERSION = "0.1.0"
 SCHEMA_VERSION = 1
@@ -69,16 +72,58 @@ EXCLUDED_FILES = frozenset({
 EXCLUDED_SUFFIXES = frozenset({
     ".pyc", ".pyo", ".pyd", ".sqlite3", ".db", ".log", ".egg-info",
 })
-DEFAULT_PLATFORMS = {
-    "windows-x86_64": "Windows 11 x64",
-    "linux-x86_64": "Linux x86_64",
-}
-DEFAULT_LAUNCHERS = {
-    "windows-x86_64": "NL Coding Agent.bat",
-    "linux-x86_64": "NL Coding Agent.sh",
-}
+DEFAULT_PLATFORMS = {target_id: SUPPORTED_TARGETS[target_id]["display_name"]
+                    for target_id in TARGET_ORDER}
+DEFAULT_LAUNCHERS = {target_id: SUPPORTED_TARGETS[target_id]["launcher"]
+                     for target_id in TARGET_ORDER}
 DEFAULT_BASE_URL = "https://downloads.example.invalid/nl-coding-agent"
 DEFAULT_RUNTIME_VERSION = "3.12.10"
+PINNED_DEPENDENCIES = (
+    {"id": "crewai", "kind": "python-package", "version": "1.15.32", "pinned": "crewai==1.15.32"},
+    {"id": "pyside6", "kind": "python-package", "version": "6.12.0", "pinned": "PySide6==6.12.0"},
+    {"id": "psutil", "kind": "python-package", "version": "7.2.2", "pinned": "psutil==7.2.2"},
+)
+MACOS_UNIVERSAL2_DECISION = {
+    "supported": False,
+    "decision": "separate-per-arch",
+    "rationale": ("Standalone Python runtimes (python-build-standalone and similar) are "
+                  "distributed per architecture. A Universal 2 payload would require measured "
+                  "universal binaries for the interpreter, extension modules and every native "
+                  "dependency; no such measured artifacts exist for this beta, so claiming "
+                  "universal2 would be unverified."),
+    "evidence": "docs/BOOTSTRAPPER.md#macos-universal-2-decision",
+    "artifact": None,
+}
+OPTIONAL_COMPONENT_SPECS = {
+    "accel-cpu": {"kind": "cpu", "backend": "cpu", "available": True,
+                  "degradation": "CPU execution is always available; no accelerator backend is required."},
+    "asr-whisper": {"kind": "asr", "backend": "whisper.cpp", "available": False,
+                    "degradation": "Dictation/ASR unavailable; text input and all non-voice features are unaffected."},
+    "tts-piper": {"kind": "tts", "backend": "piper", "available": False,
+                  "degradation": "TTS unavailable; the UI and missions remain fully usable without voice output."},
+    "gpu-cuda": {"kind": "gpu", "backend": "cuda", "available": False,
+                 "degradation": "Falls back to CPU inference; CUDA is never mandatory."},
+    "gpu-rocm": {"kind": "gpu", "backend": "rocm", "available": False,
+                 "degradation": "Falls back to CPU inference; ROCm is never mandatory."},
+    "gpu-metal": {"kind": "gpu", "backend": "metal", "available": False,
+                  "degradation": "Falls back to CPU inference; Metal is never mandatory."},
+    "gpu-mlx": {"kind": "gpu", "backend": "mlx", "available": False,
+                "degradation": "Falls back to CPU inference; MLX is never mandatory."},
+}
+
+
+def optional_components_for_target(target_id: str) -> list:
+    ids = ["accel-cpu", "asr-whisper", "tts-piper"]
+    if target_id in ("windows-x86_64", "linux-x86_64"):
+        ids.append("gpu-cuda")
+    if target_id == "linux-x86_64":
+        ids.append("gpu-rocm")
+    if target_id.startswith("macos"):
+        ids.append("gpu-metal")
+    if target_id == "macos-arm64":
+        ids.append("gpu-mlx")
+    return [{"id": component_id, **OPTIONAL_COMPONENT_SPECS[component_id],
+             "optional": True} for component_id in ids]
 
 
 class ReleaseError(RuntimeError):
@@ -211,6 +256,113 @@ def build_zip(source: Path, files: list[dict], zip_path: Path) -> tuple[str, int
     return sha256_file(zip_path), zip_path.stat().st_size
 
 
+def _runtime_archive_extension(target_id: str) -> str:
+    descriptor = SUPPORTED_TARGETS[target_id]
+    return ".zip" if descriptor["archive"] == "zip" else ".tar.gz"
+
+
+def _measure_runtime_archive(path: Path, target_id: str) -> dict:
+    if target_id not in SUPPORTED_TARGETS:
+        raise ReleaseError("unsupported runtime platform: " + str(target_id))
+    if not path.is_file():
+        raise ReleaseError("runtime archive not found: " + str(path))
+    name = path.name.lower()
+    if name.endswith(".tar.gz") or name.endswith(".tgz"):
+        archive = "tar.gz"
+    elif name.endswith(".zip"):
+        archive = "zip"
+    elif name.endswith(".tar"):
+        archive = "tar"
+    else:
+        raise ReleaseError("runtime archive must be .zip/.tar.gz/.tar: " + str(path))
+    expected = SUPPORTED_TARGETS[target_id]["archive"]
+    if archive != expected:
+        raise ReleaseError(
+            "runtime archive format " + archive + " does not match the pinned archive "
+            "kind " + expected + " for " + target_id
+        )
+    return {
+        "name": path.name,
+        "sha256": sha256_file(path),
+        "size": path.stat().st_size,
+        "archive": archive,
+        "platform": target_id,
+    }
+
+
+def build_runtime_manifest(version: str, runtime_archives: dict | None = None,
+                           base_url: str = DEFAULT_BASE_URL) -> dict:
+    """Build the six-target runtime/dependency manifest.
+
+    The Windows embedded python/ runtime is never referenced. Only archives
+    measured by the caller receive sha256/size; every other target keeps
+    explicit unmeasured placeholders and the manifest is not release-ready.
+    """
+    measured = dict(runtime_archives or {})
+    unknown = sorted(set(measured) - set(TARGET_ORDER))
+    if unknown:
+        raise ReleaseError("runtime archives for unsupported platforms: "
+                           + ", ".join(unknown))
+    targets: dict = {}
+    for target_id in TARGET_ORDER:
+        descriptor = SUPPORTED_TARGETS[target_id]
+        info = measured.get(target_id)
+        if info:
+            runtime = {
+                "id": descriptor["runtime_id"],
+                "version": str(info.get("version") or DEFAULT_RUNTIME_VERSION),
+                "archive": str(info["archive"]),
+                "url": "runtime/" + str(info["name"]),
+                "measured": True,
+                "sha256": str(info["sha256"]),
+                "size": int(info["size"]),
+            }
+        else:
+            runtime = {
+                "id": descriptor["runtime_id"],
+                "version": DEFAULT_RUNTIME_VERSION,
+                "archive": descriptor["archive"],
+                "url": "components/" + descriptor["runtime_id"]
+                        + _runtime_archive_extension(target_id),
+                "measured": False,
+                "sha256": "",
+                "size": 0,
+            }
+        targets[target_id] = {
+            "selector": {"os": descriptor["os"], "arch": descriptor["arch"]},
+            "display_name": descriptor["display_name"],
+            "launcher": descriptor["launcher"],
+            "runtime": runtime,
+            "dependencies": [dict(item, optional=False) for item in PINNED_DEPENDENCIES],
+            "optional_components": optional_components_for_target(target_id),
+            "notes": [
+                "Native " + descriptor["os"] + "/" + descriptor["arch"]
+                + " standalone Python runtime; the repository Windows x64 python/ runtime "
+                  "is never reused for this target.",
+                "sha256/size are recorded only for measured archives; unmeasured targets "
+                "keep empty placeholders and block release_ready.",
+                *(["macOS Universal 2 is not claimed: separate per-arch runtime."]
+                  if descriptor["os"] == "macos" else []),
+            ],
+        }
+    release_ready = len(measured) == len(TARGET_ORDER)
+    return {
+        "schema_version": 1,
+        "status": "release" if release_ready else "draft",
+        "release_ready": release_ready,
+        "generated_by": TOOL_NAME + " " + TOOL_VERSION,
+        "product": {
+            "id": "nl-coding-agent",
+            "name": "NL Coding Agent",
+            "version": version,
+            "channel": "beta",
+        },
+        "base_urls": {"primary": base_url.rstrip("/")},
+        "universal2": dict(MACOS_UNIVERSAL2_DECISION),
+        "targets": targets,
+    }
+
+
 def build_platform_manifest(
     *,
     version: str,
@@ -221,27 +373,13 @@ def build_platform_manifest(
     launchers: dict[str, str],
     base_url: str,
     runtime_archive: dict | None = None,
+    runtime_archives: dict[str, dict] | None = None,
+    runtime_version: str = DEFAULT_RUNTIME_VERSION,
 ) -> dict:
-    platform_entries: dict[str, dict] = {}
-    components: list[dict] = []
-    runtime_components: dict[str, dict] = {}
-    for platform_id in sorted(platforms):
-        runtime_id = "python-runtime-" + platform_id
-        runtime_components[platform_id] = {
-            "id": runtime_id,
-            "kind": "runtime",
-            "version": (runtime_archive or {}).get("version", DEFAULT_RUNTIME_VERSION),
-            "archive": "zip",
-            "destination": "python",
-            "sha256": "",
-            "size": 0,
-            "url": "components/" + runtime_id + ".zip",
-            "platforms": [platform_id],
-            "optional": True,
-            "placeholder": True,
-        }
-    ordered_components: list[dict] = []
-    ordered_components.append({
+    measured: dict[str, dict] = dict(runtime_archives or {})
+    if runtime_archive:
+        measured.setdefault(str(runtime_archive["platform"]), runtime_archive)
+    ordered_components: list[dict] = [{
         "id": "app-source",
         "kind": "app",
         "version": version,
@@ -252,38 +390,53 @@ def build_platform_manifest(
         "url": zip_name,
         "platforms": sorted(platforms),
         "placeholder": False,
-    })
-    if runtime_archive:
-        runtime_platform = runtime_archive["platform"]
-        if runtime_platform not in platforms:
-            raise ReleaseError("runtime archive platform is not in the manifest platforms: "
-                               + str(runtime_platform))
-        runtime_id = "python-runtime-" + runtime_platform
-        ordered_components.append({
-            "id": runtime_id,
-            "kind": "runtime",
-            "version": str(runtime_archive["version"]),
-            "archive": "zip",
-            "destination": "python",
-            "sha256": str(runtime_archive["sha256"]),
-            "size": int(runtime_archive["size"]),
-            "url": "runtime/" + str(runtime_archive["name"]),
-            "platforms": [runtime_platform],
-            "placeholder": False,
-        })
-        runtime_components[runtime_platform] = ordered_components[-1]
-    existing_ids = {component["id"] for component in ordered_components}
-    for key in sorted(runtime_components):
-        if runtime_components[key]["id"] not in existing_ids:
-            ordered_components.append(runtime_components[key])
+    }]
+    runtime_components: dict[str, dict] = {}
     for platform_id in sorted(platforms):
-        included = ["app-source"]
+        if platform_id not in SUPPORTED_TARGETS:
+            raise ReleaseError("unsupported platform in release manifest: " + platform_id)
+        descriptor = SUPPORTED_TARGETS[platform_id]
+        info = measured.get(platform_id)
+        if info:
+            component = {
+                "id": descriptor["runtime_id"],
+                "kind": "runtime",
+                "version": str(info.get("version") or runtime_version),
+                "archive": str(info["archive"]),
+                "destination": "python",
+                "sha256": str(info["sha256"]),
+                "size": int(info["size"]),
+                "url": "runtime/" + str(info["name"]),
+                "platforms": [platform_id],
+                "optional": False,
+                "placeholder": False,
+            }
+        else:
+            component = {
+                "id": descriptor["runtime_id"],
+                "kind": "runtime",
+                "version": runtime_version,
+                "archive": descriptor["archive"],
+                "destination": "python",
+                "sha256": "",
+                "size": 0,
+                "url": "components/" + descriptor["runtime_id"]
+                        + _runtime_archive_extension(platform_id),
+                "platforms": [platform_id],
+                "optional": True,
+                "placeholder": True,
+            }
+        runtime_components[platform_id] = component
+        ordered_components.append(component)
+    platform_entries: dict[str, dict] = {}
+    for platform_id in sorted(platforms):
         runtime_component = runtime_components[platform_id]
-        if runtime_archive and runtime_archive["platform"] == platform_id:
+        included = ["app-source"]
+        if platform_id in measured:
             included = [runtime_component["id"], "app-source"]
         platform_entries[platform_id] = {
             "display_name": platforms[platform_id],
-            "launcher": launchers.get(platform_id, DEFAULT_LAUNCHERS.get(platform_id, "nl_agent.py")),
+            "launcher": launchers.get(platform_id, SUPPORTED_TARGETS[platform_id]["launcher"]),
             "runtime_component": runtime_component["id"],
             "components": included,
         }
@@ -317,6 +470,7 @@ def build_release(
     platforms: dict[str, str] | None = None,
     launchers: dict[str, str] | None = None,
     runtime_archive: str | Path | None = None,
+    runtime_archives: dict[str, str | Path] | None = None,
     runtime_platform: str = "windows-x86_64",
     runtime_version: str = DEFAULT_RUNTIME_VERSION,
 ) -> dict:
@@ -339,21 +493,18 @@ def build_release(
     if candidate.exists():
         raise ReleaseError("candidate output already exists; refusing to overwrite: "
                            + str(candidate))
+    measured_archives: dict[str, dict] = {}
+    for platform_id, archive_ref in sorted((runtime_archives or {}).items()):
+        info = _measure_runtime_archive(Path(archive_ref).resolve(), str(platform_id))
+        info["version"] = runtime_version
+        info["source_name"] = info["name"]
+        measured_archives[str(platform_id)] = info
     runtime_info: dict | None = None
     if runtime_archive:
-        runtime_path = Path(runtime_archive).resolve()
-        if not runtime_path.is_file():
-            raise ReleaseError("runtime archive not found: " + str(runtime_path))
-        if runtime_path.suffix.lower() != ".zip":
-            raise ReleaseError("runtime archive must be a .zip file: " + str(runtime_path))
-        runtime_info = {
-            "name": runtime_path.name,
-            "sha256": sha256_file(runtime_path),
-            "size": runtime_path.stat().st_size,
-            "platform": runtime_platform,
-            "version": runtime_version,
-            "source_name": runtime_path.name,
-        }
+        runtime_info = _measure_runtime_archive(Path(runtime_archive).resolve(), runtime_platform)
+        runtime_info["version"] = runtime_version
+        runtime_info["source_name"] = runtime_info["name"]
+        measured_archives.setdefault(runtime_platform, runtime_info)
     plan_result = {
         "status": "plan",
         "product": {"id": "nl-coding-agent", "version": release_version},
@@ -365,6 +516,7 @@ def build_release(
         "zip_name": "nl-coding-agent-" + release_version + "-source.zip",
         "platforms": sorted(platform_map),
         "runtime_archive": runtime_info,
+        "runtime_archives": {pid: {key: info[key] for key in ("name", "sha256", "size", "archive")} for pid, info in sorted(measured_archives.items())},
         "writes": [],
     }
     if plan:
@@ -406,12 +558,13 @@ def build_release(
                 "display_name": platform_map[platform_id],
                 "launcher": launcher_map[platform_id],
                 "runtime_component": "python-runtime-" + platform_id,
-                "runtime_bundled": bool(runtime_info
-                                        and runtime_info["platform"] == platform_id),
+                "runtime_bundled": platform_id in measured_archives,
             }
             for platform_id in sorted(platform_map)
         },
         "runtime": runtime_info,
+        "runtime_archives": {pid: {key: info[key] for key in ("name", "sha256", "size", "archive")} for pid, info in sorted(measured_archives.items())},
+        "runtime_manifest": "runtime-manifest.json",
         "excluded_roots": sorted(EXCLUDED_ROOTS),
         "excluded_dir_names": sorted(EXCLUDED_DIR_NAMES),
         "excluded_files": sorted(EXCLUDED_FILES),
@@ -437,16 +590,25 @@ def build_release(
         launchers=launcher_map,
         base_url=base_url,
         runtime_archive=runtime_info,
+        runtime_archives=measured_archives,
+        runtime_version=runtime_version,
     )
     platform_manifest_path = candidate / "platform-manifest.json"
     platform_manifest_path.write_text(
         json.dumps(platform_manifest, indent=2, ensure_ascii=False, sort_keys=True) + NL,
         encoding="utf-8",
     )
-    if runtime_info:
-        runtime_target = candidate / "runtime" / runtime_info["name"]
+    runtime_manifest = build_runtime_manifest(release_version, measured_archives, base_url=base_url)
+    runtime_manifest_path = candidate / "runtime-manifest.json"
+    runtime_manifest_path.write_text(
+        json.dumps(runtime_manifest, indent=2, ensure_ascii=False, sort_keys=True) + NL,
+        encoding="utf-8",
+    )
+    for platform_id, info in sorted(measured_archives.items()):
+        archive_source = Path((runtime_archives or {}).get(platform_id, runtime_archive)).resolve()
+        runtime_target = candidate / "runtime" / info["name"]
         runtime_target.parent.mkdir(parents=True, exist_ok=True)
-        runtime_target.write_bytes(Path(runtime_archive).resolve().read_bytes())
+        runtime_target.write_bytes(archive_source.read_bytes())
     return {
         "status": "built",
         "candidate": str(candidate),
@@ -458,7 +620,9 @@ def build_release(
         "archive": {"path": str(zip_path), "sha256": zip_sha256, "size": zip_size},
         "release_manifest": str(release_manifest_path),
         "platform_manifest": str(platform_manifest_path),
-        "runtime_bundled": bool(runtime_info),
+        "runtime_manifest": str(runtime_manifest_path),
+        "runtime_archives": {pid: str(candidate / "runtime" / info["name"]) for pid, info in sorted(measured_archives.items())},
+        "runtime_bundled": bool(measured_archives),
         "writes": ["candidate directory created: " + str(candidate)],
     }
 
@@ -476,11 +640,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     parser.add_argument("--plan", action="store_true", help="print the plan; write nothing")
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--runtime-archive", action="append", default=[],
+                        metavar="PLATFORM=PATH",
+                        help="measured native runtime archive for one target (repeatable; "
+                             "zip for Windows, tar.gz for Linux/macOS)")
     parser.add_argument("--with-runtime-archive", default=None,
-                        help="optional prebuilt runtime .zip to bundle (python/ is never copied)")
+                        help="legacy single measured runtime .zip (use --runtime-archive)")
     parser.add_argument("--runtime-platform", default="windows-x86_64")
     parser.add_argument("--runtime-version", default=DEFAULT_RUNTIME_VERSION)
     args = parser.parse_args(argv)
+    runtime_archives: dict[str, str] = {}
+    for item in args.runtime_archive:
+        if "=" not in str(item):
+            print("error: --runtime-archive must be PLATFORM=PATH: " + str(item),
+                  file=sys.stderr)
+            return 2
+        platform_part, path_part = str(item).split("=", 1)
+        runtime_archives[platform_part.strip()] = path_part.strip()
     try:
         result = build_release(
             args.source,
@@ -490,6 +666,7 @@ def main(argv: list[str] | None = None) -> int:
             plan=args.plan,
             base_url=args.base_url,
             runtime_archive=args.with_runtime_archive,
+            runtime_archives=runtime_archives,
             runtime_platform=args.runtime_platform,
             runtime_version=args.runtime_version,
         )
