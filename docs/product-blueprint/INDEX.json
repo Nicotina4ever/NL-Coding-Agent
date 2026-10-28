@@ -4958,7 +4958,8 @@
     "v1.3_2026-10-28_stage3_supervisor": "Stage 3 supervisor implemented C3a-C3d; SH-07 Tier A fake-model acceptance PASS (7 tests; runner evidence). NL-BP-061/062 verified, NL-BP-064 partial, NL-BP-075 evidence refreshed (partial), NL-BP-063 stays blocked pending Tier B real local-model evidence. Stage 3 remains in_progress; automatic mode stays off by default. Counts: 27 verified/31 partial/41 planned/4 blocked.",
     "v1.4_2026-10-28_stage3_exit": "Stage 3 engineering complete; SH-07 Tier A verified, Tier B recorded as BLOCKED with committed evidence; NL-BP-063 stays blocked; stage 4 started from docs/PHASE4_CREWAI_FLOWS_PLAN.md.",
     "v1.5_2026-10-28_stage4_engineering": "Stage-4 engineering record C4a-C4e: CrewRuntime seam/specs, app-owned Flow state/persistence, opt-in supervisor Flow executor, HITL approvals, memory/delegation policy, capability records + model router, deterministic SBOM/compat gate. NL-BP-006/007/009 planned->partial (fake-model/opt-in evidence only), NL-BP-010/011 stay partial with refreshed evidence. Rollout decision: sequential default, Flow opt-in only (no real-model Flow acceptance); no gate weakened. Stage 4 remains in_progress. Counts: 27 verified/34 partial/38 planned/4 blocked.",
-    "v1.6_2026-10-28_stage4_complete": "Stage 4 complete (C4a-C4e): CrewRuntime seam/specs, app-owned Flow foundation, opt-in supervisor Flow executor, HITL/memory-policy/capability routing, SBOM/compat gate; sequential stays default, Flow opt-in only (no real-model Flow evidence). Stage 5 repository hygiene started."
+    "v1.6_2026-10-28_stage4_complete": "Stage 4 complete (C4a-C4e): CrewRuntime seam/specs, app-owned Flow foundation, opt-in supervisor Flow executor, HITL/memory-policy/capability routing, SBOM/compat gate; sequential stays default, Flow opt-in only (no real-model Flow evidence). Stage 5 repository hygiene started.",
+    "v1.7_2026-10-28_stage5_complete": "Stage 5 hygiene: read-only audit plus Lead-authorized safe cleanups (~2.96 MiB freed, worktrees pruned); validation 16 PASS/5 WARN/0 FAIL, full suite 417 passed; protected data/runtimes/dist preserved. Stage 6 distribution started."
   },
   "program_order": {
     "schema_version": 1,
@@ -5111,11 +5112,15 @@
       {
         "stage": 5,
         "name": "Repository cleanup and optimization",
-        "status": "in_progress",
+        "status": "completed",
         "depends_on_stages": [
           4
         ],
-        "evidence": [],
+        "evidence": [
+          "docs/REPOSITORY_HYGIENE.md (audit + Lead-authorized cleanup record)",
+          "scripts/audit_repository_hygiene.py + tests/test_repository_hygiene.py (read-only bounded audit)",
+          "commit 4299e8f (audit) and the cleanup commit"
+        ],
         "requirement_ids": [
           "NL-BP-090",
           "NL-BP-091",
@@ -5125,12 +5130,13 @@
           "NL-BP-095",
           "NL-BP-096",
           "NL-BP-097"
-        ]
+        ],
+        "note": "Hygiene audit delivered and safe cleanups applied under Lead authorization: generated caches and an accidental Windows-cache tree removed, duplicate build plan copies removed, stale temporary SH-07 worktree removed and pruned, stale build scratch removed (~2.96 MiB freed). Validation after cleanup: 16 PASS / 5 WARN / 0 FAIL, doctor, relocation 30/30, supervisor gate, SBOM verify, targeted tests and full suite 417 passed. User data, models, runtimes, vendor checkouts, backups, evidence and the stale dist release were preserved; remaining cleanup items require authorization."
       },
       {
         "stage": 6,
         "name": "Lightweight portable/bootstrapper and final release testing",
-        "status": "pending",
+        "status": "in_progress",
         "depends_on_stages": [
           5
         ],
@@ -5166,5 +5172,5 @@
       }
     ]
   },
-  "updated_at": "2026-10-28T18:10:00+01:00"
+  "updated_at": "2026-10-28T18:30:00+01:00"
 }

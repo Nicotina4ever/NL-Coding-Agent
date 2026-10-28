@@ -419,3 +419,47 @@ Apply one recommendation class at a time: H-01/H-02/H-03 (SAFE) first, then the 
 - Counts are a Windows-specific snapshot at the stated HEAD/timestamp and change with commits, test runs (caches) or new evidence.
 - The audit reports expected `git working tree` dirtiness while this task's files are uncommitted; a fresh audit after the Lead commit should show 0 uncommitted paths.
 - The full test suite was not run here (targeted tests only); the 397-test baseline is Lead-reported.
+
+## Actions taken (2026-10-28, Lead-authorized)
+
+Safe, non-destructive cleanups were applied after reviewing this report. No user data,
+models, runtimes, vendor checkouts, backups, acceptance evidence or distribution artefacts
+were touched.
+
+| ID | Action | Result |
+|---|---|---|
+| H-01 | Removed 16 generated __pycache__ directories inside the repository plus the root .pytest_cache (never the python/ runtime caches). | deleted |
+| H-02 | Removed the accidental literal %SystemDrive% tree (copied Windows cache files, generated junk). | deleted |
+| H-03 | Removed the three build/ copies of the tracked documentation plans after SHA-256 equality checks (build/phase2, build/phase3, build/phase4). | deleted |
+| H-06 | Removed the stale temporary SH-07 git worktree outside the repository and pruned its registration (acceptance evidence was already copied to docs/evidence/sh07/). | deleted |
+| H-07 | Removed stale build scratch (build/portable_plan.json, build/audit_payload_db.py). | deleted |
+
+Total freed: **3,100,666 bytes (~2.96 MiB)**.
+
+### Post-cleanup measurement
+
+Re-ran the same read-only audit after cleanup (build/phase5/hygiene_after.json):
+
+- files: **99,850**; size unchanged at **3.79 GiB** (runtimes and the protected stale release dominate).
+- duplicate groups: **15 to 12**; obsolete candidates: **39 to 15**; stale-path matches are historical/documentation references only (this report and test fixtures contain intentional old-root examples; no operational stale paths remain outside build/).
+- registered worktrees: **2 to 1** (only the canonical repository remains).
+- validation: **16 PASS / 5 WARN / 0 FAIL** (the WARNs are unpinned UI/utility dependencies, the protected stale dist manifest and the external VoiceBridge project).
+
+### Validation performed after cleanup
+
+- launchers present (6 .bat entry points);
+- imports OK (nl_coding_agent, flows, core.supervisor, agents.crew_backend, models.model_router, tools.registry);
+- nl_agent.py doctor completes with project/model checks OK;
+- scripts/verify_relocation.py 30/30 PASS;
+- scripts/verify_supervisor.py PASS (no active lease/journal/running supervisor);
+- scripts/check_crewai_upgrade.py --verify-sbom PASS;
+- targeted hygiene/compat tests 25 passed;
+- full offscreen suite **417 passed**.
+
+### Remaining NEEDS-AUTHORIZATION items (not acted on)
+
+One-off root repair scripts (temp_*.py), FOUNDATION_CHANGES.patch plus PATCH/ (audited patch
+evidence, byte-identical to live), historical root handoff documents, and the build evidence
+kept for audit traceability. The stale dist/portable-release payload (pre-relocation, missing
+current packages) and the vendor crewAI/.git are explicitly DO-NOT-TOUCH pending an authorized
+stage-6 rebuild/replacement decision.
