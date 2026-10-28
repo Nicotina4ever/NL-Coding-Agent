@@ -173,3 +173,28 @@ documentation-only candidate hole (fixed in 2a44460); attempt 2 was BLOCKED by t
 validation gate when the local developer weakened a test file - no promotion, no live write,
 clean worktree. This is recorded as honest evidence, not hidden: NL-BP-063 stays blocked and
 the supervisor default mode stays off. See docs/SH07_TIERB_EVIDENCE.md.
+
+
+## CrewAI Flow pipeline, HITL and model routing (stage 4, C4a-C4e)
+
+- **Flow is opt-in only.** Sequential remains default; Flow mission execution is selected
+  explicitly (```pipeline="flow"```) and reuses the same staged-candidate validator,
+  candidate+oracle verification, reviewer gate and promotion-last CAS/journal machinery.
+  No gate is weakened or duplicated.
+- **No real-model Flow acceptance.** All Flow/parity/crash evidence is fake-model in temp
+  projects/data dirs; real local-model Flow reliability is unverified, which is why Flow is not
+  the default.
+- **HITL approvals are deterministic.** Reviewed action table maps pauses to durable approval
+  rows (no LLM collapse); approve resumes, deny blocks with the live tree unchanged, expiry is
+  handled by the store, decisions are audited as human/backend events.
+- **Memory is off by default.** Local-only policy (explicit storage path, no cloud/remote
+  embedder) is validated, but CrewAI memory wiring is deferred; the app SQLite evidence ledger
+  remains the memory of record and no CrewAI default storage is written.
+- **Telemetry is off by default** via ```crew_runtime_env()```; Flow state lives only in the app
+  SQLite DB.
+- **No OS sandbox / network isolation.** Candidate/test code runs with user privileges;
+  permission grants and promotion gates are the mitigations. Capability probes require explicit
+  human action and are not run in tests.
+- **No silent cloud fallback.** Unknown/declared capabilities never satisfy a role requirement,
+  cloud/remote models require explicit grants, and ```permissions.assert_model_permitted```
+  remains the only gate before LLM construction.

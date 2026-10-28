@@ -124,3 +124,26 @@ docs/evidence/sh07/ and docs/SH07_TIERB_EVIDENCE.md.
   worktree.
 - Outcome: Tier A verified; Tier B not passed. NL-BP-063 stays blocked; supervisor default
   mode stays off, automatic mode remains opt-in. No gate was weakened to claim success.
+
+
+## Stage-4 CrewAI/Flows acceptance (C4a-C4e, 2026-10-28)
+
+Status: engineering record; fake-model only; no real-model Flow acceptance; default
+sequential pipeline unchanged; Flow opt-in.
+
+| Commit | Scope | Evidence |
+|---|---|---|
+| C4a d775093 | CrewRuntime seam, typed specs, CrewAI backend mapping | test_crew_backend.py 15 PASS; orchestrator seam rewritten; staging/repair green |
+| C4b d821c7f | MissionState, AppFlowPersistence app SQLite only, MissionFlow skeleton, Flow event bridge | flow state/persistence/mission_flow/resume/events 39 PASS |
+| C4c d29b727 | Real-stage SupervisorMissionExecutor, SupervisorRunFlow, opt-in supervisor pipeline, CLI/service flow surfaces | test_supervisor_flow.py 8 PASS + SH-07 flow parity; sequential default unchanged |
+| C4d 47236e5 | Durable HITL approvals, memory/delegation policy, capability records + ModelRouter, model snapshots | approvals/memory/capabilities/router tests PASS |
+| C4e (this change) | Deterministic CrewAI SBOM/compat gate, docs and rollout decision | scripts/check_crewai_upgrade.py; docs/evidence/crewai_sbom.json verified; test_crewai_compat.py 5 PASS |
+
+Acceptance commands (targeted, no real model/network): SBOM ```--verify-sbom``` and
+```--compat``` PASS; targeted stage-4 suites (test_crewai_compat + test_crew_backend +
+test_supervisor_flow + test_flow_human_feedback + test_model_router) 30 passed.
+
+Rollout decision (also in INDEX/PRODUCT_BACKLOG): sequential default; Flow opt-in only because
+no real-model Flow acceptance exists. Gates were not weakened; promotion stays last; HITL and
+memory remain opt-in/off. Limitations: no OS sandbox/network isolation; SBOM is an
+installed-environment snapshot; CrewAI metadata License=None is a measured legal-review gap.

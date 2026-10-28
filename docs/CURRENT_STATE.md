@@ -103,6 +103,28 @@ NL Coding Agent is a local-first, multi-agent software development workstation. 
   evidence in `build/phase3/evidence/`); **Tier B (real local models) pending explicit
   authorization** — NL-BP-063 stays blocked and automatic mode remains opt-in.
 
+### 9. Stage-4 CrewAI/Flows integration (C4a-C4e, engineering record)
+- **CrewRuntime seam**: ```agents/crew_backend.py``` + typed ```agents/specs.py```; orchestrator
+  model calls route through an injectable runtime; production path stays one single-agent
+  sequential Crew per stage; staged-candidate gates/promotion unchanged.
+- **Flows (opt-in)**: ```nl_coding_agent/flows/``` implements ```MissionState```, app-owned
+  ```AppFlowPersistence``` (application SQLite only, pinned ids, durable-state resume),
+  ```MissionFlow```, ```SupervisorRunFlow``` and the CrewAI event bridge;
+  ```agents/supervisor_executor.py``` drives the real orchestrator stages. Enabled only by
+  ```pipeline="flow"``` / CLI ```--pipeline flow```.
+- **HITL**: deterministic ```flows/approval_provider.py``` maps pause requests to durable
+  approvals rows; CLI/backend decisions audit human actions; deny blocks with live unchanged;
+  no model-collapsed risk approval.
+- **Model intelligence**: ```models/capabilities.py``` (measured/declared/unknown) and
+  ```models/model_router.py``` (ModelBinding, capability filter, permission gate, no silent
+  cloud fallback, mission model snapshots); memory remains off (local policy deferred).
+- **Acceptance**: fake-model stage-4 suites green; deterministic SBOM
+  ```docs/evidence/crewai_sbom.json``` verified (pins crewai/crewai-core/crewai-cli 1.15.32;
+  ```--compat``` PASS). No real-model Flow run.
+- **Rollout decision**: sequential stays default; Flow is opt-in only because real-model Flow
+  acceptance evidence is absent. No gate weakened. Stage 4 remains in progress for the remaining
+  GUI/multimodal/voice area-4 requirements.
+
 ## Verified Evidence
 
 - Full test suite: **65 passed** (`python\python.exe -m pytest`).

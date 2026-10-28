@@ -1,0 +1,371 @@
+{
+  "api_compat": [
+    {
+      "detail": "present",
+      "ok": true,
+      "target": "crewai.Agent"
+    },
+    {
+      "detail": "present",
+      "ok": true,
+      "target": "crewai.Task"
+    },
+    {
+      "detail": "present",
+      "ok": true,
+      "target": "crewai.Crew"
+    },
+    {
+      "detail": "present",
+      "ok": true,
+      "target": "crewai.LLM"
+    },
+    {
+      "detail": "present",
+      "ok": true,
+      "target": "crewai.Process"
+    },
+    {
+      "detail": "present",
+      "ok": true,
+      "target": "crewai.flow.flow.Flow"
+    },
+    {
+      "detail": "present",
+      "ok": true,
+      "target": "crewai.flow.flow.FlowState"
+    },
+    {
+      "detail": "present",
+      "ok": true,
+      "target": "crewai.flow.flow.start"
+    },
+    {
+      "detail": "present",
+      "ok": true,
+      "target": "crewai.flow.flow.listen"
+    },
+    {
+      "detail": "present",
+      "ok": true,
+      "target": "crewai.flow.flow.router"
+    },
+    {
+      "detail": "present",
+      "ok": true,
+      "target": "crewai.flow.persistence.FlowPersistence"
+    },
+    {
+      "detail": "present",
+      "ok": true,
+      "target": "crewai.flow.persistence.persist"
+    },
+    {
+      "detail": "present",
+      "ok": true,
+      "target": "crewai.flow.async_feedback.HumanFeedbackPending"
+    },
+    {
+      "detail": "present",
+      "ok": true,
+      "target": "crewai.flow.async_feedback.HumanFeedbackProvider"
+    },
+    {
+      "detail": "present",
+      "ok": true,
+      "target": "crewai.flow.async_feedback.PendingFeedbackContext"
+    },
+    {
+      "detail": "present",
+      "ok": true,
+      "target": "crewai.events.flow_events.FlowEvent"
+    },
+    {
+      "detail": "present",
+      "ok": true,
+      "target": "crewai.events.flow_events.FlowStartedEvent"
+    },
+    {
+      "detail": "present",
+      "ok": true,
+      "target": "crewai.events.flow_events.MethodExecutionFinishedEvent"
+    }
+  ],
+  "app_pins": {
+    "crewai_core_pin": null,
+    "crewai_core_pin_gap": true,
+    "crewai_pin_matches_installed": true,
+    "pyproject": {
+      "crewai": "1.15.32"
+    }
+  },
+  "dependency_inventory": {
+    "a2a-sdk": null,
+    "aiobotocore": null,
+    "aiocache": null,
+    "aiofiles": "24.1.0",
+    "aiosqlite": "0.21.0",
+    "anthropic": null,
+    "appdirs": "1.4.4",
+    "azure-ai-inference": null,
+    "azure-identity": null,
+    "boto3": "1.43.120",
+    "cel-python": "0.5.0",
+    "certifi": "2026.10.23",
+    "chromadb": "1.5.9",
+    "click": "8.5.0",
+    "crewai-cli": "1.15.32",
+    "crewai-core": "1.15.32",
+    "crewai-files": null,
+    "crewai-tools": null,
+    "cryptography": "50.0.2",
+    "docling": null,
+    "docling-core": null,
+    "google-genai": null,
+    "httpx": "0.28.1",
+    "httpx-auth": null,
+    "httpx-sse": "0.4.3",
+    "ibm-watsonx-ai": null,
+    "instructor": "1.15.4",
+    "json-repair": "0.60.1",
+    "json5": "0.10.0",
+    "jsonref": "1.1.0",
+    "lancedb": "0.40.0",
+    "litellm": "1.100.4",
+    "mcp": "1.30.0",
+    "mem0ai": null,
+    "oauthlib": "4.0.0",
+    "openai": "2.54.0",
+    "openpyxl": "3.1.5",
+    "opentelemetry-api": "1.45.1",
+    "opentelemetry-exporter-otlp-proto-http": "1.45.1",
+    "opentelemetry-sdk": "1.45.1",
+    "packaging": "26.2",
+    "pandas": null,
+    "pdfplumber": "0.11.10",
+    "portalocker": "2.7.0",
+    "pydantic": "2.12.5",
+    "pydantic-settings": "2.16.1",
+    "pyjwt": "2.15.1",
+    "python-dotenv": "1.2.4",
+    "pyyaml": "6.0.3",
+    "qdrant-client": null,
+    "qdrant-edge-py": null,
+    "regex": "2026.1.15",
+    "rich": "14.3.4",
+    "textual": "8.2.8",
+    "tiktoken": "0.14.0",
+    "tokenizers": "0.23.3",
+    "tomli": "2.0.2",
+    "tomli-w": "1.1.0",
+    "uv": "0.13.6",
+    "voyageai": null
+  },
+  "deterministic": true,
+  "distributions": {
+    "crewai": {
+      "files_sha256": "7b9ced8d9a4d046eddd04c2826a9606f8779f995131487fbba6ec860b6ce1f28",
+      "installer": "pip",
+      "license": null,
+      "license_expression": null,
+      "license_files": [],
+      "name": "crewai",
+      "requires_dist": [
+        "a2a-sdk~=0.3.10; extra == 'a2a'",
+        "aiobotocore~=3.8.0; extra == 'aws'",
+        "aiobotocore~=3.8.0; extra == 'bedrock'",
+        "aiocache[memcached,redis]~=0.12.3; extra == 'a2a'",
+        "aiofiles~=24.1.0",
+        "aiosqlite~=0.21.0",
+        "anthropic~=0.73.0; extra == 'anthropic'",
+        "appdirs~=1.4.4",
+        "azure-ai-inference~=1.0.0b9; extra == 'azure-ai-inference'",
+        "azure-identity<2,>=1.17.0; extra == 'azure-ai-inference'",
+        "boto3~=1.43.46; extra == 'aws'",
+        "boto3~=1.43.46; extra == 'bedrock'",
+        "cel-python<0.6,>=0.5.0",
+        "chromadb~=1.5.9",
+        "click<9,>=8.1.7",
+        "crewai-cli==1.15.32",
+        "crewai-core==1.15.32",
+        "crewai-files; extra == 'file-processing'",
+        "crewai-tools==1.15.32; extra == 'tools'",
+        "docling-core[chunking]<3,>=2.98.0; extra == 'docling'",
+        "docling~=2.132.0; extra == 'docling'",
+        "google-genai~=1.65.0; extra == 'google-genai'",
+        "httpx-auth~=0.23.1; extra == 'a2a'",
+        "httpx-sse~=0.4.0; extra == 'a2a'",
+        "httpx~=0.28.1",
+        "ibm-watsonx-ai~=1.3.39; extra == 'watson'",
+        "instructor<1.16,>=1.3.3",
+        "json-repair~=0.60.1",
+        "json5~=0.10.0",
+        "jsonref~=1.1.0",
+        "lancedb<1.0.0,>=0.33.0",
+        "litellm<1.100.5,>=1.100.4; extra == 'litellm'",
+        "mcp<2,>=1.30.0",
+        "mem0ai<3,>=2.0.0; extra == 'mem0'",
+        "oauthlib<5,>=4.0.0",
+        "openai<3,>=2.30.0",
+        "openpyxl~=3.1.5",
+        "openpyxl~=3.1.5; extra == 'openpyxl'",
+        "opentelemetry-api<2,>=1.45.1",
+        "opentelemetry-exporter-otlp-proto-http<2,>=1.45.1",
+        "opentelemetry-sdk<2,>=1.45.1",
+        "pandas~=2.2.3; extra == 'pandas'",
+        "pdfplumber~=0.11.4",
+        "portalocker~=2.7.0",
+        "pydantic-settings<3,>=2.14.2",
+        "pydantic<2.13,>=2.11.9",
+        "pyjwt<3,>=2.15.0",
+        "python-dotenv<2,>=1.2.2",
+        "pyyaml~=6.0",
+        "qdrant-client[fastembed]~=1.14.3; extra == 'qdrant'",
+        "qdrant-edge-py>=0.6.0; extra == 'qdrant-edge'",
+        "regex~=2026.1.15",
+        "tiktoken<0.13,>=0.8.0; extra == 'embeddings'",
+        "tokenizers<1,>=0.21",
+        "tomli-w~=1.1.0",
+        "tomli~=2.0.2",
+        "voyageai~=0.3.5; extra == 'voyageai'"
+      ],
+      "requires_python": "<3.14,>=3.10",
+      "version": "1.15.32"
+    },
+    "crewai-cli": {
+      "files_sha256": "35598e4e53f23c58619cebe82b4688ccb12cbc0d26f7c9cfbe60c65573388304",
+      "installer": "pip",
+      "license": null,
+      "license_expression": null,
+      "license_files": [],
+      "name": "crewai-cli",
+      "requires_dist": [
+        "appdirs~=1.4.4",
+        "certifi>=2026.10.18",
+        "click<9,>=8.1.7",
+        "crewai-core==1.15.32",
+        "cryptography>=42.0",
+        "httpx~=0.28.1",
+        "packaging>=23.0",
+        "pydantic-settings<3,>=2.14.2",
+        "pydantic<2.13,>=2.11.9",
+        "pyjwt<3,>=2.15.0",
+        "python-dotenv<2,>=1.2.2",
+        "rich>=13.7.1",
+        "textual>=7.5.0",
+        "tomli-w~=1.1.0",
+        "tomli~=2.0.2",
+        "uv<1,>=0.13.4"
+      ],
+      "requires_python": "<3.14,>=3.10",
+      "version": "1.15.32"
+    },
+    "crewai-core": {
+      "files_sha256": "5a6e937fb89e30909093b683e18af14f5e65a37751867844d1893fd7fc417340",
+      "installer": "pip",
+      "license": null,
+      "license_expression": null,
+      "license_files": [],
+      "name": "crewai-core",
+      "requires_dist": [
+        "appdirs~=1.4.4",
+        "cryptography>=42.0",
+        "httpx~=0.28.1",
+        "opentelemetry-api<2,>=1.45.1",
+        "opentelemetry-exporter-otlp-proto-http<2,>=1.45.1",
+        "opentelemetry-sdk<2,>=1.45.1",
+        "packaging>=23.0",
+        "portalocker~=2.7.0",
+        "pydantic<2.13,>=2.11.9",
+        "pyjwt<3,>=2.15.0",
+        "rich>=13.7.1",
+        "tomli~=2.0.2"
+      ],
+      "requires_python": "<3.14,>=3.10",
+      "version": "1.15.32"
+    }
+  },
+  "generator": "scripts/check_crewai_upgrade.py",
+  "import_path_evidence": {
+    "crewai_file": "crewai/__init__.py",
+    "crewai_version": "1.15.32",
+    "under_site_packages": true,
+    "vendor_checkout_import": false
+  },
+  "license_evidence": {
+    "manual_legal_review_required": true,
+    "measured_gap": "installed crewai/crewai-core/crewai-cli metadata has no License field",
+    "notable_dependencies": {
+      "PySide6": {
+        "license": "LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only",
+        "license_expression": null,
+        "version": "6.12.0"
+      },
+      "chromadb": {
+        "license": null,
+        "license_expression": null,
+        "version": "1.5.9"
+      },
+      "lancedb": {
+        "license": null,
+        "license_expression": null,
+        "version": "0.40.0"
+      },
+      "litellm": {
+        "license": null,
+        "license_expression": "MIT",
+        "version": "1.100.4"
+      },
+      "opentelemetry-api": {
+        "license": null,
+        "license_expression": "Apache-2.0",
+        "version": "1.45.1"
+      },
+      "pydantic": {
+        "license": null,
+        "license_expression": "MIT",
+        "version": "2.12.5"
+      }
+    },
+    "unknown_licenses": [
+      "crewai",
+      "crewai-cli",
+      "crewai-core"
+    ],
+    "vendor_license": {
+      "copyright_line": "Copyright (c) 2025 crewAI, Inc.",
+      "path": "crewAI/LICENSE",
+      "present": true,
+      "sha256": "28868731966f4aa37f02879839aabc797137e27ddde4e274ef9cf965f9a71774"
+    }
+  },
+  "pinned_chain": {
+    "crewai": "1.15.32",
+    "crewai-cli": "1.15.32",
+    "crewai-core": "1.15.32"
+  },
+  "pinned_chain_versions_aligned": true,
+  "platform": "win32",
+  "python": {
+    "implementation": "CPython",
+    "version": "3.12.10"
+  },
+  "rollout_decision": {
+    "default_pipeline": "sequential",
+    "flow_pipeline": "opt-in only",
+    "gates_weakened": false,
+    "reason": "no real-model Flow acceptance evidence; fake-model Flow parity only"
+  },
+  "runtime_guards_expected": {
+    "default_flow_storage": "app SQLite only (AppFlowPersistence); no CrewAI default store",
+    "memory_default": "off",
+    "os_sandbox": "none (candidate code runs with user privileges)",
+    "telemetry_disabled_env": [
+      "CREWAI_DISABLE_TELEMETRY",
+      "CREWAI_DISABLE_TRACKING",
+      "OTEL_SDK_DISABLED",
+      "NO_COLOR"
+    ]
+  },
+  "schema_version": "1.0"
+}

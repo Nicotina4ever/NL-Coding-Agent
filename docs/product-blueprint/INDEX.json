@@ -251,7 +251,7 @@
       "area": "core",
       "priority": "P0",
       "bp_priority": "new (final product requirement area 1)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-001"
       ],
@@ -261,8 +261,9 @@
         "no vendor checkout dependency and no placeholder Flow left unused"
       ],
       "evidence": [
-        "tests/test_foundation.py::test_crewai_flow_import proves only the installed package import - PASS in 68-test batch",
-        "grep over nl_coding_agent/**/*.py finds no Flow usage and no flows module"
+        "C4a-C4c: nl_coding_agent/flows/{state,persistence,mission_flow,supervisor_flow}.py + agents/supervisor_executor.py implement a production Flow mission pipeline (app SQLite persistence, pinned ids, durable-state resume)",
+        "tests/test_flow_state.py/test_flow_persistence.py/test_mission_flow.py/test_flow_resume.py 38 tests PASS and tests/test_supervisor_flow.py 8 PASS (fake model only)",
+        "opt-in only: default pipeline stays sequential; no real-model Flow acceptance"
       ],
       "source_refs": [
         "FINAL-REQ/area-1",
@@ -284,7 +285,7 @@
       "area": "core",
       "priority": "P0",
       "bp_priority": "new (final product requirement area 1)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-006",
         "NL-BP-051"
@@ -295,8 +296,9 @@
         "integration tests use fake models and isolate the live tree"
       ],
       "evidence": [
-        "no Flow-based pipeline exists (grep)",
-        "durable mission state components exist but are not Flow-driven (nl_coding_agent/core/selfbuild_runner.py uses a plain loop)"
+        "C4b/C4c: MissionFlow + SupervisorRunFlow durable sequence with flow_states/flow_runs in app SQLite, pinned flow ids and durable-fact resume",
+        "tests/test_flow_resume.py 5 PASS (crash/restart, no repeated steps) and tests/test_supervisor_flow.py 8 PASS (parity, reconcile idempotent, single executor)",
+        "flow executor is behind pipeline='flow' (CLI --pipeline flow); sequential remains default"
       ],
       "source_refs": [
         "FINAL-REQ/area-1",
@@ -354,7 +356,7 @@
       "area": "core",
       "priority": "P0",
       "bp_priority": "P1 (03_MASTER_CHECKLIST P1-05 'capability test reale')",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-008"
       ],
@@ -364,8 +366,9 @@
         "capability-aware routing refuses unsupported combinations and explains why"
       ],
       "evidence": [
-        "ModelInfo in nl_coding_agent/models/providers.py exposes only provider/name/size/loaded/family/modified/capabilities tuple that is never populated",
-        "grep finds no capability probe, no JSON-schema probe and no vision probing code"
+        "C4d: models/capabilities.py records measured/declared/unknown/unavailable capabilities (additive model_capabilities table; measured wins, declared/unknown never pass)",
+        "C4d: capability-aware ModelRouter refuses unsupported combinations (RouteRefused with missing capabilities); tests/test_model_capabilities.py + test_model_router.py PASS",
+        "real probes were not executed in stage 4; no network/model loads in tests"
       ],
       "source_refs": [
         "specifiche/05_MODEL_HUB_PROVIDERS.md",
@@ -401,7 +404,8 @@
         "nl_coding_agent/cli.py flags --dev-model, --reviewer-model, --debug-model",
         "config/models.yaml global defaults; nl_coding_agent/agents/orchestrator.py DEFAULT_*_MODEL constants",
         "GUI Agents panel is read-only (nl_coding_agent/gui/widgets/agents_panel.py; docs/CURRENT_STATE.md)",
-        "project registry persists facts in SQLite without per-project YAML (tests/test_foundation.py::test_open_project_round_trip - PASS)"
+        "project registry persists facts in SQLite without per-project YAML (tests/test_foundation.py::test_open_project_round_trip - PASS)",
+        "C4d: ModelRouter role->ModelBinding resolution with capability/permission filters; tests/test_model_router.py PASS"
       ],
       "source_refs": [
         "specifiche/05_MODEL_HUB_PROVIDERS.md",
@@ -436,7 +440,8 @@
       "evidence": [
         "handoff payloads include \"model\": <model_name> per stage (orchestrator.py lines ~718, 864, 958)",
         "SQLite PRAGMA table_info(missions) measured: no model/provider/params columns (read-only probe)",
-        "temperature is set in _make_llm (0.1) but not persisted"
+        "temperature is set in _make_llm (0.1) but not persisted",
+        "C4d: models/model_router.py ModelBinding + mission_model_snapshots table persist immutable role/model/params/capability snapshots (fake-model test); not yet wired into every mission path"
       ],
       "source_refs": [
         "specifiche/05_MODEL_HUB_PROVIDERS.md",
@@ -4951,7 +4956,8 @@
     "v1.1_2026-10-28_stage2": "C6/C7 wired the staged-candidate harness end-to-end; NL-BP-004/054/055/056/057/058/059/060/074 verified with fake-model tests (full suite 149 passed). No new requirement IDs.",
     "v1.2_2026-10-28_stage2_complete": "Stage 2 closed: permission model + cloud gate (C9a), tool registry + recovery retention + repair evidence (C9b); NL-BP-065/072/073/076 verified (25 verified/29 partial/45 planned/4 blocked). Stage 3 started with the persisted supervisor plan.",
     "v1.3_2026-10-28_stage3_supervisor": "Stage 3 supervisor implemented C3a-C3d; SH-07 Tier A fake-model acceptance PASS (7 tests; runner evidence). NL-BP-061/062 verified, NL-BP-064 partial, NL-BP-075 evidence refreshed (partial), NL-BP-063 stays blocked pending Tier B real local-model evidence. Stage 3 remains in_progress; automatic mode stays off by default. Counts: 27 verified/31 partial/41 planned/4 blocked.",
-    "v1.4_2026-10-28_stage3_exit": "Stage 3 engineering complete; SH-07 Tier A verified, Tier B recorded as BLOCKED with committed evidence; NL-BP-063 stays blocked; stage 4 started from docs/PHASE4_CREWAI_FLOWS_PLAN.md."
+    "v1.4_2026-10-28_stage3_exit": "Stage 3 engineering complete; SH-07 Tier A verified, Tier B recorded as BLOCKED with committed evidence; NL-BP-063 stays blocked; stage 4 started from docs/PHASE4_CREWAI_FLOWS_PLAN.md.",
+    "v1.5_2026-10-28_stage4_engineering": "Stage-4 engineering record C4a-C4e: CrewRuntime seam/specs, app-owned Flow state/persistence, opt-in supervisor Flow executor, HITL approvals, memory/delegation policy, capability records + model router, deterministic SBOM/compat gate. NL-BP-006/007/009 planned->partial (fake-model/opt-in evidence only), NL-BP-010/011 stay partial with refreshed evidence. Rollout decision: sequential default, Flow opt-in only (no real-model Flow acceptance); no gate weakened. Stage 4 remains in_progress. Counts: 27 verified/34 partial/38 planned/4 blocked."
   },
   "program_order": {
     "schema_version": 1,
@@ -5049,7 +5055,10 @@
           3
         ],
         "evidence": [
-          "docs/PHASE4_CREWAI_FLOWS_PLAN.md (CrewAI/Flows integration design, C4a-C4e)"
+          "docs/PHASE4_CREWAI_FLOWS_PLAN.md (CrewAI/Flows integration design, C4a-C4e)",
+          "C4a d775093 CrewRuntime seam/specs; C4b d821c7f app-owned Flow state/persistence; C4c d29b727 opt-in supervisor Flow executor + CLI/service; C4d 47236e5 HITL approvals, memory/delegation policy, capability records + model router",
+          "C4e: scripts/check_crewai_upgrade.py + docs/evidence/crewai_sbom.json (deterministic, verify-sbom PASS, crewai/crewai-core/crewai-cli 1.15.32, API baseline PASS); fake-model stage-4 suites green (targeted counts recorded in docs/HARNESS_ACCEPTANCE.md)",
+          "Rollout decision: sequential default, Flow opt-in only, because no real-model Flow acceptance evidence exists; no gate weakened. Stage 4 remains in_progress (GUI/multimodal/voice/other area-4 work open)."
         ],
         "requirement_ids": [
           "NL-BP-001",

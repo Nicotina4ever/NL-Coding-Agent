@@ -60,14 +60,14 @@ SH-07 Tier B (real local models) remains pending explicit authorization and bloc
 | Status | P0 | P1 | P2 | P3 | Total |
 |---|---|---|---|---|---|
 | verified | 18 | 9 | 0 | 0 | 27 |
-| partial | 7 | 22 | 2 | 0 | 31 |
-| planned | 18 | 8 | 13 | 2 | 41 |
+| partial | 10 | 22 | 2 | 0 | 34 |
+| planned | 15 | 8 | 13 | 2 | 38 |
 | blocked | 4 | 0 | 0 | 0 | 4 |
 | **Total** | **47** | **39** | **15** | **2** | **103** |
 
 | Area | Requirements | verified | partial | planned | blocked |
 |---|---|---|---|---|---|
-| Area 1 - CrewAI + CrewAI Flows first-class integration | 13 | 6 | 4 | 3 | 0 |
+| Area 1 - CrewAI + CrewAI Flows first-class integration | 13 | 6 | 7 | 0 | 0 |
 | Area 2 - Studio GUI + multimodal chat | 27 | 1 | 7 | 19 | 0 |
 | Area 3 - Universal autonomous development | 28 | 16 | 6 | 5 | 1 |
 | Area 4 - Repository hygiene | 8 | 2 | 4 | 2 | 0 |
@@ -86,6 +86,8 @@ SH-07 Tier B (real local models) remains pending explicit authorization and bloc
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v1.5 (2026-10-28)** - Stage-4 engineering record (C4a-C4e): CrewRuntime seam/typed specs, app-owned Flow state+persistence, opt-in supervisor Flow executor and HITL approvals, capability records + model router, memory/delegation policy, SBOM/compat gate (docs/evidence/crewai_sbom.json). NL-BP-006/007/009 planned->partial (Flow opt-in + fake-model verified for 006/007; capability registry framework only for 009); NL-BP-010/011 evidence refreshed, both stay partial. Rollout decision: sequential remains default, Flow opt-in only, because no real-model Flow acceptance exists; no gate weakened. Stage 4 remains in progress (GUI/multimodal/voice/other area-4 requirements still open). Counts: 27 verified / 34 partial / 38 planned / 4 blocked.
 
 **v1.4 (2026-10-28)** - Stage 3 engineering complete (supervisor, preflight, queue/lease, backend selection, SH-07 Tier A verified); SH-07 Tier B recorded as BLOCKED with honest evidence (docs/SH07_TIERB_EVIDENCE.md); NL-BP-063 stays blocked, supervisor default mode off. Stage 4 started from docs/PHASE4_CREWAI_FLOWS_PLAN.md. No new requirement IDs.
 
@@ -178,7 +180,7 @@ _CrewAI as a first-class engine dependency (not a cloned vendor checkout), agent
 <a id="nl-bp-006"></a>
 ### NL-BP-006 - CrewAI Flows first-class integration in a product pipeline
 
-- **Area:** CORE - **Priority:** P0 - **Status:** planned
+- **Area:** CORE - **Priority:** P0 - **Status:** partial
 - **Blueprint priority:** new (final product requirement area 1)
 - **Dependencies:** NL-BP-001
 - **Acceptance gates:**
@@ -188,13 +190,15 @@ _CrewAI as a first-class engine dependency (not a cloned vendor checkout), agent
 - **Evidence:**
   - tests/test_foundation.py::test_crewai_flow_import proves only the installed package import - PASS in 68-test batch
   - grep over nl_coding_agent/**/*.py finds no Flow usage and no flows module
+  - C4a-C4c: nl_coding_agent/flows/{state,persistence,mission_flow,supervisor_flow}.py + agents/supervisor_executor.py implement a production Flow mission pipeline; AppFlowPersistence (app SQLite, pinned ids, durable-state resume) and tests/test_flow_state.py/test_flow_persistence.py/test_mission_flow.py/test_flow_resume.py 38 tests PASS (fake model)
+  - supervisor opt-in flow pipeline parity: tests/test_supervisor_flow.py 8 PASS + SH-07 flow parity test; rollback/deny/stop gates unchanged; no real-model Flow run
 - **Sources:** FINAL-REQ/area-1; specifiche/01_ARCHITETTURA_E_RUNTIME.md; gs-tasks/task-9
-- **Note:** Only an import smoke test exists (from crewai.flow.flow import Flow). No production Flow is used.
+- **Note:** Flow integration is implemented but opt-in only. The default pipeline stays sequential because no real local-model Flow acceptance exists; fake-model fake-runtime tests are green.
 
 <a id="nl-bp-007"></a>
 ### NL-BP-007 - Flow-based durable autonomous mission pipeline
 
-- **Area:** CORE - **Priority:** P0 - **Status:** planned
+- **Area:** CORE - **Priority:** P0 - **Status:** partial
 - **Blueprint priority:** new (final product requirement area 1)
 - **Dependencies:** NL-BP-006, NL-BP-051
 - **Acceptance gates:**
@@ -202,10 +206,10 @@ _CrewAI as a first-class engine dependency (not a cloned vendor checkout), agent
   - crash/restart resumes the flow without repeating completed steps
   - integration tests use fake models and isolate the live tree
 - **Evidence:**
-  - no Flow-based pipeline exists (grep)
-  - durable mission state components exist but are not Flow-driven (nl_coding_agent/core/selfbuild_runner.py uses a plain loop)
+  - C4b/C4c: MissionFlow + SupervisorRunFlow run a durable mission sequence with persisted flow state in the app SQLite DB (flow_states/flow_runs), pinned flow ids and durable-fact resume; tests/test_flow_resume.py 5 passed, tests/test_supervisor_flow.py 8 passed (crash across supervisor restart, idempotent reconcile, fake model only)
+  - The default orchestrator/supervisor path still uses the sequential executor; Flow execution is behind pipeline="flow" (CLI --pipeline flow) and was not run against real models
 - **Sources:** FINAL-REQ/area-1; specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md; specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md
-- **Note:** Requires the Flow foundation plus durable mission state from area 3.
+- **Note:** Flow-based supervisor pipeline implemented and fake-model verified (opt-in). Crash/resume parity and single-executor invariants are tested; a real-model Flow acceptance is still absent, so this stays partial.
 
 <a id="nl-bp-008"></a>
 ### NL-BP-008 - Multi-provider Model Hub core: dynamic discovery, health, loaded state, unload
@@ -228,7 +232,7 @@ _CrewAI as a first-class engine dependency (not a cloned vendor checkout), agent
 <a id="nl-bp-009"></a>
 ### NL-BP-009 - Provider capability registry from real probes (tools, JSON, vision, audio, context)
 
-- **Area:** CORE - **Priority:** P0 - **Status:** planned
+- **Area:** CORE - **Priority:** P0 - **Status:** partial
 - **Blueprint priority:** P1 (03_MASTER_CHECKLIST P1-05 'capability test reale')
 - **Dependencies:** NL-BP-008
 - **Acceptance gates:**
@@ -236,10 +240,11 @@ _CrewAI as a first-class engine dependency (not a cloned vendor checkout), agent
   - real probes test tool calling, JSON/structured output, vision and max usable context
   - capability-aware routing refuses unsupported combinations and explains why
 - **Evidence:**
-  - ModelInfo in nl_coding_agent/models/providers.py exposes only provider/name/size/loaded/family/modified/capabilities tuple that is never populated
-  - grep finds no capability probe, no JSON-schema probe and no vision probing code
+  - C4d: nl_coding_agent/models/capabilities.py records measured/declared/unknown/unavailable capabilities (vision/audio/tool_calling/structured_output/context) in the additive model_capabilities table; measured wins, declared/unknown never pass; probes are caller-supplied (no implicit network)
+  - C4d: capability-aware ModelRouter refuses unsupported combinations (RouteRefused with missing capabilities); tests/test_model_capabilities.py + test_model_router.py PASS
+  - Real capability probes (actual tool/JSON/vision/audio/context probes against local models) were NOT executed in this stage; no network/model loads in tests
 - **Sources:** specifiche/05_MODEL_HUB_PROVIDERS.md; specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md; 03_MASTER_CHECKLIST.md#P1-05; FINAL-REQ/area-2
-- **Note:** OpenAI compatibility is not treated as proof of tool calling or multimodal support; capability probing is entirely absent.
+- **Note:** Capability registry/routing framework implemented and unit-tested; real measured probes and UI remain missing, so this stays partial.
 
 <a id="nl-bp-005"></a>
 ### NL-BP-005 - Reviewer independence and persisted verdict
@@ -273,6 +278,7 @@ _CrewAI as a first-class engine dependency (not a cloned vendor checkout), agent
   - config/models.yaml global defaults; nl_coding_agent/agents/orchestrator.py DEFAULT_*_MODEL constants
   - GUI Agents panel is read-only (nl_coding_agent/gui/widgets/agents_panel.py; docs/CURRENT_STATE.md)
   - project registry persists facts in SQLite without per-project YAML (tests/test_foundation.py::test_open_project_round_trip - PASS)
+  - C4d: ModelRouter role->ModelBinding resolution (explicit override -> project -> role config -> fallback) with capability/permission filters; tests/test_model_router.py PASS
 - **Sources:** specifiche/05_MODEL_HUB_PROVIDERS.md; docs/05_ORCHESTRATION.md; 03_MASTER_CHECKLIST.md#P1-05; AGENTS.md#no-configuration-ceremony
 - **Note:** CLI per-mission overrides and a global config file exist; GUI mapping is read-only and project-level mapping is not persisted.
 
@@ -290,6 +296,7 @@ _CrewAI as a first-class engine dependency (not a cloned vendor checkout), agent
   - handoff payloads include "model": <model_name> per stage (orchestrator.py lines ~718, 864, 958)
   - SQLite PRAGMA table_info(missions) measured: no model/provider/params columns (read-only probe)
   - temperature is set in _make_llm (0.1) but not persisted
+  - C4d: models/model_router.py ModelBinding + mission_model_snapshots table persist immutable role/provider/model/params/capability snapshots (fake-model test); not yet wired into every mission path
 - **Sources:** specifiche/05_MODEL_HUB_PROVIDERS.md; specifiche/18_SQLITE_SCHEMA_E_STATI.md; specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md
 - **Note:** Stage handoffs record the model name; sampling parameters, provider version and a mission-level config snapshot are not persisted as first-class rows.
 
