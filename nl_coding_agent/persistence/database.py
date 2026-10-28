@@ -349,6 +349,52 @@ CREATE TABLE IF NOT EXISTS capability_approvals (
     expires_at   TEXT,
     source       TEXT NOT NULL DEFAULT 'human'
 );
+
+-- Stage-8 Universal Goal Mode (G1, additive only - goal_store/GoalService own
+-- validation and lifecycle). Existing missions/tasks are reused via goal_missions.
+CREATE TABLE IF NOT EXISTS goals (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id              INTEGER,
+    title                   TEXT NOT NULL,
+    objective               TEXT NOT NULL,
+    acceptance_criteria_json TEXT NOT NULL DEFAULT '[]',
+    priority                TEXT NOT NULL DEFAULT 'P1',
+    status                  TEXT NOT NULL DEFAULT 'planned',
+    dependencies_json       TEXT NOT NULL DEFAULT '[]',
+    template_id             TEXT,
+    template_version        TEXT,
+    source                  TEXT NOT NULL DEFAULT '',
+    origin                  TEXT NOT NULL DEFAULT 'user',
+    attachments_json        TEXT NOT NULL DEFAULT '[]',
+    reference_metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at              TEXT NOT NULL,
+    updated_at              TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS milestones (
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    goal_id                INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+    title                  TEXT NOT NULL,
+    description            TEXT NOT NULL DEFAULT '',
+    priority               TEXT NOT NULL DEFAULT 'P1',
+    status                 TEXT NOT NULL DEFAULT 'pending',
+    ordering               INTEGER NOT NULL DEFAULT 0,
+    dependencies_json      TEXT NOT NULL DEFAULT '[]',
+    acceptance_criteria_json TEXT NOT NULL DEFAULT '[]',
+    evidence_refs_json     TEXT NOT NULL DEFAULT '[]',
+    created_at             TEXT NOT NULL,
+    updated_at             TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_milestones_goal_order
+    ON milestones(goal_id, ordering);
+CREATE TABLE IF NOT EXISTS goal_missions (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    goal_id      INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+    milestone_id INTEGER REFERENCES milestones(id) ON DELETE SET NULL,
+    mission_id   INTEGER NOT NULL REFERENCES missions(id) ON DELETE CASCADE,
+    role         TEXT NOT NULL DEFAULT 'primary',
+    created_at   TEXT NOT NULL,
+    UNIQUE(goal_id, milestone_id, mission_id)
+);
 """
 
 # Columns added after the first operational baseline.  Migrations are additive
@@ -411,6 +457,14 @@ CREATE INDEX IF NOT EXISTS idx_capability_approvals_status
     ON capability_approvals(capability, status, id DESC);
 CREATE INDEX IF NOT EXISTS idx_capability_approvals_project
     ON capability_approvals(project_id, status, id DESC);
+CREATE INDEX IF NOT EXISTS idx_goals_project_status
+    ON goals(project_id, status, id DESC);
+CREATE INDEX IF NOT EXISTS idx_goals_priority
+    ON goals(priority, id);
+CREATE INDEX IF NOT EXISTS idx_milestones_goal_status
+    ON milestones(goal_id, status, ordering, id);
+CREATE INDEX IF NOT EXISTS idx_goal_missions_goal
+    ON goal_missions(goal_id, milestone_id, mission_id);
 """
 
 
