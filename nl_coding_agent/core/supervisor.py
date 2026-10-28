@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Callable
 
 from nl_coding_agent.core import backlog, promotion, resource_gate
-from nl_coding_agent.core.mission_lock import lock_status
+from nl_coding_agent.core.mission_lock import MissionLockError, lock_status, mission_lock
 from nl_coding_agent.core.run_control import RunControl, RunStopped
 from nl_coding_agent.persistence import database, supervisor_store as store
 from nl_coding_agent.persistence.database import db_path
@@ -37,6 +37,8 @@ from nl_coding_agent.persistence.missions import (
     get_active_mission_for_requirement,
     get_mission,
     list_missions,
+    mark_mission_started,
+    update_mission_status,
 )
 
 __all__ = [
@@ -109,6 +111,7 @@ class SupervisorConfig:
     developer_model: str | None = None
     reviewer_model: str | None = None
     debug_model: str | None = None
+    pipeline: str = "sequential"
 
     @classmethod
     def load(cls, project_id: int | None, *, overrides: dict | None = None) -> "SupervisorConfig":
@@ -168,6 +171,8 @@ class SupervisorConfig:
             raise SupervisorError("program_stage_override must be a positive integer")
         if not str(self.backlog_path or "").strip():
             raise SupervisorError("backlog_path must not be empty")
+        if str(self.pipeline or "") not in ("sequential", "flow"):
+            raise SupervisorError("Invalid supervisor pipeline: " + repr(self.pipeline))
 
 
 @dataclass
@@ -316,6 +321,8 @@ class Supervisor:
         self._completed = 0
         self._failed = 0
         self._results: list[dict] = []
+        self._executors: dict[int, object] = {}
+        self._flow_runner = None
 
     # ------------------------------------------------------------ diagnostics
 
@@ -1002,6 +1009,8 @@ class Supervisor:
             "queue_counts": counts,
             "program_stage": stage,
             "config": self.config.to_dict(),
+            "pipeline": self.config.pipeline,
+            "flow_runs": store.list_flow_runs(project_id=project_id)[:20],
             "resume_command": self._resume_command(),
         }
 
@@ -1080,6 +1089,92 @@ class Supervisor:
 
         return MultiAgentOrchestrator(self.root, project_id=self.project_id)
 
+    def _build_executor(self, mission_id: int, goal: str):
+        """Return the MissionStageExecutor for flow mode, or None (sequential)."""
+        if self.config.pipeline == "sequential":
+            return None
+        key = int(mission_id)
+        cached = self._executors.get(key)
+        if cached is not None:
+            return cached
+        from nl_coding_agent.agents.supervisor_executor import SupervisorMissionExecutor
+
+        executor = SupervisorMissionExecutor(
+            self._build_orchestrator(), key, str(goal or ""),
+            control=self.control,
+            developer_model=self.config.developer_model,
+            reviewer_model=self.config.reviewer_model,
+            debug_model=self.config.debug_model,
+        )
+        self._executors[key] = executor
+        return executor
+
+    def _invoke_mission(self, mission_id: int, goal: str | None) -> dict:
+        """Dispatch to the configured pipeline (sequential default remains untouched)."""
+        if str(self.config.pipeline) == "flow":
+            return self._invoke_flow_mission(mission_id, goal)
+        return self._invoke_orchestrator(mission_id, goal)
+
+    def _invoke_flow_mission(self, mission_id: int, goal: str | None) -> dict:
+        """Execute one mission through MissionFlow; the supervisor finalizes status."""
+        mission = get_mission(mission_id) or {}
+        effective_goal = str(goal or mission.get("goal") or "").strip()
+        from nl_coding_agent.flows.supervisor_flow import SupervisorRunFlow
+
+        executor = None
+        result = None
+        try:
+            mark_mission_started(int(mission_id))
+            with mission_lock(int(mission_id)):
+                if self._flow_runner is None:
+                    self._flow_runner = SupervisorRunFlow(self)
+                outcome = self._flow_runner.run_mission(int(mission_id), effective_goal)
+                executor = outcome.get("executor")
+                if executor is None:
+                    current = get_mission(int(mission_id)) or {}
+                    result = {
+                        "status": str(current.get("status") or "interrupted"),
+                        "mission_id": int(mission_id),
+                        "pipeline": "flow",
+                        "error": current.get("result_summary"),
+                    }
+                else:
+                    result = executor.finalize(outcome.get("flow_result") or {})
+        except RunStopped as exc:
+            if executor is None:
+                executor = self._executors.get(int(mission_id))
+            try:
+                result = (executor.finalize({"status": "interrupted", "error": str(exc)})
+                          if executor is not None
+                          else {"status": "interrupted", "error": str(exc)})
+            except Exception:
+                result = {"status": "interrupted", "error": str(exc)}
+        except MissionLockError as exc:
+            update_mission_status(int(mission_id), "blocked")
+            result = {"status": "blocked", "error": str(exc), "code": "mission-lock"}
+        except Exception as exc:  # noqa: BLE001 - classified by the supervisor
+            from nl_coding_agent.core.permissions import PermissionDenied
+
+            if isinstance(exc, PermissionDenied):
+                try:
+                    update_mission_status(int(mission_id), "blocked")
+                except Exception:
+                    pass
+                result = {"status": "blocked", "error": "Permission denied: " + str(exc),
+                          "code": "permission-denied"}
+            else:
+                try:
+                    update_mission_status(int(mission_id), "failed")
+                except Exception:
+                    pass
+                result = {"status": "failed", "error": str(exc),
+                          "code": type(exc).__name__}
+        if not isinstance(result, dict):
+            result = {"status": "failed", "error": "Flow executor returned a non-dict result"}
+        result.setdefault("mission_id", int(mission_id))
+        result["pipeline"] = "flow"
+        return result
+
     def _invoke_orchestrator(self, mission_id: int, goal: str | None) -> dict:
         mission = get_mission(mission_id) or {}
         effective_goal = str(goal or mission.get("goal") or "").strip()
@@ -1133,7 +1228,7 @@ class Supervisor:
                     "error": "Machine inference slot is busy.", "mission_id": int(mission_id)}
         self._adopt_machine_lease()
         try:
-            return self._invoke_orchestrator(int(mission_id), None)
+            return self._invoke_mission(int(mission_id), None)
         finally:
             resource_gate.release_inference_slot(self.owner_id)
             self.machine_lease = None
@@ -1236,7 +1331,7 @@ class Supervisor:
                 kind="mission", mission_id=mission_id,
                 payload={"requirement_id": fresh.get("requirement_id")},
             )
-            result = self._invoke_orchestrator(mission_id, str(fresh.get("goal") or ""))
+            result = self._invoke_mission(mission_id, str(fresh.get("goal") or ""))
             return self.classify(result)
         finally:
             resource_gate.release_inference_slot(self.owner_id)
@@ -1748,6 +1843,8 @@ class Supervisor:
             "retry_after_s": retry_after,
             "resume_command": self._resume_command(),
             "queue": store.list_queue(int(self.project_id), limit=20),
+            "pipeline": self.config.pipeline,
+            "flow_runs": store.list_flow_runs(project_id=int(self.project_id))[:20],
             "checkpoints": self.checkpoints,
         }
 
@@ -1774,6 +1871,7 @@ def run_supervisor(
     event_sink: Callable | None = None,
     control: RunControl | None = None,
     resource_decider: Callable | None = None,
+    pipeline: str | None = None,
 ) -> dict:
     root = Path(project_root).resolve()
     if project_id is None:
@@ -1790,6 +1888,8 @@ def run_supervisor(
                        ("debug_model", debug_model)):
         if value is not None:
             overrides[key] = value
+    if pipeline is not None:
+        overrides["pipeline"] = str(pipeline)
     config = SupervisorConfig.load(project_id, overrides=overrides)
     supervisor = Supervisor(
         root, project_id=project_id, config=config,

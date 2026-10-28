@@ -83,6 +83,35 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(calls["mode"], "assisted")
         self.assertIn("completed", out)
 
+    def test_pipeline_flag_is_forwarded(self):
+        calls = {}
+
+        def fake_run(root, **kwargs):
+            calls.update(kwargs)
+            return {"status": "completed", "missions": [], "resume_command": "x"}
+
+        with patch("nl_coding_agent.core.supervisor.run_supervisor", fake_run):
+            code, _out, _err = run_main([
+                "supervisor", "run", "--project", ".", "--mode", "automatic",
+                "--max-missions", "1", "--pipeline", "flow",
+            ])
+        self.assertEqual(code, 0)
+        self.assertEqual(calls["pipeline"], "flow")
+
+    def test_status_shows_pipeline_and_flow_runs(self):
+        payload = {
+            "status": "RUNNING", "mode": "automatic", "pipeline": "flow",
+            "root": "X:/project", "program_stage": 2, "queue_counts": {},
+            "flow_runs": [{"flow_id": "flow-1", "status": "RUNNING"}],
+            "resume_command": "resume",
+        }
+        with patch("nl_coding_agent.core.supervisor.supervisor_status", lambda root: payload):
+            code, out, _err = run_main(["supervisor", "status", "--project", "."])
+        self.assertEqual(code, 0)
+        self.assertIn("Pipeline: flow", out)
+        self.assertIn("Flow runs: 1", out)
+
+
 
 class RunCommandTests(unittest.TestCase):
     def test_run_forwards_mode_and_budget_and_prints_json(self):

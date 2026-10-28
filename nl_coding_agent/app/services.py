@@ -384,6 +384,48 @@ class AppServices:
         except Exception:
             return []
 
+    def supervisor_flow_runs(self, project_id: int, *, limit: int = 20) -> list[dict]:
+        """Read-only durable Flow run rows for one project (C4c)."""
+        try:
+            from nl_coding_agent.persistence import supervisor_store
+
+            return supervisor_store.list_flow_runs(project_id=int(project_id))[: int(limit)]
+        except Exception:
+            return []
+
+    def supervisor_flow_status(self, project_id: int, *, flow_id: str | None = None) -> dict:
+        """Read-only Flow pipeline status: configured pipeline + runs (+ one state)."""
+        pipeline = "sequential"
+        try:
+            from nl_coding_agent.persistence import database
+
+            config = database.get_json_setting(
+                "supervisor.project." + str(int(project_id))
+            )
+            pipeline = str(config.get("pipeline") or "sequential")
+        except Exception:
+            pipeline = "sequential"
+        runs = self.supervisor_flow_runs(project_id)
+        counts: dict[str, int] = {}
+        for row in runs:
+            state = str(row.get("status") or "")
+            counts[state] = counts.get(state, 0) + 1
+        payload: dict = {
+            "pipeline": pipeline,
+            "flow_runs": runs,
+            "flow_counts": counts,
+            "read_only": True,
+        }
+        if flow_id:
+            payload["flow_id"] = str(flow_id)
+            try:
+                from nl_coding_agent.flows.persistence import AppFlowPersistence
+
+                payload["state"] = AppFlowPersistence().load_state(str(flow_id))
+            except Exception as exc:  # noqa: BLE001 - read-only best effort
+                payload["state_error"] = str(exc)
+        return payload
+
     def get_permissions(self, project_id: int | None = None) -> dict:
         """Read-only effective permission policy for the GUI/settings view."""
         try:

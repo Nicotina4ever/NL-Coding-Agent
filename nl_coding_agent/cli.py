@@ -434,6 +434,7 @@ def _cmd_supervisor_run(args, *, detach: bool = False) -> int:
             developer_model=getattr(args, "dev_model", None),
             reviewer_model=getattr(args, "reviewer_model", None),
             debug_model=getattr(args, "debug_model", None),
+            pipeline=getattr(args, "pipeline", None),
         )
     except Exception as exc:  # noqa: BLE001 - CLI boundary
         print(f"ERROR: supervisor run failed: {exc}", file=sys.stderr)
@@ -506,8 +507,13 @@ def _cmd_supervisor_status(args) -> int:
     else:
         run = status.get("run") or {}
         print(f"Supervisor status: {run.get('status') or status.get('status') or 'idle'}")
-        print(f"Mode: {status.get('mode')}  Project: {status.get('root')}")
+        print(f"Mode: {status.get('mode')}  Pipeline: {status.get('pipeline', 'sequential')}"
+              f"  Project: {status.get('root')}")
         print(f"Program stage: {status.get('program_stage')}")
+        flows = status.get("flow_runs") or []
+        if flows:
+            print(f"Flow runs: {len(flows)} (latest {flows[0].get('flow_id')} "
+                  f"{flows[0].get('status')})")
         print(f"Queue counts: {status.get('queue_counts') or {}}")
         lease = status.get("lease")
         if lease:
@@ -756,6 +762,8 @@ def main() -> int:
     run_p.add_argument("--dev-model", help="Override the developer model")
     run_p.add_argument("--reviewer-model", help="Override the reviewer model")
     run_p.add_argument("--debug-model", help="Override the debugger model")
+    run_p.add_argument("--pipeline", choices=["sequential", "flow"], default=None,
+                       help="Execution pipeline (default: persisted/sequential)")
 
     start_p = svs.add_parser("start", help="Persist the mode and start a detached supervisor process")
     _add_common(start_p)
@@ -765,6 +773,8 @@ def main() -> int:
     start_p.add_argument("--dev-model", help="Override the developer model")
     start_p.add_argument("--reviewer-model", help="Override the reviewer model")
     start_p.add_argument("--debug-model", help="Override the debugger model")
+    start_p.add_argument("--pipeline", choices=["sequential", "flow"], default=None,
+                         help="Execution pipeline (default: persisted/sequential)")
 
     stop_p = svs.add_parser("stop", help="Request a graceful supervisor stop")
     _add_common(stop_p)

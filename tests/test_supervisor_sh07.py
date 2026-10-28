@@ -226,6 +226,38 @@ class SH07Base(unittest.TestCase):
         return store.list_evidence(mission_id)
 
 
+
+
+class SH07FlowPipelineParityTests(SH07Base):
+    """C4c: the opt-in Flow pipeline must reach the same SH-07 acceptance result."""
+
+    def _flow_config(self, **overrides):
+        return self.config(pipeline="flow", **overrides)
+
+    def test_two_consecutive_missions_through_flow_pipeline(self):
+        supervisor = self.make_supervisor(config=self._flow_config())
+        result = supervisor.run(max_missions=2)
+        self.assertEqual(result["status"], "completed", result)
+        self.assertEqual(result["completed"], 2)
+        self.assertEqual(result["pipeline"], "flow")
+        missions = self.missions_by_requirement()
+        self.assertEqual(missions["R-2"]["status"], "completed")
+        self.assertEqual(missions["R-3"]["status"], "completed")
+        self.assertTrue(missions["R-2"].get("flow_id"))
+        self.assertTrue(missions["R-3"].get("flow_id"))
+        self.assertEqual(self.stage_dirs(), [])
+        self.assertEqual(
+            (self.root / "src" / "feature_a.py").read_text(encoding="utf-8"),
+            FEATURE_A,
+        )
+        self.assertEqual(
+            (self.root / "src" / "feature_b.py").read_text(encoding="utf-8"),
+            FEATURE_B,
+        )
+        flows = store.list_flow_runs(project_id=self.project_id)
+        self.assertEqual(len(flows), 2)
+        self.assertTrue(all(row["status"] == "COMPLETED" for row in flows))
+
 class SH07HappyPathTests(SH07Base):
     def test_two_consecutive_missions_without_manual_repair(self):
         supervisor = self.make_supervisor()
