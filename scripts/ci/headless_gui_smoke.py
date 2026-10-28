@@ -49,6 +49,10 @@ def run(report_dir: Path | None = None) -> dict:
             "ide_page": window._page_index.get("ide") == 8,
             "research_page": window._page_index.get("research") == 9,
             "goals_page": window._page_index.get("goals") == 10,
+            "goals_sections_7": window._goals_panel._tabs.count() == 7,
+            "goals_actions": bool(window._goals_panel._verify_btn.accessibleName())
+                              and bool(window._goals_panel._replan_btn.accessibleName())
+                              and bool(window._goals_panel._complete_btn.accessibleName()),
             "ide_tabs_4": window._ide_tabs.count() == 4,
             "terminal_read_only": window._terminal_panel._output.isReadOnly(),
             "git_read_only": window._git_panel._diff.isReadOnly(),

@@ -90,6 +90,24 @@ def test_autonomy_panel_is_non_blocking_and_project_scoped(services, tmp_path):
     panel.shutdown()
 
 
+
+
+def test_goals_panel_exposes_all_sections_without_project():
+    from nl_coding_agent.gui.widgets.goals_panel import GoalsPanel
+
+    _app()
+    panel = GoalsPanel(SimpleNamespace())
+    assert [panel._tabs.tabText(i) for i in range(panel._tabs.count())] == [
+        "Overview", "Milestones", "Missions & Queue", "Activity & Decisions",
+        "Plan Versions", "Evidence & Verification", "Next Work"]
+    assert panel._create_btn.isEnabled() is False
+    assert panel._verify_btn.isEnabled() is False
+    assert panel._replan_btn.isEnabled() is False
+    panel.close()
+    panel.deleteLater()
+    QApplication.processEvents()
+
+
 def test_panels_do_not_import_database_or_crewai():
     widgets = Path("nl_coding_agent/gui/widgets")
     for name in ("agents_panel.py", "settings_panel.py", "autonomy_panel.py",

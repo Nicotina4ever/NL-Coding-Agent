@@ -79,6 +79,13 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
     assert goals._goals_table.editTriggers() == (
         QTableWidget.EditTrigger.NoEditTriggers)
     assert "No project" in goals._scope_label.text()
+    assert goals._tabs.count() == 7
+    assert [goals._tabs.tabText(i) for i in range(7)] == [
+        "Overview", "Milestones", "Missions & Queue", "Activity & Decisions",
+        "Plan Versions", "Evidence & Verification", "Next Work"]
+    assert goals._verify_btn.accessibleName() == "Verify goal evidence (read-only)"
+    assert goals._replan_btn.accessibleName() == "Replan goal with rationale"
+    assert goals._complete_btn.accessibleName() == "Complete goal with verification evidence"
     from nl_coding_agent.gui.widgets.command_palette import CommandPalette
     actions = window._command_palette_actions()
     assert any(action.action_id == "doctor" and action.enabled for action in actions)

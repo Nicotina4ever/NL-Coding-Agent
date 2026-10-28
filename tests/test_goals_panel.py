@@ -61,6 +61,32 @@ class FakeGoalServices:
         self.lifecycle_calls = []
         self.complete_calls = []
         self.complete_result = None
+        self.verify_calls = []
+        self.verify_result = {"ok": True, "verified": True, "verdict": "verified",
+                              "criteria": [{"criterion_id": "AC-1", "status": "verified",
+                                            "blockers": []}],
+                              "blockers": [], "outstanding": {"outstanding": 0},
+                              "record_id": 1, "status_mutated": False}
+        self.replan_calls = []
+        self.replan_result = {"ok": True, "version": 2, "trigger": "evidence",
+                              "rationale": "new evidence",
+                              "diff": {"added": [31], "removed": [30]}}
+        self.version_items = [{"version": 1, "current": False, "trigger": "initial",
+                               "rationale": "initial plan", "diff": {"added": [30]}},
+                              {"version": 2, "current": True, "trigger": "evidence",
+                               "rationale": "adjust", "diff": {"added": [31]}}]
+        self.activity_items = [{"event_kind": "goal_lifecycle", "message": "activated",
+                                "created_at": "2026-01-01"},
+                               {"event_kind": "verification", "message": "verified",
+                                "created_at": "2026-01-02"}]
+        self.mission_items = [{"mission_id": 5, "title": "Existing mission",
+                               "status": "completed", "role": "primary"}]
+        self.queue_items = []
+        self.verification_records = [{"id": 7, "verdict": "verified",
+                                      "created_at": "2026-01-02",
+                                      "criteria": [{"criterion_id": "AC-1",
+                                                    "status": "verified",
+                                                    "blockers": []}]}]
 
     def _copy(self, goal):
         return dict(goal)
@@ -103,6 +129,35 @@ class FakeGoalServices:
                                         "milestones_completed": 1,
                                         "goals_by_status": {"active": 2, "planned": 1}}}
 
+    def goal_verify(self, goal_id, evidence=None, criteria=None):
+        self.verify_calls.append((goal_id, evidence, criteria))
+        return dict(self.verify_result)
+
+    def goal_missions(self, goal_id):
+        return {"ok": True, "missions": [dict(item) for item in self.mission_items]}
+
+    def goal_queue(self, project_id=None, limit=50):
+        return {"ok": True, "queue": [dict(item) for item in self.queue_items]}
+
+    def goal_activity(self, goal_id, limit=50):
+        return {"ok": True, "activity": [dict(item) for item in self.activity_items]}
+
+    def goal_plan_versions(self, goal_id):
+        return {"ok": True, "versions": [dict(item) for item in self.version_items],
+                "current": 2}
+
+    def goal_replan(self, goal_id, plan=None, rationale="", trigger="manual"):
+        self.replan_calls.append((goal_id, plan, rationale, trigger))
+        if not rationale:
+            return {"ok": False, "error": "rationale is required"}
+        return dict(self.replan_result)
+
+    def goal_verifications(self, goal_id, limit=20):
+        return {"ok": True, "verifications": [dict(item) for item in self.verification_records]}
+
+    def goal_verification_outstanding(self, goal_id):
+        return {"ok": True, "outstanding": {"outstanding": 1}}
+
     def goal_create(self, objective, *, project_id=None, **kwargs):
         self.create_calls.append((objective, project_id, kwargs))
         goal = _goal(99, kwargs.get("title") or objective, "planned",
@@ -139,7 +194,7 @@ class FakeGoalServices:
     def goal_cancel(self, goal_id):
         return self._transition("cancel", goal_id)
 
-    def goal_complete(self, goal_id):
+    def goal_complete(self, goal_id, evidence=None, criteria=None):
         self.complete_calls.append(goal_id)
         if self.complete_result is not None:
             return dict(self.complete_result)
@@ -251,10 +306,7 @@ def test_lifecycle_actions_and_completion_gate():
     select_goal(panel, 3)  # active with pending milestone
     assert panel._action_buttons["pause"].isEnabled() is True
     assert panel._action_buttons["activate"].isEnabled() is False
-    assert panel._complete_btn.isEnabled() is False
-    assert "incomplete milestones" in panel._complete_btn.toolTip()
-    assert panel._complete_goal() is False
-    assert fake.complete_calls == []
+    assert panel._complete_btn.isEnabled() is True
     assert panel._lifecycle("pause") is True
     assert fake.lifecycle_calls[-1][0] == "pause"
     assert panel._action_buttons["resume"].isEnabled() is True
@@ -270,20 +322,29 @@ def test_lifecycle_actions_and_completion_gate():
 def test_verification_gated_complete_success_and_service_blockers():
     _app()
     panel, fake = make_panel()
-    select_goal(panel, 1)  # active, all milestones completed
+    select_goal(panel, 1)
     assert panel._complete_btn.isEnabled() is True
-    assert panel._complete_gate_error(panel._current) == ""
     assert panel._complete_goal() is True
+    assert fake.verify_calls and fake.verify_calls[-1][0] == 1
     assert fake.complete_calls == [1]
-    assert "verification-gated" in panel._status_label.text()
+    assert "completed after verified evidence" in panel._status_label.text()
 
     panel2, fake2 = make_panel()
     select_goal(panel2, 1)
-    fake2.complete_result = {"ok": False, "error": "incomplete evidence",
-                             "blockers": ["missing test evidence"]}
+    fake2.complete_result = {"ok": False, "error": "completion precondition",
+                             "blockers": ["milestone missing"]}
     assert panel2._complete_goal() is False
-    assert "blocked by verification-gated service" in panel2._status_label.text()
-    assert "missing test evidence" in panel2._blockers_view.toPlainText()
+    assert "Completion refused" in panel2._status_label.text()
+    assert "milestone missing" in panel2._verification_blockers.toPlainText()
+
+    panel3, fake3 = make_panel()
+    select_goal(panel3, 1)
+    fake3.verify_result = {"ok": True, "verified": False, "verdict": "unverified",
+                           "criteria": [], "blockers": [{"detail": "missing evidence"}]}
+    assert panel3._complete_goal() is False
+    assert fake3.complete_calls == []
+    assert "status unchanged" in panel3._status_label.text()
+    assert panel3._current.get("status") == "active"
 
 
 def test_milestones_progress_next_work_and_errors():
@@ -306,6 +367,82 @@ def test_milestones_progress_next_work_and_errors():
     assert "boom" in panel._status_label.text()
 
 
+
+def test_missions_queue_activity_versions_and_evidence_sections():
+    _app()
+    panel, fake = make_panel()
+    select_goal(panel, 1)
+    assert panel._tabs.count() == 7
+    assert panel._missions_list.count() == 1
+    assert "Mission 5" in panel._missions_list.item(0).text()
+    assert "role: primary" in panel._missions_list.item(0).text()
+    assert panel._queue_list.count() == 1
+    assert "empty" in panel._queue_list.item(0).text().lower()
+    assert panel._activity_list.count() == 2
+    assert "activated" in panel._activity_list.item(0).text()
+    assert panel._versions_table.rowCount() == 2
+    assert panel._versions_table.item(1, 1).text() == "yes"
+    assert panel._criteria_table.rowCount() == 1
+    assert panel._criteria_table.item(0, 0).text() == "AC-1"
+    assert "verified" in panel._verification_status.text()
+    assert fake.verify_calls == []
+
+
+def test_replan_dialog_validation_success_diff_and_failure():
+    _app()
+    from nl_coding_agent.gui.widgets.goals_panel import ReplanDialog
+    dialog = ReplanDialog()
+    assert "Plan JSON" in dialog.validation_error()
+    dialog._plan.setPlainText("{invalid")
+    assert "Invalid plan JSON" in dialog.validation_error()
+    dialog._plan.setPlainText("[{\"title\": \"M2\"}]")
+    assert "Rationale" in dialog.validation_error()
+    dialog._rationale.setText("scope changed")
+    dialog._trigger.setCurrentText("requirements")
+    assert dialog.validation_error() == ""
+    values = dialog.values()
+    assert values["rationale"] == "scope changed" and values["trigger"] == "requirements"
+    assert isinstance(values["plan"], list)
+
+    panel, fake = make_panel()
+    select_goal(panel, 1)
+    assert panel._replan([{"title": "M2"}], "scope changed", "requirements") is True
+    assert fake.replan_calls[-1][1] == [{"title": "M2"}]
+    assert fake.replan_calls[-1][2] == "scope changed"
+    assert "added" in panel._version_detail.toPlainText()
+    assert panel._replan([], "reason", "manual") is False
+    assert panel._replan([{"title": "M2"}], "", "manual") is False
+
+
+def test_replan_refusal_and_not_connected_states():
+    _app()
+    panel, fake = make_panel()
+    select_goal(panel, 1)
+    fake.replan_result = {"ok": False, "error": "plan validation failed"}
+    assert panel._replan([{"title": "M2"}], "reason", "manual") is False
+    assert "Replan refused" in panel._status_label.text()
+
+    from types import SimpleNamespace
+    from nl_coding_agent.gui.widgets.goals_panel import GoalsPanel
+    offline = GoalsPanel(SimpleNamespace(goal_list=lambda **kwargs: {"ok": True, "goals": []}))
+    offline.set_project({"id": 7, "name": "P"})
+    assert offline._replan_btn.isEnabled() is False
+    assert offline._verify_btn.isEnabled() is False
+
+
+def test_evidence_dialog_validation_and_criteria_optional():
+    _app()
+    from nl_coding_agent.gui.widgets.goals_panel import EvidenceDialog
+    dialog = EvidenceDialog()
+    assert "required" in dialog.validation_error().lower()
+    dialog._evidence.setPlainText("{bad")
+    assert "Invalid evidence" in dialog.validation_error()
+    dialog._evidence.setPlainText('{"type": "test", "source": "pytest", "result": "pass"}')
+    assert dialog.validation_error() == ""
+    dialog._criteria.setPlainText('["AC-1"]')
+    values = dialog.values()
+    assert values["evidence"]["result"] == "pass"
+    assert values["criteria"] == ["AC-1"]
 def test_static_guards_no_direct_db_network_or_crewai_and_no_auto_mission():
     source = (REPO / "nl_coding_agent" / "gui" / "widgets" / "goals_panel.py").read_text(
         encoding="utf-8").lower()
