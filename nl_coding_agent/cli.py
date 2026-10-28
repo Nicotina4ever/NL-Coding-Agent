@@ -40,6 +40,10 @@ def ollama_stop(crewai_model: str) -> None:
 
 
 def make_llm(role_cfg: dict, base_url: str) -> LLM:
+    """Build the CrewAI LLM after the fail-closed cloud/network permission gate."""
+    from nl_coding_agent.core.permissions import assert_model_permitted
+
+    assert_model_permitted(role_cfg["model"], base_url)
     return LLM(model=role_cfg["model"], base_url=base_url,
                 temperature=role_cfg.get("temperature", 0.1))
 

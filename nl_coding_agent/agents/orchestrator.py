@@ -89,7 +89,15 @@ def _truncate(text: str, limit: int = 20_000) -> str:
 
 
 def _make_llm(model_name: str, base_url: str = "http://127.0.0.1:11434", temperature: float = 0.1) -> LLM:
-    """Create a CrewAI LLM instance for Ollama."""
+    """Create a permission-checked CrewAI LLM instance for Ollama.
+
+    Fail-closed escalation gate: a cloud model needs an explicit CLOUD grant and
+    a non-loopback endpoint needs an explicit NETWORK grant. There is no flag or
+    environment variable that disables this check.
+    """
+    from nl_coding_agent.core.permissions import assert_model_permitted
+
+    assert_model_permitted(model_name, base_url)
     return LLM(model=model_name, base_url=base_url, temperature=temperature)
 
 
