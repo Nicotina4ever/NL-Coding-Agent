@@ -67,10 +67,10 @@ relaxed by either input.
 | Status | P0 | P1 | P2 | P3 | Total |
 |---|---|---|---|---|---|
 | verified | 20 | 13 | 0 | 0 | 33 |
-| partial | 26 | 26 | 11 | 1 | 64 |
-| planned | 34 | 19 | 9 | 1 | 63 |
+| partial | 30 | 26 | 11 | 1 | 68 |
+| planned | 30 | 19 | 9 | 1 | 59 |
 | blocked | 3 | 0 | 0 | 0 | 3 |
-| **Total** | **83** | **58** | **20** | **2** | **163** |
+| **Total** | 83 | 58 | 20 | 2 | 163 |
 
 | Area | Requirements | verified | partial | planned | blocked |
 |---|---|---|---|---|---|
@@ -93,6 +93,8 @@ relaxed by either input.
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v3.9 (2026-10-28)** - Stage-7 first implementation increments: NL-BP-168 capability taxonomy and durable scoped approvals (20 capabilities/12 scopes/6 decisions, fail-closed defaults, additive SQLite, audit, 23 tests; part of Trusted Auto Review/Full Autonomy track) and NL-BP-170/175/206 research foundation (stdlib retrieval policy with domain/SSRF/rate/size enforcement, injectable-transport fetcher with redirects/provenance/untrusted tagging, HTML reader; 69 tests). Both are partial/foundation-only: no GUI/tool wiring, search providers, browser, real transport, research store or real-network acceptance; full suite 814 passed. Real-network research and TRUSTED AUTO REVIEW/FULL AUTONOMY remain pending/MANUAL-PENDING.
 
 **v3.8 (2026-10-28)** - Queue-only Universal Web Research & Intelligence Engine directive. Read-only capability audit (docs/WEB_RESEARCH_CAPABILITY_AUDIT.md) found no external web-research capability: stdlib urllib is used only for loopback Ollama/model-provider probes and a local tool health endpoint; MCP is local stdio-only with human-gated invocation and no bundled GitHub/HF/web servers; NETWORK/CLOUD permission scopes are fail-closed but unused by research tools; attachments are local files/clipboard only. Deduped every directive sub-capability against NL-BP-169..176/203 and added seven genuine gaps as planned requirements **NL-BP-205..211** (provider registry, retrieval safety, connector registration, HF acquisition, version-aware docs, Studio research workspace, acceptance matrix) under stage 7. No existing ID/acceptance/status or stage 1-6 status was rewritten; no code/model/network run started; addendum bundle preserved. Totals: 163 requirements; 33 verified / 64 partial / 63 planned / 3 blocked.
 

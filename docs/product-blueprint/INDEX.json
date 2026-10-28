@@ -4165,7 +4165,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-072",
         "NL-BP-073"
@@ -4177,13 +4177,14 @@
       ],
       "evidence": [
         "not started - queued only by task-59 from the user addendum; no code, mission or network run was started",
-        "source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.2"
+        "source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.2",
+        "Implemented first increment: 20-capability taxonomy with risk classes/default fail-closed decisions, 12 scopes, six decision semantics, CapabilityScope matching, Allowed/Denied/NeedsApproval results, grant/revoke/request/decide/expire/inspection APIs, durable additive capability_grants/capability_approvals SQLite tables with restart survival, audit events and no silent cross-enable; legacy permissions/cloud gates unchanged; 23 new tests (87 targeted batch) and docs/07_SAFETY.md. Not yet wired into GUI/tool execution; full Trusted Auto Review/Full Autonomy profiles remain planned (NL-BP-166/167)."
       ],
       "source_refs": [
         "docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.2"
       ],
       "primary_source": "docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md",
-      "note": "Extends NL-BP-072/073 without rewriting their acceptance; the existing application filter is explicitly not an OS sandbox.",
+      "note": "Implemented first increment: 20-capability taxonomy with risk classes/default fail-closed decisions, 12 scopes, six decision semantics, CapabilityScope matching, Allowed/Denied/NeedsApproval results, grant/revoke/request/decide/expire/inspection APIs, durable additive capability_grants/capability_approvals SQLite tables with restart survival, audit events and no silent cross-enable; legacy permissions/cloud gates unchanged; 23 new tests (87 targeted batch) and docs/07_SAFETY.md. Not yet wired into GUI/tool execution; full Trusted Auto Review/Full Autonomy profiles remain planned (NL-BP-166/167).",
       "backlog_anchor": "nl-bp-168",
       "program_stage": 7,
       "program_stage_name": "Universal autonomy, research intelligence and Mega Suite",
@@ -4229,7 +4230,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-168",
         "NL-BP-169"
@@ -4241,13 +4242,14 @@
       ],
       "evidence": [
         "not started - queued only by task-59 from the user addendum; no code, mission or network run was started",
-        "source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1"
+        "source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1",
+        "Foundation implemented: stdlib-only research.models/policy/fetch/reader with canonical URL provenance, HTTPS-only default, domain/SSRF/redirect/rate/time/size/content-type policy, injectable-transport fetcher (no default network), optional permission-gate callback, untrusted tagging, and HTML->text/Markdown extraction (title/metadata/headings/lists/code/links/tables; script/style/iframe dropped). 69 tests with fake transports/fixtures. Missing for completion: JS browser automation, cache, PDF/Office extraction, real transport/permission-broker wiring and real-network acceptance (MANUAL-PENDING)."
       ],
       "source_refs": [
         "docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1"
       ],
       "primary_source": "docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md",
-      "note": "Browser interaction is a separate capability/grant, not an implicit side effect of web search.",
+      "note": "Foundation implemented: stdlib-only research.models/policy/fetch/reader with canonical URL provenance, HTTPS-only default, domain/SSRF/redirect/rate/time/size/content-type policy, injectable-transport fetcher (no default network), optional permission-gate callback, untrusted tagging, and HTML->text/Markdown extraction (title/metadata/headings/lists/code/links/tables; script/style/iframe dropped). 69 tests with fake transports/fixtures. Missing for completion: JS browser automation, cache, PDF/Office extraction, real transport/permission-broker wiring and real-network acceptance (MANUAL-PENDING).",
       "backlog_anchor": "nl-bp-170",
       "program_stage": 7,
       "program_stage_name": "Universal autonomy, research intelligence and Mega Suite",
@@ -4391,7 +4393,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-168",
         "NL-BP-170"
@@ -4403,13 +4405,14 @@
       ],
       "evidence": [
         "not started - queued only by task-59 from the user addendum; no code, mission or network run was started",
-        "source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.2"
+        "source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.2",
+        "Foundation: retrieved content is explicitly tagged untrusted and carried as data with provenance; reader drops/records script/iframe/object content without executing it; no instruction-executing path in the new fetch/reader modules. Formal prompt-injection fixtures, agent-boundary enforcement and audit of rejected instructions remain to implement before completion."
       ],
       "source_refs": [
         "docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.2"
       ],
       "primary_source": "docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md",
-      "note": "Security requirement for the research engine; dovetails with the full-autonomy disclosure (NL-BP-167).",
+      "note": "Foundation: retrieved content is explicitly tagged untrusted and carried as data with provenance; reader drops/records script/iframe/object content without executing it; no instruction-executing path in the new fetch/reader modules. Formal prompt-injection fixtures, agent-boundary enforcement and audit of rejected instructions remain to implement before completion.",
       "backlog_anchor": "nl-bp-175",
       "program_stage": 7,
       "program_stage_name": "Universal autonomy, research intelligence and Mega Suite",
@@ -5406,7 +5409,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "new (user directive 2026-10-28: universal web research & intelligence engine)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-170",
         "NL-BP-175"
@@ -5419,7 +5422,8 @@
       ],
       "evidence": [
         "not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md; no code, mission or network run started",
-        "capability-gap evidence: docs/WEB_RESEARCH_CAPABILITY_AUDIT.md sections 3 and 5 (only local urllib Ollama/model probes, gated local-stdio MCP, unused web-research permissions, local-only attachments)"
+        "capability-gap evidence: docs/WEB_RESEARCH_CAPABILITY_AUDIT.md sections 3 and 5 (only local urllib Ollama/model probes, gated local-stdio MCP, unused web-research permissions, local-only attachments)",
+        "Foundation: RetrievalPolicy enforces scheme/port, host/domain allow+deny with subdomain precedence, SSRF blocking for loopback/private/link-local/multicast/reserved IPs and localhost, explicit exceptions, max redirects/time/bytes/content-type, deterministic shared rate limiting; fetcher re-checks policy on every redirect and records redirect chain/provenance/untrusted marker; 69 tests. Missing: cache expiry/refresh, connect-time DNS-rebinding defenses, real transport wiring, per-mission persisted policy and real-network acceptance (MANUAL-PENDING)."
       ],
       "source_refs": [
         "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
@@ -5428,7 +5432,7 @@
         "NL-BP-175"
       ],
       "primary_source": "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
-      "note": "Safety gap distinct from NL-BP-175 (model/agent trust boundary); must exist before any real fetch is enabled.",
+      "note": "Foundation: RetrievalPolicy enforces scheme/port, host/domain allow+deny with subdomain precedence, SSRF blocking for loopback/private/link-local/multicast/reserved IPs and localhost, explicit exceptions, max redirects/time/bytes/content-type, deterministic shared rate limiting; fetcher re-checks policy on every redirect and records redirect chain/provenance/untrusted marker; 69 tests. Missing: cache expiry/refresh, connect-time DNS-rebinding defenses, real transport wiring, per-mission persisted policy and real-network acceptance (MANUAL-PENDING).",
       "backlog_anchor": "nl-bp-206",
       "program_stage": 7,
       "program_stage_name": "Universal autonomy, research intelligence and Mega Suite",
@@ -5647,8 +5651,8 @@
     "total": 163,
     "by_status": {
       "verified": 33,
-      "partial": 64,
-      "planned": 63,
+      "partial": 68,
+      "planned": 59,
       "blocked": 3
     },
     "by_priority": {
@@ -5677,10 +5681,10 @@
         "planned": 7
       },
       "autonomy": {
-        "partial": 6,
         "verified": 16,
-        "blocked": 1,
-        "planned": 27
+        "partial": 10,
+        "planned": 23,
+        "blocked": 1
       },
       "hygiene": {
         "verified": 3,
@@ -5701,13 +5705,13 @@
     "by_priority_status": {
       "P0": {
         "verified": 20,
-        "partial": 26,
-        "blocked": 3,
-        "planned": 34
+        "partial": 30,
+        "planned": 30,
+        "blocked": 3
       },
       "P1": {
-        "partial": 26,
         "verified": 13,
+        "partial": 26,
         "planned": 19
       },
       "P2": {
@@ -7269,7 +7273,8 @@
     "v3.5_2026-10-28_stage6_rehearsal_reproducibility": "Stage-6h/6i: synthetic end-to-end release-pipeline rehearsal (explicit synthetic fixtures/NOT-A-RELEASE, canonical manifests unchanged, full wiring PASS) and cross-platform reproducible source-release check wired into CI (two byte-identical builds, 40/40 checks, forbidden-content scan). Full suite 693 passed. External/manual acceptance items unchanged.",
     "v3.6_2026-10-28_gui_safety_linux_evidence": "Stage-4 G1: Settings > Advanced self-build controls + always-reachable emergency pause/stop (NL-BP-023/024 partial, 064 evidence; offscreen tests). Stage-6j/6k: genuine WSL2 Linux execution evidence, POSIX Self-Build launcher bad-substitution fix, and byte-identical cross-platform release manifests/beta package. Full suite 722 passed. External/manual items unchanged; addendum input queued without implementing it.",
     "v3.7_2026-10-28_addendum_import": "Queue-only import of the user-supplied 2026-10-28 Universal Autonomy/Research/Mega Suite addendum (preserved unchanged at docs/product-blueprint/addenda, MANIFEST verified). A read-only cross-check against the 117 live requirements produced a 20-group dedupe map; 39 genuinely new capabilities were added as planned requirements NL-BP-166..204 and mapped to a new pending program stage 7 'Universal autonomy, research intelligence and Mega Suite'. Covered capabilities stayed on existing IDs (dynamic teams 066/067, competence index 068/069, staged gates 054-060/063, multi-platform beta 152-165, Studio 020-046). No existing ID/acceptance/status was rewritten, stages 1-6 were untouched, and no code, mission or network run started. SH-07 Tier B remains blocked; owner authorization is still required for publication/deletion/cloud. Totals: 156 requirements; 33 verified / 64 partial / 56 planned / 3 blocked.",
-    "v3.8_2026-10-28_web_research_directive": "Queue-only registration of the user's Universal Web Research & Intelligence Engine directive. A read-only capability audit (docs/WEB_RESEARCH_CAPABILITY_AUDIT.md) confirmed the app has only stdlib urllib loopback probes for local Ollama/model providers and fixed tool health checks, a human-gated local-stdio MCP client with no bundled GitHub/HF/web servers, fail-closed NETWORK/CLOUD permission scopes not yet used by any research tool, and a local-only attachment pipeline; there is no web search/reader/GitHub/HF client, research store or GUI. Every directive sub-capability was deduplicated against NL-BP-169..176/203; seven genuine gaps were added as NL-BP-205..211 (provider registry, retrieval safety, connector registration, HF acquisition, version-aware docs, research workspace, acceptance matrix) under stage 7. No existing ID/acceptance/status or stage 1-6 status was rewritten; no code, model, mission or network run started; addendum bundle preserved unchanged. Totals: 163 requirements; 33 verified / 64 partial / 63 planned / 3 blocked."
+    "v3.8_2026-10-28_web_research_directive": "Queue-only registration of the user's Universal Web Research & Intelligence Engine directive. A read-only capability audit (docs/WEB_RESEARCH_CAPABILITY_AUDIT.md) confirmed the app has only stdlib urllib loopback probes for local Ollama/model providers and fixed tool health checks, a human-gated local-stdio MCP client with no bundled GitHub/HF/web servers, fail-closed NETWORK/CLOUD permission scopes not yet used by any research tool, and a local-only attachment pipeline; there is no web search/reader/GitHub/HF client, research store or GUI. Every directive sub-capability was deduplicated against NL-BP-169..176/203; seven genuine gaps were added as NL-BP-205..211 (provider registry, retrieval safety, connector registration, HF acquisition, version-aware docs, research workspace, acceptance matrix) under stage 7. No existing ID/acceptance/status or stage 1-6 status was rewritten; no code, model, mission or network run started; addendum bundle preserved unchanged. Totals: 163 requirements; 33 verified / 64 partial / 63 planned / 3 blocked.",
+    "v3.9_2026-10-28_stage7_first_increments": "Stage-7 first implementation increments: autonomy capability taxonomy + durable scoped approvals (168 partial) and research policy/fetcher/reader foundation (170/175/206 partial). 92 new tests; full suite 814 passed. No network/model runs; real-network acceptance, search providers, browser, research store and GUI remain pending/MANUAL-PENDING."
   },
   "program_order": {
     "schema_version": 1,
@@ -7567,11 +7572,11 @@
           "NL-BP-210",
           "NL-BP-211"
         ],
-        "note": "Queued by task-59. Execute after stage 6 gates pass or when the Lead records an explicit evidence-backed exception for independent low-risk work. Stages 1-6 statuses and existing requirements are untouched. The addendum grants no deletion/publication/cloud authorization and does not relax SH-07 Tier B or the staged-candidate gates. v3.8 extension (task-60): registered the Universal Web Research & Intelligence Engine gaps as NL-BP-205..211; queue-only, no implementation started."
+        "note": "Queued by task-59. Execute after stage 6 gates pass or when the Lead records an explicit evidence-backed exception for independent low-risk work. Stages 1-6 statuses and existing requirements are untouched. The addendum grants no deletion/publication/cloud authorization and does not relax SH-07 Tier B or the staged-candidate gates. v3.8 extension (task-60): registered the Universal Web Research & Intelligence Engine gaps as NL-BP-205..211; queue-only, no implementation started. First implementation increments landed: autonomy A1 (NL-BP-168 capability taxonomy + durable scoped approvals, fail-closed, 23 tests) and research R1 (NL-BP-170/175/206 foundation: stdlib retrieval policy/SSRF/rate/size enforcement, injectable-transport fetcher with redirects/provenance/untrusted tagging, HTML reader, 69 tests). Both are foundations only: no GUI/tool wiring, search providers, browser, real transport, research store or real-network acceptance yet; real-network research and Trusted Auto Review/Full Autonomy remain MANUAL-PENDING/planned."
       }
     ]
   },
-  "updated_at": "2026-10-28T21:19:19+01:00",
+  "updated_at": "2026-10-28T21:40:00+01:00",
   "addendum_import": {
     "imported_at": "2026-10-28T21:08:26+01:00",
     "task": "shared task-59 (queue-only backlog import; no implementation)",

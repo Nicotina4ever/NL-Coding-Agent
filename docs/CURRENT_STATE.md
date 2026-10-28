@@ -559,3 +559,22 @@ Round-5 verification: full suite 722 passed; relocation gate 33/0/1 expected dir
 supervisor gate ok; SBOM OK; Linux evidence runs all exit 0. WSL2 is not GitHub Actions; no
 GUI/native-runtime/clean-machine/hardware/platform support is claimed. External/manual acceptance
 items and owner authorizations remain pending.
+
+Stage-7 first implementation increments (2026-10-28)
+
+Two foundation increments from the queued Universal Autonomy/Research addendum are implemented,
+tested and committed, without claiming the broader capabilities complete:
+- Autonomy A1 (NL-BP-168): a 20-capability taxonomy with risk classes and fail-closed defaults, 12
+  permission scopes, six decision semantics, durable SQLite capability grants/approvals with expiry,
+  revocation, restart survival, audit events and a single check_capability API; legacy permissions and
+  cloud/network gates are unchanged. Not yet wired into GUI or tool execution; Trusted Auto Review and
+  Full Autonomy profiles remain planned (NL-BP-166/167).
+- Research R1 (NL-BP-170/175/206 foundation): stdlib-only research package with immutable provenance,
+  fail-closed RetrievalPolicy (HTTPS default, domain allow/deny, SSRF/private-IP blocking, redirects,
+  time/size/content-type caps, deterministic rate limiting), an injectable-transport fetcher that
+  re-checks policy on every redirect, tags content untrusted and records redirect provenance, and an
+  HTML reader producing text/Markdown with metadata/headings/lists/code/links/tables while dropping
+  script/iframe content. No default network transport, no search providers, browser, PDF/Office
+  extraction, cache/store or GUI yet; real-network acceptance remains MANUAL-PENDING (NL-BP-203/211).
+
+Verification: full suite 814 passed; relocation/supervisor gates green; no network/model/GUI runs.
