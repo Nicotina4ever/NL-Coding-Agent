@@ -228,6 +228,20 @@ class MultiAgentOrchestrator:
     def _emit(self, source: str, level: str, message: str, **payload) -> None:
         self.bus.emit(Event(source=source, level=level, message=message, payload=payload or None))
 
+    def _call_model(self, agent, task) -> str:
+        """Single seam for model invocation.
+
+        Tests monkeypatch this method to inject deterministic fake model output
+        without loading any LLM; real runs use CrewAI exactly as before.
+        """
+        crew = Crew(
+            agents=[agent],
+            tasks=[task],
+            process=Process.sequential,
+            verbose=True,
+        )
+        return str(crew.kickoff())
+
     def _snapshot(self) -> dict[str, str]:
         return snapshot_workspace(self.root)
 
@@ -671,11 +685,9 @@ INSTRUCTIONS:
             expected_output="Summary of files actually modified and the changes made.",
             agent=dev_agent,
         )
-        crew = Crew(agents=[dev_agent], tasks=[crew_task], process=Process.sequential, verbose=True)
-
         before = self._snapshot()
         try:
-            output = str(crew.kickoff())
+            output = self._call_model(dev_agent, crew_task)
             actions = _apply_text_actions(self.root, output)
             after = self._snapshot()
             diff, changed = diff_snapshots(before, after)
@@ -832,10 +844,8 @@ INSTRUCTIONS:
 4. Keep changes minimal and focused on resolving the error.
 """
         task = Task(description=prompt, expected_output="Summary of the fix actually applied.", agent=debugger)
-        crew = Crew(agents=[debugger], tasks=[task], process=Process.sequential, verbose=True)
-
         before = self._snapshot()
-        output = str(crew.kickoff())
+        output = self._call_model(debugger, task)
         actions = _apply_text_actions(self.root, output)
         after = self._snapshot()
         diff, changed = diff_snapshots(before, after)
@@ -933,10 +943,8 @@ INSTRUCTIONS:
             expected_output="APPROVE or REJECT verdict on the first line, followed by review notes.",
             agent=reviewer,
         )
-        crew = Crew(agents=[reviewer], tasks=[task], process=Process.sequential, verbose=True)
-
         try:
-            review_text = str(crew.kickoff())
+            review_text = self._call_model(reviewer, task)
             verdict = parse_reviewer_verdict(review_text)
             record_task_attempt(task_id, "completed", output=_truncate(review_text))
             update_task_status(task_id, "completed")

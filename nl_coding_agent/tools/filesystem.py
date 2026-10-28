@@ -53,7 +53,9 @@ def scoped_write_file(project_root: Path | str, rel_path: str, content: str) -> 
     """Create or overwrite a file safely within project root."""
     target = resolve_scoped_path(project_root, rel_path, for_write=True)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(content, encoding="utf-8")
+    # newline="" disables Windows CRLF translation: the bytes written must be the
+    # same bytes the staging broker hashes/promotes and recovery compares (C2).
+    target.write_text(content, encoding="utf-8", newline="")
     return f"Successfully wrote {len(content)} characters to {rel_path}"
 
 
@@ -71,7 +73,7 @@ def scoped_patch_file(project_root: Path | str, rel_path: str, target_snippet: s
 
     occurrences = content.count(target_snippet)
     new_content = content.replace(target_snippet, replacement_snippet)
-    target.write_text(new_content, encoding="utf-8")
+    target.write_text(new_content, encoding="utf-8", newline="")
     return f"Successfully replaced {occurrences} occurrence(s) in {rel_path}"
 
 

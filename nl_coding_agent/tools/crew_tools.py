@@ -1,4 +1,11 @@
-"""CrewAI tool bindings for project-scoped development."""
+"""CrewAI tool bindings for project-scoped development.
+
+Model-facing tools are deliberately limited to file read/write/patch/list. Generic
+shell execution (run_command) and test execution (run_tests, git_diff) are NOT
+exposed to the model: they are arbitrary code execution and there is no OS sandbox
+in this phase (SPEC-28 SH-05). Verification is performed by the independent
+verifier stage, never by the model.
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,13 +16,10 @@ from nl_coding_agent.tools.filesystem import (
     scoped_patch_file,
     scoped_list_dir,
 )
-from nl_coding_agent.tools.shell import scoped_run_command
-from nl_coding_agent.tools.git_tools import get_git_diff, get_git_status
-from nl_coding_agent.tools.verification import run_verification
 
 
 def get_project_tools(project_root: Path | str) -> list:
-    """Create a suite of CrewAI tools scoped strictly to the given project_root."""
+    """Create the model-facing tool suite scoped strictly to project_root."""
     root = Path(project_root).resolve()
 
     @tool("read_file")
@@ -51,31 +55,4 @@ def get_project_tools(project_root: Path | str) -> list:
         except Exception as e:
             return f"Error listing directory '{path}': {e}"
 
-    @tool("run_command")
-    def run_command(command: str) -> str:
-        """Run a shell command in the project root and return stdout and stderr."""
-        try:
-            res = scoped_run_command(root, command)
-            return f"Exit code: {res['returncode']}\nSTDOUT:\n{res['stdout']}\nSTDERR:\n{res['stderr']}"
-        except Exception as e:
-            return f"Error running command: {e}"
-
-    @tool("git_diff")
-    def git_diff() -> str:
-        """Inspect uncommitted git changes in the project."""
-        try:
-            return get_git_diff(root)
-        except Exception as e:
-            return f"Error getting git diff: {e}"
-
-    @tool("run_tests")
-    def run_tests() -> str:
-        """Run the project's automated test suite and report results."""
-        try:
-            res = run_verification(root)
-            status = "PASSED" if res["passed"] else "FAILED"
-            return f"Test status: {status} (code {res['exit_code']})\nOutput:\n{res['stdout']}\nErrors:\n{res['stderr']}"
-        except Exception as e:
-            return f"Error running tests: {e}"
-
-    return [read_file, write_file, patch_file, list_dir, run_command, git_diff, run_tests]
+    return [read_file, write_file, patch_file, list_dir]

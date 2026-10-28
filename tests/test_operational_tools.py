@@ -64,13 +64,28 @@ def test_scoped_shell_execution():
         assert "test.txt" in res["stdout"]
 
 
-def test_crew_tools_binding():
+def test_crew_tools_binding_limited_to_file_operations():
     with tempfile.TemporaryDirectory() as tmp_dir:
         root = Path(tmp_dir)
         tools = get_project_tools(root)
-        assert len(tools) == 7
         tool_names = [t.name for t in tools]
-        assert "read_file" in tool_names
-        assert "write_file" in tool_names
-        assert "patch_file" in tool_names
-        assert "run_tests" in tool_names
+        assert len(tools) == 4
+        assert set(tool_names) == {"read_file", "write_file", "patch_file", "list_dir"}
+        # Arbitrary shell/test/git execution must never be model-facing (SPEC-28 SH-05).
+        assert "run_command" not in tool_names
+        assert "run_tests" not in tool_names
+        assert "git_diff" not in tool_names
+
+
+def test_scoped_write_file_writes_lf_bytes_without_newline_translation():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        root = Path(tmp_dir)
+        scoped_write_file(root, "src/lf.py", "a = 1\nb = 2\n")
+        raw = (root / "src" / "lf.py").read_bytes()
+        assert b"\r\n" not in raw
+        assert raw == b"a = 1\nb = 2\n"
+
+        scoped_patch_file(root, "src/lf.py", "a = 1", "a = 3")
+        raw = (root / "src" / "lf.py").read_bytes()
+        assert b"\r\n" not in raw
+        assert raw == b"a = 3\nb = 2\n"
