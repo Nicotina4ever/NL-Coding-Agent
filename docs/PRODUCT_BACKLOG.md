@@ -12,6 +12,8 @@
 
 **Web-research directive v3.8 (2026-10-28, queue-only):** the Universal Web Research & Intelligence Engine directive was audited read-only (see docs/WEB_RESEARCH_CAPABILITY_AUDIT.md); existing research requirements NL-BP-169..176/203 were preserved and seven genuine gaps became planned NL-BP-205..211 in stage 7. No existing ID/acceptance/status or stage 1-6 status was changed and no implementation started. Totals: 163 requirements (33 verified / 64 partial / 63 planned / 3 blocked).
 
+**Goal-mode directive v4.2 (2026-10-28, queue-only):** the Universal Goal Mode + Document-Driven Goal Bootstrap & Planning directives were audited read-only (docs/GOAL_MODE_CAPABILITY_AUDIT.md): no goals/milestones tables or Goals GUI, supervisor/queue/lease/Flow substrate reusable, document ingestion local-only, GOAL_TEMPLATE advisory. Twelve gaps became planned NL-BP-212..223 in new pending stage 8; existing NL-BP-050 stays partial/unchanged. No code/model/network/mission run. Totals: 175 requirements (33 verified / 77 partial / 62 planned / 3 blocked).
+
 ## How to use this backlog
 
 1. **Pick from the top, not from chat.** Execute only requirements that are READY (all dependencies done). P0 first, then P1; a single active requirement/milestone at a time unless write scopes are disjoint.
@@ -52,15 +54,14 @@ evidence only.
 | 5 | Repository cleanup and optimization | COMPLETE | 8 | NL-BP 90-97 | 4 |
 | 6 | Lightweight portable/bootstrapper and final release testing | IN PROGRESS | 40 | NL-BP 110-124, 140-142, 144-165 | 5 |
 | 7 | Universal autonomy, research intelligence and Mega Suite | PENDING | 46 | NL-BP 166-211 | 6 |
+| 8 | Universal Goal Mode and document-driven planning | PENDING | 12 | NL-BP 212-223 | 3, 7 |
 
 Execution rule: a later stage starts only when the previous stage's gates pass, unless the
 Lead records an explicit evidence-backed exception for independent low-risk work. Stages 1-5
-are complete; stage 6 is in progress (cross-platform private beta extension; real-hardware,
-clean-machine, CI and owner authorization items remain MANUAL-PENDING). Stage 7 - Universal
-autonomy, research intelligence and Mega Suite - is **pending/queued** from the user addendum
-and the web-research directive (v3.8); it must not start before stage 6 gates or an explicit
-Lead exception. SH-07 Tier B (real local models) remains BLOCKED in NL-BP-063 and is not
-relaxed by either input.
+are complete; stage 6 is in progress; stage 7 (universal autonomy/research/Mega Suite) is
+pending; stage 8 (Universal Goal Mode and document-driven planning) is pending and depends on
+stages 3 and 7. SH-07 Tier B (real local models) remains BLOCKED in NL-BP-063 and is not
+relaxed by any queued directive.
 
 ## Summary
 
@@ -68,18 +69,18 @@ relaxed by either input.
 |---|---|---|---|---|---|
 | verified | 20 | 13 | 0 | 0 | 33 |
 | partial | 37 | 28 | 11 | 1 | 77 |
-| planned | 23 | 17 | 9 | 1 | 50 |
+| planned | 34 | 18 | 9 | 1 | 62 |
 | blocked | 3 | 0 | 0 | 0 | 3 |
-| **Total** | 83 | 58 | 20 | 2 | 163 |
+| **Total** | **94** | **59** | **20** | **2** | **175** |
 
 | Area | Requirements | verified | partial | planned | blocked |
 |---|---|---|---|---|---|
 | Area 1 - CrewAI + CrewAI Flows first-class integration | 16 | 6 | 7 | 3 | 0 |
-| Area 2 - Studio GUI + multimodal chat | 33 | 3 | 23 | 7 | 0 |
-| Area 3 - Universal autonomous development | 50 | 16 | 6 | 27 | 1 |
+| Area 2 - Studio GUI + multimodal chat | 34 | 3 | 24 | 7 | 0 |
+| Area 3 - Universal autonomous development | 60 | 16 | 18 | 25 | 1 |
 | Area 4 - Repository hygiene | 8 | 3 | 5 | 0 | 0 |
 | Area 5 - Lightweight installation + portable distribution | 27 | 2 | 12 | 13 | 0 |
-| Area 6 - Release acceptance criteria | 29 | 3 | 11 | 13 | 2 |
+| Area 6 - Release acceptance criteria | 30 | 3 | 11 | 14 | 2 |
 
 ### Area ownership
 
@@ -93,6 +94,8 @@ relaxed by either input.
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v4.2 (2026-10-28)** - Queue-only Universal Goal Mode + Document-Driven Goal Bootstrap & Planning directives. Read-only audit (docs/GOAL_MODE_CAPABILITY_AUDIT.md) confirmed: SQLite has missions/tasks/task_attempts/handoffs/verification_runs/mission_queue/supervisor_runs/leases/approvals/Flow tables but no goals/milestones; supervisor/queue/lease/Flow infrastructure and CLI supervisor commands exist; GUI has Task Board/Autonomy/Research but no Goals page; document ingestion is local attachment extraction plus scanner filenames; GOAL_TEMPLATE.md is advisory only. Deduped against NL-BP-050/051/052/061/062/063/064/066-070/166-168/169-176/177-181/203/205-211; twelve gaps added as planned NL-BP-212..223 in new pending program stage 8 (depends on stages 3 and 7). NL-BP-050 remains partial and unchanged. No code/model/network/mission run started; addenda preserved. Totals: 175 requirements; 33 verified / 77 partial / 62 planned / 3 blocked.
 
 **v4.1 (2026-10-28)** - Stage-7 R4/R5: ResearchService permission + auto-review boundary before any network-capable work, explicit permission-gated stdlib transport (no implicit network), provenance/citation persistence in the research store and typed read-only research tools; Studio Research workspace as the 10th page (provider/permission/offline status, previews, history, saved findings, URL/GitHub/HF/attachment intake); CI headless smoke updated for 10 pages. 34 new tests; full suite 910 passed. Live network/providers, real AppServices research facade, tool-execution/model wiring and real-network acceptance remain MANUAL-PENDING; no research-reliability or platform-support claim.
 
@@ -973,6 +976,23 @@ _Professional NL-branded Studio shell; multimodal mission chat (drag-and-drop, C
 - **Sources:** user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md); docs/WEB_RESEARCH_CAPABILITY_AUDIT.md; NL-BP-169; NL-BP-170; NL-BP-171; NL-BP-172; NL-BP-173; NL-BP-174; NL-BP-175; NL-BP-176
 - **Note:** New GUI surface; local attachments (NL-BP-026..030) become one intake path rather than the research capability itself.
 - **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-216"></a>
+### NL-BP-216 - Goals GUI with CLI/API parity: milestones, progress, evidence, blockers and lifecycle actions
+
+- **Area:** STUDIO - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directives 2026-10-28: Universal Goal Mode + document-driven planning)
+- **Dependencies:** NL-BP-212, NL-BP-213, NL-BP-214
+- **Acceptance gates:**
+  - A Goals/Milestones page shows hierarchy, milestones, task queues, active agents, logs, decisions, verified progress, outstanding requirements and blockers.
+  - Lifecycle actions (pause/resume/cancel/replan/approve) are available and mirrored in CLI and API with equivalent behavior and permission checks.
+  - The GUI is a non-blocking view over stable services; no business logic lives in widgets.
+- **Evidence:**
+  - not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY_AUDIT.md; no code, mission or network run started
+  - capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)
+- **Sources:** user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md); docs/GOAL_MODE_CAPABILITY_AUDIT.md; NL-BP-212; NL-BP-213; NL-BP-214
+- **Note:** New GUI/CLI/API surface; extends the Task Board/Autonomy panel rather than replacing them.
+- **Program stage:** 8 - Universal Goal Mode and document-driven planning
 
 ## Area 3 - Universal autonomous development
 
@@ -1863,6 +1883,174 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
 - **Sources:** user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md); docs/WEB_RESEARCH_CAPABILITY_AUDIT.md; NL-BP-170; NL-BP-173; NL-BP-174
 - **Note:** Extends ecosystem discovery (NL-BP-173) with version awareness and conflict/uncertainty handling.
 - **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-212"></a>
+### NL-BP-212 - Universal Goal Mode core: goal creation, persistent multi-goal hierarchy and lifecycle
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directives 2026-10-28: Universal Goal Mode + document-driven planning)
+- **Dependencies:** NL-BP-050, NL-BP-051, NL-BP-061, NL-BP-064, NL-BP-166
+- **Acceptance gates:**
+  - Users can create a goal from natural language with attachments/repository/reference material and observable acceptance criteria; goals are distinguishable from agent proposals and persist with provenance.
+  - Persistent multi-goal hierarchy (goals > milestones > tasks/missions) with priorities, dependencies, ownership and pause/resume/cancel lifecycle; no goal is lost across restart or agent/model changes.
+  - Reuses the existing supervisor, SQLite and Flow substrate instead of a parallel orchestrator; Goal Mode is available with CLI/API/GUI parity and explicit autonomy-policy integration.
+- **Evidence:**
+  - not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY_AUDIT.md; no code, mission or network run started
+  - capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)
+- **Sources:** user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md); docs/GOAL_MODE_CAPABILITY_AUDIT.md; NL-BP-050; NL-BP-051; NL-BP-061; NL-BP-064; NL-BP-166
+- **Note:** Executable depth for the hierarchy concept in NL-BP-050 (kept unchanged); reuses 051/061/064 and the Trusted profile 166.
+- **Program stage:** 8 - Universal Goal Mode and document-driven planning
+
+<a id="nl-bp-213"></a>
+### NL-BP-213 - Adaptive goal decomposition and versioned replanning
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directives 2026-10-28: Universal Goal Mode + document-driven planning)
+- **Dependencies:** NL-BP-212, NL-BP-062
+- **Acceptance gates:**
+  - A goal is decomposed into milestones/tasks/missions with priorities, dependencies, risks and validation criteria derived from the objective and evidence.
+  - Replanning is versioned and triggered by new evidence, failures or changed constraints without silently discarding or rewriting the original objective; differences and rationale are persisted.
+- **Evidence:**
+  - not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY_AUDIT.md; no code, mission or network run started
+  - capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)
+- **Sources:** user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md); docs/GOAL_MODE_CAPABILITY_AUDIT.md; NL-BP-212; NL-BP-062
+- **Note:** Replaces the fixed checklist/next-mission heuristic for goal mode; the indexed-backlog selector (062) remains a valid fallback.
+- **Program stage:** 8 - Universal Goal Mode and document-driven planning
+
+<a id="nl-bp-214"></a>
+### NL-BP-214 - Goal continuation scheduler: cross-goal eligible-task execution
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directives 2026-10-28: Universal Goal Mode + document-driven planning)
+- **Dependencies:** NL-BP-212, NL-BP-061, NL-BP-062, NL-BP-064
+- **Acceptance gates:**
+  - Eligible tasks across multiple active goals are selected and executed without a new prompt, respecting policies, budgets and pause/stop.
+  - Resource scheduling and conflict handling prevent concurrent unsafe writes and duplicate execution; reuses the existing mission queue/lease/claim substrate.
+  - Continuation decisions are persisted and explainable (which goal/task, why selected, why deferred).
+- **Evidence:**
+  - not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY_AUDIT.md; no code, mission or network run started
+  - capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)
+- **Sources:** user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md); docs/GOAL_MODE_CAPABILITY_AUDIT.md; NL-BP-212; NL-BP-061; NL-BP-062; NL-BP-064
+- **Note:** Cross-goal extension of the verified single-sequence supervisor (061/062); does not relax staged/independent gates.
+- **Program stage:** 8 - Universal Goal Mode and document-driven planning
+
+<a id="nl-bp-215"></a>
+### NL-BP-215 - Independent goal completion verification against the original objective
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directives 2026-10-28: Universal Goal Mode + document-driven planning)
+- **Dependencies:** NL-BP-212, NL-BP-054, NL-BP-058, NL-BP-060
+- **Acceptance gates:**
+  - A goal is never marked complete from its own checklist or agent claim; completion is verified against the original objective and acceptance criteria with independent evidence/tests.
+  - Outstanding requirements, blockers, regressions and unverified manual items are reported explicitly; deliberate false-completion claims are rejected and persisted.
+  - Verification reuses the staged-candidate/oracle and fail-closed gates instead of duplicating them.
+- **Evidence:**
+  - not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY_AUDIT.md; no code, mission or network run started
+  - capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)
+- **Sources:** user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md); docs/GOAL_MODE_CAPABILITY_AUDIT.md; NL-BP-212; NL-BP-054; NL-BP-058; NL-BP-060
+- **Note:** Goal-level layer over verified gate foundations 054/058/060; SH-07 Tier B (063) remains blocked.
+- **Program stage:** 8 - Universal Goal Mode and document-driven planning
+
+<a id="nl-bp-217"></a>
+### NL-BP-217 - Reusable goal templates across projects and the NL Mega Suite
+
+- **Area:** AUTONOMY - **Priority:** P1 - **Status:** planned
+- **Blueprint priority:** new (user directives 2026-10-28: Universal Goal Mode + document-driven planning)
+- **Dependencies:** NL-BP-212, NL-BP-195
+- **Acceptance gates:**
+  - Goal templates (objective, acceptance criteria, milestones, constraints, risks) can be created, versioned, previewed and instantiated in unrelated projects.
+  - Templates are reusable by the future NL Mega Suite integration path and never imply execution/approval by themselves.
+- **Evidence:**
+  - not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY_AUDIT.md; no code, mission or network run started
+  - capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)
+- **Sources:** user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md); docs/GOAL_MODE_CAPABILITY_AUDIT.md; NL-BP-212; NL-BP-195
+- **Note:** Extends the advisory GOAL_TEMPLATE.md into a real reusable system; depends on the planned Mega Suite installer 195.
+- **Program stage:** 8 - Universal Goal Mode and document-driven planning
+
+<a id="nl-bp-218"></a>
+### NL-BP-218 - Document corpus discovery and ingestion with provenance
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directives 2026-10-28: Universal Goal Mode + document-driven planning)
+- **Dependencies:** NL-BP-077, NL-BP-043, NL-BP-030
+- **Acceptance gates:**
+  - Discovers and ingests project documentation from folders/nested trees (README/AGENTS/specs/architecture/checklists/roadmaps), Markdown/text/PDF/Office/archives, Git repository documentation and authorized documentation URLs.
+  - Every ingested item carries provenance (path/URL, hash, revision/timestamp, type) and is treated as untrusted input: content is never executed and unsafe archives are refused.
+  - Ingestion is consent-based and bounded (no unbounded filesystem scanning, no silent network, no user secrets).
+- **Evidence:**
+  - not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY_AUDIT.md; no code, mission or network run started
+  - capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)
+- **Sources:** user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md); docs/GOAL_MODE_CAPABILITY_AUDIT.md; NL-BP-077; NL-BP-043; NL-BP-030
+- **Note:** New corpus pipeline; reuses project discovery (077), context retrieval (043), local extraction (030) and research readers where URLs are authorized.
+- **Program stage:** 8 - Universal Goal Mode and document-driven planning
+
+<a id="nl-bp-219"></a>
+### NL-BP-219 - Documentation reconciliation: authoritative sources, conflicts and obsolete requirements
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directives 2026-10-28: Universal Goal Mode + document-driven planning)
+- **Dependencies:** NL-BP-218, NL-BP-178, NL-BP-174
+- **Acceptance gates:**
+  - Reconciles documentation against source/dependencies/tests/Git history: authoritative vs stale docs, version conflicts, obsolete instructions, missing or contradictory requirements.
+  - Findings carry source provenance and severity; contradictions are surfaced rather than silently resolved.
+  - Reconciliation results feed plan generation and remain versioned/re-runnable.
+- **Evidence:**
+  - not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY_AUDIT.md; no code, mission or network run started
+  - capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)
+- **Sources:** user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md); docs/GOAL_MODE_CAPABILITY_AUDIT.md; NL-BP-218; NL-BP-178; NL-BP-174
+- **Note:** New reconciliation engine; complementary to the planned Project Genome (178) and research store (174).
+- **Program stage:** 8 - Universal Goal Mode and document-driven planning
+
+<a id="nl-bp-220"></a>
+### NL-BP-220 - Requirement/objective/constraint/dependency/acceptance extraction with provenance
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directives 2026-10-28: Universal Goal Mode + document-driven planning)
+- **Dependencies:** NL-BP-218, NL-BP-219, NL-BP-050
+- **Acceptance gates:**
+  - Extracts objectives, requirements, constraints (technical/legal/owner), dependencies and acceptance criteria from the documentation corpus.
+  - Every extracted item cites its source document/excerpt and confidence; inferred items are labelled and never presented as explicit user requirements.
+  - Extraction output is machine-readable and feeds plan generation without executing document content.
+- **Evidence:**
+  - not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY_AUDIT.md; no code, mission or network run started
+  - capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)
+- **Sources:** user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md); docs/GOAL_MODE_CAPABILITY_AUDIT.md; NL-BP-218; NL-BP-219; NL-BP-050
+- **Note:** New extraction layer; the goal/acceptance concept in 050 remains the record shape.
+- **Program stage:** 8 - Universal Goal Mode and document-driven planning
+
+<a id="nl-bp-221"></a>
+### NL-BP-221 - Editable document-driven plan preview/approval with optional supervised execution
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directives 2026-10-28: Universal Goal Mode + document-driven planning)
+- **Dependencies:** NL-BP-213, NL-BP-220, NL-BP-064, NL-BP-166
+- **Acceptance gates:**
+  - A document-driven plan can be previewed, edited, approved or rejected before execution, with rationale and provenance for each item.
+  - Plan versions are persisted and immutable once executed; optional auto-execution runs only under the configured autonomy policy/approvals and can be paused/stopped.
+  - Approval decisions and plan changes are audited.
+- **Evidence:**
+  - not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY_AUDIT.md; no code, mission or network run started
+  - capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)
+- **Sources:** user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md); docs/GOAL_MODE_CAPABILITY_AUDIT.md; NL-BP-213; NL-BP-220; NL-BP-064; NL-BP-166
+- **Note:** Consumes decomposition (213) and extraction (220) and autonomy policy (064/166); no silent auto-execution.
+- **Program stage:** 8 - Universal Goal Mode and document-driven planning
+
+<a id="nl-bp-222"></a>
+### NL-BP-222 - Incremental documentation-change and new-evidence reconciliation
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directives 2026-10-28: Universal Goal Mode + document-driven planning)
+- **Dependencies:** NL-BP-218, NL-BP-219, NL-BP-214, NL-BP-215
+- **Acceptance gates:**
+  - Document changes or new evidence are detected incrementally and reconciled with the active plan/goal without silently discarding verified progress or the original objective.
+  - Changed assumptions/requirements trigger explainable replanning; unaffected verified work is preserved and re-verified where necessary.
+  - Incremental results are versioned and auditable.
+- **Evidence:**
+  - not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY_AUDIT.md; no code, mission or network run started
+  - capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)
+- **Sources:** user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md); docs/GOAL_MODE_CAPABILITY_AUDIT.md; NL-BP-218; NL-BP-219; NL-BP-214; NL-BP-215
+- **Note:** Builds on reconciliation (219) and the continuation/verification requirements; avoids full re-planning from scratch.
+- **Program stage:** 8 - Universal Goal Mode and document-driven planning
 
 ## Area 4 - Repository hygiene
 
@@ -2971,6 +3159,23 @@ _Evidence gates for the final product: non-default install path; clean Windows w
 - **Note:** Extends the addendum's real-network acceptance requirement (NL-BP-203) with the full failure/exception matrix.
 - **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
 
+<a id="nl-bp-223"></a>
+### NL-BP-223 - Document-driven goal acceptance scenario on an unfamiliar project
+
+- **Area:** RELEASE - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directives 2026-10-28: Universal Goal Mode + document-driven planning)
+- **Dependencies:** NL-BP-212, NL-BP-213, NL-BP-214, NL-BP-215, NL-BP-216, NL-BP-218, NL-BP-219, NL-BP-220, NL-BP-221, NL-BP-222
+- **Acceptance gates:**
+  - Import an unfamiliar documentation-rich project; produce a traceable plan deriving requirements/constraints/acceptance from its docs.
+  - Insert a deliberately false completion claim and prove independent verification rejects it; execute an eligible task under policy and preserve progress across restart.
+  - Cover docs-only projects without runnable tests via honest document-consistency evidence; label synthetic vs real evidence distinctly.
+- **Evidence:**
+  - not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY_AUDIT.md; no code, mission or network run started
+  - capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)
+- **Sources:** user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md); docs/GOAL_MODE_CAPABILITY_AUDIT.md; NL-BP-212; NL-BP-213; NL-BP-214; NL-BP-215; NL-BP-216; NL-BP-218; NL-BP-219; NL-BP-220; NL-BP-221; NL-BP-222
+- **Note:** End-to-end acceptance for stage 8; separate from research acceptance (203/211) and cross-app scenario (199).
+- **Program stage:** 8 - Universal Goal Mode and document-driven planning
+
 ## Addendum import v3.7 - Universal Autonomy/Research/Mega Suite dedupe mapping
 
 User-supplied addendum (2026-10-28) preserved unchanged at docs/product-blueprint/addenda/ (MANIFEST verified). Queue-only import by shared task-59: the spec was cross-checked against the 117 existing requirements; only genuinely missing capabilities were added. Existing IDs, acceptance criteria and statuses were not rewritten; stages 1-6 statuses were not changed.
@@ -3034,6 +3239,36 @@ New requirements are program stage 7, status planned. Blocked/external items pre
 - real-network research acceptance is permissioned/manual (NL-BP-203/211) and cannot be claimed from fixtures
 - MCP is local stdio-only and no GitHub/HF/web MCP server is bundled; remote MCP transports are unsupported
 - stage 7 is pending; SH-07 Tier B (NL-BP-063) remains blocked
+
+## Goal-mode directive v4.2 - capability audit and dedupe mapping
+
+Read-only audit: docs/GOAL_MODE_CAPABILITY_AUDIT.md (file:line evidence). Source: user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning. Queue-only: no implementation, no code/model/network/mission run.
+
+| Sub-capability | Existing coverage | New requirements | Decision |
+|---|---|---|---|
+| Persistent goal/milestone hierarchy + CRUD | NL-BP-050 | NL-BP-212 | 050 remains the conceptual record; 212 supplies executable goal tables/API/lifecycle |
+| Goal creation from NL + attachments/repos/references/acceptance criteria | NL-BP-026, NL-BP-027, NL-BP-028, NL-BP-029, NL-BP-030, NL-BP-077 | NL-BP-212 | goal entity + intake mapping is new; local attachments reused |
+| Multi-goal priorities/dependencies/pause/resume/cancel | NL-BP-051, NL-BP-061, NL-BP-064 | NL-BP-212 | new goal lifecycle; mission persistence/lock/policy reused |
+| Adaptive goal decomposition + versioned replanning | NL-BP-062, NL-BP-050, NL-BP-178 | NL-BP-213 | new decomposition/replan engine; genome planned |
+| Goal continuation scheduler across goals | NL-BP-061, NL-BP-062, NL-BP-064, NL-BP-070 | NL-BP-214 | cross-goal scheduling is new; queue/lease reused |
+| Independent goal completion verification / false-completion detection | NL-BP-054, NL-BP-058, NL-BP-060, NL-BP-203 | NL-BP-215 | goal-level verifier new; verified gate foundations reused |
+| Goals GUI + CLI/API parity | NL-BP-046, NL-BP-025, NL-BP-023, NL-BP-024 | NL-BP-216 | new Goals surface; existing dashboard/task board extended |
+| Reusable goal templates across projects/Mega Suite | - | NL-BP-217 | GOAL_TEMPLATE advisory only; new system |
+| Document corpus discovery/ingestion with provenance | NL-BP-077, NL-BP-043, NL-BP-030, NL-BP-170, NL-BP-171 | NL-BP-218 | new corpus pipeline; local extraction/project scan/research readers reused |
+| Documentation reconciliation | NL-BP-178, NL-BP-174 | NL-BP-219 | new reconciliation engine; genome/research store adjacent |
+| Requirement/objective/constraint/dependency/acceptance extraction | NL-BP-050, NL-BP-178 | NL-BP-220 | new extraction with provenance |
+| Editable plan preview/approve + supervised auto-execution + versions | NL-BP-213, NL-BP-064, NL-BP-166, NL-BP-024 | NL-BP-221 | new plan surface; autonomy policy reused |
+| Incremental doc-change/new-evidence reconciliation | NL-BP-219, NL-BP-174, NL-BP-214, NL-BP-215 | NL-BP-222 | new incremental reconciliation |
+| Document-driven goal acceptance scenario | NL-BP-203, NL-BP-199, NL-BP-200, NL-BP-201 | NL-BP-223 | new end-to-end stage-8 acceptance |
+
+New requirements are program stage 8, status planned. Blocked/external items preserved:
+- stage 8 is pending; depends_on_stages [3, 7] and stage 7 is itself pending/partially implemented
+- existing NL-BP-050 stays partial and is not rewritten; reconciliation needs an authorized evidence update
+- document-driven auto-execution requires autonomy policy/approval (NL-BP-064/166..168); corpus content is untrusted and never executed
+- independent goal verification cannot rely on model consensus; SH-07 Tier B (NL-BP-063) remains blocked
+- unbounded folder ingestion is not authorized; corpus discovery is consent-based and bounded
+- docs-only projects require honest document-consistency evidence, never fabricated test results
+- goal templates depend on the planned Mega Suite path (NL-BP-195)
 
 ## Deduplication and merge decisions
 
