@@ -14,8 +14,10 @@ import os
 import re
 from pathlib import Path
 
-from crewai import Agent, Crew, LLM, Process, Task
+from crewai import LLM
 
+from nl_coding_agent.agents.crew_backend import CrewAIBackend, CrewRuntime
+from nl_coding_agent.agents.specs import resolve_role
 from nl_coding_agent.app.services import Event, get_event_bus
 from nl_coding_agent.core import candidate_verification, promotion
 from nl_coding_agent.core.mission_lock import MissionLockError, mission_lock
@@ -261,10 +263,15 @@ class MultiAgentOrchestrator:
     """Coordinates Developer, Tester, Debugger, and Reviewer on a real project."""
 
     def __init__(self, project_root: Path | str, base_url: str = "http://127.0.0.1:11434",
-                 project_id: int | None = None):
+                 project_id: int | None = None,
+                 crew_runtime: CrewRuntime | None = None):
         self.root = Path(project_root).resolve()
         self.base_url = base_url
         self.project_id = int(project_id) if project_id is not None else None
+        self.crew_runtime: CrewRuntime = (
+            crew_runtime if crew_runtime is not None
+            else CrewAIBackend(base_url=self.base_url, project_id=self.project_id)
+        )
         self.bus = get_event_bus()
         self._last_verification = None
 
@@ -294,28 +301,25 @@ class MultiAgentOrchestrator:
         expected_output: str,
         tools: list | None = None,
     ) -> str:
-        """Single CrewAI invocation seam; tests monkeypatch this method.
+        """Single model-invocation seam; tests monkeypatch this method.
 
-        No stage method may construct Agent/Task/Crew itself: every model call goes
-        through here so the staged-candidate harness can be tested without Ollama.
+        No stage method may construct Agent/Task/Crew or touch a model directly: every
+        model call goes through the CrewRuntime seam (CrewAIBackend by default,
+        FakeCrewRuntime in tests) so the staged-candidate harness can be tested without
+        Ollama and the default behavior stays exactly one single-agent sequential Crew.
         """
-        agent = Agent(
-            role=role,
+        spec = resolve_role(role)
+        result = self.crew_runtime.run_agent(
+            spec,
+            prompt,
             goal=goal,
             backstory=backstory,
-            llm=_make_llm(model_name, self.base_url, project_id=self.project_id),
-            tools=tools or [],
-            verbose=True,
-            allow_delegation=False,
+            model_name=model_name,
+            expected_output=expected_output,
+            tools=tools,
+            project_id=self.project_id,
         )
-        task = Task(description=prompt, expected_output=expected_output, agent=agent)
-        crew = Crew(
-            agents=[agent],
-            tasks=[task],
-            process=Process.sequential,
-            verbose=True,
-        )
-        return str(crew.kickoff())
+        return result.text
 
     def _snapshot(self) -> dict[str, str]:
         return snapshot_workspace(self.root)
