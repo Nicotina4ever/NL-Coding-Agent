@@ -14,14 +14,16 @@ Single index of every consolidated product requirement. Each row has a stable ID
 
 **v4.3 open-model directive (queue-only):** ten gaps NL-BP-224..233 added to new pending stage 9; existing model requirements 008/009/010/036/068/069/183/208 retained.
 
-**v4.4 release-publication directive (queue-only):** read-only audit of the Final Release Hygiene & GitHub Publication Gate: read-only hygiene/distribution audits, root-reorg/retention policy, packaging/beta/rehearsal/acceptance tooling and the VERIFIED secrets/history scanner (NL-BP-162, exit-code gate) exist, but no CI/hook enforcement, no integrated final readiness milestone and no publication-readiness verdict. Three gaps added as **NL-BP-234..236** (P0 final readiness milestone, P0 mandatory blocking pre-push gate, P1 publication verdict/external-acceptance gate) in new pending **stage 10** (depends on stages 6-9). Stages 1-9 statuses and all existing requirements are unchanged. Totals: **188 requirements** (33 verified / 77 partial / 75 planned / 3 blocked). No code/model/network/push/publish run started.
+**v4.4 release-publication directive (queue-only):** three gaps NL-BP-234..236 added to new pending stage 10; existing hygiene/distribution/acceptance requirements retained.
+
+**v5.2 Studio final-UX directive (queue-only):** read-only audit (docs/STUDIO_FINAL_UX_AUDIT.md) found verified NL branding/theme and partial navigation/settings/self-build/emergency/accessibility/state requirements, but NO UI i18n, 82 inline styles/110 hardcoded colours, a prominent Projects Self-Build button, a raw QTextEdit Inspector, ambiguous project/activity state and offscreen-only GUI evidence. Five acceptance gaps **NL-BP-237..241** were appended to the **existing program stage 4** (no new stage/framework); stage 4 status/note were corrected honestly from completed to **in progress** ('engineering complete; final UX acceptance reopened'). Existing requirement IDs/acceptance and stages 1-3/5-10 are unchanged. Totals: **193 requirements** (34 verified / 82 partial / 74 planned / 3 blocked). No code/GUI/model/network run started.
 
 ## Program execution order (authoritative)
 
 - **Stage 1 - Repository relocation and path reconciliation**: completed (1 requirements; NL-BP 143)
 - **Stage 2 - Transactional staging, safety and self-healing**: completed (15 requirements; NL-BP 3-5, 54-60, 65, 72-74, 76)
 - **Stage 3 - Persistent autonomous supervisor and verified handoff**: completed (13 requirements; NL-BP 12, 50-53, 61-64, 66-67, 75, 77)
-- **Stage 4 - Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities**: completed (40 requirements; NL-BP 1-2, 6-11, 13, 20-46, 68-71)
+- **Stage 4 - Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities**: in progress (45 requirements; NL-BP 1-2, 6-11, 13, 20-46, 68-71, 237-241) - engineering complete; final UX acceptance reopened by the 2026-10-29 directive
 - **Stage 5 - Repository cleanup and optimization**: completed (8 requirements; NL-BP 90-97)
 - **Stage 6 - Lightweight portable/bootstrapper and final release testing**: in progress (40 requirements; NL-BP 110-124, 140-142, 144-165)
 - **Stage 7 - Universal autonomy, research intelligence and Mega Suite**: pending (46 requirements; NL-BP 166-211) - queued scope; no implementation started
@@ -29,7 +31,7 @@ Single index of every consolidated product requirement. Each row has a stable ID
 - **Stage 9 - Open model and provider ecosystem**: pending (10 requirements; NL-BP 224-233) - queued scope; no implementation started
 - **Stage 10 - Final release hygiene and GitHub publication gate**: pending (3 requirements; NL-BP 234-236) - queued scope; no implementation started
 
-Every row below carries the same requirement ID and evidence; the stage mapping is authoritative in docs/product-blueprint/INDEX.json (program_stage). Stage 10 is pending and depends on stages 6-9.
+Every row below carries the same requirement ID and evidence; the stage mapping is authoritative in docs/product-blueprint/INDEX.json (program_stage). Stage 4 was reopened honestly by the final Studio UX directive; stages 7-10 are pending.
 
 ## Status legend
 
@@ -69,7 +71,7 @@ Every row below carries the same requirement ID and evidence; the stage mapping 
 | NL-BP-230 | Explicit capability states declared/detected/tested/unknown with warnings, not arbitrary rejection | user directive 2026-10-28 (open model) | new (user directive 2026-10-28: open model and provider ecosystem) | planned | not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_... | [NL-BP-230](PRODUCT_BACKLOG.md#nl-bp-230) |
 | NL-BP-231 | Flexible local/external/embedding/multimodal routing with explanations, override and policy enforcement | user directive 2026-10-28 (open model) | new (user directive 2026-10-28: open model and provider ecosystem) | planned | not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_... | [NL-BP-231](PRODUCT_BACKLOG.md#nl-bp-231) |
 
-### Area 2 - Studio GUI + multimodal chat (STUDIO, 35 requirements)
+### Area 2 - Studio GUI + multimodal chat (STUDIO, 40 requirements)
 
 | ID | Requirement | Source | BP priority | Status | Evidence (primary) | Backlog |
 |---|---|---|---|---|---|---|
@@ -105,9 +107,14 @@ Every row below carries the same requirement ID and evidence; the stage mapping 
 | NL-BP-192 | Multi-window / multi-session workspace | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-192](PRODUCT_BACKLOG.md#nl-bp-192) |
 | NL-BP-193 | Advanced IDE parity: profiling, merge conflicts, code actions and quick-open | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-193](PRODUCT_BACKLOG.md#nl-bp-193) |
 | NL-BP-194 | OCR-on-demand extraction for images, screenshots and documents | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-194](PRODUCT_BACKLOG.md#nl-bp-194) |
-| NL-BP-210 | Studio Research workspace: search history, source previews, permission status and saved findings | user directive 2026-10-28 (web research) | new (user directive 2026-10-28: universal web research & intelligence engine) | partial | partial | finding-to-mission attachments + reversible detach + non-destructive retention + GUI controls; live-network/provider/approval acceptance pending |
-| NL-BP-216 | Goals GUI with CLI/API parity: milestones, progress, evidence, blockers and lifecycle actions | user directive 2026-10-28 (goal mode) | new (user directives 2026-10-28: Universal Goal Mode + document-driven planning) | planned | partial | tasks/queue/active-workers + plan approval GUI/CLI/API implemented; permission-policy gating, non-blocking refresh and real lifecycle acceptance pending |
+| NL-BP-210 | Studio Research workspace: search history, source previews, permission status and saved findings | user directive 2026-10-28 (web research) | new (user directive 2026-10-28: universal web research & intelligence engine) | partial | not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILI... | [NL-BP-210](PRODUCT_BACKLOG.md#nl-bp-210) |
+| NL-BP-216 | Goals GUI with CLI/API parity: milestones, progress, evidence, blockers and lifecycle actions | user directive 2026-10-28 (goal mode) | new (user directives 2026-10-28: Universal Goal Mode + document-driven planning) | partial | not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY... | [NL-BP-216](PRODUCT_BACKLOG.md#nl-bp-216) |
 | NL-BP-232 | Model Hub GUI/CLI/API provider and profile management | user directive 2026-10-28 (open model) | new (user directive 2026-10-28: open model and provider ecosystem) | planned | not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_... | [NL-BP-232](PRODUCT_BACKLOG.md#nl-bp-232) |
+| NL-BP-237 | Studio UI internationalization and localization infrastructure | user directive 2026-10-28 (studio UX) | new (user directive 2026-10-29: final Studio GUI UX acceptance) | planned | not started - queued only by task-87 from the user directive; read-only GUI/UX capability audit in docs/STUDIO_FINAL_U... | [NL-BP-237](PRODUCT_BACKLOG.md#nl-bp-237) |
+| NL-BP-238 | Studio visual design and information architecture polish | user directive 2026-10-28 (studio UX) | new (user directive 2026-10-29: final Studio GUI UX acceptance) | planned | not started - queued only by task-87 from the user directive; read-only GUI/UX capability audit in docs/STUDIO_FINAL_U... | [NL-BP-238](PRODUCT_BACKLOG.md#nl-bp-238) |
+| NL-BP-239 | Self-build placement and runtime UX acceptance | user directive 2026-10-28 (studio UX) | new (user directive 2026-10-29: final Studio GUI UX acceptance) | planned | not started - queued only by task-87 from the user directive; read-only GUI/UX capability audit in docs/STUDIO_FINAL_U... | [NL-BP-239](PRODUCT_BACKLOG.md#nl-bp-239) |
+| NL-BP-240 | Inspector structured summaries, expandable diagnostics and unambiguous project/activity state | user directive 2026-10-28 (studio UX) | new (user directive 2026-10-29: final Studio GUI UX acceptance) | planned | not started - queued only by task-87 from the user directive; read-only GUI/UX capability audit in docs/STUDIO_FINAL_U... | [NL-BP-240](PRODUCT_BACKLOG.md#nl-bp-240) |
+| NL-BP-241 | Real-GUI visual and interaction acceptance evidence | user directive 2026-10-28 (studio UX) | new (user directive 2026-10-29: final Studio GUI UX acceptance) | planned | not started - queued only by task-87 from the user directive; read-only GUI/UX capability audit in docs/STUDIO_FINAL_U... | [NL-BP-241](PRODUCT_BACKLOG.md#nl-bp-241) |
 
 ### Area 3 - Universal autonomous development (AUTONOMY, 60 requirements)
 
@@ -150,7 +157,7 @@ Every row below carries the same requirement ID and evidence; the stage mapping 
 | NL-BP-172 | Research: Hugging Face model investigator without checkpoint download | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | partial | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-172](PRODUCT_BACKLOG.md#nl-bp-172) |
 | NL-BP-173 | Research: ecosystem and package documentation discovery | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-173](PRODUCT_BACKLOG.md#nl-bp-173) |
 | NL-BP-174 | Local-first research knowledge store with citations and provenance | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | partial | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-174](PRODUCT_BACKLOG.md#nl-bp-174) |
-| NL-BP-175 | Untrusted-source and prompt-injection resistance for research content | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | partial | verified | verified: passive injection scanner + untrusted content + redacted audit + no-execution guarantees |
+| NL-BP-175 | Untrusted-source and prompt-injection resistance for research content | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | verified | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-175](PRODUCT_BACKLOG.md#nl-bp-175) |
 | NL-BP-176 | Research-aware agent planning and upgrade/update checks | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-176](PRODUCT_BACKLOG.md#nl-bp-176) |
 | NL-BP-177 | Multi-root project workspace with read-only discovery first | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-177](PRODUCT_BACKLOG.md#nl-bp-177) |
 | NL-BP-178 | Project Genome: versioned measurable codebase intelligence map | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-178](PRODUCT_BACKLOG.md#nl-bp-178) |
@@ -163,12 +170,12 @@ Every row below carries the same requirement ID and evidence; the stage mapping 
 | NL-BP-206 | Web retrieval safety policy: domain allow/deny, SSRF/private-IP, redirect and download limits, caching provenance | user directive 2026-10-28 (web research) | new (user directive 2026-10-28: universal web research & intelligence engine) | partial | not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILI... | [NL-BP-206](PRODUCT_BACKLOG.md#nl-bp-206) |
 | NL-BP-207 | Research connectors registered through the existing tool registry/MCP with typed read-only permissions | user directive 2026-10-28 (web research) | new (user directive 2026-10-28: universal web research & intelligence engine) | partial | not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILI... | [NL-BP-207](PRODUCT_BACKLOG.md#nl-bp-207) |
 | NL-BP-209 | Version-aware official documentation research: SDK/API versions, changelogs and migration guides | user directive 2026-10-28 (web research) | new (user directive 2026-10-28: universal web research & intelligence engine) | planned | not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILI... | [NL-BP-209](PRODUCT_BACKLOG.md#nl-bp-209) |
-| NL-BP-212 | Universal Goal Mode core: goal creation, persistent multi-goal hierarchy and lifecycle | user directive 2026-10-28 (goal mode) | new (user directives 2026-10-28: Universal Goal Mode + document-driven planning) | planned | partial | approval/audit + linked task/queue/worker inspection + approve/tasks/workers CLI/API/GUI landed; plan derivation/autonomy-policy execution pending |
-| NL-BP-213 | Adaptive goal decomposition and versioned replanning | user directive 2026-10-28 (goal mode) | new (user directives 2026-10-28: Universal Goal Mode + document-driven planning) | planned | partial | versioned replanning/diffs implemented; task/mission derivation from objective/evidence and autonomous triggering still pending |
+| NL-BP-212 | Universal Goal Mode core: goal creation, persistent multi-goal hierarchy and lifecycle | user directive 2026-10-28 (goal mode) | new (user directives 2026-10-28: Universal Goal Mode + document-driven planning) | partial | not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY... | [NL-BP-212](PRODUCT_BACKLOG.md#nl-bp-212) |
+| NL-BP-213 | Adaptive goal decomposition and versioned replanning | user directive 2026-10-28 (goal mode) | new (user directives 2026-10-28: Universal Goal Mode + document-driven planning) | partial | not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY... | [NL-BP-213](PRODUCT_BACKLOG.md#nl-bp-213) |
 | NL-BP-214 | Goal continuation scheduler: cross-goal eligible-task execution | user directive 2026-10-28 (goal mode) | new (user directives 2026-10-28: Universal Goal Mode + document-driven planning) | planned | not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY... | [NL-BP-214](PRODUCT_BACKLOG.md#nl-bp-214) |
-| NL-BP-215 | Independent goal completion verification against the original objective | user directive 2026-10-28 (goal mode) | new (user directives 2026-10-28: Universal Goal Mode + document-driven planning) | planned | partial | verification gate wired into AppServices/CLI completion with refusals/records/false-completion; oracle/staged-gate reuse and external evidence pending |
+| NL-BP-215 | Independent goal completion verification against the original objective | user directive 2026-10-28 (goal mode) | new (user directives 2026-10-28: Universal Goal Mode + document-driven planning) | partial | not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY... | [NL-BP-215](PRODUCT_BACKLOG.md#nl-bp-215) |
 | NL-BP-217 | Reusable goal templates across projects and the NL Mega Suite | user directive 2026-10-28 (goal mode) | new (user directives 2026-10-28: Universal Goal Mode + document-driven planning) | planned | not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY... | [NL-BP-217](PRODUCT_BACKLOG.md#nl-bp-217) |
-| NL-BP-218 | Document corpus discovery and ingestion with provenance | user directive 2026-10-28 (goal mode) | new (user directives 2026-10-28: Universal Goal Mode + document-driven planning) | planned | partial | bounded document corpus discovery/ingestion with provenance/untrusted marking implemented (8 tests); reconciliation/planning pending |
+| NL-BP-218 | Document corpus discovery and ingestion with provenance | user directive 2026-10-28 (goal mode) | new (user directives 2026-10-28: Universal Goal Mode + document-driven planning) | partial | not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY... | [NL-BP-218](PRODUCT_BACKLOG.md#nl-bp-218) |
 | NL-BP-219 | Documentation reconciliation: authoritative sources, conflicts and obsolete requirements | user directive 2026-10-28 (goal mode) | new (user directives 2026-10-28: Universal Goal Mode + document-driven planning) | planned | not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY... | [NL-BP-219](PRODUCT_BACKLOG.md#nl-bp-219) |
 | NL-BP-220 | Requirement/objective/constraint/dependency/acceptance extraction with provenance | user directive 2026-10-28 (goal mode) | new (user directives 2026-10-28: Universal Goal Mode + document-driven planning) | planned | not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY... | [NL-BP-220](PRODUCT_BACKLOG.md#nl-bp-220) |
 | NL-BP-221 | Editable document-driven plan preview/approval with optional supervised execution | user directive 2026-10-28 (goal mode) | new (user directives 2026-10-28: Universal Goal Mode + document-driven planning) | planned | not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY... | [NL-BP-221](PRODUCT_BACKLOG.md#nl-bp-221) |
@@ -255,7 +262,7 @@ Every row below carries the same requirement ID and evidence; the stage mapping 
 | NL-BP-211 | Research acceptance extension: fixture-vs-real-network matrix and cross-project evidence reuse | user directive 2026-10-28 (web research) | new (user directive 2026-10-28: universal web research & intelligence engine) | planned | not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILI... | [NL-BP-211](PRODUCT_BACKLOG.md#nl-bp-211) |
 | NL-BP-223 | Document-driven goal acceptance scenario on an unfamiliar project | user directive 2026-10-28 (goal mode) | new (user directives 2026-10-28: Universal Goal Mode + document-driven planning) | planned | not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY... | [NL-BP-223](PRODUCT_BACKLOG.md#nl-bp-223) |
 | NL-BP-233 | Open-provider acceptance scenario on real endpoints | user directive 2026-10-28 (open model) | new (user directive 2026-10-28: open model and provider ecosystem) | planned | not started - queued only by task-69 from the user directive; read-only capability audit in docs/OPEN_MODEL_ECOSYSTEM_... | [NL-BP-233](PRODUCT_BACKLOG.md#nl-bp-233) |
-| NL-BP-235 | Mandatory blocking pre-push secrets/content scan gate | user directive 2026-10-28 (release hygiene) | new (user directive 2026-10-28: final release hygiene and GitHub publication gate) | planned | partial | gate hardened + real-push-blocking tests; canonical scan-all blocked by old synthetic fixture in bounded history, final release-HEAD rerun pending |
+| NL-BP-235 | Mandatory blocking pre-push secrets/content scan gate | user directive 2026-10-28 (release hygiene) | new (user directive 2026-10-28: final release hygiene and GitHub publication gate) | partial | not started - queued only by task-70 from the user directive; read-only capability audit in docs/RELEASE_PUBLICATION_G... | [NL-BP-235](PRODUCT_BACKLOG.md#nl-bp-235) |
 | NL-BP-236 | Publication readiness verdict and external-acceptance gate | user directive 2026-10-28 (release hygiene) | new (user directive 2026-10-28: final release hygiene and GitHub publication gate) | planned | not started - queued only by task-70 from the user directive; read-only capability audit in docs/RELEASE_PUBLICATION_G... | [NL-BP-236](PRODUCT_BACKLOG.md#nl-bp-236) |
 
 ## Source inventory
@@ -348,6 +355,7 @@ Every row below carries the same requirement ID and evidence; the stage mapping 
 | USER-DIRECTIVE 2026-10-28 universal goal mode + document-driven goal bootstrap & planning (task-68 brief) | external-brief | goal-mode/document-planning audit + dedupe mapping + NL-BP-212..223 | external |
 | USER-DIRECTIVE 2026-10-28 open model & provider ecosystem (task-69 brief) | external-brief | model/provider ecosystem audit + dedupe mapping + NL-BP-224..233 | external |
 | USER-DIRECTIVE 2026-10-28 final release hygiene & GitHub publication gate (task-70 brief) | external-brief | release/publication gate audit + dedupe mapping + NL-BP-234..236 | external |
+| USER-DIRECTIVE 2026-10-29 final Studio GUI UX acceptance (task-87 brief) | external-brief | Studio GUI/UX audit + dedupe mapping + NL-BP-237..241 | external |
 
 ## Addendum import v3.7 - dedupe mapping (queue-only)
 
@@ -436,9 +444,7 @@ Every row below carries the same requirement ID and evidence; the stage mapping 
 | Permission/cloud-spending enforcement | NL-BP-168, NL-BP-072 | none (covered) | retained; 231 enforces existing policy |
 | Open-provider acceptance scenario | - | NL-BP-233 | new end-to-end acceptance |
 
-## Release-publication directive v4.4 - capability audit and dedupe mapping (queue-only)
-
-Audit: [RELEASE_PUBLICATION_GATE_AUDIT.md](RELEASE_PUBLICATION_GATE_AUDIT.md). Source: user directive 2026-10-28: Final Release Hygiene & GitHub Publication Gate + mandatory pre-push secrets/content scan.
+## Release-publication directive v4.4 - dedupe mapping (queue-only)
 
 | Sub-capability | Existing coverage | New requirements | Decision |
 |---|---|---|---|
@@ -456,16 +462,37 @@ Audit: [RELEASE_PUBLICATION_GATE_AUDIT.md](RELEASE_PUBLICATION_GATE_AUDIT.md). S
 | Readiness taxonomy enforcement | NL-BP-198 | NL-BP-236 | 198 retained; 236 verdict references it |
 | Owner residual-risk sign-off | - | NL-BP-236 | new recorded artifact |
 
+## Studio final-UX directive v5.2 - capability audit and dedupe mapping (queue-only)
+
+Audit: [STUDIO_FINAL_UX_AUDIT.md](STUDIO_FINAL_UX_AUDIT.md). Source: user directive 2026-10-29: final Studio GUI UX acceptance (i18n, visual polish, self-build placement, Inspector/state clarity, real-GUI evidence).
+
+| Sub-capability | Existing coverage | New requirements | Decision |
+|---|---|---|---|
+| Branding, logo, tokens, dark theme shell | NL-BP-020 | none (covered) | verified NL-BP-020 retained |
+| Navigation/panels/inspector/log/status bar | NL-BP-021 | NL-BP-238, NL-BP-240 | 021 retained; final IA/Inspector extend it |
+| Settings surfaces | NL-BP-022 | NL-BP-237, NL-BP-239 | 022 retained; language setting and advanced activation extend it |
+| Self-build controls under Settings > Advanced | NL-BP-023 | NL-BP-239 | 023 retained; placement/runtime acceptance extends it |
+| Emergency pause/stop always reachable | NL-BP-024 | none (covered) | 024 retained and reused by 239 |
+| Accessibility/focus/DPI/shortcuts | NL-BP-044 | NL-BP-238, NL-BP-241 | 044 retained; visual/real-GUI evidence extend it |
+| Non-blocking responsive UI and explicit states | NL-BP-045 | NL-BP-238, NL-BP-240 | 045 retained |
+| Project dashboard/agent-task visualization | NL-BP-046 | NL-BP-240 | 046 retained; state clarity extends it |
+| Visual quality lab / screenshot baselines | NL-BP-190 | NL-BP-241 | 190 retained; real-GUI evidence extends it |
+| Goals/Tasks progress surfaces | NL-BP-216, NL-BP-046 | none (covered) | retained and reused by 239 |
+| UI internationalization/localization | - | NL-BP-237 | genuinely new |
+| Visual design/IA polish with reusable components | - | NL-BP-238 | genuinely new acceptance layer |
+| Self-build placement/runtime UX acceptance | - | NL-BP-239 | genuinely new acceptance over 023/024 |
+| Inspector structured summaries + project/activity state clarity | - | NL-BP-240 | genuinely new |
+| Real-GUI screenshot/interaction evidence | - | NL-BP-241 | genuinely new acceptance over 044/190 |
+| Notification centre/toasts | - | none (covered) | folded into 238/240 status reporting; no separate requirement |
+
 Blocked / external items preserved by this import:
-- stage 10 is pending; depends_on_stages [6,7,8,9] and several of those stages are in progress/pending
-- publication/push/visibility/collaborator upload remain FORBIDDEN without explicit owner authorization (NL-BP-163; PRIVATE_BETA_RUNBOOK G-1..G-10); repository has no configured remote
-- real external acceptance (real hardware, clean machines, actual GitHub CI runs, non-Windows builds, beta tester records) remains MANUAL-PENDING and blocks any publication-ready verdict (NL-BP-236)
-- committed docs/SECRETS_AUDIT.md snapshot was measured at an earlier HEAD and must be re-run at the release HEAD; the bounded heuristic scanner cannot prove absence of custom/obfuscated secrets, LFS/submodules or deep history
-- no deletion of user data, live SQLite, python/ runtime, data/, da_eliminare/crewAI, models, evidence, backups or stale release candidates without owner authorization
-- SH-07 Tier B (NL-BP-063) stays BLOCKED and blocks a final readiness verdict
-- code removal only after dependency analysis and regression, inside a separately authorized scope
-- no git-history rewrite without verified backup and explicit owner authorization; leaked secrets in history are presumed compromised and require rotation
-- local static CI checks are not actual GitHub CI execution evidence; real CI runs remain pending (NL-BP-165)
+- no new stage/framework: final Studio UX remains stage-4 work and is queued only
+- Italian-default localization needs a real translation catalog and QA pass; machine translation alone is not acceptance
+- real-GUI screenshots/interaction evidence at multiple sizes/DPI is manual/hardware-dependent and cannot be inferred from offscreen tests
+- removing the Projects Self-Build button requires the Settings > Advanced activation path and non-prominent self-repo open path to be accepted first (NL-BP-023/024)
+- Inspector redesign must keep evidence/errors reachable via expandable diagnostics
+- theme/design cleanup must preserve the verified NL identity/tokens and no-glow rule
+- existing requirement statuses (020 verified; 021/022/023/024/044/045/046 partial; 190 planned) are unchanged; stage-4 reopen is a program-level honesty correction
 
 ## Conflicts recorded during consolidation
 
@@ -487,12 +514,13 @@ Blocked / external items preserved by this import:
 - **C16 - Universal Goal Mode vs existing mission/supervisor/backlog design**: The existing system already has a supervisor, durable mission queue, leases and mission goals, and NL-BP-050 already claims a Goals/Milestones hierarchy concept; importing goal mode naively would duplicate 050/061/062/064. **Resolution:** Read-only audit mapped the directives against existing requirements: the execution substrate is reused, NL-BP-050 keeps its conceptual acceptance unchanged (still partial), and only the executable goal-mode depth and document-driven bootstrap gaps were registered as NL-BP-212..223 in new stage 8. No existing ID/acceptance/status was rewritten.
 - **C17 - Open provider ecosystem vs existing fixed-schema Model Hub**: The existing Model Hub is a verified but config-schema-centic discovery layer with a closed provider kind list, Bearer-only auth, temperature-only params and a read-only GUI; the directive asks for editable presets, custom profiles/adapters, per-model profiles and management surfaces. A naive import would duplicate NL-BP-008/009/010/036/068/069/183. **Resolution:** Read-only audit mapped every directive sub-capability to existing IDs or ten genuine extension gaps NL-BP-224..233 in new stage 9. Existing requirements (including verified 008 and partial 009/010/036) are retained unchanged; presets are explicitly conveniences, not restrictions; no approved-family/architecture/quantization allow-list is created.
 - **C18 - Final readiness milestone vs existing per-domain hygiene/distribution/acceptance requirements**: The repository already has read-only hygiene audits, packaging/rehearsal tooling, a verified secrets scanner and an acceptance matrix; a naive import of a final release milestone would duplicate them. **Resolution:** Read-only audit mapped the directive to existing IDs: the individual requirements are retained unchanged and the milestone consumes them. Only three integrated capabilities were added: NL-BP-234 (final repository/distribution readiness milestone and justified refactor), NL-BP-235 (mandatory blocking pre-push gate over the verified NL-BP-162 scanner) and NL-BP-236 (publication readiness verdict + external-acceptance/sign-off gate). No existing ID/acceptance/status was rewritten.
+- **C19 - Program stage 4 marked completed vs final Studio UX acceptance reopened**: Stage 4 was recorded as completed while the user's final UX directive requires localization, visual/IA polish, self-build placement/runtime UX, Inspector/activity-state clarity and real-GUI evidence that are absent or only offscreen-tested. **Resolution:** Stage 4 status/note corrected honestly to in_progress ('engineering complete; final UX acceptance reopened'), and NL-BP-237..241 appended to its membership. No existing requirement ID/acceptance/status or other stage status was changed; no new stage was created.
 
 ## Related documents
 
 - [PRODUCT_BACKLOG.md](PRODUCT_BACKLOG.md) - canonical backlog with acceptance gates, dependencies and dedup decisions.
-- [RELEASE_PUBLICATION_GATE_AUDIT.md](RELEASE_PUBLICATION_GATE_AUDIT.md) - read-only release/publication-gate capability audit with file:line evidence.
-- [OPEN_MODEL_ECOSYSTEM_AUDIT.md](OPEN_MODEL_ECOSYSTEM_AUDIT.md); [GOAL_MODE_CAPABILITY_AUDIT.md](GOAL_MODE_CAPABILITY_AUDIT.md); [WEB_RESEARCH_CAPABILITY_AUDIT.md](WEB_RESEARCH_CAPABILITY_AUDIT.md) - sibling capability audits.
-- [docs/SECRETS_AUDIT.md](SECRETS_AUDIT.md); [SECRETS_AUDIT.md](SECRETS_AUDIT.md); [PRIVATE_BETA_RUNBOOK.md](PRIVATE_BETA_RUNBOOK.md); [RELEASE_ACCEPTANCE.md](RELEASE_ACCEPTANCE.md) - secrets/publication evidence.
+- [STUDIO_FINAL_UX_AUDIT.md](STUDIO_FINAL_UX_AUDIT.md) - read-only final Studio GUI/UX acceptance audit with file:line evidence.
+- [RELEASE_PUBLICATION_GATE_AUDIT.md](RELEASE_PUBLICATION_GATE_AUDIT.md); [OPEN_MODEL_ECOSYSTEM_AUDIT.md](OPEN_MODEL_ECOSYSTEM_AUDIT.md); [GOAL_MODE_CAPABILITY_AUDIT.md](GOAL_MODE_CAPABILITY_AUDIT.md); [WEB_RESEARCH_CAPABILITY_AUDIT.md](WEB_RESEARCH_CAPABILITY_AUDIT.md) - sibling capability audits.
 - [product-blueprint/INDEX.json](product-blueprint/INDEX.json) - machine-readable requirements, stages, source inventory, directive imports, dedup map and conflicts.
+- [product-blueprint/addenda/](product-blueprint/addenda/) - preserved user addendum bundle (unchanged).
 

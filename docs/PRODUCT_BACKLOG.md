@@ -18,6 +18,8 @@
 
 **Release-publication directive v4.4 (2026-10-28, queue-only):** the Final Release Hygiene & GitHub Publication Gate directive was audited read-only (docs/RELEASE_PUBLICATION_GATE_AUDIT.md): read-only hygiene/distribution audits, root policy, packaging/beta/rehearsal/acceptance tooling and the verified secrets/history scanner NL-BP-162 exist, but there is no CI/hook enforcement, no integrated final readiness milestone and no publication-readiness verdict; real external acceptance stays MANUAL-PENDING. Three gaps became planned NL-BP-234..236 in new pending stage 10; existing requirements unchanged. No code/model/network/push/publish run. Totals: 188 requirements (33 verified / 77 partial / 75 planned / 3 blocked).
 
+**Studio final-UX directive v5.2 (2026-10-29, queue-only):** the final Studio GUI UX directive was audited read-only (docs/STUDIO_FINAL_UX_AUDIT.md): verified NL branding/theme and partial navigation/settings/self-build/emergency/accessibility/state requirements exist, but there is no UI i18n, 82 inline styles/110 hardcoded colours, a prominent Projects Self-Build button, a raw QTextEdit Inspector, ambiguous project/activity state and offscreen-only GUI evidence. Five gaps became planned NL-BP-237..241 appended to the EXISTING stage 4 (no new stage); stage 4 status/note corrected honestly to in_progress ('engineering complete; final UX acceptance reopened'). Existing IDs/acceptance and other stages unchanged. No code/GUI/model/network run. Totals: 193 requirements (34 verified / 82 partial / 74 planned / 3 blocked).
+
 ## How to use this backlog
 
 1. **Pick from the top, not from chat.** Execute only requirements that are READY (all dependencies done). P0 first, then P1; a single active requirement/milestone at a time unless write scopes are disjoint.
@@ -54,7 +56,7 @@ evidence only.
 | 1 | Repository relocation and path reconciliation | COMPLETE | 1 | NL-BP 143 | - |
 | 2 | Transactional staging, safety and self-healing | COMPLETE | 15 | NL-BP 3-5, 54-60, 65, 72-74, 76 | 1 |
 | 3 | Persistent autonomous supervisor and verified handoff | COMPLETE | 13 | NL-BP 12, 50-53, 61-64, 66-67, 75, 77 | 2 |
-| 4 | Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities | COMPLETE | 40 | NL-BP 1-2, 6-11, 13, 20-46, 68-71 | 3 |
+| 4 | Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities | IN PROGRESS | 45 | NL-BP 1-2, 6-11, 13, 20-46, 68-71, 237-241 | 3 |
 | 5 | Repository cleanup and optimization | COMPLETE | 8 | NL-BP 90-97 | 4 |
 | 6 | Lightweight portable/bootstrapper and final release testing | IN PROGRESS | 40 | NL-BP 110-124, 140-142, 144-165 | 5 |
 | 7 | Universal autonomy, research intelligence and Mega Suite | PENDING | 46 | NL-BP 166-211 | 6 |
@@ -63,10 +65,11 @@ evidence only.
 | 10 | Final release hygiene and GitHub publication gate | PENDING | 3 | NL-BP 234-236 | 6, 7, 8, 9 |
 
 Execution rule: a later stage starts only when the previous stage's gates pass, unless the
-Lead records an explicit evidence-backed exception for independent low-risk work. Stages 1-5
-are complete; stage 6 is in progress; stages 7-10 are pending. SH-07 Tier B (real local models)
-remains BLOCKED in NL-BP-063 and blocks any final readiness verdict. Publication/push remains
-forbidden without explicit owner authorization.
+Lead records an explicit evidence-backed exception for independent low-risk work. Stages 1-3
+and 5 are complete; stage 4 is in progress (engineering complete; final UX acceptance reopened
+by the 2026-10-29 directive); stage 6 is in progress; stages 7-10 are pending. SH-07 Tier B
+(real local models) remains BLOCKED in NL-BP-063 and blocks any final readiness verdict.
+Publication/push remains forbidden without explicit owner authorization.
 
 ## Summary
 
@@ -74,18 +77,18 @@ forbidden without explicit owner authorization.
 |---|---|---|---|---|---|
 | verified | 21 | 13 | 0 | 0 | 34 |
 | partial | 42 | 28 | 11 | 1 | 82 |
-| planned | 40 | 19 | 9 | 1 | 69 |
+| planned | 45 | 19 | 9 | 1 | 74 |
 | blocked | 3 | 0 | 0 | 0 | 3 |
-| **Total** | 106 | 60 | 20 | 2 | 188 |
+| **Total** | **111** | **60** | **20** | **2** | **193** |
 
 | Area | Requirements | verified | partial | planned | blocked |
 |---|---|---|---|---|---|
 | Area 1 - CrewAI + CrewAI Flows first-class integration | 24 | 6 | 7 | 11 | 0 |
-| Area 2 - Studio GUI + multimodal chat | 35 | 3 | 24 | 8 | 0 |
-| Area 3 - Universal autonomous development | 60 | 16 | 18 | 25 | 1 |
+| Area 2 - Studio GUI + multimodal chat | 40 | 3 | 25 | 12 | 0 |
+| Area 3 - Universal autonomous development | 60 | 17 | 21 | 21 | 1 |
 | Area 4 - Repository hygiene | 9 | 3 | 5 | 1 | 0 |
 | Area 5 - Lightweight installation + portable distribution | 27 | 2 | 12 | 13 | 0 |
-| Area 6 - Release acceptance criteria | 33 | 3 | 11 | 17 | 2 |
+| Area 6 - Release acceptance criteria | 33 | 3 | 12 | 16 | 2 |
 
 ### Area ownership
 
@@ -99,6 +102,8 @@ forbidden without explicit owner authorization.
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v5.2 (2026-10-29)** - Queue-only final Studio GUI UX acceptance directive. Read-only audit (docs/STUDIO_FINAL_UX_AUDIT.md) confirmed: verified NL branding/theme shell (020) and partial navigation/settings/self-build/emergency/accessibility/state requirements (021/022/023/024/044/045/046); NO UI internationalization/language setting/persistence; 82 setStyleSheet calls and 110 hardcoded colour literals across the GUI; a prominent Projects-page 'Self-Build (This Agent)' button (projects_panel.py:34-37, 121-125) alongside existing Settings > Advanced controls; a raw read-only QTextEdit Inspector; ambiguous project/open/activity state; and offscreen-only GUI evidence with real-desktop/clipboard/DPI items MANUAL-PENDING. Five acceptance gaps appended to the EXISTING program stage 4 as planned NL-BP-237..241 (i18n, visual/IA polish, self-build placement/runtime UX, Inspector/state clarity, real-GUI evidence). Stage 4 status/note corrected honestly from completed to in_progress ('engineering complete; final UX acceptance reopened'); no new stage/framework; stages 1-3/5-10 untouched; existing requirement IDs/acceptance retained; addenda preserved; no code/GUI/model/network run started. Totals: 193 requirements; 34 verified / 82 partial / 74 planned / 3 blocked.
 
 **v5.1 (2026-10-29)** - Goal Mode G8/G9: plan approval metadata and audit (current/explicit version, idempotent, replan creates unapproved version), read-only linked task/queue/active-work inspection with connected/idle/not-connected states, AppServices/CLI goal approve/tasks/workers, an eighth Goals GUI section (Tasks & Active Workers) and Plan Version approval controls, with GUI adapters aligned to the real facade. Goal suite 98 passed; targeted GUI 23 passed; full integration suite 1081 passed in 147.8 s. Counts unchanged at 34 verified / 82 partial / 69 planned / 3 blocked. NL-BP-216 remains partial for permission-policy gating/non-blocking refresh and real lifecycle acceptance; NL-BP-213 remains partial for objective/evidence-driven task/mission derivation.
 
@@ -1169,6 +1174,93 @@ _Professional NL-branded Studio shell; multimodal mission chat (drag-and-drop, C
 - **Sources:** user directive 2026-10-28: Open Model & Provider Ecosystem (task-69; audited in docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md); docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md; NL-BP-036; NL-BP-224; NL-BP-225; NL-BP-229; NL-BP-231
 - **Note:** Extends the partial read-only Model Hub UI (NL-BP-036) without rewriting it.
 - **Program stage:** 9 - Open model and provider ecosystem
+
+<a id="nl-bp-237"></a>
+### NL-BP-237 - Studio UI internationalization and localization infrastructure
+
+- **Area:** STUDIO - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directive 2026-10-29: final Studio GUI UX acceptance)
+- **Dependencies:** NL-BP-020, NL-BP-022, NL-BP-044
+- **Acceptance gates:**
+  - UI language defaults to Italian on the user's initial installation, with English plus extensible language catalogs and manual selection and optional OS-language detection.
+  - The choice persists across restart and applies consistently to menus, dialogs, tooltips, errors and notifications.
+  - UI language is independent of agent-response language and of generated code/documentation language; missing translations fall back visibly without breaking the UI.
+  - Catalog loading is testable and no user-visible string remains hardcoded outside the catalog.
+- **Evidence:**
+  - not started - queued only by task-87 from the user directive; read-only GUI/UX capability audit in docs/STUDIO_FINAL_UX_AUDIT.md; no code, GUI, model or network run started
+  - capability evidence: audit sections 3-4 (no UI i18n; 82 setStyleSheet/110 hardcoded colours; prominent Projects Self-Build button; raw QTextEdit Inspector; offscreen-only GUI tests)
+- **Sources:** user directive 2026-10-29: final Studio GUI UX acceptance (localization, design polish, self-build placement, Inspector/state clarity, real-GUI evidence) (task-87; audited in docs/STUDIO_FINAL_UX_AUDIT.md); docs/STUDIO_FINAL_UX_AUDIT.md; NL-BP-020; NL-BP-022; NL-BP-044
+- **Note:** Genuinely new; no UI translation infrastructure or language setting exists today.
+- **Program stage:** 4 - Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities
+
+<a id="nl-bp-238"></a>
+### NL-BP-238 - Studio visual design and information architecture polish
+
+- **Area:** STUDIO - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directive 2026-10-29: final Studio GUI UX acceptance)
+- **Dependencies:** NL-BP-020, NL-BP-021, NL-BP-044, NL-BP-045
+- **Acceptance gates:**
+  - A coherent typography, spacing, density, hierarchy and navigation system is applied across pages/panels with reusable components instead of per-widget inline styling.
+  - Layouts remain usable and readable at supported window sizes/DPI settings, with status reporting that is legible (not raw debug text).
+  - The real NL logo/palette/tokens define the identity; no unrelated palette and no distracting glow on text/code/logs.
+  - Any retained inline style is justified; visual QA evidence is provided per the acceptance scenario in NL-BP-241.
+- **Evidence:**
+  - not started - queued only by task-87 from the user directive; read-only GUI/UX capability audit in docs/STUDIO_FINAL_UX_AUDIT.md; no code, GUI, model or network run started
+  - capability evidence: audit sections 3-4 (no UI i18n; 82 setStyleSheet/110 hardcoded colours; prominent Projects Self-Build button; raw QTextEdit Inspector; offscreen-only GUI tests)
+- **Sources:** user directive 2026-10-29: final Studio GUI UX acceptance (localization, design polish, self-build placement, Inspector/state clarity, real-GUI evidence) (task-87; audited in docs/STUDIO_FINAL_UX_AUDIT.md); docs/STUDIO_FINAL_UX_AUDIT.md; NL-BP-020; NL-BP-021; NL-BP-044; NL-BP-045
+- **Note:** Extends verified shell/tokens (020) and partial navigation/accessibility (021/044/045); the 82 inline styles/110 hardcoded colours are the measured debt.
+- **Program stage:** 4 - Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities
+
+<a id="nl-bp-239"></a>
+### NL-BP-239 - Self-build placement and runtime UX acceptance
+
+- **Area:** STUDIO - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directive 2026-10-29: final Studio GUI UX acceptance)
+- **Dependencies:** NL-BP-023, NL-BP-024, NL-BP-046, NL-BP-216
+- **Acceptance gates:**
+  - The prominent Projects-page Self-Build action is removed; activation and configuration live under Settings > Advanced > Autonomous Development (reusing NL-BP-023/024 controls, not duplicating them).
+  - Self-build progress is visible in Goals/Tasks with clear linked mission/task state, and the emergency pause/stop remains accessible during execution.
+  - The self-build repository can still be opened as a normal project through a documented non-prominent path; no hidden auto-start occurs.
+- **Evidence:**
+  - not started - queued only by task-87 from the user directive; read-only GUI/UX capability audit in docs/STUDIO_FINAL_UX_AUDIT.md; no code, GUI, model or network run started
+  - capability evidence: audit sections 3-4 (no UI i18n; 82 setStyleSheet/110 hardcoded colours; prominent Projects Self-Build button; raw QTextEdit Inspector; offscreen-only GUI tests)
+- **Sources:** user directive 2026-10-29: final Studio GUI UX acceptance (localization, design polish, self-build placement, Inspector/state clarity, real-GUI evidence) (task-87; audited in docs/STUDIO_FINAL_UX_AUDIT.md); docs/STUDIO_FINAL_UX_AUDIT.md; NL-BP-023; NL-BP-024; NL-BP-046; NL-BP-216
+- **Note:** Reuses partial NL-BP-023/024 and Goals/Tasks surfaces; acceptance is new.
+- **Program stage:** 4 - Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities
+
+<a id="nl-bp-240"></a>
+### NL-BP-240 - Inspector structured summaries, expandable diagnostics and unambiguous project/activity state
+
+- **Area:** STUDIO - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directive 2026-10-29: final Studio GUI UX acceptance)
+- **Dependencies:** NL-BP-021, NL-BP-022, NL-BP-045, NL-BP-046
+- **Acceptance gates:**
+  - Inspector presents structured summaries (project/mission/agent/verification) with expandable raw diagnostics instead of a single raw technical wall.
+  - Project selection, opened-project state and current application activity (idle/indexing/auditing/supervisor running/mission running) are unambiguous across header, status and Projects page.
+  - Errors and evidence remain reachable in expanded diagnostics; no information is hidden by the redesign.
+- **Evidence:**
+  - not started - queued only by task-87 from the user directive; read-only GUI/UX capability audit in docs/STUDIO_FINAL_UX_AUDIT.md; no code, GUI, model or network run started
+  - capability evidence: audit sections 3-4 (no UI i18n; 82 setStyleSheet/110 hardcoded colours; prominent Projects Self-Build button; raw QTextEdit Inspector; offscreen-only GUI tests)
+- **Sources:** user directive 2026-10-29: final Studio GUI UX acceptance (localization, design polish, self-build placement, Inspector/state clarity, real-GUI evidence) (task-87; audited in docs/STUDIO_FINAL_UX_AUDIT.md); docs/STUDIO_FINAL_UX_AUDIT.md; NL-BP-021; NL-BP-022; NL-BP-045; NL-BP-046
+- **Note:** Extends partial NL-BP-021/022/045/046; structured Inspector and activity model are new.
+- **Program stage:** 4 - Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities
+
+<a id="nl-bp-241"></a>
+### NL-BP-241 - Real-GUI visual and interaction acceptance evidence
+
+- **Area:** STUDIO - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directive 2026-10-29: final Studio GUI UX acceptance)
+- **Dependencies:** NL-BP-020, NL-BP-021, NL-BP-044, NL-BP-190
+- **Acceptance gates:**
+  - Real screenshots are captured for the main pages/dialogs at multiple window sizes and DPI settings, with evidence stored in the repository.
+  - Functional interaction tests exercise real-window behaviour (open/select project, page navigation, self-build activation/stop, inspector expansion, language switch) beyond offscreen widget construction.
+  - Real-GUI evidence is labelled real/manual and is never inferred from offscreen tests; extends NL-BP-190/044 visual/accessibility acceptance.
+- **Evidence:**
+  - not started - queued only by task-87 from the user directive; read-only GUI/UX capability audit in docs/STUDIO_FINAL_UX_AUDIT.md; no code, GUI, model or network run started
+  - capability evidence: audit sections 3-4 (no UI i18n; 82 setStyleSheet/110 hardcoded colours; prominent Projects Self-Build button; raw QTextEdit Inspector; offscreen-only GUI tests)
+- **Sources:** user directive 2026-10-29: final Studio GUI UX acceptance (localization, design polish, self-build placement, Inspector/state clarity, real-GUI evidence) (task-87; audited in docs/STUDIO_FINAL_UX_AUDIT.md); docs/STUDIO_FINAL_UX_AUDIT.md; NL-BP-020; NL-BP-021; NL-BP-044; NL-BP-190
+- **Note:** Extends planned NL-BP-190 and partial NL-BP-044; offscreen-only tests are the current evidence gap.
+- **Program stage:** 4 - Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities
 
 ## Area 3 - Universal autonomous development
 
@@ -3577,6 +3669,38 @@ New requirements are program stage 10, status planned. Blocked/external items pr
 - code removal only after dependency analysis and regression, inside a separately authorized scope
 - no git-history rewrite without verified backup and explicit owner authorization; leaked secrets in history are presumed compromised and require rotation
 - local static CI checks are not actual GitHub CI execution evidence; real CI runs remain pending (NL-BP-165)
+
+## Studio final-UX directive v5.2 - capability audit and dedupe mapping
+
+Read-only audit: docs/STUDIO_FINAL_UX_AUDIT.md (file:line evidence). Source: user directive 2026-10-29: final Studio GUI UX acceptance (i18n, visual polish, self-build placement, Inspector/state clarity, real-GUI evidence). Queue-only: no implementation, no code/GUI/model/network run.
+
+| Sub-capability | Existing coverage | New requirements | Decision |
+|---|---|---|---|
+| Branding, logo, tokens, dark theme shell | NL-BP-020 | none (covered) | verified NL-BP-020 retained |
+| Navigation/panels/inspector/log/status bar | NL-BP-021 | NL-BP-238, NL-BP-240 | 021 retained; final IA/Inspector extend it |
+| Settings surfaces | NL-BP-022 | NL-BP-237, NL-BP-239 | 022 retained; language setting and advanced activation extend it |
+| Self-build controls under Settings > Advanced | NL-BP-023 | NL-BP-239 | 023 retained; placement/runtime acceptance extends it |
+| Emergency pause/stop always reachable | NL-BP-024 | none (covered) | 024 retained and reused by 239 |
+| Accessibility/focus/DPI/shortcuts | NL-BP-044 | NL-BP-238, NL-BP-241 | 044 retained; visual/real-GUI evidence extend it |
+| Non-blocking responsive UI and explicit states | NL-BP-045 | NL-BP-238, NL-BP-240 | 045 retained |
+| Project dashboard/agent-task visualization | NL-BP-046 | NL-BP-240 | 046 retained; state clarity extends it |
+| Visual quality lab / screenshot baselines | NL-BP-190 | NL-BP-241 | 190 retained; real-GUI evidence extends it |
+| Goals/Tasks progress surfaces | NL-BP-216, NL-BP-046 | none (covered) | retained and reused by 239 |
+| UI internationalization/localization | - | NL-BP-237 | genuinely new |
+| Visual design/IA polish with reusable components | - | NL-BP-238 | genuinely new acceptance layer |
+| Self-build placement/runtime UX acceptance | - | NL-BP-239 | genuinely new acceptance over 023/024 |
+| Inspector structured summaries + project/activity state clarity | - | NL-BP-240 | genuinely new |
+| Real-GUI screenshot/interaction evidence | - | NL-BP-241 | genuinely new acceptance over 044/190 |
+| Notification centre/toasts | - | none (covered) | folded into 238/240 status reporting; no separate requirement |
+
+New requirements are appended to existing program stage 4, status planned. Blocked/external items preserved:
+- no new stage/framework: final Studio UX remains stage-4 work and is queued only
+- Italian-default localization needs a real translation catalog and QA pass; machine translation alone is not acceptance
+- real-GUI screenshots/interaction evidence at multiple sizes/DPI is manual/hardware-dependent and cannot be inferred from offscreen tests
+- removing the Projects Self-Build button requires the Settings > Advanced activation path and non-prominent self-repo open path to be accepted first (NL-BP-023/024)
+- Inspector redesign must keep evidence/errors reachable via expandable diagnostics
+- theme/design cleanup must preserve the verified NL identity/tokens and no-glow rule
+- existing requirement statuses (020 verified; 021/022/023/024/044/045/046 partial; 190 planned) are unchanged; stage-4 reopen is a program-level honesty correction
 
 ## Deduplication and merge decisions
 
