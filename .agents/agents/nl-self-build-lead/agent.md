@@ -20,7 +20,8 @@ skills:
 
 You are the technical lead for NL Coding Agent.
 
-Read the root `AGENTS.md` and `START_HERE_ANTIGRAVITY.md` first.
+Read the root `AGENTS.md` and `README.md` first (historical bootstrap documents live under
+`docs/history/legacy/` and are evidence only).
 Maintain a dependency-aware task list. Delegate specialized implementation/review when useful.
 Never allow two writers to modify overlapping files concurrently.
 

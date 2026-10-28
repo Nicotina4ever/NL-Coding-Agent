@@ -87,6 +87,8 @@ SH-07 Tier B (real local models) remains pending explicit authorization and bloc
 
 ## Changelog
 
+**v1.9 (2026-10-28)** - Structural hygiene pass: one authoritative root README.md; legacy handoff/readme/patch evidence moved (git mv, nothing deleted) to docs/history/legacy/ with an index; docs/REPOSITORY_STRUCTURE.md ownership/retention/packaging policy; crewAI checkout audited read-only (not imported; kept protected); measured before/after root inventory; P-01..P-08 authorization-gated proposals recorded. Stage-6a bootstrapper/reproducible release builder evidence added; stage-4 F1 (multimodal chat) and F2 (voice) evidence added; stage 4 remains in progress (F3 IDE surfaces).
+
 **v1.8 (2026-10-28)** - Program-status correction: stage 4 remains IN PROGRESS because C4a-C4e delivered only the CrewAI/Flows/model-intelligence portion; Studio GUI, multimodal chat/attachments, voice/ASR/TTS and IDE surfaces are still outstanding. Stage 5 (hygiene) completed; stage 6 (distribution) started early with final release acceptance gated on stage-4 completion and explicit distribution authorization. No requirement IDs changed.
 
 **v1.7 (2026-10-28)** - Stage 5 complete: read-only repository hygiene audit plus Lead-authorized safe cleanups (3,100,666 bytes freed; 15 to 12 duplicate groups; 2 to 1 worktrees); validation 16 PASS/5 WARN/0 FAIL, full suite 417 passed. Remaining cleanup items need explicit authorization; user data, runtimes and stale dist release preserved. Stage 6 distribution/acceptance started.
@@ -886,7 +888,7 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - nl_coding_agent/core/code_integrity_gate.py (detect_stub, detect_weak_test) present
   - promotion.validate wires the integrity gate into candidate validation (C3/C4; 24 harness tests PASS at HEAD 7e778da); still not called by the orchestrator
   - tests/test_staging_broker_adversarial.py::test_sh01_stub_never_touches_live_source and ::test_sh04_weak_test_rejected - PASS (68-test batch, broker level)
-  - selfbuild_runner.py lines 308-310 still run the post-hoc detect_stub + direct baseline rewrite; AUDIT_REALE_E_LIMITI.md item 6 records the fail-open except
+  - selfbuild_runner.py lines 308-310 still run the post-hoc detect_stub + direct baseline rewrite; docs/history/legacy/AUDIT_REALE_E_LIMITI.md item 6 records the fail-open except
   - mission #45 blocked after live stub overwrite restored from baseline 42 (SQLite result summary)
 - **Sources:** specifiche/27_SELF_CHANGE_GATES_AND_DEPLOY.md; specifiche/28_SELF_HEALING_AGENT_HARNESS.md#4; 03_MASTER_CHECKLIST.md#P0-17
 - **Note:** Integrity gate is enforced before promotion and is fail-closed.
@@ -946,7 +948,7 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - tests/test_orchestrator_staging.py: status assertions for happy/stub/reject/stop-after/legacy
   - SQLite: missions #44/#45 blocked with REJECT; 13 completed; no completed mission visible with failing verification
   - selfbuild_runner preflight/legacy gates added in C5 return blocked for unresolved promotion state and non-harness missions (HEAD 7e778da)
-  - AUDIT_REALE_E_LIMITI.md item 6 records the runner fail-open exception (swallowed error)
+  - docs/history/legacy/AUDIT_REALE_E_LIMITI.md item 6 records the runner fail-open exception (swallowed error)
   - orchestrator finalize path only on APPROVE; Phase 2 C6c plans explicit finalize split
 - **Sources:** specifiche/28_SELF_HEALING_AGENT_HARNESS.md#2; specifiche/19_TEST_MATRIX_E_GATE.md; specifiche/07_QUALITY_GATES_E_BENCHMARK.md
 - **Note:** Fail-closed mission status semantics implemented and tested.
@@ -1005,7 +1007,7 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - Tier B attempt 2 (2a44460): real local models -> validation rejected weakened tests, supervisor BLOCKED with 0 promotions and clean worktree; docs/evidence/sh07/attempt2/
   - SQLite: mission #44 blocked REJECT (supervisor continuous execution); mission #45 blocked after stub overwrite (result summary)
   - data/selfbuild_state.json audit_note_42/43: stub restore and manual repair recorded
-  - HANDOFF_DEEPSEEK_HARNESS.md: previous cycle #43/#45 produced stubs; protections not integrated
+  - docs/history/legacy/HANDOFF_DEEPSEEK_HARNESS.md: previous cycle #43/#45 produced stubs; protections not integrated
   - docs/CURRENT_STATE.md known boundaries: no unattended proof
   - Tier A (fake model) now PASS: tests/test_supervisor_sh07.py 7 tests - two consecutive staged-candidate missions with candidate+oracle verification, one promotion per mission, restart/pause/stop idempotency and fail-closed negatives; evidence via scripts/run_supervisor_sh07.py --mode fake
   - Tier B (real local models) NOT executed: scripts/run_supervisor_sh07.py --mode live --confirm-live --worktree <isolated worktree> requires explicit authorization and records evidence under build/phase3/evidence/
@@ -1095,7 +1097,7 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - tests/test_permissions.py 38 tests: defaults, grant/revoke persistence, project overrides, unknown scope, audit rows, model-tool static check
   - nl_coding_agent/tools/filesystem.py PROTECTED_DIRS + resolve_scoped_path; tests/test_scope_permission.py 2 tests PASS, tests/test_operational_tools.py security test PASS (68-test batch)
   - nl_coding_agent/tools/shell.py shell=True with cwd only (no confinement); no grants/broker/tables in SQLite
-  - specifiche/25_PERMISSIONS_AND_EXTERNAL_TOOLS.md; AUDIT_REALE_E_LIMITI.md item 5
+  - specifiche/25_PERMISSIONS_AND_EXTERNAL_TOOLS.md; docs/history/legacy/AUDIT_REALE_E_LIMITI.md item 5
 - **Sources:** specifiche/25_PERMISSIONS_AND_EXTERNAL_TOOLS.md; specifiche/15_SICUREZZA_E_PRIVACY.md; 03_MASTER_CHECKLIST.md#P0-16; 03_MASTER_CHECKLIST.md#P1-09; 03_MASTER_CHECKLIST.md#P1-15
 - **Note:** Universal permission model implemented backend-side; GUI Settings matrix is a stage-4/5 follow-up.
 
@@ -1805,7 +1807,7 @@ _Evidence gates for the final product: non-default install path; clean Windows w
 - **Evidence:**
   - tests/test_staging_broker_adversarial.py SH-01/SH-04 PASS at broker level (68-test batch)
   - SQLite mission #45 blocked after agent overwrote planner/test; post-hoc rollback from baseline (result summary)
-  - data/selfbuild_state.json audit_note_42/43 manual restore; AUDIT_REALE_E_LIMITI.md items 1-4
+  - data/selfbuild_state.json audit_note_42/43 manual restore; docs/history/legacy/AUDIT_REALE_E_LIMITI.md items 1-4
 - **Sources:** FINAL-REQ/area-6; specifiche/28_SELF_HEALING_AGENT_HARNESS.md#5; specifiche/27_SELF_CHANGE_GATES_AND_DEPLOY.md
 - **Note:** BLOCKED: broker-level SH-01/SH-04 tests pass, but the live pipeline still writes directly to the working tree before the post-hoc gate; mission #45 is a real live overwrite incident.
 
@@ -2008,7 +2010,7 @@ All previous IDs are mapped below. A single requirement can absorb several legac
 | C3 | External portable directories claimed but absent | Blueprint/history claims three sibling portables (~1.46 GB each) plus K:\AI\portable-smoke-project. Read-only inspection of K:\AI on 2026-10-28 shows none of those four paths; only the internal dist/portable-release payload exists. **Resolution:** Current measurement wins for status. The external-artifact requirement (NL-BP-093) is partial: the audit/authorization record for the removal is not in the repository, so the history cannot be reconstructed from repo evidence. No deletion action was taken by this task. |
 | C4 | Self-build state and history disagree across docs/DB/state | CURRENT_STATE ends at mission #41 (65/69 test claims) and says next = new mission; selfbuild_state.json records last_completed=#43 with audit notes; SQLite has completed #42/#43, blocked #44/#45; NEXT_SELF_BUILD_MISSION.md title says 'Supervisor Persistente' while its goal is P1-01 project discovery. **Resolution:** Durable DB + state JSON are treated as the historical record; docs are stale views (NL-BP-151). Mission #44 (continuous supervisor execution) and #45 (project discovery) are blocked/REJECT and are evidence that unattended autonomy is not achieved (NL-BP-063). This backlog is the new durable specification. |
 | C5 | Test-count claims disagree | Test counts in docs are 65/69/72/97/103; measured at final snapshot HEAD 7e778da (2026-10-28 16:12) the collection is 134 tests, with 24 harness component tests and 37 key regression tests passing (plus two earlier safe batches of 68+16 at HEAD 8871145). The full suite was intentionally not run by this consolidation. **Resolution:** Reported as measured, not claimed as full-green: NL-BP-150 is partial until a documented full-suite run. Stale counts in state docs must be updated after Phase 2 (NL-BP-151). |
-| C6 | Safety harness applied but not wired | The safety modules are applied and tested standalone: staging_broker/recovery_store/code_integrity_gate v2 (C1a), promotion lifecycle (C3), candidate+oracle verification (C4) and harness schema/preflight (C5) landed during consolidation; 24 harness tests pass. However grep still shows no staging/promotion/candidate-verification calls from agents/orchestrator.py, so model writes still reach the live tree before any gate. Mission #45 shows a live stub overwrite followed by rollback. Some docs/audit notes read as if the protections were verified end-to-end. **Resolution:** Status is blocked for the integration requirements NL-BP-055/056/057/147 and partial for NL-BP-058/059 (modules + tests landed, orchestrator wiring pending) and NL-BP-060. Module-level tests are evidence of components only, never of end-to-end protection. This matches audit AUDIT_REALE_E_LIMITI.md and the Phase 2 plan (C6/C7 pending at snapshot). |
+| C6 | Safety harness applied but not wired | The safety modules are applied and tested standalone: staging_broker/recovery_store/code_integrity_gate v2 (C1a), promotion lifecycle (C3), candidate+oracle verification (C4) and harness schema/preflight (C5) landed during consolidation; 24 harness tests pass. However grep still shows no staging/promotion/candidate-verification calls from agents/orchestrator.py, so model writes still reach the live tree before any gate. Mission #45 shows a live stub overwrite followed by rollback. Some docs/audit notes read as if the protections were verified end-to-end. **Resolution:** Status is blocked for the integration requirements NL-BP-055/056/057/147 and partial for NL-BP-058/059 (modules + tests landed, orchestrator wiring pending) and NL-BP-060. Module-level tests are evidence of components only, never of end-to-end protection. This matches audit docs/history/legacy/AUDIT_REALE_E_LIMITI.md and the Phase 2 plan (C6/C7 pending at snapshot). |
 | C7 | Blueprint priorities vs final-product release criteria | The blueprint puts multimodal attachments/ASR in P2 and distribution in P3 while the final release acceptance criteria make them mandatory. Conversely the blueprint's P0 self-build items are prerequisites for the release criterion 'invalid agent edits cannot corrupt verified sources'. **Resolution:** Priority semantics are explicitly redefined in this backlog: P0 = release acceptance criterion or hard safety/prerequisite; P1 = coherent product; P2 = advanced blueprint evolution; P3 = polish/extras. Both BP priority and backlog priority are recorded per requirement. |
 | C8 | Prior PRODUCT_BACKLOG.md consolidation was incomplete | The previous file lists 13 checklist IDs without acceptance gates, evidence, dependencies, status classification or machine-readable index, and claims 'No duplicates' while covering only part of the checklist. **Resolution:** It is replaced by this consolidated backlog (103 atomic requirements with evidence). Its entries are mapped in the dedup map; mission #42's completion does not prove backlog quality. |
 | C9 | Docs say autonomous priority gate is met/verified | Those claims predate the Phase 2 safety audit and the blocked missions #44/#45; they are historical, not current. **Resolution:** Final requirements and current measured evidence override them. NL-BP-146/147 blocked; NL-BP-063 blocked; completion claims are not treated as evidence. |

@@ -11,7 +11,8 @@ The product is not a generic chat wrapper and not a clone of Cursor. Its definin
 is **orchestration**: task decomposition, precise handoffs, resource-aware scheduling,
 verification, conflict prevention, persistent state, and controlled self-development.
 
-Read `START_HERE_ANTIGRAVITY.md` before implementing major work.
+Read `README.md` (overview and quick start), `docs/REPOSITORY_STRUCTURE.md` (directory ownership,
+retention and packaging limits) and this file before implementing major work.
 
 ## Existing environment — preserve it
 
@@ -22,8 +23,11 @@ Workspace root on the user's machine:
 Existing paths:
 - `python\` — dedicated disposable Python 3.12 embedded runtime. Use this Python. Do not create
   venv/conda/uv environments unless explicitly requested.
-- `crewAI\` — vendor/source checkout. Treat as reference/vendor; do not rewrite.
-- `crewAI-tools\` — legacy/vendor checkout. Treat as reference/vendor; do not rewrite.
+- `crewAI\` — vendor/reference source checkout only. It is **not imported** by the application
+  (the installed `crewai` package inside `python\` is used); treat it as reference/vendor, do not
+  rewrite it and never ship it.
+- `crewAI-tools\` — legacy/vendor checkout; currently absent. Same protected-vendor policy if it is
+  ever restored.
 - `nl_coding_agent\` — existing bootstrap application. Refactor incrementally; do not throw away
   working CLI behavior without replacement tests.
 - `config\`, `state\`, `logs\` may already exist.
@@ -31,6 +35,16 @@ Existing paths:
 Python validation already succeeded:
 - `python\python.exe -m pip check` -> no broken requirements.
 - importing `Agent, Crew, Task, Flow, LLM` from `crewai` -> succeeds.
+
+## Documentation entry points
+
+- `README.md` — the single authoritative overview, quick start and documentation map.
+- `docs/REPOSITORY_STRUCTURE.md` — directory ownership, retention/cleanup policy and the
+  development-only exclusion list for the portable payload.
+- `docs/history/legacy/INDEX.md` — dated legacy documents and patch evidence kept for history;
+  they are evidence only, not current instructions.
+- Keep exactly one authoritative root README (`README.md`). Archive dated root documents under
+  `docs/history/legacy/` instead of adding alternative README variants.
 
 ## Workspace containment and build outputs
 

@@ -241,8 +241,8 @@ authoritative in docs/product-blueprint/INDEX.json (program_stage).
 | `docs/DISTRIBUTION_AUDIT.md` | evidence | measured sizes, duplicate/dependency audit | yes |
 | `docs/PORTABLE_BUILD.md` | evidence | staging and NL_DATA_DIR evidence | yes |
 | `docs/CREWAI_RUNTIME.md` | evidence | CrewAI pin/import/license evidence | yes |
-| `AUDIT_REALE_E_LIMITI.md` | evidence | safety foundation audit and gaps | yes |
-| `HANDOFF_DEEPSEEK_HARNESS.md` | evidence | stub incidents #43/#45, harness objective | yes |
+| `docs/history/legacy/AUDIT_REALE_E_LIMITI.md` | evidence | safety foundation audit and gaps | yes |
+| `docs/history/legacy/HANDOFF_DEEPSEEK_HARNESS.md` | evidence | stub incidents #43/#45, harness objective | yes |
 | `AGENTS.md` | governance | workspace rules, containment, verification invariant | yes |
 | `FINAL-PRODUCT-REQUIREMENTS (task brief areas 1-6)` | external-brief | 6 product areas and 9 release acceptance criteria | external |
 | `Team task board (task-8..task-14)` | external-brief | area ownership mapping | external |

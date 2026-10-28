@@ -1,17 +1,51 @@
-﻿python/
+# Embedded runtime and vendor checkouts (protected; never committed or shipped as source)
+python/
 crewAI/
 crewAI-tools/
+
+# User data, persisted state and diagnostics (never committed or shipped)
 data/
 logs/
 state/
+
+# Python bytecode and packaging metadata
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
 *.egg-info/
+.venv/
+venv/
+
+# Build and release outputs (regenerated; keep at most one verified release candidate)
 dist/
 build/
+
+# Test/type-check/coverage artifacts (regenerated on demand)
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Local scratch and accidental variable-expansion paths
+cache/
+temp/
+tmp/
+*.tmp
+*.bak
+nul
+%SystemDrive%/
+
+# Editor and OS noise
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local secrets / machine-local state
 .env
 *.sqlite3
 *.db

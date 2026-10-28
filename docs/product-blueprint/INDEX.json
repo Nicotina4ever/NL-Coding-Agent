@@ -4186,13 +4186,13 @@
       "exists": true
     },
     {
-      "path": "AUDIT_REALE_E_LIMITI.md",
+      "path": "docs/history/legacy/AUDIT_REALE_E_LIMITI.md",
       "role": "evidence",
       "used_for": "safety foundation audit and gaps",
       "exists": true
     },
     {
-      "path": "HANDOFF_DEEPSEEK_HARNESS.md",
+      "path": "docs/history/legacy/HANDOFF_DEEPSEEK_HARNESS.md",
       "role": "evidence",
       "used_for": "stub incidents #43/#45, harness objective",
       "exists": true
@@ -4960,7 +4960,8 @@
     "v1.5_2026-10-28_stage4_engineering": "Stage-4 engineering record C4a-C4e: CrewRuntime seam/specs, app-owned Flow state/persistence, opt-in supervisor Flow executor, HITL approvals, memory/delegation policy, capability records + model router, deterministic SBOM/compat gate. NL-BP-006/007/009 planned->partial (fake-model/opt-in evidence only), NL-BP-010/011 stay partial with refreshed evidence. Rollout decision: sequential default, Flow opt-in only (no real-model Flow acceptance); no gate weakened. Stage 4 remains in_progress. Counts: 27 verified/34 partial/38 planned/4 blocked.",
     "v1.6_2026-10-28_stage4_complete": "Stage 4 complete (C4a-C4e): CrewRuntime seam/specs, app-owned Flow foundation, opt-in supervisor Flow executor, HITL/memory-policy/capability routing, SBOM/compat gate; sequential stays default, Flow opt-in only (no real-model Flow evidence). Stage 5 repository hygiene started.",
     "v1.7_2026-10-28_stage5_complete": "Stage 5 hygiene: read-only audit plus Lead-authorized safe cleanups (~2.96 MiB freed, worktrees pruned); validation 16 PASS/5 WARN/0 FAIL, full suite 417 passed; protected data/runtimes/dist preserved. Stage 6 distribution started.",
-    "v1.8_2026-10-28_stage4_status_correction": "Corrected program stage 4 status to in_progress: C4a-C4e delivered the CrewAI/Flows/model-intelligence part only; Studio GUI/multimodal/voice/IDE surfaces remain outstanding. Stage 5 completed; stage 6 distribution foundation started early with final acceptance gated on stage-4 completion and distribution authorization."
+    "v1.8_2026-10-28_stage4_status_correction": "Corrected program stage 4 status to in_progress: C4a-C4e delivered the CrewAI/Flows/model-intelligence part only; Studio GUI/multimodal/voice/IDE surfaces remain outstanding. Stage 5 completed; stage 6 distribution foundation started early with final acceptance gated on stage-4 completion and distribution authorization.",
+    "v1.9_2026-10-28_structural_hygiene": "Structural follow-up: one authoritative root README, legacy docs/patch evidence moved to docs/history/legacy (nothing deleted), repository ownership/retention/packaging policy documented, crewAI checkout audited read-only (not imported; kept protected), measured before/after root inventory; P-01..P-08 proposals recorded for explicit authorization. Stage-6a bootstrapper/reproducible-builder evidence added; stage 4 F1/F2 evidence added."
   },
   "program_order": {
     "schema_version": 1,
@@ -5064,7 +5065,10 @@
           "Rollout decision: sequential default, Flow opt-in only, because no real-model Flow acceptance evidence exists; no gate weakened. Stage 4 remains in_progress (GUI/multimodal/voice/other area-4 work open).",
           "docs/HARNESS_ACCEPTANCE.md (Stage 4 C4a-C4e evidence, fake-model-only statement, rollout decision)",
           "docs/evidence/crewai_sbom.json (verified SBOM artifact; scripts/check_crewai_upgrade.py --verify-sbom PASS; --compat 18/18)",
-          "commits d775093 C4a, d821c7f C4b, d29b727 C4c, 47236e5 C4d, 853d0c6 C4e"
+          "commits d775093 C4a, d821c7f C4b, d29b727 C4c, 47236e5 C4d, 853d0c6 C4e",
+          "docs/REPOSITORY_HYGIENE_FOLLOWUP.md (structural hygiene pass: root inventory, docs consolidation, crewAI checkout audit)",
+          "commit 4787c30 F1 multimodal mission chat (attachments, clipboard/drag-drop, capability-aware routing)",
+          "commit 8040022 F2 voice (local speech manager, dictation/TTS lifecycle; hardware acceptance manual-pending)"
         ],
         "requirement_ids": [
           "NL-BP-001",
@@ -5120,7 +5124,10 @@
         "evidence": [
           "docs/REPOSITORY_HYGIENE.md (audit + Lead-authorized cleanup record)",
           "scripts/audit_repository_hygiene.py + tests/test_repository_hygiene.py (read-only bounded audit)",
-          "commit 4299e8f (audit) and the cleanup commit"
+          "commit 4299e8f (audit) and the cleanup commit",
+          "docs/REPOSITORY_STRUCTURE.md (authoritative ownership/retention/packaging policy)",
+          "docs/history/legacy/INDEX.md (legacy docs and patch evidence moved, nothing deleted)",
+          "README.md (single authoritative root entry point)"
         ],
         "requirement_ids": [
           "NL-BP-090",
@@ -5141,7 +5148,10 @@
         "depends_on_stages": [
           5
         ],
-        "evidence": [],
+        "evidence": [
+          "docs/BOOTSTRAPPER.md + installer/ + scripts/build_release.py (per-user bootstrapper and reproducible source release builder)",
+          "commit 771ecd1 stage 6a (255 tracked files -> 1,053,218 B zip, byte-identical reproducibility, offline install 255/255 verified)"
+        ],
         "requirement_ids": [
           "NL-BP-110",
           "NL-BP-111",
@@ -5174,5 +5184,5 @@
       }
     ]
   },
-  "updated_at": "2026-10-28T18:35:00+01:00"
+  "updated_at": "2026-10-28T18:45:00+01:00"
 }
