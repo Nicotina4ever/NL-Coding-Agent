@@ -57,17 +57,17 @@ with the audited safety-foundation harness (C1-C5 done, C6-C8 next).
 
 | Status | P0 | P1 | P2 | P3 | Total |
 |---|---|---|---|---|---|
-| verified | 5 | 7 | 0 | 0 | 12 |
-| partial | 15 | 22 | 2 | 0 | 39 |
+| verified | 14 | 7 | 0 | 0 | 21 |
+| partial | 9 | 22 | 2 | 0 | 33 |
 | planned | 20 | 10 | 13 | 2 | 45 |
-| blocked | 7 | 0 | 0 | 0 | 7 |
+| blocked | 4 | 0 | 0 | 0 | 4 |
 | **Total** | **47** | **39** | **15** | **2** | **103** |
 
 | Area | Requirements | verified | partial | planned | blocked |
 |---|---|---|---|---|---|
-| Area 1 - CrewAI + CrewAI Flows first-class integration | 13 | 5 | 5 | 3 | 0 |
+| Area 1 - CrewAI + CrewAI Flows first-class integration | 13 | 6 | 4 | 3 | 0 |
 | Area 2 - Studio GUI + multimodal chat | 27 | 1 | 7 | 19 | 0 |
-| Area 3 - Universal autonomous development | 28 | 2 | 13 | 9 | 4 |
+| Area 3 - Universal autonomous development | 28 | 10 | 8 | 9 | 1 |
 | Area 4 - Repository hygiene | 8 | 2 | 4 | 2 | 0 |
 | Area 5 - Lightweight installation + portable distribution | 15 | 2 | 5 | 8 | 0 |
 | Area 6 - Release acceptance criteria | 12 | 0 | 5 | 4 | 3 |
@@ -84,6 +84,8 @@ with the audited safety-foundation harness (C1-C5 done, C6-C8 next).
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v1.1 (2026-10-28)** - C6/C7 wired the staged-candidate harness end-to-end: NL-BP-004/054/055/056/057/058/059/060/074 moved to verified (fake-model end-to-end tests, full suite 149 passed). No new requirement IDs; stage 2 remains in progress for permissions/tool registry (NL-BP-072/073); SH-07/supervisor work belongs to stage 3.
 
 **v1.0 (2026-10-28)** - first consolidated backlog; supersedes the prior docs/PRODUCT_BACKLOG.md and all duplicate planning lists. Sources: Master Blueprint v6 files (30 specifications + checklist + handoffs + templates), final-product requirements (6 areas, 9 release acceptance criteria), docs/CURRENT_STATE.md, docs/COMPLETED_MISSIONS.md, docs/NEXT_SELF_BUILD_MISSION.md, docs/PHASE2_HARNESS_INTEGRATION_PLAN.md, docs/WORKSPACE_MIGRATION.md, AGENTS.md, repository code, tests and a read-only SQLite/FS audit. 98 source ID groups merged into 103 atomic requirements; 11 conflicts recorded.
 
@@ -148,7 +150,7 @@ _CrewAI as a first-class engine dependency (not a cloned vendor checkout), agent
 <a id="nl-bp-004"></a>
 ### NL-BP-004 - Fail-closed test/verification gate blocks completion
 
-- **Area:** CORE - **Priority:** P0 - **Status:** partial
+- **Area:** CORE - **Priority:** P0 - **Status:** verified
 - **Blueprint priority:** P0 (03_MASTER_CHECKLIST P0-06)
 - **Dependencies:** NL-BP-003
 - **Acceptance gates:**
@@ -156,12 +158,14 @@ _CrewAI as a first-class engine dependency (not a cloned vendor checkout), agent
   - an ambiguous reviewer verdict is treated as REJECT
   - adversarial test SH-04 (green candidate tests, weakened baseline oracle) blocks promotion
 - **Evidence:**
+  - C6 bce3b71: fail-closed gate inside the orchestrator; staging tests prove invalid/stub candidates and reviewer REJECT produce blocked/unchanged live tree
+  - tests/test_orchestrator_staging.py 8 tests; full suite 149 passed (2026-10-28)
   - orchestrator._run_tester_stage raises VerificationError after max_retries=2 (nl_coding_agent/agents/orchestrator.py)
   - parse_reviewer_verdict ambiguity -> REJECT covered by tests/test_roadmap.py::test_verdicts - PASS in 68-test batch
   - SQLite: mission #45 status=blocked, review_verdict=REJECT (measured probe)
   - gap: no automated test yet for test-fail + reviewer-approve (planned as NL-BP-058 oracle gate)
 - **Sources:** specifiche/07_QUALITY_GATES_E_BENCHMARK.md; specifiche/19_TEST_MATRIX_E_GATE.md; 03_MASTER_CHECKLIST.md#P0-06
-- **Note:** Tester failure raises before review and the reviewer parser defaults to REJECT, but the SH-04 adversarial case (red oracle with weakened tests) is only planned, and the post-hoc runner gate is fail-open on exceptions.
+- **Note:** Wired end-to-end into the orchestrator in C6; completion requires verified promotion.
 
 <a id="nl-bp-006"></a>
 ### NL-BP-006 - CrewAI Flows first-class integration in a product pipeline
@@ -788,7 +792,7 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
 <a id="nl-bp-054"></a>
 ### NL-BP-054 - Evidence-based completion: no mission completes without passing gates
 
-- **Area:** AUTONOMY - **Priority:** P0 - **Status:** partial
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** verified
 - **Blueprint priority:** P0 (03_MASTER_CHECKLIST P0-06; SPEC-07)
 - **Dependencies:** NL-BP-003, NL-BP-005
 - **Acceptance gates:**
@@ -796,16 +800,18 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - failed tests or empty diff make completion impossible
   - baseline/diff cannot be retroactively rewritten to hide agent changes
 - **Evidence:**
+  - C6 bce3b71: _finalize_completed only after verified promotion; _finalize_blocked/_finalize_interrupted never report applied changes
+  - tests/test_orchestrator_staging.py: happy path vs stub/reject/stop-after assertions
   - orchestrator _finalize only called on APPROVE path; tester raises VerificationError on failure
   - SQLite measured: 13 completed (11 with APPROVE), missions #44/#45 blocked REJECT
   - specifiche/07_QUALITY_GATES_E_BENCHMARK.md; gap: SH-04 oracle test planned
 - **Sources:** specifiche/07_QUALITY_GATES_E_BENCHMARK.md; specifiche/19_TEST_MATRIX_E_GATE.md; 03_MASTER_CHECKLIST.md#P0-06
-- **Note:** The orchestrator finalizes completed only after tester success and reviewer APPROVE; the independent deterministic oracle from NL-BP-058 is required for full compliance.
+- **Note:** Evidence-based completion is enforced by the staged-candidate orchestrator flow.
 
 <a id="nl-bp-055"></a>
 ### NL-BP-055 - Staged candidate writes: every model mutation stays off the live tree
 
-- **Area:** AUTONOMY - **Priority:** P0 - **Status:** blocked
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** verified
 - **Blueprint priority:** P0 (03_MASTER_CHECKLIST P0-17; SPEC-28 invariants)
 - **Dependencies:** NL-BP-051, NL-BP-053
 - **Acceptance gates:**
@@ -813,17 +819,19 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - before promotion no live file changes; an automated test asserts live-tree bytes are unchanged after a developer stage
   - staging excluded from vendor/data/cache copies and cleaned on terminal status
 - **Evidence:**
+  - C6 bce3b71: developer/debugger tools, JSON tool calls and text fallback write only stage.workspace; promotion is the only live-write path
+  - tests/test_orchestrator_staging.py: live tree unchanged until promotion (8 tests)
   - nl_coding_agent/core/staging_broker.py exists (v2, C1a commit cb5184e); tests/test_staging_broker_adversarial.py 7 tests PASS (68-test batch, incl SH-01/SH-02/SH-03/SH-04)
   - promotion lifecycle (C3 commit 7372128, 14 tests), candidate/oracle verification (C4 commit 10aa437, 7 tests) and harness schema (C5 commit 7e778da) landed during consolidation; 24 harness tests PASS (HEAD 7e778da)
   - grep: no staging/promotion import or call in nl_coding_agent/agents/orchestrator.py
   - docs/PHASE2_HARNESS_INTEGRATION_PLAN.md section 1.3 (runtime imports not wired); mission #45 result summary: agent overwrote planner/test live before rollback (SQLite probe)
 - **Sources:** specifiche/28_SELF_HEALING_AGENT_HARNESS.md#2; specifiche/27_SELF_CHANGE_GATES_AND_DEPLOY.md; 03_MASTER_CHECKLIST.md#P0-17; FINAL-REQ/area-6 (criterion 7)
-- **Note:** BLOCKED on integration: staging_broker v2, promotion.py (C3) and candidate_verification.py (C4) are implemented and tested standalone; the orchestrator still does not import them (grep 0), so model writes reach the live root. This is the core Phase 2 (task-6) gap.
+- **Note:** Staged-candidate writes wired end-to-end; model-facing surface is 4 file tools (no shell/test/git).
 
 <a id="nl-bp-056"></a>
 ### NL-BP-056 - Pre-edit recovery points, compare-and-swap rollback and baseline provenance
 
-- **Area:** AUTONOMY - **Priority:** P0 - **Status:** blocked
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** verified
 - **Blueprint priority:** P0 (03_MASTER_CHECKLIST P0-13)
 - **Dependencies:** NL-BP-055
 - **Acceptance gates:**
@@ -831,18 +839,20 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - rollback restores only files whose current hash equals the recorded postimage; human edits are never overwritten
   - SH-02/SH-03 crash and concurrency tests pass; external changes are tracked distinctly from mission changes
 - **Evidence:**
+  - C6 bce3b71: promotion.ensure_recovery_point before live writes; CAS drift check; rollback_from_snapshot(expected_post_hashes)
+  - tests/test_promotion_stage.py (14 tests) + staging human-edit CAS-conflict test
   - nl_coding_agent/core/recovery_store.py v2 applied (C1a); tests/test_rollback_stub.py 3 tests PASS (68-test batch)
   - promotion.ensure_recovery_point/promote/rollback implement recovery point + CAS + journal (C3, 14 tests PASS); selfbuild_runner preflight calls promotion.preflight (C5); orchestrator not wired yet
   - tests/test_staging_broker_adversarial.py::test_sh02_cas_rollback_preserves_newer_human_edit and ::test_sh03_recovery_from_promoted_candidate - PASS (broker level)
   - selfbuild_runner.py imports save_snapshot/rollback_from_snapshot at line 12, used only in the post-hoc block at ~line 308
   - data/mission_baselines: 16 baseline files measured; mission #45 rollback evidence (agent-reported in result summary)
 - **Sources:** specifiche/02A_RECOVERY_POINTS_ROLLBACK_CACHE.md; specifiche/15_SICUREZZA_E_PRIVACY.md; 03_MASTER_CHECKLIST.md#P0-13
-- **Note:** BLOCKED: recovery_store v2 is implemented and unit-tested but has no call site in the orchestrator; the only call is the post-hoc gate in selfbuild_runner.py.
+- **Note:** Recovery point + compare-and-swap rollback implemented and wired before promotion.
 
 <a id="nl-bp-057"></a>
 ### NL-BP-057 - Stub/weak-test integrity gate enforced before promotion
 
-- **Area:** AUTONOMY - **Priority:** P0 - **Status:** blocked
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** verified
 - **Blueprint priority:** P0 (03_MASTER_CHECKLIST P0-17; SPEC-27; SPEC-28 SH-01/SH-04)
 - **Dependencies:** NL-BP-055, NL-BP-056
 - **Acceptance gates:**
@@ -850,18 +860,20 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - SH-01 (planner replaced by pass + self-approving test) and SH-04 (green weakened tests) are blocked before any live write
   - no false positive for legitimate pass/abstract bodies; evidence persisted
 - **Evidence:**
+  - C6 bce3b71: promotion.validate (AST stub/weak-test, scope, protected/input paths) before candidate verification; post-hoc runner gate removed in C7 3790aaf
+  - stub candidate end-to-end test -> blocked, live unchanged, no recovery point
   - nl_coding_agent/core/code_integrity_gate.py (detect_stub, detect_weak_test) present
   - promotion.validate wires the integrity gate into candidate validation (C3/C4; 24 harness tests PASS at HEAD 7e778da); still not called by the orchestrator
   - tests/test_staging_broker_adversarial.py::test_sh01_stub_never_touches_live_source and ::test_sh04_weak_test_rejected - PASS (68-test batch, broker level)
   - selfbuild_runner.py lines 308-310 still run the post-hoc detect_stub + direct baseline rewrite; AUDIT_REALE_E_LIMITI.md item 6 records the fail-open except
   - mission #45 blocked after live stub overwrite restored from baseline 42 (SQLite result summary)
 - **Sources:** specifiche/27_SELF_CHANGE_GATES_AND_DEPLOY.md; specifiche/28_SELF_HEALING_AGENT_HARNESS.md#4; 03_MASTER_CHECKLIST.md#P0-17
-- **Note:** BLOCKED: AST detection exists and works at broker level, but the promotion path is not wired; the runner gate runs after the mission already wrote the live tree and is fail-open on unexpected exceptions.
+- **Note:** Integrity gate is enforced before promotion and is fail-closed.
 
 <a id="nl-bp-058"></a>
 ### NL-BP-058 - Independent candidate + oracle verification before promotion
 
-- **Area:** AUTONOMY - **Priority:** P0 - **Status:** partial
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** verified
 - **Blueprint priority:** P0 (SPEC-28 section 5; SPEC-19; SH-04)
 - **Dependencies:** NL-BP-055
 - **Acceptance gates:**
@@ -869,17 +881,19 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - baseline-pinned oracle tests run over candidate source; both suites green before promotion
   - SH-04 prototype (green weakened tests + red oracle) is reproduced as an automated test
 - **Evidence:**
+  - C6 bce3b71: tester gate runs candidate_verification.verify_candidate (candidate + baseline-test oracle) in disposable copies; verification_runs rows recorded
+  - tests/test_candidate_verification.py (7) + tests/test_orchestrator_staging.py (candidate/oracle rows asserted)
   - docs/PHASE2_HARNESS_INTEGRATION_PLAN.md sections 4.1-4.9 (measured prototypes: source-only copy 182 files/1.32 MB, suite ~13.5 s; oracle-overlay proof)
   - nl_coding_agent/core/candidate_verification.py exists (C4 commit 10aa437) with tests/test_candidate_verification.py 7 tests PASS (24-test harness batch, HEAD 7e778da)
   - grep: no candidate_verification import/call in nl_coding_agent/agents/orchestrator.py (integration pending, Phase 2 C6b)
   - oracle gate required by SPEC-28 section 5 and final area 6 criterion 7
 - **Sources:** specifiche/28_SELF_HEALING_AGENT_HARNESS.md#5; specifiche/19_TEST_MATRIX_E_GATE.md; docs/PHASE2_HARNESS_INTEGRATION_PLAN.md
-- **Note:** Module and tests landed (C4) but the orchestrator does not call them yet (C6b pending); the oracle gate therefore still does not protect live missions.
+- **Note:** Candidate + oracle verification is the tester gate for missions.
 
 <a id="nl-bp-059"></a>
 ### NL-BP-059 - Promotion journal, CAS and crash reconciliation
 
-- **Area:** AUTONOMY - **Priority:** P0 - **Status:** partial
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** verified
 - **Blueprint priority:** P0 (03_MASTER_CHECKLIST P0-13; SPEC-28 SH-03)
 - **Dependencies:** NL-BP-055, NL-BP-056
 - **Acceptance gates:**
@@ -887,17 +901,19 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - resume reconciles all-after/all-before/mixed states, automatic CAS rollback on mixed, blocked on conflict
   - journal is never deleted without proof; tests cover crash points
 - **Evidence:**
+  - C6 bce3b71: promotion.promote/journal/reconcile wired in _run_locked (promotion-complete resume, conflict -> blocked)
+  - tests/test_promotion_stage.py journal/reconcile tests + staging resume test
   - tests/test_staging_broker_adversarial.py promotion/rollback tests PASS (68-test batch)
   - nl_coding_agent/core/promotion.py (C3) + tests/test_promotion_stage.py 14 tests PASS (24-test harness batch, HEAD 7e778da); DB promotion_status/staging_dir columns present (C5); selfbuild preflight uses promotion.preflight
   - docs/PHASE2_HARNESS_INTEGRATION_PLAN.md sections 5.3-5.5 (algorithm); no orchestrator call sites (grep)
   - SQLite missions table has no promotion_status/staging_dir columns yet (PRAGMA measured)
 - **Sources:** specifiche/28_SELF_HEALING_AGENT_HARNESS.md#4; specifiche/02A_RECOVERY_POINTS_ROLLBACK_CACHE.md#3; 03_MASTER_CHECKLIST.md#P0-13
-- **Note:** Promotion module, journal/CAS tests and DB columns landed (C3/C5); the orchestrator promotion call and finalize split (C6c) are still pending, so the live path does not use them.
+- **Note:** Promotion journal, CAS and crash reconciliation are wired.
 
 <a id="nl-bp-060"></a>
 ### NL-BP-060 - Fail-closed mission status semantics (no false APPROVE/completed)
 
-- **Area:** AUTONOMY - **Priority:** P0 - **Status:** partial
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** verified
 - **Blueprint priority:** P0 (SPEC-28 invariant 9; SPEC-19)
 - **Dependencies:** NL-BP-054, NL-BP-059
 - **Acceptance gates:**
@@ -905,12 +921,14 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - no APPROVE persisted when tests failed; no baseline rewrite after the fact
   - static check proves only the finalize function writes completed
 - **Evidence:**
+  - C6 bce3b71: completed only after promotion; blocked on every gate failure; staged paths not reported as applied changes
+  - tests/test_orchestrator_staging.py: status assertions for happy/stub/reject/stop-after/legacy
   - SQLite: missions #44/#45 blocked with REJECT; 13 completed; no completed mission visible with failing verification
   - selfbuild_runner preflight/legacy gates added in C5 return blocked for unresolved promotion state and non-harness missions (HEAD 7e778da)
   - AUDIT_REALE_E_LIMITI.md item 6 records the runner fail-open exception (swallowed error)
   - orchestrator finalize path only on APPROVE; Phase 2 C6c plans explicit finalize split
 - **Sources:** specifiche/28_SELF_HEALING_AGENT_HARNESS.md#2; specifiche/19_TEST_MATRIX_E_GATE.md; specifiche/07_QUALITY_GATES_E_BENCHMARK.md
-- **Note:** Mostly enforced at orchestrator level and in DB history; the runner still post-processes results and the fail-open exception path remains.
+- **Note:** Fail-closed mission status semantics implemented and tested.
 
 <a id="nl-bp-061"></a>
 ### NL-BP-061 - Supervisor daemon independent of the chat/LLM with durable queue, lease and preflight
@@ -1049,7 +1067,7 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
 <a id="nl-bp-074"></a>
 ### NL-BP-074 - Model-facing tool surface limited to file operations; no false sandbox claims
 
-- **Area:** AUTONOMY - **Priority:** P0 - **Status:** partial
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** verified
 - **Blueprint priority:** P0 (03_MASTER_CHECKLIST P0-16; SPEC-28 SH-05)
 - **Dependencies:** NL-BP-072
 - **Acceptance gates:**
@@ -1057,11 +1075,13 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - verification commands run only through the deterministic tester stage
   - docs state explicitly that candidate code executes with user privileges and no OS sandbox is claimed
 - **Evidence:**
+  - C2 8871145: model tools reduced to read_file/write_file/patch_file/list_dir; run_command/run_tests/git_diff removed
+  - tests/test_operational_tools.py asserts the 4-tool surface; seam test guards single CrewAI invocation point
   - nl_coding_agent/tools/crew_tools.py 4 tools (commit 8871145 C2)
   - tests/test_operational_tools.py::test_crew_tools_binding_limited_to_file_operations - PASS (68-test batch; asserts run_command/run_tests/git_diff absent)
   - docs/07_SAFETY.md currently lacks the staged-harness limitation section (planned C8 in Phase 2 plan)
 - **Sources:** specifiche/25_PERMISSIONS_AND_EXTERNAL_TOOLS.md; specifiche/28_SELF_HEALING_AGENT_HARNESS.md#2; 03_MASTER_CHECKLIST.md#P0-16
-- **Note:** C2 reduced the model tool set to read_file/write_file/patch_file/list_dir; disclosure of the staged-harness/no-OS-sandbox boundary in product docs is still pending (Phase 2 C8).
+- **Note:** Model-facing tool surface is limited to file operations; no shell/test execution.
 
 <a id="nl-bp-050"></a>
 ### NL-BP-050 - Persistent Goals > Milestones > Tasks > Missions hierarchy with CRUD

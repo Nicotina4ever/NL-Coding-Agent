@@ -1,6 +1,6 @@
 # SPEC-28 — Self-Healing Agent Harness: prevenzione, riparazione, rollback, recupero
 
-**Stato:** proposta progettuale, NON implementata o verificata nel repository corrente.  
+**Stato:** implementata nella harness staged-candidate (fase 2, commit C1-C7): staging obbligatorio, recovery point, CAS/journal, verifica indipendente candidate+oracle e promozione come ultimo gate; verificata con test fake-model. Supervisor autonomo persistente e due missioni consecutive senza intervento manuale restano da verificare (fase 3).
 **Priorità:** P0, blocca l’autonomia non presidiata.  
 **Ambito:** capacità universale: vale per qualunque progetto, compreso quello di NL Coding Agent.  
 **Caso avverso reale:** nelle missioni #42/#43 il Developer locale ha sostituito `nl_coding_agent/core/autonomous_roadmap_planner.py` e alcuni test con stub. Un metodo con `pass` e un test che verifica solo una proprietà booleana non dimostrano una riparazione. I 69 test preesistenti possono restare verdi anche quando una funzionalità non è più reale.

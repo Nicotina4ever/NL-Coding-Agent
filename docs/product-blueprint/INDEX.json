@@ -179,7 +179,7 @@
       "area": "core",
       "priority": "P0",
       "bp_priority": "P0 (03_MASTER_CHECKLIST P0-06)",
-      "status": "partial",
+      "status": "verified",
       "dependencies": [
         "NL-BP-003"
       ],
@@ -192,7 +192,9 @@
         "orchestrator._run_tester_stage raises VerificationError after max_retries=2 (nl_coding_agent/agents/orchestrator.py)",
         "parse_reviewer_verdict ambiguity -> REJECT covered by tests/test_roadmap.py::test_verdicts - PASS in 68-test batch",
         "SQLite: mission #45 status=blocked, review_verdict=REJECT (measured probe)",
-        "gap: no automated test yet for test-fail + reviewer-approve (planned as NL-BP-058 oracle gate)"
+        "gap: no automated test yet for test-fail + reviewer-approve (planned as NL-BP-058 oracle gate)",
+        "C6 bce3b71: fail-closed gate inside the orchestrator; staging tests prove invalid/stub candidates and reviewer REJECT produce blocked/unchanged live tree",
+        "tests/test_orchestrator_staging.py 8 tests; full suite 149 passed (2026-10-28)"
       ],
       "source_refs": [
         "specifiche/07_QUALITY_GATES_E_BENCHMARK.md",
@@ -200,7 +202,7 @@
         "03_MASTER_CHECKLIST.md#P0-06"
       ],
       "primary_source": "specifiche/07_QUALITY_GATES_E_BENCHMARK.md",
-      "note": "Tester failure raises before review and the reviewer parser defaults to REJECT, but the SH-04 adversarial case (red oracle with weakened tests) is only planned, and the post-hoc runner gate is fail-open on exceptions.",
+      "note": "Wired end-to-end into the orchestrator in C6; completion requires verified promotion.",
       "backlog_anchor": "nl-bp-004",
       "program_stage": 2,
       "program_stage_name": "Transactional staging, safety and self-healing",
@@ -1559,7 +1561,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "P0 (03_MASTER_CHECKLIST P0-06; SPEC-07)",
-      "status": "partial",
+      "status": "verified",
       "dependencies": [
         "NL-BP-003",
         "NL-BP-005"
@@ -1572,7 +1574,9 @@
       "evidence": [
         "orchestrator _finalize only called on APPROVE path; tester raises VerificationError on failure",
         "SQLite measured: 13 completed (11 with APPROVE), missions #44/#45 blocked REJECT",
-        "specifiche/07_QUALITY_GATES_E_BENCHMARK.md; gap: SH-04 oracle test planned"
+        "specifiche/07_QUALITY_GATES_E_BENCHMARK.md; gap: SH-04 oracle test planned",
+        "C6 bce3b71: _finalize_completed only after verified promotion; _finalize_blocked/_finalize_interrupted never report applied changes",
+        "tests/test_orchestrator_staging.py: happy path vs stub/reject/stop-after assertions"
       ],
       "source_refs": [
         "specifiche/07_QUALITY_GATES_E_BENCHMARK.md",
@@ -1580,7 +1584,7 @@
         "03_MASTER_CHECKLIST.md#P0-06"
       ],
       "primary_source": "specifiche/07_QUALITY_GATES_E_BENCHMARK.md",
-      "note": "The orchestrator finalizes completed only after tester success and reviewer APPROVE; the independent deterministic oracle from NL-BP-058 is required for full compliance.",
+      "note": "Evidence-based completion is enforced by the staged-candidate orchestrator flow.",
       "backlog_anchor": "nl-bp-054",
       "program_stage": 2,
       "program_stage_name": "Transactional staging, safety and self-healing",
@@ -1594,7 +1598,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "P0 (03_MASTER_CHECKLIST P0-17; SPEC-28 invariants)",
-      "status": "blocked",
+      "status": "verified",
       "dependencies": [
         "NL-BP-051",
         "NL-BP-053"
@@ -1608,7 +1612,9 @@
         "nl_coding_agent/core/staging_broker.py exists (v2, C1a commit cb5184e); tests/test_staging_broker_adversarial.py 7 tests PASS (68-test batch, incl SH-01/SH-02/SH-03/SH-04)",
         "promotion lifecycle (C3 commit 7372128, 14 tests), candidate/oracle verification (C4 commit 10aa437, 7 tests) and harness schema (C5 commit 7e778da) landed during consolidation; 24 harness tests PASS (HEAD 7e778da)",
         "grep: no staging/promotion import or call in nl_coding_agent/agents/orchestrator.py",
-        "docs/PHASE2_HARNESS_INTEGRATION_PLAN.md section 1.3 (runtime imports not wired); mission #45 result summary: agent overwrote planner/test live before rollback (SQLite probe)"
+        "docs/PHASE2_HARNESS_INTEGRATION_PLAN.md section 1.3 (runtime imports not wired); mission #45 result summary: agent overwrote planner/test live before rollback (SQLite probe)",
+        "C6 bce3b71: developer/debugger tools, JSON tool calls and text fallback write only stage.workspace; promotion is the only live-write path",
+        "tests/test_orchestrator_staging.py: live tree unchanged until promotion (8 tests)"
       ],
       "source_refs": [
         "specifiche/28_SELF_HEALING_AGENT_HARNESS.md#2",
@@ -1617,7 +1623,7 @@
         "FINAL-REQ/area-6 (criterion 7)"
       ],
       "primary_source": "specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
-      "note": "BLOCKED on integration: staging_broker v2, promotion.py (C3) and candidate_verification.py (C4) are implemented and tested standalone; the orchestrator still does not import them (grep 0), so model writes reach the live root. This is the core Phase 2 (task-6) gap.",
+      "note": "Staged-candidate writes wired end-to-end; model-facing surface is 4 file tools (no shell/test/git).",
       "backlog_anchor": "nl-bp-055",
       "program_stage": 2,
       "program_stage_name": "Transactional staging, safety and self-healing",
@@ -1631,7 +1637,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "P0 (03_MASTER_CHECKLIST P0-13)",
-      "status": "blocked",
+      "status": "verified",
       "dependencies": [
         "NL-BP-055"
       ],
@@ -1645,7 +1651,9 @@
         "promotion.ensure_recovery_point/promote/rollback implement recovery point + CAS + journal (C3, 14 tests PASS); selfbuild_runner preflight calls promotion.preflight (C5); orchestrator not wired yet",
         "tests/test_staging_broker_adversarial.py::test_sh02_cas_rollback_preserves_newer_human_edit and ::test_sh03_recovery_from_promoted_candidate - PASS (broker level)",
         "selfbuild_runner.py imports save_snapshot/rollback_from_snapshot at line 12, used only in the post-hoc block at ~line 308",
-        "data/mission_baselines: 16 baseline files measured; mission #45 rollback evidence (agent-reported in result summary)"
+        "data/mission_baselines: 16 baseline files measured; mission #45 rollback evidence (agent-reported in result summary)",
+        "C6 bce3b71: promotion.ensure_recovery_point before live writes; CAS drift check; rollback_from_snapshot(expected_post_hashes)",
+        "tests/test_promotion_stage.py (14 tests) + staging human-edit CAS-conflict test"
       ],
       "source_refs": [
         "specifiche/02A_RECOVERY_POINTS_ROLLBACK_CACHE.md",
@@ -1653,7 +1661,7 @@
         "03_MASTER_CHECKLIST.md#P0-13"
       ],
       "primary_source": "specifiche/02A_RECOVERY_POINTS_ROLLBACK_CACHE.md",
-      "note": "BLOCKED: recovery_store v2 is implemented and unit-tested but has no call site in the orchestrator; the only call is the post-hoc gate in selfbuild_runner.py.",
+      "note": "Recovery point + compare-and-swap rollback implemented and wired before promotion.",
       "backlog_anchor": "nl-bp-056",
       "program_stage": 2,
       "program_stage_name": "Transactional staging, safety and self-healing",
@@ -1667,7 +1675,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "P0 (03_MASTER_CHECKLIST P0-17; SPEC-27; SPEC-28 SH-01/SH-04)",
-      "status": "blocked",
+      "status": "verified",
       "dependencies": [
         "NL-BP-055",
         "NL-BP-056"
@@ -1682,7 +1690,9 @@
         "promotion.validate wires the integrity gate into candidate validation (C3/C4; 24 harness tests PASS at HEAD 7e778da); still not called by the orchestrator",
         "tests/test_staging_broker_adversarial.py::test_sh01_stub_never_touches_live_source and ::test_sh04_weak_test_rejected - PASS (68-test batch, broker level)",
         "selfbuild_runner.py lines 308-310 still run the post-hoc detect_stub + direct baseline rewrite; AUDIT_REALE_E_LIMITI.md item 6 records the fail-open except",
-        "mission #45 blocked after live stub overwrite restored from baseline 42 (SQLite result summary)"
+        "mission #45 blocked after live stub overwrite restored from baseline 42 (SQLite result summary)",
+        "C6 bce3b71: promotion.validate (AST stub/weak-test, scope, protected/input paths) before candidate verification; post-hoc runner gate removed in C7 3790aaf",
+        "stub candidate end-to-end test -> blocked, live unchanged, no recovery point"
       ],
       "source_refs": [
         "specifiche/27_SELF_CHANGE_GATES_AND_DEPLOY.md",
@@ -1690,7 +1700,7 @@
         "03_MASTER_CHECKLIST.md#P0-17"
       ],
       "primary_source": "specifiche/27_SELF_CHANGE_GATES_AND_DEPLOY.md",
-      "note": "BLOCKED: AST detection exists and works at broker level, but the promotion path is not wired; the runner gate runs after the mission already wrote the live tree and is fail-open on unexpected exceptions.",
+      "note": "Integrity gate is enforced before promotion and is fail-closed.",
       "backlog_anchor": "nl-bp-057",
       "program_stage": 2,
       "program_stage_name": "Transactional staging, safety and self-healing",
@@ -1704,7 +1714,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "P0 (SPEC-28 section 5; SPEC-19; SH-04)",
-      "status": "partial",
+      "status": "verified",
       "dependencies": [
         "NL-BP-055"
       ],
@@ -1717,7 +1727,9 @@
         "docs/PHASE2_HARNESS_INTEGRATION_PLAN.md sections 4.1-4.9 (measured prototypes: source-only copy 182 files/1.32 MB, suite ~13.5 s; oracle-overlay proof)",
         "nl_coding_agent/core/candidate_verification.py exists (C4 commit 10aa437) with tests/test_candidate_verification.py 7 tests PASS (24-test harness batch, HEAD 7e778da)",
         "grep: no candidate_verification import/call in nl_coding_agent/agents/orchestrator.py (integration pending, Phase 2 C6b)",
-        "oracle gate required by SPEC-28 section 5 and final area 6 criterion 7"
+        "oracle gate required by SPEC-28 section 5 and final area 6 criterion 7",
+        "C6 bce3b71: tester gate runs candidate_verification.verify_candidate (candidate + baseline-test oracle) in disposable copies; verification_runs rows recorded",
+        "tests/test_candidate_verification.py (7) + tests/test_orchestrator_staging.py (candidate/oracle rows asserted)"
       ],
       "source_refs": [
         "specifiche/28_SELF_HEALING_AGENT_HARNESS.md#5",
@@ -1725,7 +1737,7 @@
         "docs/PHASE2_HARNESS_INTEGRATION_PLAN.md"
       ],
       "primary_source": "specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
-      "note": "Module and tests landed (C4) but the orchestrator does not call them yet (C6b pending); the oracle gate therefore still does not protect live missions.",
+      "note": "Candidate + oracle verification is the tester gate for missions.",
       "backlog_anchor": "nl-bp-058",
       "program_stage": 2,
       "program_stage_name": "Transactional staging, safety and self-healing",
@@ -1739,7 +1751,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "P0 (03_MASTER_CHECKLIST P0-13; SPEC-28 SH-03)",
-      "status": "partial",
+      "status": "verified",
       "dependencies": [
         "NL-BP-055",
         "NL-BP-056"
@@ -1753,7 +1765,9 @@
         "tests/test_staging_broker_adversarial.py promotion/rollback tests PASS (68-test batch)",
         "nl_coding_agent/core/promotion.py (C3) + tests/test_promotion_stage.py 14 tests PASS (24-test harness batch, HEAD 7e778da); DB promotion_status/staging_dir columns present (C5); selfbuild preflight uses promotion.preflight",
         "docs/PHASE2_HARNESS_INTEGRATION_PLAN.md sections 5.3-5.5 (algorithm); no orchestrator call sites (grep)",
-        "SQLite missions table has no promotion_status/staging_dir columns yet (PRAGMA measured)"
+        "SQLite missions table has no promotion_status/staging_dir columns yet (PRAGMA measured)",
+        "C6 bce3b71: promotion.promote/journal/reconcile wired in _run_locked (promotion-complete resume, conflict -> blocked)",
+        "tests/test_promotion_stage.py journal/reconcile tests + staging resume test"
       ],
       "source_refs": [
         "specifiche/28_SELF_HEALING_AGENT_HARNESS.md#4",
@@ -1761,7 +1775,7 @@
         "03_MASTER_CHECKLIST.md#P0-13"
       ],
       "primary_source": "specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
-      "note": "Promotion module, journal/CAS tests and DB columns landed (C3/C5); the orchestrator promotion call and finalize split (C6c) are still pending, so the live path does not use them.",
+      "note": "Promotion journal, CAS and crash reconciliation are wired.",
       "backlog_anchor": "nl-bp-059",
       "program_stage": 2,
       "program_stage_name": "Transactional staging, safety and self-healing",
@@ -1775,7 +1789,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "P0 (SPEC-28 invariant 9; SPEC-19)",
-      "status": "partial",
+      "status": "verified",
       "dependencies": [
         "NL-BP-054",
         "NL-BP-059"
@@ -1789,7 +1803,9 @@
         "SQLite: missions #44/#45 blocked with REJECT; 13 completed; no completed mission visible with failing verification",
         "selfbuild_runner preflight/legacy gates added in C5 return blocked for unresolved promotion state and non-harness missions (HEAD 7e778da)",
         "AUDIT_REALE_E_LIMITI.md item 6 records the runner fail-open exception (swallowed error)",
-        "orchestrator finalize path only on APPROVE; Phase 2 C6c plans explicit finalize split"
+        "orchestrator finalize path only on APPROVE; Phase 2 C6c plans explicit finalize split",
+        "C6 bce3b71: completed only after promotion; blocked on every gate failure; staged paths not reported as applied changes",
+        "tests/test_orchestrator_staging.py: status assertions for happy/stub/reject/stop-after/legacy"
       ],
       "source_refs": [
         "specifiche/28_SELF_HEALING_AGENT_HARNESS.md#2",
@@ -1797,7 +1813,7 @@
         "specifiche/07_QUALITY_GATES_E_BENCHMARK.md"
       ],
       "primary_source": "specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
-      "note": "Mostly enforced at orchestrator level and in DB history; the runner still post-processes results and the fail-open exception path remains.",
+      "note": "Fail-closed mission status semantics implemented and tested.",
       "backlog_anchor": "nl-bp-060",
       "program_stage": 2,
       "program_stage_name": "Transactional staging, safety and self-healing",
@@ -2261,7 +2277,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "P0 (03_MASTER_CHECKLIST P0-16; SPEC-28 SH-05)",
-      "status": "partial",
+      "status": "verified",
       "dependencies": [
         "NL-BP-072"
       ],
@@ -2273,7 +2289,9 @@
       "evidence": [
         "nl_coding_agent/tools/crew_tools.py 4 tools (commit 8871145 C2)",
         "tests/test_operational_tools.py::test_crew_tools_binding_limited_to_file_operations - PASS (68-test batch; asserts run_command/run_tests/git_diff absent)",
-        "docs/07_SAFETY.md currently lacks the staged-harness limitation section (planned C8 in Phase 2 plan)"
+        "docs/07_SAFETY.md currently lacks the staged-harness limitation section (planned C8 in Phase 2 plan)",
+        "C2 8871145: model tools reduced to read_file/write_file/patch_file/list_dir; run_command/run_tests/git_diff removed",
+        "tests/test_operational_tools.py asserts the 4-tool surface; seam test guards single CrewAI invocation point"
       ],
       "source_refs": [
         "specifiche/25_PERMISSIONS_AND_EXTERNAL_TOOLS.md",
@@ -2281,7 +2299,7 @@
         "03_MASTER_CHECKLIST.md#P0-16"
       ],
       "primary_source": "specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
-      "note": "C2 reduced the model tool set to read_file/write_file/patch_file/list_dir; disclosure of the staged-harness/no-OS-sandbox boundary in product docs is still pending (Phase 2 C8).",
+      "note": "Model-facing tool surface is limited to file operations; no shell/test execution.",
       "backlog_anchor": "nl-bp-074",
       "program_stage": 2,
       "program_stage_name": "Transactional staging, safety and self-healing",
@@ -3589,10 +3607,10 @@
   "counts": {
     "total": 103,
     "by_status": {
-      "verified": 12,
-      "partial": 39,
+      "verified": 21,
+      "partial": 33,
       "planned": 45,
-      "blocked": 7
+      "blocked": 4
     },
     "by_priority": {
       "P0": 47,
@@ -3610,37 +3628,32 @@
     },
     "by_area_status": {
       "core": {
-        "verified": 5,
-        "partial": 5,
-        "planned": 3,
-        "blocked": 0
+        "verified": 6,
+        "partial": 4,
+        "planned": 3
       },
       "studio": {
         "verified": 1,
         "partial": 7,
-        "planned": 19,
-        "blocked": 0
+        "planned": 19
       },
       "autonomy": {
-        "verified": 2,
-        "partial": 13,
-        "planned": 9,
-        "blocked": 4
+        "partial": 8,
+        "verified": 10,
+        "blocked": 1,
+        "planned": 9
       },
       "hygiene": {
         "verified": 2,
         "partial": 4,
-        "planned": 2,
-        "blocked": 0
+        "planned": 2
       },
       "distribution": {
         "verified": 2,
         "partial": 5,
-        "planned": 8,
-        "blocked": 0
+        "planned": 8
       },
       "release": {
-        "verified": 0,
         "partial": 5,
         "planned": 4,
         "blocked": 3
@@ -3648,28 +3661,22 @@
     },
     "by_priority_status": {
       "P0": {
-        "verified": 5,
-        "partial": 15,
+        "verified": 14,
+        "partial": 9,
         "planned": 20,
-        "blocked": 7
+        "blocked": 4
       },
       "P1": {
-        "verified": 7,
         "partial": 22,
-        "planned": 10,
-        "blocked": 0
+        "verified": 7,
+        "planned": 10
       },
       "P2": {
-        "verified": 0,
-        "partial": 2,
         "planned": 13,
-        "blocked": 0
+        "partial": 2
       },
       "P3": {
-        "verified": 0,
-        "partial": 0,
-        "planned": 2,
-        "blocked": 0
+        "planned": 2
       }
     },
     "status_order": [
@@ -4924,7 +4931,8 @@
       "docs/product-blueprint/INDEX.json",
       "build/backlog/ (working notes and generator)"
     ],
-    "2026-10-28_program_order": "2026-10-28: added authoritative 6-stage program execution order and program_stage/program_stage_dependencies on every requirement (user directive; no new requirement IDs, no duplicates)."
+    "2026-10-28_program_order": "2026-10-28: added authoritative 6-stage program execution order and program_stage/program_stage_dependencies on every requirement (user directive; no new requirement IDs, no duplicates).",
+    "v1.1_2026-10-28_stage2": "C6/C7 wired the staged-candidate harness end-to-end; NL-BP-004/054/055/056/057/058/059/060/074 verified with fake-model tests (full suite 149 passed). No new requirement IDs."
   },
   "program_order": {
     "schema_version": 1,
@@ -4956,7 +4964,9 @@
         "evidence": [
           "commits cb5184e C1a, 451211c C1b, 8871145 C2, 7372128 C3, 10aa437 C4, 7e778da C5",
           "docs/PHASE2_HARNESS_INTEGRATION_PLAN.md (C1a-C8)",
-          "tests/test_promotion_stage.py, tests/test_candidate_verification.py, tests/test_harness_schema.py"
+          "tests/test_promotion_stage.py, tests/test_candidate_verification.py, tests/test_harness_schema.py",
+          "commits 3790aaf C7 (post-hoc gate removal), bce3b71 C6 (staged-candidate orchestrator wiring)",
+          "tests/test_orchestrator_staging.py (8 fake-model end-to-end tests), full suite 149 passed"
         ],
         "requirement_ids": [
           "NL-BP-003",
@@ -5108,5 +5118,6 @@
         ]
       }
     ]
-  }
+  },
+  "updated_at": "2026-10-28T16:35:00+01:00"
 }

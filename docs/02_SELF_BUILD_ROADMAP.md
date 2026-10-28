@@ -149,6 +149,12 @@ Self-build task requirements:
 - GUI offers "Restart to apply" when needed;
 - failed candidate remains inspectable and does not erase the last known working revision.
 
+- model writes are staged: developer/debugger tools write only a staged workspace;
+- the tester runs independent candidate + oracle regression suites in disposable copies;
+- promotion is the last gate (recovery point + compare-and-swap + journal) and
+  happens only after reviewer APPROVE; blocked/interrupted missions never claim
+  staged changes as applied.
+
 The self-builder updates `docs/CURRENT_STATE.md` and `docs/NEXT_SELF_BUILD_MISSION.md`.
 
 ## Phase 8 — Advanced GUI

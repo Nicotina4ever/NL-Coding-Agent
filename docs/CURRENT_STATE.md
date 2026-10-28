@@ -210,3 +210,29 @@ NL Coding Agent is a local-first, multi-agent software development workstation. 
   - Full test suite: **69 passed**.
   - Next command: `python\python.exe nl_agent.py selfbuild --autonomous --project "K:\AI\NL Coding Agent"` (update `docs/NEXT_SELF_BUILD_MISSION.md` before continuing).
 
+
+## Staged-Candidate Harness (2026-10-28)
+
+The mission pipeline is now transactional (phase-2 commits C1-C7; see
+`docs/PHASE2_HARNESS_INTEGRATION_PLAN.md`):
+
+- every model write goes to a staged workspace, never directly to the live tree;
+- validation (AST stub/weak-test, scope, protected paths) runs before any live write;
+- the tester gate runs independent candidate + oracle regression suites in
+  disposable copies of the staged workspace; the oracle pins baseline tests;
+- the reviewer reviews the candidate diff and verification evidence before promotion;
+- promotion is the last gate: recovery point + compare-and-swap + journal, with
+  reconcile-on-resume; a REJECT or gate failure leaves the live tree unchanged;
+- `completed` is written only after verified promotion; blocked/interrupted
+  missions record staged paths as candidate evidence, not as applied changes.
+
+Database additions (additive): `missions.harness_version`,
+`missions.staging_dir`, `missions.promotion_status`. Legacy missions
+(without `harness_version`) are refused for resume. The post-hoc runner gate that
+used to rescan and rewrite the live tree after a mission was removed; the gate now
+exists inside the orchestrator before promotion.
+
+Evidence (2026-10-28): full suite **149 passed** (23 s) including 8 fake-model
+end-to-end staging tests (happy path, stub blocked, reviewer reject, stop-after/
+resume, human-edit CAS conflict, legacy refusal), promotion/candidate-verification
+tests and 4 model-seam tests. The relocation gate remains 30/30 PASS.
