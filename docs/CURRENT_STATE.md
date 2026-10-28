@@ -865,3 +865,26 @@ Document planning D2/D3 (2026-10-29)
   plan generation/approval (221) and inferred items receive human confirmation.
 - Full integration suite 1137 passed in 185.0 s measured wall time. Counts: 193 requirements,
   37 verified / 86 partial / 67 planned / 3 blocked.
+
+Document-driven plan loop verified (2026-10-29)
+
+- NL-BP-219/220/221 are verified. The document planning path is now end-to-end:
+  DocumentCorpus ingestion -> deterministic reconciliation and requirement/constraint/
+  acceptance extraction with provenance -> deterministic plan generation with milestones,
+  priorities, dependencies, risks/blockers, validation strategy and source citations ->
+  versioned draft edits requiring rationale/diff validation -> approve/reject with audit and
+  immutable snapshots. Persistence lives in additive document_plans/document_plan_versions
+  tables; approved plans are metadata only and never execute, instantiate missions or create
+  goals.
+- CLI: docs plan, docs plans, docs plan-edit, docs plan-approve, docs plan-reject (JSON/text,
+  required reasons, stable exits, NL_DATA_DIR isolation, no execution flags).
+- GUI: non-prominent Projects 'Document plan...' action opens a DocumentPlanDialog with
+  Summary/Milestones/Reconciliation/Versions tabs, validated milestone JSON editing with
+  rationale, approve/reject with reason/confirmation and honest empty/unknown/error states.
+  It uses injected AppServices only; no direct DB/network/model access. Projects action is
+  localized it/en; dialog body strings remain English (remaining localization limit).
+- Optional supervised auto-execution was intentionally not added; approved plans remain
+  metadata. NL-BP-222 (incremental documentation-change reconciliation) and NL-BP-223
+  (end-to-end document-driven acceptance scenario) remain planned.
+- Full integration suite 1153 passed in 183.0 s measured wall time. Counts: 193 requirements,
+  40 verified / 84 partial / 66 planned / 3 blocked.

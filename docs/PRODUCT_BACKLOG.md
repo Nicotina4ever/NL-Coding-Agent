@@ -75,9 +75,9 @@ Publication/push remains forbidden without explicit owner authorization.
 
 | Status | P0 | P1 | P2 | P3 | Total |
 |---|---|---|---|---|---|
-| verified | 24 | 13 | 0 | 0 | 37 |
-| partial | 46 | 28 | 11 | 1 | 86 |
-| planned | 38 | 19 | 9 | 1 | 67 |
+| verified | 27 | 13 | 0 | 0 | 40 |
+| partial | 44 | 28 | 11 | 1 | 84 |
+| planned | 37 | 19 | 9 | 1 | 66 |
 | blocked | 3 | 0 | 0 | 0 | 3 |
 | **Total** | 111 | 60 | 20 | 2 | 193 |
 
@@ -102,6 +102,8 @@ Publication/push remains forbidden without explicit owner authorization.
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v5.6 (2026-10-29)** - Document-driven plan loop completed and verified: deterministic plan generation from corpus/reconciliation/extraction with objectives/acceptance/milestones/priorities/dependencies/risks/validation/provenance; versioned draft/approved/rejected persistence with immutable snapshots, edit/rationale/diff validation, approve/reject audit and no execution/mission/goal creation; CLI docs plan/plans/plan-edit/plan-approve/plan-reject and a GUI DocumentPlanDialog with summary/milestones/reconciliation/version editing/approval. NL-BP-219/220/221 verified; 222 (incremental doc-change reconciliation) and 223 (end-to-end acceptance scenario) remain planned. Full integration suite 1153 passed in 183.0 s; counts 40 verified / 84 partial / 66 planned / 3 blocked.
 
 **v5.5 (2026-10-29)** - Document planning D2/D3: documentation reconciliation (authoritative/stale/version conflicts, obsolete/missing docs, contradictions, doc-vs-source/dependency/test/Git evidence, immutable provenance findings, deterministic/versioned runs, no auto-resolution) and requirement/constraint/acceptance extraction (explicit-vs-inferred labels, confidence, source excerpt/hash/line provenance, dedupe/bounds); end-to-end DocumentCorpus ingestion through AppServices, CLI and a non-prominent Projects GUI action with structured untrusted summaries. NL-BP-218 verified; 219/220 partial pending plan generation/approval integration (221) and human confirmation of inferred items. Full integration suite 1137 passed in 185.0 s; counts 37 verified / 86 partial / 67 planned / 3 blocked.
 
