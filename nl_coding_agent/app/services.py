@@ -115,6 +115,17 @@ class AppServices:
         from nl_coding_agent.tools.filesystem import scoped_list_dir
         return scoped_list_dir(project_root, rel_path)
 
+    # --- External tools (SPEC-25 / NL-BP-073) ---
+
+    def list_external_tools(self, probe: bool = True) -> list[dict]:
+        """Read-only external tool discovery for Settings -> Permissions & External Tools.
+
+        Probes are fixed, bounded version commands or a health GET; no tool is
+        installed, copied, modified or handed arbitrary arguments.
+        """
+        from nl_coding_agent.tools.registry import ToolRegistry
+        return ToolRegistry().describe_all(probe=probe)
+
     # --- Ollama / Models ---
 
     def check_ollama(self) -> bool:
