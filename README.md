@@ -25,9 +25,13 @@ release requirements in `docs/PRODUCT_BACKLOG.md` pass.
 
 ## Requirements
 
-- Windows 11 (the current launchers, installer bootstrap and GUI are Windows-first).
-- The embedded Python runtime and dependencies are **already included** under `python/`; do not
-  create a venv/conda environment.
+- Windows 11 is the primary verified development target (Windows-first CI/startup evidence).
+- Windows: the embedded Python runtime and dependencies are **already included** under `python/`;
+  do not create a venv/conda environment.
+- Linux/macOS: POSIX `.sh` launchers are now shipped for the private beta, but the provisioned
+  native runtime is still unmeasured/MANUAL-PENDING and no support claim is made. Packaged beta
+  installs must use `python/bin/python3` from the payload; system Python is a source-checkout
+  developer fallback only.
 - Ollama installed and running locally for local-model inference (models are discovered
   dynamically and are never hard-coded). Cloud escalation is opt-in only.
 - NVIDIA RTX 4060 Ti 8 GB VRAM / 32 GB RAM is the reference target; the app degrades gracefully.
@@ -39,17 +43,27 @@ their own location, so they can be double-clicked or started from any working di
 
 | Entry point | Purpose |
 |---|---|
-| `NL Coding Agent.bat` | Desktop GUI (PySide6) — the single obvious launcher at the repository root. |
-| `scripts\launchers\doctor.bat` | Environment diagnostics (runtime, CrewAI, Ollama, project state). |
-| `scripts\launchers\status.bat` | Persisted projects/missions/state summary. |
-| `scripts\launchers\Self-Build Mode.bat` | One guided self-build mission with persisted state and resume hint. |
+| `NL Coding Agent.bat` | Windows desktop GUI (PySide6) — the obvious launcher at the repository root. |
+| `scripts\launchers\doctor.bat` | Windows environment diagnostics (runtime, CrewAI, Ollama, project state). |
+| `scripts\launchers\status.bat` | Windows persisted projects/missions/state summary. |
+| `scripts\launchers\Self-Build Mode.bat` | Windows one guided self-build mission with persisted state and resume hint. |
+| `scripts/launchers/NL Coding Agent.sh` | POSIX desktop GUI launcher for Linux/macOS beta (staged to the payload root). |
+| `scripts/launchers/doctor.sh` | POSIX read-only environment diagnostics (payload root: `doctor.sh`). |
+| `scripts/launchers/status.sh` | POSIX persisted-state summary (payload root: `status.sh`). |
+| `scripts/launchers/Self-Build Mode.sh` | POSIX explicit one-mission launcher (payload root, preserves exit codes). |
+| `scripts/launchers/NL Coding Agent.command` | macOS Finder wrapper that execs `NL Coding Agent.sh`. |
 | `scripts\launchers\voicebridge\audit_voicebridge.bat` | Read-only audit of the external NL VoiceBridge Studio project. |
 | `scripts\launchers\voicebridge\work_voicebridge.bat` | Prepare a task for the external VoiceBridge project. |
 
 The diagnostics/status/self-build launchers are developed under `scripts/launchers/`; the portable
-payload stages them back to the payload root under the same user-facing names (`doctor.bat`,
-`status.bat`, `Self-Build Mode.bat`), so a portable install keeps the familiar launch files
-beside `NL Coding Agent.bat`. See `scripts/launchers/README.md`.
+payload stages them back to the payload root under the same user-facing names, for both Windows
+(`doctor.bat`, `status.bat`, `Self-Build Mode.bat`) and POSIX (`doctor.sh`, `status.sh`,
+`Self-Build Mode.sh`, `NL Coding Agent.sh`, plus the `.command` Finder wrapper). The POSIX
+launchers look for the provisioned runtime at `python/bin/python3` (compatibly
+`runtime/bin/python3`); in a source checkout only they may warn and fall back to system
+`python3` for development. A packaged payload without the runtime fails closed with installer
+instructions. Launchers pass all arguments through, preserve exit codes and never start a model
+mission except when the user explicitly runs Self-Build Mode.
 
 Equivalent CLI form (use the embedded runtime explicitly):
 

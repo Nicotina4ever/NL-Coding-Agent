@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -53,6 +54,10 @@ class TestPortableStaging(unittest.TestCase):
         _write(root / "scripts" / "launchers" / "Self-Build Mode.bat", "@echo off\n")
         _write(root / "scripts" / "launchers" / "doctor.bat", "@echo off\n")
         _write(root / "scripts" / "launchers" / "status.bat", "@echo off\n")
+        for name in ("NL Coding Agent.sh", "doctor.sh", "status.sh",
+                     "Self-Build Mode.sh", "NL Coding Agent.command"):
+            _write(root / "scripts" / "launchers" / name,
+                   "#!/usr/bin/env sh\nexec echo \"$@\"\n")
         _write(root / "AGENTS.md", "dev rules")
         _write(root / "installer" / "bootstrap.py", "installer")
         _write(root / "PATCH" / "old.py", "patch evidence")
@@ -81,7 +86,8 @@ class TestPortableStaging(unittest.TestCase):
                 "nl_coding_agent/flows/__init__.py", "python/python.exe",
                 "assets/logo.svg", "config/models.yaml", "pyproject.toml",
                 "Self-Build Mode.bat", "NL Coding Agent.bat", "doctor.bat",
-                "status.bat",
+                "status.bat", "NL Coding Agent.sh", "NL Coding Agent.command",
+                "doctor.sh", "status.sh", "Self-Build Mode.sh",
             ):
                 self.assertTrue((output / included).is_file(), included)
             # Sources under scripts/launchers/ are re-mapped to the payload root.
@@ -99,7 +105,7 @@ class TestPortableStaging(unittest.TestCase):
             self.assertFalse((output / "SHA256_MANIFEST.json").exists())
 
             self.assertEqual(manifest["payload_manifest_version"], 1)
-            self.assertEqual(manifest["file_count"], 15)
+            self.assertEqual(manifest["file_count"], 20)
             self.assertEqual(manifest["source_name"], "source")
             self.assertEqual(manifest["output_name"], "payload")
             self.assertEqual(manifest["output_location"], "external")
@@ -137,8 +143,38 @@ class TestPortableStaging(unittest.TestCase):
                     "pyproject.toml",
                     "python",
                     "status.bat",
+                    "NL Coding Agent.sh",
+                    "NL Coding Agent.command",
+                    "doctor.sh",
+                    "status.sh",
+                    "Self-Build Mode.sh",
                 },
             )
+
+    def test_posix_launchers_are_staged_at_payload_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            output = root / "payload"
+            self._source_tree(source)
+            completed = _run(source, output, "--json")
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            manifest = json.loads(completed.stdout)
+            self.assertFalse((output / "scripts").exists())
+            for name in ("NL Coding Agent.sh", "NL Coding Agent.command",
+                         "doctor.sh", "status.sh", "Self-Build Mode.sh"):
+                self.assertTrue((output / name).is_file(), name)
+                self.assertIn("scripts/launchers/" + name,
+                              manifest["launcher_source_to_payload"])
+                self.assertEqual(
+                    manifest["launcher_source_to_payload"]["scripts/launchers/" + name],
+                    name,
+                )
+            if os.name != "nt":
+                for name in ("NL Coding Agent.sh", "doctor.sh", "status.sh",
+                             "Self-Build Mode.sh", "NL Coding Agent.command"):
+                    self.assertTrue(os.access(output / name, os.X_OK), name)
+            self.assertEqual(manifest["payload_checks"]["absolute_path_hits"], [])
 
     def test_dry_run_does_not_write_output(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -152,7 +188,7 @@ class TestPortableStaging(unittest.TestCase):
             manifest = json.loads(completed.stdout)
             self.assertTrue(manifest["dry_run"])
             self.assertFalse(output.exists())
-            self.assertEqual(manifest["file_count"], 15)
+            self.assertEqual(manifest["file_count"], 20)
             self.assertFalse(manifest["output_location"] == "dist")
 
     def test_non_empty_output_is_refused(self):

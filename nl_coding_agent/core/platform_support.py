@@ -270,7 +270,9 @@ _PLATFORM_DECLARATIONS: tuple[PlatformDeclaration, ...] = (
         PLATFORM_STATUS_MANIFEST_SCHEMA_ONLY, True,
         "six-target runtime manifest declares python-runtime-linux-x86_64 "
         "(unmeasured template, tar.gz)",
-        "NL Coding Agent.sh declared in installer/platform_targets.py; not shipped",
+        "NL Coding Agent.sh + doctor.sh/status.sh/Self-Build Mode.sh staged at the "
+        "payload root (sources under scripts/launchers/); runtime entrypoint "
+        "python/bin/python3 is declared but still unmeasured/MANUAL-PENDING",
         "C2 provisioner supports the target (measured-only hashes, native-host "
         "install only, no Windows runtime reuse); no Linux runtime artifact, launcher "
         "or clean-machine evidence yet.",
@@ -280,7 +282,9 @@ _PLATFORM_DECLARATIONS: tuple[PlatformDeclaration, ...] = (
         PLATFORM_STATUS_MANIFEST_SCHEMA_ONLY, True,
         "six-target runtime manifest declares python-runtime-linux-aarch64 "
         "(unmeasured template, tar.gz)",
-        "NL Coding Agent.sh declared in installer/platform_targets.py; not shipped",
+        "NL Coding Agent.sh + doctor.sh/status.sh/Self-Build Mode.sh staged at the "
+        "payload root (sources under scripts/launchers/); runtime entrypoint "
+        "python/bin/python3 is declared but still unmeasured/MANUAL-PENDING",
         "C2 declares the target but no ARM64 runtime/wheels are evidenced; the "
         "CrewAI native stack must be verified on a real runner before any claim.",
     ),
@@ -290,7 +294,9 @@ _PLATFORM_DECLARATIONS: tuple[PlatformDeclaration, ...] = (
         "six-target runtime manifest declares python-runtime-macos-x86_64 "
         "(unmeasured template, tar.gz); Universal 2 not claimed "
         "(separate-per-arch decision)",
-        "NL Coding Agent.sh declared in installer/platform_targets.py; not shipped",
+        "NL Coding Agent.sh + doctor.sh/status.sh/Self-Build Mode.sh staged at the "
+        "payload root (sources under scripts/launchers/); runtime entrypoint "
+        "python/bin/python3 is declared but still unmeasured/MANUAL-PENDING",
         "No macOS runtime, launcher or signing/notarization evidence; C2 records "
         "separate per-architecture runtimes and makes no Universal 2 claim; "
         "real-hardware acceptance MANUAL-PENDING.",
@@ -301,7 +307,9 @@ _PLATFORM_DECLARATIONS: tuple[PlatformDeclaration, ...] = (
         "six-target runtime manifest declares python-runtime-macos-arm64 "
         "(unmeasured template, tar.gz); Universal 2 not claimed "
         "(separate-per-arch decision)",
-        "NL Coding Agent.sh declared in installer/platform_targets.py; not shipped",
+        "NL Coding Agent.sh + doctor.sh/status.sh/Self-Build Mode.sh staged at the "
+        "payload root (sources under scripts/launchers/); runtime entrypoint "
+        "python/bin/python3 is declared but still unmeasured/MANUAL-PENDING",
         "No macOS ARM64 runtime/wheels or signing/notarization evidence; C2 records "
         "separate per-architecture runtimes and makes no Universal 2 claim; "
         "real-hardware acceptance MANUAL-PENDING.",

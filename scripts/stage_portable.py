@@ -55,6 +55,12 @@ LAUNCHER_SOURCE_TO_PAYLOAD = {
     "scripts/launchers/doctor.bat": "doctor.bat",
     "scripts/launchers/status.bat": "status.bat",
     "scripts/launchers/Self-Build Mode.bat": "Self-Build Mode.bat",
+    # POSIX beta launch surface (same user-facing names at the payload root).
+    "scripts/launchers/NL Coding Agent.sh": "NL Coding Agent.sh",
+    "scripts/launchers/NL Coding Agent.command": "NL Coding Agent.command",
+    "scripts/launchers/doctor.sh": "doctor.sh",
+    "scripts/launchers/status.sh": "status.sh",
+    "scripts/launchers/Self-Build Mode.sh": "Self-Build Mode.sh",
 }
 EXCLUDED_ROOTS = (
     WORKSPACE_DIRNAME,
@@ -97,7 +103,7 @@ EXCLUDED_FILES = {
 }
 TEXT_SUFFIXES = {
     ".py", ".md", ".txt", ".yaml", ".yml", ".json", ".toml", ".bat", ".ps1",
-    ".ini", ".cfg",
+    ".ini", ".cfg", ".sh", ".command",
 }
 OLD_ROOT_PATTERN = re.compile(r"K:/+AI/+Coding[ ]+Agent", re.IGNORECASE)
 MAX_ABSOLUTE_PATH_SCAN_BYTES = 2 * 1024 * 1024
@@ -316,6 +322,11 @@ def _stage(source: Path, output: Path, files: list[Path]) -> None:
         destination = output / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, destination)
+        if destination.suffix.lower() in {".sh", ".command"}:
+            try:
+                os.chmod(destination, 0o755)
+            except OSError:
+                pass
 
 
 def _print_summary(manifest: dict) -> None:

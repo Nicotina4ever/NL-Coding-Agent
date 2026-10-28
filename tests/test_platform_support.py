@@ -7,10 +7,14 @@ a model; the real GPU runner is injected only with fakes.
 from __future__ import annotations
 
 import json
+import os
+from pathlib import Path
 
 import pytest
 
 from nl_coding_agent.core import platform_support as ps
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 # ---------------------------------------------------------------------------
@@ -52,8 +56,11 @@ def test_platform_declarations_do_not_overclaim_support():
                 assert "runtime missing" in item.default_launcher
             else:
                 assert item.default_launcher.startswith("NL Coding Agent.sh")
-                assert "declared in installer/platform_targets.py" in item.default_launcher
-                assert "not shipped" in item.default_launcher
+                assert "payload root" in item.default_launcher
+                assert "python/bin/python3" in item.default_launcher
+                assert "unmeasured" in item.default_launcher
+                assert "MANUAL-PENDING" in item.default_launcher
+                assert "not shipped" not in item.default_launcher
     windows = ps.get_platform_declaration("windows-x86_64")
     assert "NL Coding Agent.bat" in windows.default_launcher
     assert "scripts/launchers/" in windows.default_launcher
@@ -61,6 +68,53 @@ def test_platform_declarations_do_not_overclaim_support():
         declaration = ps.get_platform_declaration(macos_id)
         assert "Universal 2 not claimed" in declaration.runtime_manifest
         assert "separate-per-arch" in declaration.runtime_manifest
+
+
+def test_posix_launchers_are_shipped_and_fail_closed():
+    launchers = ROOT / "scripts" / "launchers"
+    expected = ("NL Coding Agent.sh", "doctor.sh", "status.sh",
+                "Self-Build Mode.sh", "NL Coding Agent.command")
+    for name in expected:
+        path = launchers / name
+        assert path.is_file(), name
+        text = path.read_text(encoding="utf-8")
+        assert text.startswith("#!/usr/bin/env sh\n"), name
+        assert '"$@"' in text, name
+        if name != "NL Coding Agent.command":
+            assert "nl_agent.py" in text, name
+            assert "python/bin/python3" in text, name
+            assert "python3" in text, name
+            assert "BOOTSTRAPPER" in text or "bootstrap" in text, name
+            assert "selfbuild" not in text or "Self-Build" in path.name, name
+    doctor = (launchers / "doctor.sh").read_text(encoding="utf-8")
+    assert "doctor" in doctor and "gui" not in doctor
+    gui = (launchers / "NL Coding Agent.sh").read_text(encoding="utf-8")
+    assert "gui" in gui and "selfbuild" not in gui
+    command = (launchers / "NL Coding Agent.command").read_text(encoding="utf-8")
+    assert "NL Coding Agent.sh" in command and "exec" in command
+    if os.name != "nt":
+        for name in expected:
+            assert os.access(launchers / name, os.X_OK), name
+
+
+def test_posix_launcher_shell_syntax_when_shell_available():
+    import shutil
+    import subprocess
+
+    shell = shutil.which("bash") or shutil.which("sh")
+    if not shell:
+        pytest.skip("no POSIX shell available for syntax validation")
+    launchers = ROOT / "scripts" / "launchers"
+    for name in ("NL Coding Agent.sh", "doctor.sh", "status.sh",
+                 "Self-Build Mode.sh", "NL Coding Agent.command"):
+        source = (launchers / name).read_bytes()
+        completed = subprocess.run([shell, "-n"], input=source,
+                                   capture_output=True, timeout=30)
+        stderr = (completed.stderr or b"").decode("utf-8", "replace").lower()
+        if completed.returncode != 0 and "windows subsystem for linux" in stderr:
+            pytest.skip("bash shim requires an installed WSL distribution")
+        assert completed.returncode == 0, (
+            name, (completed.stderr or b"")[-1000:])
 
 
 def test_every_platform_declaration_is_json_safe():
