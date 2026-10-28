@@ -195,13 +195,60 @@ def build_task(spec: TaskSpec, agent: Agent, *, description: str,
     )
 
 
+_CLOUD_EMBEDDER_TOKENS = ("openai", "cloud", "remote", "azure", "http://", "https://")
+
+
+def is_cloud_embedder(embedder: str | None) -> bool:
+    text = str(embedder or "").strip().lower()
+    return any(token in text for token in _CLOUD_EMBEDDER_TOKENS)
+
+
+def validate_memory_policy(spec: CrewSpec) -> dict:
+    """Memory is off by default; if enabled it must be fully local and explicit."""
+    if not isinstance(spec, CrewSpec):
+        raise SpecError("validate_memory_policy requires a CrewSpec")
+    if not spec.memory.enabled and spec.memory_policy != "local":
+        return {"enabled": False}
+    memory = spec.memory
+    if not memory.enabled:
+        raise CrewRuntimeError("memory_policy='local' requires an enabled MemoryPolicy")
+    if is_cloud_embedder(memory.embedder):
+        raise CrewRuntimeError(
+            "CrewAI memory must not use a cloud/remote embedder: " + repr(memory.embedder)
+        )
+    if not str(memory.storage_dir or "").strip():
+        raise CrewRuntimeError("CrewAI memory requires an explicit local storage_dir")
+    return {"enabled": True, "storage_dir": memory.storage_dir,
+            "embedder": memory.embedder}
+
+
+def _enforce_delegation(spec: CrewSpec) -> None:
+    """Write roles never delegate; read-only delegation is allowlisted and depth 1."""
+    delegation = spec.delegation
+    if delegation.max_depth > 1:
+        raise CrewRuntimeError("Delegation max_depth must be <= 1")
+    for agent in spec.agents:
+        if agent.tools_policy == "stage_write" and (
+            agent.allow_delegation or delegation.allow
+        ):
+            raise CrewRuntimeError(
+                "Write-capable agent " + agent.role_id + " must not delegate"
+            )
+        if agent.allow_delegation and agent.role_id not in delegation.allowlist:
+            raise CrewRuntimeError(
+                "Delegating agent " + agent.role_id + " is not in the delegation allowlist"
+            )
+
+
 def build_crew(spec: CrewSpec, agents: list, tasks: list) -> Crew:
     if not isinstance(spec, CrewSpec):
         raise SpecError("build_crew requires a CrewSpec")
-    if spec.memory.enabled or spec.memory_policy == "local":
+    memory_policy = validate_memory_policy(spec)
+    _enforce_delegation(spec)
+    if memory_policy.get("enabled"):
         raise CrewRuntimeError(
-            "CrewAI memory is not enabled in C4a: it requires an explicit local "
-            "storage path/embedder policy (deferred to C4d)."
+            "Local CrewAI memory policy validated (explicit storage_dir/embedder), but the "
+            "memory wiring is deferred to C4e; memory remains off in C4d."
         )
     process = Process.sequential if spec.process == "sequential" else Process.hierarchical
     kwargs: dict[str, Any] = {

@@ -39,6 +39,8 @@ __all__ = [
     "record_evidence", "list_evidence",
     "create_approval", "decide_approval", "get_approval", "list_approvals",
     "pending_approvals",
+    "create_flow_approval", "get_approval_by_flow", "decide_flow_approval",
+    "flow_approval_outcome", "pending_flow_approvals",
     "FLOW_RUN_STATES", "start_flow_run", "update_flow_run", "get_flow_run",
     "list_flow_runs",
 ]
@@ -97,6 +99,7 @@ FLOW_TERMINAL_STATES: tuple[str, ...] = (
 APPROVAL_STATUSES: tuple[str, ...] = ("pending", "approved", "denied", "expired")
 APPROVAL_ACTIONS: tuple[str, ...] = (
     "delete", "network", "cloud", "install", "publish", "migrate", "external_tool",
+    "review",
 )
 
 _RUN_UPDATABLE = frozenset({
@@ -1119,6 +1122,71 @@ def create_approval(project_id: int, *, action: str, scope: dict, reason: str,
              str(expires_at) if expires_at else None),
         )
         return int(cursor.lastrowid)
+
+
+def create_flow_approval(project_id: int, *, flow_id: str, method_name: str,
+                         action: str, reason: str = "", mission_id: int | None = None,
+                         queue_id: int | None = None,
+                         supervisor_run_id: int | None = None,
+                         requested_by: str = "flow", ttl_s: int | None = None) -> int:
+    """Create a HITL approval linked to a Flow (durable; no model involvement)."""
+    from datetime import datetime, timedelta
+
+    expires_at = None
+    if ttl_s is not None:
+        expires_at = (datetime.now() + timedelta(seconds=int(ttl_s))).isoformat(timespec="seconds")
+    scope = {
+        "flow_id": _require_text(flow_id, "flow_id"),
+        "method": str(method_name or ""),
+        "queue_id": int(queue_id) if queue_id is not None else None,
+        "supervisor_run_id": int(supervisor_run_id) if supervisor_run_id is not None else None,
+    }
+    return create_approval(
+        int(project_id), action=action, scope=scope, reason=reason,
+        mission_id=mission_id, requested_by=requested_by, expires_at=expires_at,
+    )
+
+
+def get_approval_by_flow(flow_id: str) -> dict | None:
+    rows = list_approvals_for_flow(flow_id)
+    return rows[-1] if rows else None
+
+
+def list_approvals_for_flow(flow_id: str) -> list[dict]:
+    with _db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM approvals ORDER BY id ASC"
+        ).fetchall()
+    result = []
+    for row in rows:
+        data = _approval_row(row)
+        if (data.get("scope") or {}).get("flow_id") == str(flow_id):
+            result.append(data)
+    return result
+
+
+def decide_flow_approval(approval_id: int, *, approved: bool, decided_by: str,
+                         reason: str = "") -> dict:
+    ok = decide_approval(int(approval_id), approved=approved,
+                         decided_by=decided_by, reason=reason)
+    approval = get_approval(int(approval_id))
+    return {"ok": bool(ok), "approval": approval}
+
+
+def flow_approval_outcome(flow_id: str) -> str:
+    approvals = list_approvals_for_flow(flow_id)
+    if not approvals:
+        return "missing"
+    for approval in reversed(approvals):
+        status = str(approval.get("status") or "")
+        if status in ("approved", "denied", "expired"):
+            return status
+    return "pending"
+
+
+def pending_flow_approvals(project_id: int) -> list[dict]:
+    return [row for row in pending_approvals(int(project_id))
+            if (row.get("scope") or {}).get("flow_id")]
 
 
 def _expire_stale_approvals(conn: sqlite3.Connection, project_id: int) -> None:

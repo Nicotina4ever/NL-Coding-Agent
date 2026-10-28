@@ -1011,8 +1011,67 @@ class Supervisor:
             "config": self.config.to_dict(),
             "pipeline": self.config.pipeline,
             "flow_runs": store.list_flow_runs(project_id=project_id)[:20],
+            "approvals": store.pending_approvals(project_id),
             "resume_command": self._resume_command(),
         }
+
+    # ------------------------------------------------------------ approvals
+
+    def list_approvals(self, status: str | None = None) -> list[dict]:
+        self._ensure_project()
+        return store.list_approvals(int(self.project_id), status=status)
+
+    def pending_approvals(self) -> list[dict]:
+        self._ensure_project()
+        return store.pending_approvals(int(self.project_id))
+
+    def decide_approval(self, approval_id: int, *, approved: bool,
+                        decided_by: str, reason: str = "") -> dict:
+        """Human/backend decision; no model may call this."""
+        self._ensure_project()
+        approval = store.get_approval(int(approval_id))
+        if approval is None:
+            return {"ok": False, "error": "Approval not found: " + str(approval_id)}
+        if str(approval.get("status")) != "pending":
+            return {"ok": False, "error": "Approval is not pending", "approval": approval}
+        scope = approval.get("scope") or {}
+        ok = store.decide_approval(int(approval_id), approved=approved,
+                                   decided_by=str(decided_by), reason=str(reason))
+        mission_id = approval.get("mission_id")
+        queue_id = scope.get("queue_id")
+        flow_id = scope.get("flow_id")
+        decision = "approved" if approved else "denied"
+        if queue_id is not None:
+            try:
+                store.update_queue_item(
+                    int(queue_id), state="READY" if approved else "BLOCKED",
+                    failure_class=None if approved else "WAIT_APPROVAL")
+            except Exception:
+                pass
+        if not approved and mission_id is not None:
+            try:
+                update_mission_status(int(mission_id), "blocked")
+            except Exception:
+                pass
+        if mission_id is not None:
+            try:
+                store.record_evidence(
+                    int(mission_id), kind="approval",
+                    record_key="approval:" + str(approval_id),
+                    payload={"decision": decision, "decided_by": str(decided_by),
+                             "flow_id": flow_id, "reason": str(reason)[:2000]})
+            except Exception:
+                pass
+        self._event("Approval #" + str(approval_id) + " " + decision + " by " + str(decided_by),
+                    kind="approval", level="info" if approved else "warning",
+                    payload={"approval_id": int(approval_id), "decision": decision,
+                             "flow_id": flow_id, "queue_id": queue_id})
+        return {"ok": bool(ok), "approval_id": int(approval_id), "decision": decision,
+                "flow_id": flow_id, "queue_id": queue_id, "mission_id": mission_id}
+
+    def flow_approval_state(self, flow_id: str) -> str:
+        self._ensure_project()
+        return store.flow_approval_outcome(str(flow_id))
 
     # ------------------------------------------------------------- control
 

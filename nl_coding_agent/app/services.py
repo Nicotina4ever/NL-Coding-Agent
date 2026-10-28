@@ -384,6 +384,25 @@ class AppServices:
         except Exception:
             return []
 
+    def supervisor_approvals(self, project_id: int, *, status: str | None = None) -> list[dict]:
+        try:
+            from nl_coding_agent.persistence import supervisor_store
+            return supervisor_store.list_approvals(int(project_id), status=status)
+        except Exception:
+            return []
+
+    def supervisor_decide_approval(self, project_id: int, approval_id: int, *,
+                                   approved: bool, reason: str = "",
+                                   decided_by: str = "human") -> dict:
+        from nl_coding_agent.core.supervisor import Supervisor
+        from nl_coding_agent.projects.registry import get_project
+        project = get_project(int(project_id))
+        if not project:
+            return {"ok": False, "error": "Project not found"}
+        supervisor = Supervisor(Path(project["root"]), project_id=int(project_id))
+        return supervisor.decide_approval(int(approval_id), approved=approved,
+                                          decided_by=decided_by, reason=reason)
+
     def supervisor_flow_runs(self, project_id: int, *, limit: int = 20) -> list[dict]:
         """Read-only durable Flow run rows for one project (C4c)."""
         try:

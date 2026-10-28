@@ -525,6 +525,34 @@ def _cmd_supervisor_status(args) -> int:
     return 0
 
 
+def _cmd_supervisor_approvals(args) -> int:
+    from nl_coding_agent.core.supervisor import Supervisor
+    try:
+        supervisor = Supervisor(Path(args.project).resolve())
+        action = str(getattr(args, "approvals_command", "list"))
+        if action == "list":
+            payload = {"ok": True, "approvals": supervisor.list_approvals()}
+        else:
+            if not getattr(args, "id", None):
+                print("ERROR: approvals approve/deny requires --id", file=sys.stderr)
+                return 2
+            payload = supervisor.decide_approval(
+                int(args.id), approved=(action == "approve"),
+                decided_by=str(getattr(args, "decided_by", "human") or "human"),
+                reason=str(getattr(args, "reason", "") or ""))
+    except Exception as exc:
+        print(f"ERROR: supervisor approvals failed: {exc}", file=sys.stderr)
+        return 2
+    if getattr(args, "json", False):
+        _print_supervisor_json(payload)
+    else:
+        for approval in payload.get("approvals", []):
+            print(f"#{approval.get('id')} {approval.get('status')} {approval.get('action')} mission={approval.get('mission_id')}")
+        if "decision" in payload:
+            print(f"Approval #{payload.get('approval_id')}: {payload.get('decision')}")
+    return 0 if payload.get("ok", True) else 1
+
+
 def _cmd_supervisor_index(args) -> int:
     root = Path(args.project).resolve()
     from nl_coding_agent.core import backlog
@@ -691,6 +719,8 @@ def _dispatch_supervisor(args) -> int:
         return _cmd_supervisor_control(args, command)
     if command == "status":
         return _cmd_supervisor_status(args)
+    if command == "approvals":
+        return _cmd_supervisor_approvals(args)
     if command == "index":
         return _cmd_supervisor_index(args)
     if command == "recover":
@@ -786,6 +816,13 @@ def main() -> int:
     ):
         command_p = svs.add_parser(name, help=help_text)
         _add_common(command_p)
+
+    approvals_p = svs.add_parser("approvals", help="List/decide durable flow approvals (human/backend only)")
+    _add_common(approvals_p)
+    approvals_p.add_argument("approvals_command", choices=["list", "approve", "deny"])
+    approvals_p.add_argument("--id", type=int)
+    approvals_p.add_argument("--reason", default="")
+    approvals_p.add_argument("--decided-by", default="human")
 
     index_p = svs.add_parser("index", help="Check/sync the indexed blueprint backlog")
     _add_common(index_p)
