@@ -1,0 +1,112 @@
+name: CI matrix (tests, headless GUI, bootstrapper checks)
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUTF8: "1"
+  QT_QPA_PLATFORM: offscreen
+  QT_OPENGL: software
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  verify:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ARM64 hosted runners are public-preview; marked experimental/non-blocking.
+          - name: windows-x64
+            os: windows-latest
+            arch: x64
+            python_arch: x64
+            experimental: false
+          - name: windows-arm64
+            os: windows-11-arm
+            arch: arm64
+            python_arch: arm64
+            experimental: true
+          - name: ubuntu-x64
+            os: ubuntu-latest
+            arch: x86_64
+            python_arch: x64
+            experimental: false
+          - name: ubuntu-arm64
+            os: ubuntu-24.04-arm
+            arch: aarch64
+            python_arch: arm64
+            experimental: true
+          - name: macos-arm64
+            os: macos-14
+            arch: arm64
+            python_arch: arm64
+            experimental: false
+          - name: macos-intel-x64
+            os: macos-13
+            arch: x86_64
+            python_arch: x64
+            experimental: false
+    steps:
+      - name: Checkout (read-only, no persisted credentials)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: ${{ matrix.python_arch }}
+
+      - name: Install CI test dependencies (package index only; no app/runtime downloads)
+        run: python -m pip install pytest -e .
+
+      - name: Unit tests
+        run: >
+          python -m pytest -q tests -p no:cacheprovider
+          --ignore=tests/test_gui_smoke.py
+          --ignore=tests/test_gui_panels.py
+          --ignore=tests/test_bootstrap_installer.py
+          --junitxml=reports/pytest-unit.xml
+
+      - name: Integration tests
+        run: >
+          python -m pytest -q
+          tests/test_bootstrap_installer.py
+          tests/test_orchestrator_staging.py
+          tests/test_supervisor_flow.py
+          tests/test_flow_persistence.py
+          tests/test_flow_resume.py
+          -p no:cacheprovider
+          --junitxml=reports/pytest-integration.xml
+
+      - name: Headless GUI smoke (offscreen)
+        run: python scripts/ci/headless_gui_smoke.py --json --report-dir reports
+
+      - name: Bootstrapper checks (offline fake artifacts, no network)
+        run: python scripts/ci/bootstrap_check.py --json --report-dir reports
+
+      - name: Report checksums (reports only)
+        run: python scripts/ci/checksums.py reports
+
+      - name: Upload CI reports and checksums only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-reports-${{ matrix.name }}
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 7
