@@ -32,7 +32,7 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
     services.supervisor_start = lambda *a, **k: started.append(1) or {"ok": True}
     window = MainWindow(services)
     assert started == [], "autonomy/self-build must never start on app open"
-    assert window._stack.count() == 10
+    assert window._stack.count() == 11
     assert window._page_index == {
         "projects": 0,
         "files": 1,
@@ -44,6 +44,7 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
         "chat": 7,
         "ide": 8,
         "research": 9,
+        "goals": 10,
     }
     from nl_coding_agent.gui.widgets.chat_panel import ChatPanel
     assert isinstance(window._stack.widget(7), ChatPanel)
@@ -70,6 +71,14 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
     assert research._provider_combo.accessibleName() == "Research provider and route"
     assert research._preview_text.isReadOnly() is True
     assert "offline" in research._service_label.text().lower()
+    from nl_coding_agent.gui.widgets.goals_panel import GoalsPanel
+    goals = window._stack.widget(10)
+    assert isinstance(goals, GoalsPanel)
+    assert goals._create_btn.isEnabled() is False
+    assert goals._goals_table.rowCount() == 0
+    assert goals._goals_table.editTriggers() == (
+        QTableWidget.EditTrigger.NoEditTriggers)
+    assert "No project" in goals._scope_label.text()
     from nl_coding_agent.gui.widgets.command_palette import CommandPalette
     actions = window._command_palette_actions()
     assert any(action.action_id == "doctor" and action.enabled for action in actions)

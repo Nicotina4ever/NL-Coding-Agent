@@ -12,6 +12,7 @@ PAGES = [
     ("Chat",      "chat"),
     ("IDE",       "ide"),
     ("Research",  "research"),
+    ("Goals",     "goals"),
     ("Agents",    "agents"),
     ("Model Hub", "models"),
     ("Settings",  "settings"),

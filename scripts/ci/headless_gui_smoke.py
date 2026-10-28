@@ -44,10 +44,11 @@ def run(report_dir: Path | None = None) -> dict:
         checks = {
             "app_services": services is not None,
             "main_window": window is not None,
-            "stack_pages_10": window._stack.count() == 10,
+            "stack_pages_11": window._stack.count() == 11,
             "chat_page": window._page_index.get("chat") == 7,
             "ide_page": window._page_index.get("ide") == 8,
             "research_page": window._page_index.get("research") == 9,
+            "goals_page": window._page_index.get("goals") == 10,
             "ide_tabs_4": window._ide_tabs.count() == 4,
             "terminal_read_only": window._terminal_panel._output.isReadOnly(),
             "git_read_only": window._git_panel._diff.isReadOnly(),
