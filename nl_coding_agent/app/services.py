@@ -6,6 +6,7 @@ import os
 import queue
 import threading
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
@@ -892,6 +893,207 @@ class AppServices:
             except Exception as exc:  # noqa: BLE001 - read-only best effort
                 payload["state_error"] = str(exc)
         return payload
+
+    # --- Autonomy modes, budgets, preview and history (stage-4 GUI controls) ---
+    #
+    # These wrappers exist so GUI widgets never import supervisor/store modules and
+    # never contain supervisor policy. Nothing here starts a run or calls a model:
+    # saving persists validated settings only, and the preview/history calls are
+    # read-only snapshots for display.
+
+    AUTONOMY_MODES = ("off", "assisted", "automatic")
+
+    def _autonomy_project(self, project_id: int) -> dict | None:
+        from nl_coding_agent.projects.registry import get_project
+
+        return get_project(int(project_id))
+
+    def autonomy_settings(self, project_id: int) -> dict:
+        """Return the persisted autonomy mode/budgets for one project (read-only)."""
+        defaults = {
+            "mode": "off",
+            "max_missions_per_run": 1,
+            "max_attempts_per_requirement": 2,
+            "max_wall_time_s": 3600,
+            "mission_wall_time_s": 1800,
+            "pipeline": "sequential",
+            "backlog_path": "docs/product-blueprint/INDEX.json",
+            "resume_command": "",
+        }
+        try:
+            from nl_coding_agent.core.supervisor import SupervisorConfig, resume_command
+
+            config = SupervisorConfig.load(int(project_id))
+            project = self._autonomy_project(project_id)
+            resume = ""
+            if project:
+                resume = resume_command(
+                    project["root"], mode=config.mode,
+                    max_missions=config.max_missions_per_run,
+                )
+            return {
+                "ok": True,
+                "read_only": True,
+                "starts_automatically": False,
+                "project_id": int(project_id),
+                "mode": config.mode,
+                "max_missions_per_run": int(config.max_missions_per_run),
+                "max_attempts_per_requirement": int(config.max_attempts_per_requirement),
+                "max_wall_time_s": int(config.max_wall_time_s),
+                "mission_wall_time_s": int(config.mission_wall_time_s),
+                "pipeline": config.pipeline,
+                "backlog_path": str(config.backlog_path),
+                "resume_command": resume,
+                "modes": list(self.AUTONOMY_MODES),
+            }
+        except Exception as exc:  # noqa: BLE001 - GUI boundary reports, never raises
+            return {
+                "ok": False,
+                "read_only": True,
+                "starts_automatically": False,
+                "project_id": int(project_id),
+                "error": str(exc),
+                "modes": list(self.AUTONOMY_MODES),
+                **defaults,
+            }
+
+    def save_autonomy_settings(
+        self,
+        project_id: int,
+        *,
+        mode: str | None = None,
+        max_missions: int | None = None,
+        attempts: int | None = None,
+        max_wall_time_s: int | None = None,
+        mission_wall_time_s: int | None = None,
+    ) -> dict:
+        """Persist validated autonomy settings. Never starts a run or a model."""
+        updates: dict = {}
+        if mode is not None:
+            updates["mode"] = str(mode).strip().lower()
+        if max_missions is not None:
+            updates["max_missions_per_run"] = int(max_missions)
+        if attempts is not None:
+            updates["max_attempts_per_requirement"] = int(attempts)
+        if max_wall_time_s is not None:
+            updates["max_wall_time_s"] = int(max_wall_time_s)
+        if mission_wall_time_s is not None:
+            updates["mission_wall_time_s"] = int(mission_wall_time_s)
+        if not updates:
+            return {"ok": False, "started": False,
+                    "error": "No autonomy settings to save."}
+        try:
+            from nl_coding_agent.core.supervisor import SupervisorConfig
+            from nl_coding_agent.persistence import database
+
+            # Validation is the supervisor's own contract (modes, 1..5 budgets,
+            # positive wall clocks); invalid input fails closed here.
+            config = SupervisorConfig.load(int(project_id), overrides=updates)
+            key = "supervisor.project." + str(int(project_id))
+            persisted = database.get_json_setting(key)
+            persisted.update(updates)
+            database.set_json_setting(key, persisted)
+            return {
+                "ok": True,
+                "started": False,
+                "project_id": int(project_id),
+                "saved": {name: getattr(config, name) for name in updates},
+                "mode": config.mode,
+            }
+        except Exception as exc:  # noqa: BLE001 - validation/DB error reported to the caller
+            return {"ok": False, "started": False, "error": str(exc)}
+
+    def autonomy_plan(self, project_id: int) -> dict:
+        """Read-only execution preview built from persisted settings, queue and backlog.
+
+        No supervisor run is created, no command is written and no backlog sync or
+        other SQLite write happens here.
+        """
+        project = self._autonomy_project(project_id)
+        if not project:
+            return {
+                "ok": False,
+                "read_only": True,
+                "starts_automatically": False,
+                "error": "Project not found",
+            }
+        settings = self.autonomy_settings(project_id)
+        plan: dict = {
+            "ok": True,
+            "read_only": True,
+            "starts_automatically": False,
+            "project_id": int(project_id),
+            "project_root": str(project.get("root") or ""),
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "mode": settings.get("mode", "off"),
+            "settings": settings,
+            "program_stage": None,
+            "queue_counts": {},
+            "next_requirements": [],
+            "active_run": None,
+            "resume_command": settings.get("resume_command", ""),
+        }
+        try:
+            from nl_coding_agent.persistence import supervisor_store
+
+            queue = supervisor_store.list_queue(int(project_id), limit=200) or []
+            counts: dict[str, int] = {}
+            for item in queue:
+                state = str(item.get("state") or "?")
+                counts[state] = counts.get(state, 0) + 1
+            plan["queue_counts"] = counts
+            plan["active_run"] = supervisor_store.get_active_run(int(project_id))
+            backlog = supervisor_store.list_backlog() or []
+            open_items = [
+                item for item in backlog
+                if str(item.get("supervisor_status") or "").strip().upper()
+                not in ("VERIFIED", "COMPLETED", "SKIPPED")
+            ]
+            stage = next(
+                (item.get("program_stage") for item in open_items
+                 if item.get("program_stage") is not None),
+                None,
+            )
+            plan["program_stage"] = stage
+            if stage is not None:
+                same_stage = [
+                    item for item in open_items
+                    if item.get("program_stage") in (None, int(stage))
+                ]
+                if same_stage:
+                    open_items = same_stage
+            plan["next_requirements"] = [
+                {
+                    "requirement_id": item.get("requirement_id"),
+                    "title": item.get("title"),
+                    "priority": item.get("priority"),
+                    "program_stage": item.get("program_stage"),
+                    "status": item.get("status"),
+                }
+                for item in open_items[:5]
+            ]
+        except Exception as exc:  # noqa: BLE001 - partial read-only preview stays usable
+            plan["error"] = str(exc)
+        return plan
+
+    def autonomy_history(self, project_id: int, *, limit: int = 10) -> list[dict]:
+        """Read-only supervisor run history for one project from SQLite."""
+        try:
+            from nl_coding_agent.persistence import database
+
+            conn = database.get_connection()
+            try:
+                rows = conn.execute(
+                    "SELECT id, project_id, mode, status, missions_completed, "
+                    "missions_failed, started_at, finished_at, stopped_reason "
+                    "FROM supervisor_runs WHERE project_id=? ORDER BY id DESC LIMIT ?",
+                    (int(project_id), max(1, int(limit))),
+                ).fetchall()
+            finally:
+                conn.close()
+            return [dict(row) for row in rows]
+        except Exception:  # noqa: BLE001 - empty history is a valid GUI state
+            return []
 
     def get_permissions(self, project_id: int | None = None) -> dict:
         """Read-only effective permission policy for the GUI/settings view."""

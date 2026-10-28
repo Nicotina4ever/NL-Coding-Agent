@@ -43,14 +43,14 @@ class AutonomyPanel(QWidget):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(10)
 
-        title = QLabel("Autonomous Development")
+        title = QLabel("Autonomy status (read-only)")
         title.setStyleSheet("font-size: 16px; font-weight: 700;")
         layout.addWidget(title)
 
         subtitle = QLabel(
-            "Persistent supervisor: mode, budget and Pause/Stop are honoured at safe "
-            "mission boundaries. Off is the default; cloud/network/delete still require "
-            "explicit permission grants."
+            "Read-only supervisor status and mission queue. Mode, limits and Pause/Stop "
+            "live under Settings > Advanced; nothing starts automatically. Off is the "
+            "default; cloud/network/delete still require explicit permission grants."
         )
         subtitle.setWordWrap(True)
         subtitle.setStyleSheet("color: #7E8798; font-size: 12px;")
@@ -75,7 +75,6 @@ class AutonomyPanel(QWidget):
         self._attempts_spin.setRange(1, 5)
         self._attempts_spin.setValue(2)
         form.addRow("Attempts per requirement", self._attempts_spin)
-        layout.addLayout(form)
 
         buttons = QHBoxLayout()
         self._start_btn = QPushButton("Start")
@@ -91,7 +90,24 @@ class AutonomyPanel(QWidget):
         for button in (self._start_btn, self._pause_btn, self._resume_btn, self._stop_btn):
             buttons.addWidget(button)
         buttons.addStretch()
-        layout.addLayout(buttons)
+
+        # User-facing self-build controls live only under Settings > Advanced
+        # (NL-BP-023). This page is a read-only status view; the widgets remain as
+        # hidden attributes so the established service contract/tests stay valid.
+        self._controls_container = QWidget()
+        controls_layout = QVBoxLayout(self._controls_container)
+        controls_layout.setContentsMargins(0, 0, 0, 0)
+        controls_layout.addLayout(form)
+        controls_layout.addLayout(buttons)
+        self._controls_container.setVisible(False)
+        layout.addWidget(self._controls_container)
+        self._controls_pointer = QLabel(
+            "Self-build controls are under Settings > Advanced; nothing starts automatically. "
+            "This page shows read-only supervisor status and the mission queue."
+        )
+        self._controls_pointer.setWordWrap(True)
+        self._controls_pointer.setStyleSheet("font-size: 12px; color: #AB83C6;")
+        layout.addWidget(self._controls_pointer)
 
         self._status_label = QLabel("Supervisor: idle")
         self._status_label.setWordWrap(True)

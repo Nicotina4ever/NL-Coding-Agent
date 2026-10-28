@@ -6,11 +6,11 @@ from pathlib import Path
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QSplitter, QLabel, QStackedWidget, QStatusBar,
+    QSplitter, QLabel, QMessageBox, QStackedWidget, QStatusBar,
     QPushButton, QFrame, QSizePolicy, QTabWidget,
 )
 from PySide6.QtCore import Qt, QTimer, QThread, Signal, Slot
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QKeySequence, QShortcut
 from PySide6.QtSvgWidgets import QSvgWidget
 
 from nl_coding_agent.app.services import AppServices, Event, get_event_bus
@@ -60,6 +60,172 @@ class AuditThread(QThread):
             self.done.emit({"status": "scheduled", "task_id": task_id})
         except Exception as e:
             self.done.emit({"status": "error", "error": str(e)})
+
+
+_ACTIVE_SUPERVISOR_STATUSES = {
+    "running", "starting", "paused", "waiting_for_resources",
+    "waiting_for_approval", "stopping", "recovering",
+}
+
+
+class EmergencyControls(QWidget):
+    """Always-reachable, cooperative Pause/Stop for an active supervisor run.
+
+    NL-BP-024: the widget lives in the main-window status bar (outside Settings),
+    is visible only while a supervisor run/mission is active, and only forwards the
+    existing backend command (no process kill, no wait). Stop always asks for
+    confirmation. The backend persists the command and honours it at safe mission
+    boundaries, so the GUI never claims an immediate kill.
+    """
+
+    message = Signal(str, str)  # (level, text)
+
+    def __init__(self, services, parent=None):
+        super().__init__(parent)
+        self._services = services
+        self._project: dict | None = None
+        self._active = False
+
+        self.setObjectName("emergencyControls")
+        self.setAccessibleName("Active mission emergency pause and stop controls")
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        self._status_label = QLabel("Supervisor: idle")
+        self._status_label.setObjectName("supervisorLabel")
+        self._status_label.setAccessibleName("Active supervisor status")
+
+        self._pause_btn = QPushButton("Pause")
+        self._pause_btn.setObjectName("secondaryButton")
+        self._pause_btn.setAccessibleName("Emergency pause of the active mission")
+        self._pause_btn.setToolTip(
+            "Cooperative pause at the next safe mission boundary; external processes "
+            "are never killed (Ctrl+Alt+P)."
+        )
+        self._pause_btn.setEnabled(False)
+        self._pause_btn.clicked.connect(self.request_pause)
+
+        self._stop_btn = QPushButton("STOP")
+        self._stop_btn.setObjectName("dangerButton")
+        self._stop_btn.setAccessibleName("Emergency stop of the active mission")
+        self._stop_btn.setToolTip(
+            "Request a cooperative stop; confirmation required; the current mission "
+            "reaches a safe state first and external processes are never killed "
+            "(Ctrl+Alt+S)."
+        )
+        self._stop_btn.setEnabled(False)
+        self._stop_btn.clicked.connect(self.request_stop)
+
+        layout.addWidget(self._status_label)
+        layout.addWidget(self._pause_btn)
+        layout.addWidget(self._stop_btn)
+        self.setVisible(False)
+
+    # ---------------------------------------------------------------- state
+
+    def _project_id(self) -> int | None:
+        if self._project and self._project.get("id") is not None:
+            return int(self._project["id"])
+        return None
+
+    def is_active(self) -> bool:
+        return bool(self._active)
+
+    def set_project(self, project: dict | None) -> None:
+        self._project = project
+        if project is None:
+            self.update_status(None)
+
+    def update_status(self, status: dict | None) -> bool:
+        """Apply one supervisor status snapshot; returns True when a run is active."""
+        if not self._project or not status:
+            self._active = False
+            self._status_label.setText("Supervisor: idle")
+            self._pause_btn.setEnabled(False)
+            self._stop_btn.setEnabled(False)
+            self.setVisible(False)
+            return False
+        run = status.get("run") or {}
+        service = status.get("service") or {}
+        label = str(run.get("status") or status.get("status") or "idle").strip() or "idle"
+        active = bool(service.get("thread_running")) or label.lower() in _ACTIVE_SUPERVISOR_STATUSES
+        self._active = bool(active)
+        self._status_label.setText("Supervisor: " + label)
+        self._status_label.setToolTip(str(status.get("resume_command") or ""))
+        self._pause_btn.setEnabled(active)
+        self._stop_btn.setEnabled(active)
+        self.setVisible(active)
+        return self._active
+
+    # -------------------------------------------------------------- commands
+
+    def _active_project_id(self) -> int | None:
+        return self._project_id() if self._active else None
+
+    def request_pause(self) -> dict:
+        project_id = self._active_project_id()
+        if project_id is None:
+            result = {"ok": False, "error": "No active mission or supervisor run to pause."}
+            self.message.emit("info", result["error"])
+            return result
+        try:
+            result = self._services.supervisor_pause(project_id) or {}
+        except Exception as exc:  # noqa: BLE001 - GUI boundary
+            result = {"ok": False, "error": str(exc)}
+        if result.get("ok", True):
+            self._status_label.setText("Supervisor: pausing…")
+            self.message.emit(
+                "info",
+                "Pause requested - honoured at the next safe mission boundary.",
+            )
+        else:
+            self.message.emit(
+                "warning",
+                "Pause failed: " + str(result.get("error") or result.get("reason")
+                                       or "unknown error"),
+            )
+        return result
+
+    def request_stop(self, *, confirm: bool | None = None) -> dict:
+        project_id = self._active_project_id()
+        if project_id is None:
+            result = {"ok": False, "error": "No active mission or supervisor run to stop."}
+            self.message.emit("info", result["error"])
+            return result
+        if confirm is None:
+            answer = QMessageBox.question(
+                self,
+                "Emergency stop",
+                "Stop the active supervisor run?\n\n"
+                "The command is cooperative: the current mission reaches a safe state "
+                "first, state is persisted, and external processes are never killed.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            confirm = answer == QMessageBox.StandardButton.Yes
+        if not confirm:
+            self.message.emit("info", "Emergency stop cancelled.")
+            return {"ok": False, "cancelled": True}
+        try:
+            result = self._services.supervisor_stop(
+                project_id, reason="emergency stop from main window",
+            ) or {}
+        except Exception as exc:  # noqa: BLE001 - GUI boundary
+            result = {"ok": False, "error": str(exc)}
+        if result.get("ok", True):
+            self._status_label.setText("Supervisor: stopping…")
+            self.message.emit(
+                "warning",
+                "Emergency stop requested - the current mission reaches a safe state "
+                "first; external processes are not killed.",
+            )
+        else:
+            self.message.emit(
+                "warning",
+                "Emergency stop failed: " + str(result.get("error") or "unknown error"),
+            )
+        return result
 
 
 class MainWindow(QMainWindow):
@@ -129,9 +295,11 @@ class MainWindow(QMainWindow):
         self._project_label.setObjectName("projectLabel")
         header_layout.addWidget(self._project_label)
 
-        self._autonomy_btn = QPushButton("Autonomy")
+        self._autonomy_btn = QPushButton("Autonomy status")
         self._autonomy_btn.setObjectName("autonomyButton")
-        self._autonomy_btn.setToolTip("Persistent autonomous supervisor controls")
+        self._autonomy_btn.setToolTip(
+            "Read-only autonomy status; self-build controls live under Settings > Advanced"
+        )
         self._autonomy_btn.clicked.connect(lambda: self._switch_page("autonomy"))
         header_layout.addWidget(self._autonomy_btn)
 
@@ -239,23 +407,33 @@ class MainWindow(QMainWindow):
         self._ram_label.setObjectName("ramLabel")
         self._tasks_label = QLabel("Tasks: 0")
         self._tasks_label.setObjectName("tasksLabel")
-        self._supervisor_label = QLabel("Supervisor: idle")
-        self._supervisor_label.setObjectName("supervisorLabel")
-        self._stop_supervisor_btn = QPushButton("STOP")
-        self._stop_supervisor_btn.setObjectName("dangerButton")
-        self._stop_supervisor_btn.setToolTip("Emergency stop: current mission reaches a safe state first")
-        self._stop_supervisor_btn.setEnabled(False)
-        self._stop_supervisor_btn.clicked.connect(self._emergency_stop_supervisor)
+        self._emergency_controls = EmergencyControls(self._services)
+        self._emergency_controls.message.connect(self._on_emergency_message)
+        self._emergency_widget = self._emergency_controls
+        # Compatibility aliases: the label/buttons now live inside the
+        # always-reachable emergency widget (outside Settings, NL-BP-024).
+        self._supervisor_label = self._emergency_controls._status_label
+        self._pause_supervisor_btn = self._emergency_controls._pause_btn
+        self._stop_supervisor_btn = self._emergency_controls._stop_btn
         sb.addPermanentWidget(self._vram_label)
         sb.addPermanentWidget(self._ram_label)
         sb.addPermanentWidget(self._tasks_label)
-        sb.addPermanentWidget(self._supervisor_label)
-        sb.addPermanentWidget(self._stop_supervisor_btn)
+        sb.addPermanentWidget(self._emergency_controls)
 
         self._supervisor_timer = QTimer(self)
         self._supervisor_timer.timeout.connect(self._update_supervisor_status)
-        self._supervisor_timer.start(10_000)
+        self._supervisor_timer.start(5_000)
         QTimer.singleShot(1500, self._update_supervisor_status)
+
+        # Global emergency shortcuts; both handlers fail closed when nothing is active.
+        self._emergency_pause_shortcut = QShortcut(
+            QKeySequence("Ctrl+Alt+P"), self,
+            activated=self._emergency_controls.request_pause,
+        )
+        self._emergency_stop_shortcut = QShortcut(
+            QKeySequence("Ctrl+Alt+S"), self,
+            activated=self._emergency_controls.request_stop,
+        )
 
         # Resource timer
         self._res_timer = QTimer(self)
@@ -280,7 +458,6 @@ class MainWindow(QMainWindow):
             lambda: self._switch_page("autonomy")
         )
         # Command-palette stub: visible affordance for the F3b palette.
-        from PySide6.QtGui import QKeySequence, QShortcut
         QShortcut(QKeySequence("Ctrl+Shift+P"), self,
                   activated=self._show_command_palette)
 
@@ -529,41 +706,27 @@ class MainWindow(QMainWindow):
             return
         project = self._current_project
         if not project:
-            self._supervisor_label.setText("Supervisor: idle")
-            self._stop_supervisor_btn.setEnabled(False)
+            self._emergency_controls.set_project(None)
             return
+        self._emergency_controls.set_project(project)
         try:
             status = self._services.supervisor_status(int(project["id"])) or {}
         except Exception:
             status = {}
-        run = status.get("run") or {}
-        service = status.get("service") or {}
-        label = str(run.get("status") or status.get("status") or "idle")
-        self._supervisor_label.setText("Supervisor: " + label)
-        active = bool(service.get("thread_running")) or label.lower() in {
-            "running", "starting", "paused", "waiting_for_resources",
-            "waiting_for_approval", "stopping", "recovering",
-        }
-        self._stop_supervisor_btn.setEnabled(active)
-        self._supervisor_label.setToolTip(str(status.get("resume_command") or ""))
+        self._emergency_controls.update_status(status)
+
+    @Slot(str, str)
+    def _on_emergency_message(self, level: str, text: str) -> None:
+        self.statusBar().showMessage(text, 8000)
+        self._log_panel.append_log("supervisor", level, text)
+
+    @Slot()
+    def _emergency_pause_supervisor(self):
+        return self._emergency_controls.request_pause()
 
     @Slot()
     def _emergency_stop_supervisor(self):
-        project = self._current_project
-        if not project:
-            return
-        try:
-            result = self._services.supervisor_stop(
-                int(project["id"]), reason="emergency stop from main window",
-            )
-        except Exception as exc:
-            result = {"ok": False, "error": str(exc)}
-        self._log_panel.append_log(
-            "supervisor", "warning",
-            "Emergency stop requested."
-            if result.get("ok", True) else "Emergency stop failed: " + str(result.get("error")),
-        )
-        self._update_supervisor_status()
+        return self._emergency_controls.request_stop()
 
     def _stop_threads(self):
         self._closing = True
