@@ -21,6 +21,7 @@ from nl_coding_agent.core import candidate_verification, promotion
 from nl_coding_agent.core.mission_lock import MissionLockError, mission_lock
 from nl_coding_agent.core.promotion import GateFailure
 from nl_coding_agent.core.roadmap import extract_paths
+from nl_coding_agent.core.run_control import RunControl, RunStopped
 from nl_coding_agent.core.task_graph import TaskCollisionError, TaskGraph
 from nl_coding_agent.core.workspace import (
     diff_snapshots,
@@ -88,16 +89,18 @@ def _truncate(text: str, limit: int = 20_000) -> str:
     return text[:limit] + f"\n... [truncated {len(text) - limit} chars]"
 
 
-def _make_llm(model_name: str, base_url: str = "http://127.0.0.1:11434", temperature: float = 0.1) -> LLM:
+def _make_llm(model_name: str, base_url: str = "http://127.0.0.1:11434",
+              temperature: float = 0.1, *, project_id: int | None = None) -> LLM:
     """Create a permission-checked CrewAI LLM instance for Ollama.
 
     Fail-closed escalation gate: a cloud model needs an explicit CLOUD grant and
     a non-loopback endpoint needs an explicit NETWORK grant. There is no flag or
-    environment variable that disables this check.
+    environment variable that disables this check. project_id applies the
+    project-scoped permission policy when the caller (stage-3 supervisor) has one.
     """
     from nl_coding_agent.core.permissions import assert_model_permitted
 
-    assert_model_permitted(model_name, base_url)
+    assert_model_permitted(model_name, base_url, project_id=project_id)
     return LLM(model=model_name, base_url=base_url, temperature=temperature)
 
 
@@ -235,9 +238,11 @@ def _apply_text_actions(project_root: Path, text: str) -> list[str]:
 class MultiAgentOrchestrator:
     """Coordinates Developer, Tester, Debugger, and Reviewer on a real project."""
 
-    def __init__(self, project_root: Path | str, base_url: str = "http://127.0.0.1:11434"):
+    def __init__(self, project_root: Path | str, base_url: str = "http://127.0.0.1:11434",
+                 project_id: int | None = None):
         self.root = Path(project_root).resolve()
         self.base_url = base_url
+        self.project_id = int(project_id) if project_id is not None else None
         self.bus = get_event_bus()
         self._last_verification = None
 
@@ -245,6 +250,16 @@ class MultiAgentOrchestrator:
 
     def _emit(self, source: str, level: str, message: str, **payload) -> None:
         self.bus.emit(Event(source=source, level=level, message=message, payload=payload or None))
+
+    @staticmethod
+    def _checkpoint(control: RunControl | None, stage: str) -> None:
+        """Call a supervisor checkpoint at a safe stage boundary only.
+
+        There is deliberately no checkpoint between the reviewer APPROVE decision and
+        the promotion write: a stop must never interrupt a journaled promotion.
+        """
+        if control is not None:
+            control.checkpoint(stage)
 
     def _call_model(
         self,
@@ -266,7 +281,7 @@ class MultiAgentOrchestrator:
             role=role,
             goal=goal,
             backstory=backstory,
-            llm=_make_llm(model_name, self.base_url),
+            llm=_make_llm(model_name, self.base_url, project_id=self.project_id),
             tools=tools or [],
             verbose=True,
             allow_delegation=False,
@@ -780,8 +795,13 @@ class MultiAgentOrchestrator:
         reviewer_model: str | None = None,
         debug_model: str | None = None,
         stop_after: str | None = None,
+        control: RunControl | None = None,
     ) -> dict:
-        """Execute or resume a complete mission through all gates."""
+        """Execute or resume a complete mission through all gates.
+
+        control is the optional cooperative supervisor handle; its checkpoints are
+        only called at safe stage boundaries (never around the promotion write).
+        """
         mission = get_mission(mission_id)
         if not mission:
             raise ValueError(f"Mission #{mission_id} not found")
@@ -814,6 +834,7 @@ class MultiAgentOrchestrator:
                     reviewer_model,
                     debug_model,
                     stop_after,
+                    control,
                 )
         except MissionLockError as exc:
             self._emit("orchestrator", "error", str(exc), mission_id=mission_id)
@@ -828,6 +849,7 @@ class MultiAgentOrchestrator:
         reviewer_model: str,
         debug_model: str,
         stop_after: str | None,
+        control: RunControl | None = None,
     ) -> dict:
         mission = get_mission(mission_id) or {}
         existing_tasks = get_tasks(mission_id)
@@ -910,6 +932,8 @@ class MultiAgentOrchestrator:
                 )
                 return result
 
+            self._checkpoint(control, "before-developer")
+
             # 1. Developer: staged candidate only.
             if dev_task and dev_task["status"] != "completed":
                 self._run_developer_stage(mission_id, dev_task, goal, developer_model, baseline, stage)
@@ -927,12 +951,16 @@ class MultiAgentOrchestrator:
                         details={"errors": verdict["errors"]},
                     )
 
+            self._checkpoint(control, "after-developer")
+
             if stop_after == "developer":
                 return self._finalize_interrupted(
                     mission_id,
                     stage,
                     summary="Interrupted after developer stage (staged candidate retained).",
                 )
+
+            self._checkpoint(control, "before-tester")
 
             # 2. Tester: independent candidate + oracle verification, bounded repairs.
             if test_task and test_task["status"] != "completed":
@@ -941,12 +969,16 @@ class MultiAgentOrchestrator:
                 self._emit("tester", "info", "Tester stage already completed; reusing persisted verification evidence.")
                 self._rebind_persisted_verification(mission_id, stage)
 
+            self._checkpoint(control, "after-tester")
+
             if stop_after == "tester":
                 return self._finalize_interrupted(
                     mission_id,
                     stage,
                     summary="Interrupted after tester stage (verified candidate retained).",
                 )
+
+            self._checkpoint(control, "before-reviewer")
 
             # 3. Reviewer: reviews the candidate, never an applied diff.
             if rev_task and rev_task["status"] != "completed":
@@ -986,6 +1018,15 @@ class MultiAgentOrchestrator:
                 verification=self._last_verification_dict(),
             )
             return result
+        except RunStopped as exc:
+            return self._finalize_interrupted(
+                mission_id,
+                stage,
+                summary=(
+                    f"Mission interrupted at safe checkpoint '{exc.stage}': "
+                    f"{exc.reason or 'stop requested'}."
+                ),
+            )
         except GateFailure as exc:
             self._save_promotion_status(mission_id, exc.code.replace("-", "_"))
             return self._finalize_blocked(

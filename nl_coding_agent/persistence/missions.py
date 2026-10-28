@@ -43,17 +43,25 @@ def create_mission(
     goal: str,
     *,
     harness_version: int = HARNESS_VERSION,
+    requirement_id: str | None = None,
+    supervisor_run_id: int | None = None,
 ) -> int:
-    """Create a new mission record in SQLite and return its ID."""
+    """Create a new mission record in SQLite and return its ID.
+
+    Stage-3 supervisor fields (requirement_id / supervisor_run_id) are additive and
+    optional; existing callers keep the previous behaviour.
+    """
     now = _now()
     with _db() as conn, conn:
         cur = conn.execute(
             """
             INSERT INTO missions (project_id, title, goal, status, created_at, updated_at,
-                                  harness_version)
-            VALUES (?, ?, ?, 'pending', ?, ?, ?)
+                                  harness_version, requirement_id, supervisor_run_id)
+            VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?)
             """,
-            (project_id, title, goal, now, now, int(harness_version)),
+            (project_id, title, goal, now, now, int(harness_version),
+             str(requirement_id) if requirement_id else None,
+             int(supervisor_run_id) if supervisor_run_id is not None else None),
         )
         return cur.lastrowid
 
@@ -90,6 +98,28 @@ def get_mission(mission_id: int) -> dict | None:
     """Fetch mission details by ID."""
     with _db() as conn:
         row = conn.execute("SELECT * FROM missions WHERE id=?", (mission_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def list_missions_by_requirement(requirement_id: str) -> list[dict]:
+    """Return every mission linked to one indexed-backlog requirement (newest first)."""
+    with _db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM missions WHERE requirement_id=? ORDER BY id DESC",
+            (str(requirement_id),),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+
+def get_active_mission_for_requirement(requirement_id: str) -> dict | None:
+    """Return the newest resumable mission for a requirement (adoption on reconcile)."""
+    with _db() as conn:
+        row = conn.execute(
+            "SELECT * FROM missions WHERE requirement_id=? "
+            "AND status IN ('pending','running','interrupted') "
+            "ORDER BY id DESC LIMIT 1",
+            (str(requirement_id),),
+        ).fetchone()
         return dict(row) if row else None
 
 
