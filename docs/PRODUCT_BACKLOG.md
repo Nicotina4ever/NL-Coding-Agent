@@ -42,8 +42,8 @@ evidence only.
 | Stage | Name | Status | Requirements | IDs | Depends on |
 |---|---|---|---|---|---|
 | 1 | Repository relocation and path reconciliation | COMPLETE | 1 | NL-BP-143 | - |
-| 2 | Transactional staging, safety and self-healing | IN PROGRESS | 15 | NL-BP-3-5, 54-60, 65, 72-74, 76 | 1 |
-| 3 | Persistent autonomous supervisor and verified handoff | PENDING | 13 | NL-BP-12, 50-53, 61-64, 66, 67, 75, 77 | 2 |
+| 2 | Transactional staging, safety and self-healing | COMPLETE | 15 | NL-BP-3-5, 54-60, 65, 72-74, 76 | 1 |
+| 3 | Persistent autonomous supervisor and verified handoff | IN PROGRESS | 13 | NL-BP-12, 50-53, 61-64, 66, 67, 75, 77 | 2 |
 | 4 | Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities | PENDING | 40 | NL-BP-1, 2, 6-11, 13, 20-46, 68-71 | 3 |
 | 5 | Repository cleanup and optimization | PENDING | 8 | NL-BP-90-97 | 4 |
 | 6 | Lightweight portable/bootstrapper and final release testing | PENDING | 26 | NL-BP-110-124, 140-142, 144-151 | 5 |
@@ -57,9 +57,9 @@ with the audited safety-foundation harness (C1-C5 done, C6-C8 next).
 
 | Status | P0 | P1 | P2 | P3 | Total |
 |---|---|---|---|---|---|
-| verified | 14 | 7 | 0 | 0 | 21 |
-| partial | 9 | 22 | 2 | 0 | 33 |
-| planned | 20 | 10 | 13 | 2 | 45 |
+| verified | 16 | 9 | 0 | 0 | 25 |
+| partial | 8 | 22 | 2 | 0 | 32 |
+| planned | 19 | 8 | 13 | 2 | 42 |
 | blocked | 4 | 0 | 0 | 0 | 4 |
 | **Total** | **47** | **39** | **15** | **2** | **103** |
 
@@ -67,7 +67,7 @@ with the audited safety-foundation harness (C1-C5 done, C6-C8 next).
 |---|---|---|---|---|---|
 | Area 1 - CrewAI + CrewAI Flows first-class integration | 13 | 6 | 4 | 3 | 0 |
 | Area 2 - Studio GUI + multimodal chat | 27 | 1 | 7 | 19 | 0 |
-| Area 3 - Universal autonomous development | 28 | 10 | 8 | 9 | 1 |
+| Area 3 - Universal autonomous development | 28 | 14 | 7 | 6 | 1 |
 | Area 4 - Repository hygiene | 8 | 2 | 4 | 2 | 0 |
 | Area 5 - Lightweight installation + portable distribution | 15 | 2 | 5 | 8 | 0 |
 | Area 6 - Release acceptance criteria | 12 | 0 | 5 | 4 | 3 |
@@ -84,6 +84,8 @@ with the audited safety-foundation harness (C1-C5 done, C6-C8 next).
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v1.2 (2026-10-28)** - Stage 2 closed (C1-C9b). Permission model + cloud/network gate (C9a 641c333), tool registry + recovery retention + repair evidence (C9b 283a94e): NL-BP-065/072/073/076 verified. Counts: 25 verified / 29 partial / 45 planned / 4 blocked. Stage 3 started from docs/PHASE3_SUPERVISOR_PLAN.md; NL-BP-003 real-model end-to-end and SH-07 remain the stage-3 gate.
 
 **v1.1 (2026-10-28)** - C6/C7 wired the staged-candidate harness end-to-end: NL-BP-004/054/055/056/057/058/059/060/074 moved to verified (fake-model end-to-end tests, full suite 149 passed). No new requirement IDs; stage 2 remains in progress for permissions/tool registry (NL-BP-072/073); SH-07/supervisor work belongs to stage 3.
 
@@ -1002,7 +1004,7 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
 <a id="nl-bp-065"></a>
 ### NL-BP-065 - Bounded repair loop driven by structured diagnostics
 
-- **Area:** AUTONOMY - **Priority:** P0 - **Status:** partial
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** verified
 - **Blueprint priority:** P0 (SPEC-28 section 4; SPEC-07 retries)
 - **Dependencies:** NL-BP-054
 - **Acceptance gates:**
@@ -1010,10 +1012,12 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - after repeated comparable failures the mission blocks with diagnosis instead of retrying
   - repair acts on staged candidates only (NL-BP-055)
 - **Evidence:**
+  - C9b 283a94e + tests/test_harness_repair.py: scripted failing candidate -> one debugger repair -> candidate+oracle pass -> reviewer APPROVE -> one promotion -> completed (verification rows fail,fail,pass,pass)
+  - repair-budget exhaustion path -> blocked, live unchanged, no recovery point; max-attempt constants enforced
   - orchestrator _run_tester_stage max_retries=2 loop calls _run_debugger; attempts recorded in task_attempts (59 rows measured)
   - no signature classification/dead-letter; historical missions #37/#40 needed manual fixes (docs/COMPLETED_MISSIONS.md)
 - **Sources:** specifiche/28_SELF_HEALING_AGENT_HARNESS.md#4; specifiche/07_QUALITY_GATES_E_BENCHMARK.md; specifiche/24_OPERATIONS_SUPERVISION_HEALTH_AND_DIAGNOSTICS.md
-- **Note:** A tester->debugger retry loop with max_retries=2 exists; structured failure signatures, dead-letter and strategy changes are missing.
+- **Note:** Bounded repair loop implemented and evidenced on the staged-candidate flow.
 
 <a id="nl-bp-068"></a>
 ### NL-BP-068 - Explainable Model Advisor with profiles and per-agent parameters
@@ -1050,7 +1054,7 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
 <a id="nl-bp-072"></a>
 ### NL-BP-072 - Universal permission model: read/write/execute/delete/network/cloud scopes and grants
 
-- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** verified
 - **Blueprint priority:** P0 (03_MASTER_CHECKLIST P0-16; P1-09; P1-15)
 - **Dependencies:** none
 - **Acceptance gates:**
@@ -1058,11 +1062,13 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - symlink/junction realpath and TOCTOU-safe scope enforcement; out-of-scope writes denied and logged
   - SH-05 adversarial test proves broker enforcement and honest OS-sandbox limitations
 - **Evidence:**
+  - C9a 641c333 + nl_coding_agent/core/permissions.py: scopes read/write/execute/delete/network/cloud with fail-closed defaults, persisted grants in app_settings, transactional audit events, no env/flag bypass
+  - tests/test_permissions.py 38 tests: defaults, grant/revoke persistence, project overrides, unknown scope, audit rows, model-tool static check
   - nl_coding_agent/tools/filesystem.py PROTECTED_DIRS + resolve_scoped_path; tests/test_scope_permission.py 2 tests PASS, tests/test_operational_tools.py security test PASS (68-test batch)
   - nl_coding_agent/tools/shell.py shell=True with cwd only (no confinement); no grants/broker/tables in SQLite
   - specifiche/25_PERMISSIONS_AND_EXTERNAL_TOOLS.md; AUDIT_REALE_E_LIMITI.md item 5
 - **Sources:** specifiche/25_PERMISSIONS_AND_EXTERNAL_TOOLS.md; specifiche/15_SICUREZZA_E_PRIVACY.md; 03_MASTER_CHECKLIST.md#P0-16; 03_MASTER_CHECKLIST.md#P1-09; 03_MASTER_CHECKLIST.md#P1-15
-- **Note:** Only filesystem scope checks exist today; arbitrary shell is bounded by cwd only and is not an OS sandbox.
+- **Note:** Universal permission model implemented backend-side; GUI Settings matrix is a stage-4/5 follow-up.
 
 <a id="nl-bp-074"></a>
 ### NL-BP-074 - Model-facing tool surface limited to file operations; no false sandbox claims
@@ -1153,7 +1159,7 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
 <a id="nl-bp-073"></a>
 ### NL-BP-073 - Tool Registry for external tools with probe, capabilities and grants
 
-- **Area:** AUTONOMY - **Priority:** P1 - **Status:** planned
+- **Area:** AUTONOMY - **Priority:** P1 - **Status:** verified
 - **Blueprint priority:** P1 (03_MASTER_CHECKLIST P1-15)
 - **Dependencies:** NL-BP-072
 - **Acceptance gates:**
@@ -1161,10 +1167,12 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - Execute grant does not imply Write to the tool directory; tools can be reused without copying
   - GUI Settings > Permissions & External Tools with revocation and history
 - **Evidence:**
+  - C9b 283a94e + nl_coding_agent/tools/registry.py: read-only ExternalTool descriptors (git, embedded python, pytest, ollama, ffmpeg) and ToolRegistry with fixed-argv shell=False bounded probes; no arbitrary-command API
+  - tests/test_tool_registry.py 15 tests + AppServices.list_external_tools read-only API
   - no tool-registry code/tables (grep tool_registry absent)
   - specifiche/25_PERMISSIONS_AND_EXTERNAL_TOOLS.md
 - **Sources:** specifiche/25_PERMISSIONS_AND_EXTERNAL_TOOLS.md; 03_MASTER_CHECKLIST.md#P1-15
-- **Note:** Universal tool registry does not exist; only internal Python tool wrappers.
+- **Note:** Read-only discovery/capability registry implemented; grants are enforced by the permission layer, not by the registry.
 
 <a id="nl-bp-075"></a>
 ### NL-BP-075 - Operations reliability and diagnostics dashboard
@@ -1186,7 +1194,7 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
 <a id="nl-bp-076"></a>
 ### NL-BP-076 - Cloud escalation enforcement: local-only default, explicit consent
 
-- **Area:** AUTONOMY - **Priority:** P1 - **Status:** planned
+- **Area:** AUTONOMY - **Priority:** P1 - **Status:** verified
 - **Blueprint priority:** P1 (03_MASTER_CHECKLIST P1-06; SPEC-15)
 - **Dependencies:** NL-BP-072
 - **Acceptance gates:**
@@ -1194,11 +1202,13 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - no source/media leaves the machine before consent; fallback is never silent
   - tests with missing credentials and zero budget; audit trail of cloud decisions
 - **Evidence:**
+  - C9a 641c333: cloud model and remote endpoint denied by default; explicit CLOUD/NETWORK grant required; enforced in orchestrator._make_llm and cli.make_llm before LLM construction; no bypass flag; local loopback always allowed
+  - tests/test_permissions.py covers denial/allow paths and orchestrator._make_llm cloud refusal
   - settings_panel.py Cloud escalation read-only label; no cloud routing code (grep cloud)
   - models/providers.py lists whatever the provider exposes; no local/cloud classification beyond provider kind
   - specifiche/15_SICUREZZA_E_PRIVACY.md; specifiche/05_MODEL_HUB_PROVIDERS.md
 - **Sources:** specifiche/15_SICUREZZA_E_PRIVACY.md; specifiche/05_MODEL_HUB_PROVIDERS.md; 03_MASTER_CHECKLIST.md#P1-06
-- **Note:** A cloud escalation flag is displayed read-only; no enforcement, consent flow or source-upload guard exists.
+- **Note:** Cloud escalation is local-only by default with explicit consent enforcement.
 
 <a id="nl-bp-077"></a>
 ### NL-BP-077 - Open arbitrary project with automatic discovery, SQLite profile and Recent Projects

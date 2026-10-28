@@ -119,3 +119,21 @@ it is not a claim of a complete OS sandbox.
   is blocked by the oracle gate pending a human-reviewed baseline update.
 - Promoted files are normalized to LF; an external CRLF checkout would see a
   line-ending change on promoted files.
+
+
+## Permissions, external tools and retention (implemented 2026-10-28)
+
+- **Capability permissions** are human/backend-owned and fail closed: read/write/execute
+  are local defaults; delete/network/cloud require an explicit grant stored in
+  `app_settings` with audit events. Model-facing tools do not import the permission
+  API, so an agent cannot grant itself a capability; there is no bypass flag.
+- **Cloud escalation** is denied by default: a cloud model requires an explicit CLOUD
+  grant, and a non-loopback provider endpoint requires NETWORK, enforced before any LLM
+  instance is created.
+- **External tools** are discovered read-only through a registry of fixed descriptors
+  (git, embedded Python, pytest, Ollama, ffmpeg). Probes run only fixed argv lists with
+  shell=False and a hard timeout, or a localhost health GET; there is no API for
+  arbitrary command strings.
+- **Recovery retention** is auditable and explicit: read-only inventory, verified zip
+  archives, and cleanup only after confirmation against a validated archive manifest.
+  Nothing is deleted automatically.

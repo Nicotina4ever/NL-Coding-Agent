@@ -236,3 +236,31 @@ Evidence (2026-10-28): full suite **149 passed** (23 s) including 8 fake-model
 end-to-end staging tests (happy path, stub blocked, reviewer reject, stop-after/
 resume, human-edit CAS conflict, legacy refusal), promotion/candidate-verification
 tests and 4 model-seam tests. The relocation gate remains 30/30 PASS.
+
+
+## Permissions, External Tools and Retention (2026-10-28)
+
+Stage-2 closure (C9a/C9b):
+
+- **Permission model** (`nl_coding_agent/core/permissions.py`): read/write/execute/delete/
+  network/cloud scopes with fail-closed defaults (delete/network/cloud denied until an
+  explicit human grant), persisted in `app_settings` (global + optional per-project
+  overrides), transactional grant/revoke with audit events, no environment/flag bypass.
+- **Cloud escalation gate**: a cloud model requires an explicit CLOUD grant and a
+  non-loopback endpoint requires NETWORK; enforced in `_make_llm`/CLI before any LLM is
+  constructed. Local loopback Ollama models are unaffected.
+- **External tool registry** (`nl_coding_agent/tools/registry.py`): passive, read-only
+  discovery of git, embedded Python, pytest, Ollama and ffmpeg with fixed-argv,
+  shell-free, time-bounded probes; capabilities are descriptors, not grants;
+  `AppServices.list_external_tools()` exposes them read-only.
+- **Recovery retention** (`nl_coding_agent/core/retention.py`): read-only audit, verified
+  zip archive with per-file sha256 manifest, and all-or-nothing guarded cleanup that
+  requires confirmation and a validated archive; recovery points stay delta-only and
+  small.
+- **Repair evidence**: scripted failing candidate -> one debugger repair -> candidate+
+  oracle pass -> reviewer APPROVE -> promotion -> completed (verification rows show
+  fail, fail, pass, pass); repair-budget exhaustion blocks with the live tree
+  unchanged.
+
+Full suite: **215 passed**. Relocation gate: **30/30 PASS**. Stage 2 is complete except
+NL-BP-003 (real local-model end-to-end), which is the stage-3 SH-07 acceptance gate.

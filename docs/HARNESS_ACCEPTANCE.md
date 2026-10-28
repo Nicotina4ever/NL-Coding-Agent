@@ -16,6 +16,8 @@ Canonical plan: `docs/PHASE2_HARNESS_INTEGRATION_PLAN.md`. Backlog IDs:
 | C5 | 7e778da | additive harness DB schema, persistence helpers, legacy/preflight gates |
 | C6 | bce3b71 | staged-candidate lifecycle wired into MultiAgentOrchestrator |
 | C7 | 3790aaf | post-hoc runner gate removed; legacy resume refused in CLI |
+| C9a | 641c333 | universal permission model + fail-closed cloud/network escalation |
+| C9b | 283a94e | external tool registry, verified recovery retention, repair evidence |
 
 ## SH-01..SH-07 status
 
@@ -26,8 +28,12 @@ Canonical plan: `docs/PHASE2_HARNESS_INTEGRATION_PLAN.md`. Backlog IDs:
 | SH-03 | interruption/kill between stages; resume reconciles | tests/test_promotion_stage.py journal tests; tests/test_orchestrator_staging.py stop-after/resume; promotion preflight | VERIFIED (fake model) |
 | SH-04 | green but weakened tests caught by oracle | tests/test_candidate_verification.py::test_oracle_catches_green_but_weakened_candidate | VERIFIED |
 | SH-05 | out-of-scope/shell writes rejected | tests/test_promotion_stage.py scope/protected tests; 4-tool surface test; seam static guard | VERIFIED (tool broker; no OS sandbox claimed) |
-| SH-06 | economic/integrity recovery points | tests/test_rollback_stub.py; tests/test_promotion_stage.py recovery/CAS; staging excludes python/crewAI/dist/data | PARTIAL (archive/dedup/retention UX is future scope) |
+| SH-06 | economic/integrity recovery points | tests/test_retention.py (11: read-only audit, verified zip archive, guarded all-or-nothing cleanup); tests/test_rollback_stub.py; tests/test_promotion_stage.py recovery/CAS; staging excludes python/crewAI/dist/data | VERIFIED (archive + retention implemented; no blob dedup by design) |
 | SH-07 | two consecutive missions without manual repair | not executed on the reworked supervisor yet | PENDING stage 3 (NL-BP-063) |
+
+## Stage-2 closure (2026-10-28)
+
+C9a/C9b completed the remaining stage-2 requirements: permissions + cloud gate (NL-BP-072/076), tool registry (NL-BP-073), retention archive/cleanup (SH-06) and repair success/budget evidence (NL-BP-065). Full suite: **215 passed**. Relocation gate: 30/30 PASS. Stage 2 is complete except NL-BP-003 real-model end-to-end evidence, which is the stage-3 SH-07 acceptance gate.
 
 ## Verification commands (safe, read-only for the live tree)
 
