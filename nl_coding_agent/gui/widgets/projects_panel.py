@@ -23,6 +23,8 @@ class ProjectsPanel(QWidget):
         super().__init__(parent)
         self._services = services
         self._i18n = translator
+        self._opened_project = None
+        self._selected_project = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
@@ -34,13 +36,6 @@ class ProjectsPanel(QWidget):
         self._title.setStyleSheet("font-size: 16px; font-weight: 700;")
         header.addWidget(self._title)
         header.addStretch()
-        self._self_build_btn = QPushButton(tr_for(
-            self._i18n, "projects.self_build", "Self-Build (This Agent)"))
-        self_build_btn = self._self_build_btn
-        self_build_btn.setStyleSheet("color: #46A3C0; border-color: #46A3C0;")
-        self_build_btn.clicked.connect(self._on_self_build_open)
-        header.addWidget(self_build_btn)
-
         self._open_btn = QPushButton(tr_for(
             self._i18n, "projects.open", "Open Project…"))
         open_btn = self._open_btn
@@ -48,6 +43,21 @@ class ProjectsPanel(QWidget):
         open_btn.clicked.connect(self._on_open_project)
         header.addWidget(open_btn)
         layout.addLayout(header)
+        identity = QLabel("Opened: —    |    Selected: —")
+        identity.setObjectName("nlProjectIdentity")
+        identity.setAccessibleName("Opened project and selected project identity")
+        self._identity_label = identity
+        layout.addWidget(identity)
+        self._self_build_btn = QPushButton("Advanced self-build…")
+        self._self_build_btn.setObjectName("subtleLinkButton")
+        self._self_build_btn.setFlat(True)
+        self._self_build_btn.setAccessibleName(
+            "Unobtrusive advanced self-build link (controls live in Settings Advanced)")
+        self._self_build_btn.setToolTip(
+            "Self-build is intentionally unobtrusive. Configure it in "
+            "Settings > Advanced > Autonomous Development.")
+        self._self_build_btn.clicked.connect(self._on_self_build_open)
+        layout.addWidget(self._self_build_btn, alignment=Qt.AlignmentFlag.AlignRight)
 
         # Recent projects list
         self._recent_label = QLabel(tr_for(
@@ -89,8 +99,6 @@ class ProjectsPanel(QWidget):
 
     def retranslate(self) -> None:
         self._title.setText(tr_for(self._i18n, "projects.title", "Projects"))
-        self._self_build_btn.setText(tr_for(
-            self._i18n, "projects.self_build", "Self-Build (This Agent)"))
         self._open_btn.setText(tr_for(
             self._i18n, "projects.open", "Open Project…"))
         self._recent_label.setText(tr_for(
@@ -149,6 +157,27 @@ class ProjectsPanel(QWidget):
         self._audit_btn.setEnabled(has_sel)
         self._mission_btn.setEnabled(has_sel)
         self._remove_btn.setEnabled(has_sel)
+        selected = (current.data(Qt.ItemDataRole.UserRole)
+                    if current is not None else None)
+        self._selected_project = selected
+        self._update_identity_label()
+
+    def set_opened_project(self, project) -> None:
+        """Make the opened project unambiguously distinct from list selection."""
+        self._opened_project = dict(project) if project else None
+        self._update_identity_label()
+
+    def _update_identity_label(self) -> None:
+        opened = (self._opened_project or {}).get("name") or "—"
+        selected = (self._selected_project or {}).get("name") or "—"
+        label = "Opened: " + str(opened) + "    |    Selected: " + str(selected)
+        if self._selected_project and self._opened_project:
+            if self._selected_project.get("id") != self._opened_project.get("id"):
+                label += "    (selection differs from opened project)"
+        self._identity_label.setText(label)
+        self._identity_label.setToolTip(
+            "Opened = the project currently loaded in the Studio; "
+            "Selected = highlighted list item.")
 
     def _on_self_build_open(self):
         root = Path(__file__).resolve().parents[3]

@@ -305,7 +305,13 @@ class MainWindow(QMainWindow):
         self._project_label = QLabel(tr_for(
             self._i18n, "app.no_project", "No project open"))
         self._project_label.setObjectName("projectLabel")
+        self._project_label.setAccessibleName("Opened project")
         header_layout.addWidget(self._project_label)
+        self._activity_label = QLabel("IDLE · no active mission")
+        self._activity_label.setObjectName("nlActivityBadge")
+        self._activity_label.setProperty("state", "idle")
+        self._activity_label.setAccessibleName("Studio activity and current mission")
+        header_layout.addWidget(self._activity_label)
 
         self._autonomy_btn = QPushButton(tr_for(
             self._i18n, "app.autonomy_status", "Autonomy status"))
@@ -622,7 +628,9 @@ class MainWindow(QMainWindow):
     @Slot(dict)
     def _on_project_opened(self, project: dict):
         self._current_project = project
-        self._project_label.setText(project["name"])
+        self._project_label.setText("Opened: " + str(project["name"]))
+        self._projects_panel.set_opened_project(project)
+        self._set_activity("idle", "No active mission")
         facts = self._services.get_project_facts(project["id"])
         self._inspector.show_project(project, facts)
         self._files_panel.set_project(project)
@@ -783,6 +791,31 @@ class MainWindow(QMainWindow):
         except Exception:
             status = {}
         self._emergency_controls.update_status(status)
+        run = status.get("run") or {}
+        run_status = str(run.get("status") or status.get("status") or "idle").lower()
+        mission = run.get("mission") or status.get("mission") or {}
+        mission_title = str(mission.get("title") or run.get("mission_title")
+                            or status.get("mission_title") or "")
+        if run_status in ("running", "active", "starting"):
+            self._set_activity("running", "Current mission: " + (mission_title or "—"))
+        elif run_status in ("blocked", "failed", "interrupted", "error"):
+            self._set_activity("blocked", "Current mission: " + (mission_title or "—"))
+        elif run_status in ("paused", "pausing"):
+            self._set_activity("paused", "Current mission: " + (mission_title or "—"))
+        else:
+            self._set_activity("idle", "No active mission")
+
+    def _set_activity(self, state: str, detail: str = "") -> None:
+        """Unambiguous selected/opened activity label in the Studio header."""
+        if not hasattr(self, "_activity_label"):
+            return
+        state = str(state or "idle").lower()
+        label = state.upper() + (" · " + detail if detail else "")
+        self._activity_label.setText(label)
+        self._activity_label.setProperty("state", state)
+        self._activity_label.setToolTip(detail)
+        self._activity_label.style().unpolish(self._activity_label)
+        self._activity_label.style().polish(self._activity_label)
 
     @Slot(str, str)
     def _on_emergency_message(self, level: str, text: str) -> None:

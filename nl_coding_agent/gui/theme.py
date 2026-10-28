@@ -336,8 +336,76 @@ QGroupBox::title {{
 """
 
 
+# --- U2 reusable design tokens/components (NL identity only) -----------------
+def design_tokens(tokens: dict | None = None) -> dict:
+    """Return verified NL token values plus derived typography/spacing scales."""
+    values = tokens if tokens is not None else load_tokens()
+    b = values.get("brand", {})
+    n = values.get("ui_neutrals", {})
+    s = values.get("semantic", {})
+    return {
+        "brand": dict(b), "neutrals": dict(n), "semantic": dict(s),
+        "rules": dict(values.get("rules", {})),
+        "typography": {"display": "20px", "title": "16px", "section": "13px",
+                       "body": "13px", "small": "12px", "micro": "11px",
+                       "mono": "12px"},
+        "spacing": {"xs": 4, "sm": 8, "md": 12, "lg": 16, "xl": 24},
+        "density": {"row": 26, "card_min_height": 64, "header_height": 44},
+        "radius": {"sm": 3, "md": 4, "lg": 6},
+    }
+
+
+def component_qss(tokens: dict) -> str:
+    """Component rules derived only from the verified NL palette (no new colours)."""
+    b = tokens.get("brand", {})
+    n = tokens.get("ui_neutrals", {})
+    s = tokens.get("semantic", {})
+    ev = b.get("electric_violet", "#7531FE")
+    lv = b.get("lavender", "#AB83C6")
+    cy = b.get("cyan", "#46A3C0")
+    sf1 = n.get("surface_1", "#181A20")
+    sf2 = n.get("surface_2", "#20232B")
+    sf3 = n.get("surface_3", "#292D37")
+    bdr = n.get("border", "#343947")
+    tp = n.get("text_primary", "#F3F4F7")
+    ts = n.get("text_secondary", "#B8BECA")
+    tm = n.get("text_muted", "#7E8798")
+    ok = s.get("success", "#55C58A")
+    warn = s.get("warning", "#E6B85C")
+    err = s.get("danger", "#E26472")
+    return f"""
+/* U2 component rules - typography, spacing/density, cards and badges */
+#nlSectionHeader {{ background: transparent; }}
+#nlSectionTitle {{ color: {tp}; font-size: 16px; font-weight: 700; letter-spacing: 0.2px; }}
+#nlSectionSubtitle {{ color: {tm}; font-size: 12px; }}
+#nlSectionRule {{ color: {bdr}; }}
+#nlSummaryCard {{ background-color: {sf1}; border: 1px solid {bdr};
+                  border-radius: 6px; padding: 8px 10px; min-height: 64px; }}
+#nlSummaryCard:hover {{ border-color: {ev}; background-color: {sf2}; }}
+#nlCardTitle {{ color: {tm}; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; }}
+#nlCardValue {{ color: {tp}; font-size: 14px; font-weight: 600; }}
+#nlCardDetail {{ color: {ts}; font-size: 12px; }}
+#nlStatusBadge {{ border-radius: 8px; padding: 2px 8px; font-size: 11px; font-weight: 700; }}
+#nlStatusBadge[tone="ok"] {{ color: {ok}; background-color: rgba(85,197,138,0.12); }}
+#nlStatusBadge[tone="warn"] {{ color: {warn}; background-color: rgba(230,184,92,0.12); }}
+#nlStatusBadge[tone="error"] {{ color: {err}; background-color: rgba(226,100,114,0.12); }}
+#nlStatusBadge[tone="info"] {{ color: {cy}; background-color: rgba(70,163,192,0.12); }}
+#nlStatusBadge[tone="idle"] {{ color: {tm}; background-color: {sf2}; }}
+#nlStatusBadge[tone="accent"] {{ color: {ev}; background-color: rgba(117,49,254,0.14); }}
+#nlEmptyState {{ color: {tm}; font-size: 12px; padding: 10px; }}
+#nlActivityBadge {{ color: {cy}; font-size: 11px; font-weight: 600; padding: 2px 8px;
+                    border: 1px solid {bdr}; border-radius: 8px; }}
+#nlActivityBadge[state="running"] {{ color: {ok}; border-color: {ok}; }}
+#nlActivityBadge[state="blocked"] {{ color: {err}; border-color: {err}; }}
+#nlProjectIdentity {{ color: {lv}; font-size: 12px; }}
+#subtleLinkButton {{ background: transparent; color: {tm}; border: none;
+                     padding: 2px 4px; font-size: 11px; text-align: right; }}
+#subtleLinkButton:hover {{ color: {ev}; }}
+"""
+
+
 def apply_theme(app, tokens_path: Path | None = None) -> str:
     tokens = load_tokens(tokens_path)
-    qss = build_qss(tokens)
+    qss = build_qss(tokens) + component_qss(tokens)
     app.setStyleSheet(qss)
     return qss

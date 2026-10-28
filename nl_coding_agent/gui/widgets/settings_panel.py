@@ -137,6 +137,11 @@ class SettingsPanel(QWidget):
         group.setAccessibleName("Advanced self-build and autonomy controls")
         outer = QVBoxLayout(group)
         outer.setSpacing(8)
+        self._self_build_heading = QLabel("Self-Build (This Agent) — Advanced controls")
+        self._self_build_heading.setObjectName("advancedSelfBuildHeading")
+        self._self_build_heading.setAccessibleName(
+            "Self-Build (This Agent) activation and configuration")
+        outer.addWidget(self._self_build_heading)
 
         intro = QLabel(
             "Nothing starts automatically when the app opens or when settings are saved. "
