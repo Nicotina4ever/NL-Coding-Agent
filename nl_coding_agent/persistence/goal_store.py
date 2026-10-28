@@ -417,6 +417,8 @@ def _plan_version_from_row(row) -> dict | None:
         except (TypeError, ValueError):
             data[key] = [] if key != "diff" else {}
     data["is_current"] = bool(data.get("is_current"))
+    data["approved"] = bool(data.get("approved"))
+    data["approval_status"] = "approved" if data.get("approved") else "pending"
     return data
 
 
@@ -444,6 +446,25 @@ def get_current_plan_version(goal_id: int) -> dict | None:
     return rows[0] if rows else None
 
 
+def approve_plan_version(goal_id: int, version: int, *, approved_by: str,
+                         approval_note: str = "") -> dict | None:
+    """Approve one existing plan version idempotently (never changes goals)."""
+    current = get_plan_version(int(goal_id), int(version))
+    if current is None:
+        return None
+    if bool(current.get("approved")):
+        return {"already_approved": True, "version": current}
+    now = _now()
+    with _db() as conn, conn:
+        conn.execute(
+            "UPDATE goal_plan_versions SET approved=1, approved_at=?, "
+            "approved_by=?, approval_note=? WHERE goal_id=? AND version=?",
+            (now, str(approved_by or "")[:200], str(approval_note or "")[:4000],
+             int(goal_id), int(version)))
+    updated = get_plan_version(int(goal_id), int(version))
+    return {"already_approved": False, "version": updated}
+
+
 # ------------------------------------------------------- mission links (G6)
 def list_goal_links(goal_id: int) -> list[dict]:
     with _db() as conn:
@@ -454,6 +475,109 @@ def list_goal_links(goal_id: int) -> list[dict]:
             "FROM goal_missions gm LEFT JOIN missions m ON m.id=gm.mission_id "
             "WHERE gm.goal_id=? ORDER BY gm.id ASC", (int(goal_id),)).fetchall()
         return [dict(row) for row in rows]
+
+
+
+# ---------------------------------------------- linked work inspection (G8)
+def list_linked_mission_tasks(goal_id: int) -> dict:
+    links = list_goal_links(goal_id)
+    missions: dict[int, dict] = {}
+    for link in links:
+        mission_id = link.get("mission_id")
+        if mission_id is None:
+            continue
+        mission_id = int(mission_id)
+        mission = missions.setdefault(mission_id, {
+            "mission_id": mission_id,
+            "title": link.get("mission_title"),
+            "status": link.get("mission_status"),
+            "roles": [], "tasks": []})
+        role = str(link.get("role") or "primary")
+        if role not in mission["roles"]:
+            mission["roles"].append(role)
+    mission_ids = sorted(missions)
+    tasks: list[dict] = []
+    if mission_ids:
+        placeholders = ",".join("?" for _ in mission_ids)
+        with _db() as conn:
+            rows = conn.execute(
+                "SELECT id, mission_id, title, status, agent_role, depends_on "
+                "FROM tasks WHERE mission_id IN (" + placeholders + ") "
+                "ORDER BY mission_id ASC, id ASC", mission_ids).fetchall()
+        for row in rows:
+            item = dict(row)
+            item["depends_on"] = _json_load_list(item.get("depends_on"))
+            tasks.append(item)
+            mission = missions.get(int(item["mission_id"]))
+            if mission is not None:
+                mission["tasks"].append(item)
+    return {"linked": bool(missions), "missions": list(missions.values()),
+            "tasks": tasks}
+
+
+def list_linked_queue_entries(goal_id: int) -> dict:
+    links = list_goal_links(goal_id)
+    mission_ids = sorted({int(link["mission_id"]) for link in links
+                          if link.get("mission_id") is not None})
+    entries: list[dict] = []
+    if mission_ids:
+        placeholders = ",".join("?" for _ in mission_ids)
+        with _db() as conn:
+            rows = conn.execute(
+                "SELECT id, project_id, requirement_id, mission_id, state, priority, "
+                "attempts, max_attempts, lease_owner, claimed_at, scheduled_at, "
+                "finished_at, failure_class, created_at, updated_at "
+                "FROM mission_queue WHERE mission_id IN (" + placeholders + ") "
+                "ORDER BY id ASC", mission_ids).fetchall()
+        entries = [dict(row) for row in rows]
+    return {"linked": bool(mission_ids), "mission_ids": mission_ids,
+            "entries": entries}
+
+
+def list_linked_active_work(goal_id: int) -> dict:
+    links = list_goal_links(goal_id)
+    mission_ids = sorted({int(link["mission_id"]) for link in links
+                          if link.get("mission_id") is not None})
+    assigned: list[dict] = []
+    if mission_ids:
+        placeholders = ",".join("?" for _ in mission_ids)
+        with _db() as conn:
+            rows = conn.execute(
+                "SELECT id, mission_id, title, status, agent_role, depends_on "
+                "FROM tasks WHERE mission_id IN (" + placeholders + ") "
+                "AND TRIM(COALESCE(agent_role, '')) != '' "
+                "ORDER BY mission_id ASC, id ASC", mission_ids).fetchall()
+        for row in rows:
+            item = dict(row)
+            item["depends_on"] = _json_load_list(item.get("depends_on"))
+            assigned.append(item)
+    # Supervisor runs have no mission_id; scope by the goal/mission project where
+    # available. If no project scope exists, return an explicit no-scope result.
+    project_ids: list[int] = []
+    goal = get_goal(int(goal_id))
+    if goal and goal.get("project_id") is not None:
+        project_ids.append(int(goal["project_id"]))
+    if mission_ids:
+        placeholders = ",".join("?" for _ in mission_ids)
+        with _db() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT project_id FROM missions WHERE id IN ("
+                + placeholders + ") AND project_id IS NOT NULL", mission_ids).fetchall()
+        project_ids.extend(int(row["project_id"]) for row in rows)
+    project_ids = sorted(set(project_ids))
+    runs: list[dict] = []
+    if project_ids:
+        placeholders = ",".join("?" for _ in project_ids)
+        with _db() as conn:
+            rows = conn.execute(
+                "SELECT id, project_id, mode, status, owner_id, owner_pid, "
+                "heartbeat_at, started_at, finished_at "
+                "FROM supervisor_runs WHERE project_id IN (" + placeholders + ") "
+                "ORDER BY id DESC", project_ids).fetchall()
+        runs = [dict(row) for row in rows]
+    return {"linked": bool(mission_ids), "mission_ids": mission_ids,
+            "assigned_tasks": assigned, "supervisor_runs": runs,
+            "scope_available": bool(project_ids)}
 
 
 def counts() -> dict:

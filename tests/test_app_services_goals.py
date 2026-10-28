@@ -189,6 +189,32 @@ class AppGoalsTests(unittest.TestCase):
         self.assertEqual(bad["error"]["code"], "decomposition")
 
 
+    def test_plan_approval_and_read_only_work_inspection(self):
+        goal = self.create(title="G8", acceptance_criteria=["works"])["goal"]
+        goal_id = goal["id"]
+        self.services.goal_activate(goal_id)
+        replanned = self.services.goal_replan(
+            goal_id, [{"title": "A"}], "initial", trigger="manual")
+        self.assertTrue(replanned["ok"], replanned)
+        approved = self.services.goal_approve_plan(
+            goal_id, rationale="approved for G8")
+        self.assertTrue(approved["ok"], approved)
+        self.assertTrue(approved["approved"])
+        self.assertFalse(approved["already_approved"])
+        self.assertTrue(self.services.goal_approve_plan(goal_id)["already_approved"])
+        current = self.services.goal_current_plan(goal_id)["plan"]
+        self.assertTrue(current["approved"])
+        self.assertEqual(current["approval_status"], "approved")
+        self.assertEqual(self.services.goal_mission_tasks(goal_id)["state"],
+                         "not_connected")
+        self.assertEqual(self.services.goal_queue_entries(goal_id)["state"],
+                         "not_connected")
+        workers = self.services.goal_active_work(goal_id)
+        self.assertEqual(workers["state"], "not_connected")
+        self.assertEqual(workers["assigned_tasks"], [])
+        self.assertFalse(self.services.goal_approve_plan(9999)["ok"])
+
+
     def test_facade_is_thin_and_import_safe(self):
         source = (REPO_ROOT / "nl_coding_agent" / "app" / "services.py").read_text(
             encoding="utf-8")

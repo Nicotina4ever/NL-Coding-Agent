@@ -428,6 +428,10 @@ CREATE TABLE IF NOT EXISTS goal_plan_versions (
     diff_json         TEXT NOT NULL DEFAULT '{}',
     supersedes        INTEGER,
     is_current        INTEGER NOT NULL DEFAULT 0,
+    approved          INTEGER NOT NULL DEFAULT 0,
+    approved_at       TEXT,
+    approved_by       TEXT NOT NULL DEFAULT '',
+    approval_note     TEXT NOT NULL DEFAULT '',
     created_at        TEXT NOT NULL,
     UNIQUE(goal_id, version)
 );
@@ -465,6 +469,11 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("milestones", "risk", "TEXT NOT NULL DEFAULT ''"),
     ("milestones", "validation_strategy", "TEXT NOT NULL DEFAULT ''"),
     ("milestones", "mission_intent", "TEXT NOT NULL DEFAULT ''"),
+    # Stage-8 G8 explicit plan approval metadata (additive; old plans pending).
+    ("goal_plan_versions", "approved", "INTEGER NOT NULL DEFAULT 0"),
+    ("goal_plan_versions", "approved_at", "TEXT"),
+    ("goal_plan_versions", "approved_by", "TEXT NOT NULL DEFAULT ''"),
+    ("goal_plan_versions", "approval_note", "TEXT NOT NULL DEFAULT ''"),
 ]
 
 _INDEXES = """

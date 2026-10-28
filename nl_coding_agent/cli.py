@@ -755,7 +755,9 @@ GOAL_GROUP_EPILOG = (
     "(tests, commands, artifacts, reviewer/user confirmation); a checklist, plan, "
     "progress percentage or agent claim can never complete a goal. Goal data lives "
     "in the NL_DATA_DIR application database; there is no reset command - use a "
-    "temporary NL_DATA_DIR to isolate a run."
+    "temporary NL_DATA_DIR to isolate a run. Plan approval and task/queue/worker "
+    "inspection are read-only planning metadata: they never start workers or "
+    "execute missions."
 )
 
 
@@ -1193,6 +1195,85 @@ def _dispatch_goal_with(args, services) -> int:
                 print(str(result.get("message")))
         return 0
 
+    if command == "approve":
+        result = services.goal_approve_plan(
+            args.goal_id, version=getattr(args, "version", None),
+            rationale=getattr(args, "rationale", None),
+            approver=getattr(args, "approver", "user") or "user")
+        version = (result.get("plan") or {}).get("version")
+        if as_json:
+            print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+        elif result.get("ok"):
+            suffix = " (already approved)" if result.get("already_approved") else ""
+            print("Goal #" + str(args.goal_id) + " plan v" + str(version)
+                  + " approved" + suffix + ".")
+        if not result.get("ok"):
+            error = _goal_error_payload(result)
+            print("ERROR [" + str(error.get("code")) + "]: "
+                  + str(error.get("message")), file=sys.stderr)
+            return 1
+        return 0
+
+    if command == "tasks":
+        result = services.goal_mission_tasks(args.goal_id)
+        if as_json:
+            print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+        elif not result.get("ok"):
+            pass
+        elif not result.get("missions"):
+            print("Goal #" + str(args.goal_id) + ": no linked missions/tasks.")
+        else:
+            for mission in result.get("missions") or []:
+                print("Mission #" + str(mission.get("mission_id")) + " ["
+                      + str(mission.get("status")) + "] "
+                      + str(mission.get("title")))
+                for task in mission.get("tasks") or []:
+                    print("  task #" + str(task.get("id")) + " ["
+                          + str(task.get("status")) + "] "
+                          + str(task.get("title")) + " role="
+                          + str(task.get("agent_role") or "-"))
+        if not result.get("ok"):
+            error = _goal_error_payload(result)
+            print("ERROR [" + str(error.get("code")) + "]: "
+                  + str(error.get("message")), file=sys.stderr)
+            return 1
+        return 0
+
+    if command == "workers":
+        active = services.goal_active_work(args.goal_id)
+        queue = services.goal_queue_entries(args.goal_id) if active.get("ok") else {"ok": False}
+        combined = dict(active)
+        combined["queue_entries"] = queue.get("entries") or []
+        if as_json:
+            print(json.dumps(combined, indent=2, ensure_ascii=False, default=str))
+        elif not active.get("ok"):
+            pass
+        elif combined.get("state") == "not_connected":
+            print("Goal #" + str(args.goal_id) + ": no linked missions/workers.")
+        else:
+            print("Goal #" + str(args.goal_id) + " active work: "
+                  + str(combined.get("state")))
+            for task in combined.get("assigned_tasks") or []:
+                print("  task #" + str(task.get("id")) + " ["
+                      + str(task.get("status")) + "] "
+                      + str(task.get("title")) + " role="
+                      + str(task.get("agent_role")))
+            for run in combined.get("supervisor_runs") or []:
+                print("  run #" + str(run.get("id")) + " ["
+                      + str(run.get("status")) + "] mode="
+                      + str(run.get("mode")) + " owner="
+                      + str(run.get("owner_id") or "-"))
+            for entry in combined.get("queue_entries") or []:
+                print("  queue #" + str(entry.get("id")) + " ["
+                      + str(entry.get("state")) + "] mission #"
+                      + str(entry.get("mission_id")))
+        if not active.get("ok"):
+            error = _goal_error_payload(active)
+            print("ERROR [" + str(error.get("code")) + "]: "
+                  + str(error.get("message")), file=sys.stderr)
+            return 1
+        return 0
+
     if command == "verify":
         evidence, criteria, error = _goal_verification_inputs(args)
         if error:
@@ -1526,6 +1607,27 @@ def main(argv: list[str] | None = None) -> int:
     queue_p = gs.add_parser("queue", help="Linked mission queue/status (read-only)")
     queue_p.add_argument("goal_id", type=int)
     queue_p.add_argument("--json", action="store_true")
+
+    approve_p = gs.add_parser(
+        "approve", help="Explicitly approve a plan version (metadata only)",
+        description="Approve the current/default or an explicit plan version. "
+                    "Approval does not execute or instantiate missions and does "
+                    "not approve future replans.")
+    approve_p.add_argument("goal_id", type=int)
+    approve_p.add_argument("--version", type=int, default=None)
+    approve_p.add_argument("--rationale", default=None)
+    approve_p.add_argument("--approver", default="user")
+    approve_p.add_argument("--json", action="store_true")
+
+    tasks_p = gs.add_parser(
+        "tasks", help="Inspect linked missions and tasks (read-only)")
+    tasks_p.add_argument("goal_id", type=int)
+    tasks_p.add_argument("--json", action="store_true")
+
+    workers_p = gs.add_parser(
+        "workers", help="Inspect active work/queue/runs (read-only)")
+    workers_p.add_argument("goal_id", type=int)
+    workers_p.add_argument("--json", action="store_true")
 
     # GUI subcommand
     sub.add_parser("gui")

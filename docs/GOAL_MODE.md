@@ -1,6 +1,6 @@
 # Goal Mode (Stage 8) - Goals, Milestones and Decomposition
 
-**Status:** G1/G2/G3/G5/G6 foundation implemented. Durable goals and milestones, lifecycle,
+**Status:** G1/G2/G3/G5/G6/G8 foundation implemented. Durable goals and milestones, lifecycle,
 dependency validation, structured decomposition, independent completion verification and a
 non-executing `goal` CLI are available. Completion is **verification-gated**: source-backed
 evidence is verified first and a goal can never complete from a checklist, plan, progress or
@@ -10,11 +10,11 @@ and no agent/model runs.
 **Implementation:** `nl_coding_agent/persistence/goal_store.py` (SQL persistence),
 `nl_coding_agent/core/goals.py` (GoalService), `nl_coding_agent/core/goal_verification.py`
 (independent verifier), `nl_coding_agent/app/services.py` (lazy goal facade + completion
-gate + replan/links/activity/queue), `nl_coding_agent/cli.py` (`goal` command group).
+gate + replan/links/activity/queue/approval/inspection), `nl_coding_agent/cli.py` (`goal` command group).
 **Tests:** `tests/test_goals_core.py`, `tests/test_goal_verification.py`,
 `tests/test_app_services_goals.py`, `tests/test_goals_cli.py`,
-`tests/test_goal_completion_gate.py`, `tests/test_goal_replanning.py`
-(targeted tests; temp `NL_DATA_DIR`).
+`tests/test_goal_completion_gate.py`, `tests/test_goal_replanning.py`,
+`tests/test_goal_approval.py` (targeted tests; temp `NL_DATA_DIR`).
 
 ---
 
@@ -206,6 +206,43 @@ CLI exit codes follow the other goal commands: 0 success, 1 validation/not-found
 dependency/decomposition, 2 usage/argparse/malformed JSON. Goal commands dispatch before
 model config and use `NL_DATA_DIR` isolation.
 
+## 4d. Plan approval and read-only work inspection (G8)
+
+Plan approval is explicit metadata, separate from execution and from completion:
+
+- `GoalService.approve_plan(goal_id, version=None, rationale=None, approver="user")`
+  approves the current plan version by default or an explicit existing version, records
+  approved_at/approved_by/approval_note, emits `source=goals` `plan_approved` audit, and is
+  idempotent (a second call returns already_approved without a duplicate audit).
+- No current plan version means approval is refused; missing/invalid versions are
+  structured errors. `approver` must be non-empty and rationale/note is bounded.
+- Approval never executes/instantiates missions or workers and does not approve future
+  plans: `replan_goal` always creates a new unapproved version, while an older approved
+  version remains historically approved. `goal_current_plan` / `goal_plan_versions`
+  expose `approved`, `approval_status`, `approved_at`, `approved_by` and
+  `approval_note`.
+
+Read-only inspection APIs (no mission creation, execution or worker control):
+
+- `goal_mission_tasks(goal_id)`: only linked missions with tasks
+  (id/title/status/agent_role/depends_on); explicit `not_connected` when no mission is linked.
+- `goal_queue_entries(goal_id)`: only `mission_queue` rows for linked missions
+  (state/priority/attempts/lease_owner/claimed_at/scheduled_at/finished_at); explicit
+  `not_connected` when no mission is linked.
+- `goal_active_work(goal_id)`: assigned tasks (non-empty agent_role) plus
+  `supervisor_runs` scoped by goal/mission project where available
+  (id/mode/status/owner_id/owner_pid/heartbeat_at); states `not_connected` / `idle` /
+  `active`. It never starts/claims/stops workers.
+
+```powershell
+python\nl_agent.py goal approve 1 --version 2 --rationale "approved for execution planning" --json
+python\nl_agent.py goal tasks 1 --json
+python\nl_agent.py goal workers 1 --json
+```
+
+Exit codes follow other goal commands (0 success, 1 validation/not-found, 2 usage); there
+are no execution flags and no worker/mission execution is performed.
+
 ## 5. AppServices facade
 
 `services.goal_*` is a thin lazy wrapper over GoalService (no duplicated logic):
@@ -228,6 +265,10 @@ model config and use `NL_DATA_DIR` isolation.
 | `goal_links` | linked existing missions (id/title/status/role) |
 | `goal_activity` | goal-scoped source=goals audit timeline |
 | `goal_queue` | read-only linked mission queue/status or explicit not-connected state |
+| `goal_approve_plan` | explicit idempotent plan-version approval (metadata only) |
+| `goal_mission_tasks` | read-only linked missions + tasks |
+| `goal_queue_entries` | read-only mission_queue rows for linked missions |
+| `goal_active_work` | read-only assigned tasks + supervisor runs (not-connected/idle/active) |
 
 All methods return `{"ok": bool, ...}` envelopes; failures return
 `{"ok": false, "error": {"code": "validation|not_found|lifecycle|dependency|decomposition|verification|error", "type": ..., "message": ...}}`.
@@ -249,12 +290,13 @@ config file and never touch the live mission execution path; tests use a temp
 - No dependency-aware scheduling, execution FSM or autonomous goal runner. Verification
   judges only supplied/recorded evidence; it does not execute tests/commands, create
   artifacts or prove absolute product correctness (human/external evidence is still required).
-- Replanning/model intent does not execute missions: goals/links/queue are read-only
-  planning surfaces; a future runner must still enqueue/start missions explicitly.
+- Replanning/model intent does not execute missions: goals/links/queue/tasks/workers are
+  read-only planning surfaces; approval is metadata only and a future runner must still
+  enqueue/start missions explicitly. No worker control/queue mutation exists.
 - No goal templates/import UI, no reset/delete command, no multi-user concurrency controls
   beyond SQLite, no cross-project scheduler.
 - Completion is available through CLI/facade only with verified evidence; the verifier does
   not execute anything and GUI completion remains unwired.
 - No GUI editing in this increment; the GUI Goal Mode remains a future increment.
 - Real autonomous goal execution, GUI Goal Mode replan/queue editing, scheduling and
-  external-evidence collection remain **MANUAL-PENDING** and outside G1/G2/G3/G5/G6.
+  external-evidence collection remain **MANUAL-PENDING** and outside G1/G2/G3/G5/G6/G8.

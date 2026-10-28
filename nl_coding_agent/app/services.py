@@ -2141,6 +2141,54 @@ class AppServices:
             return self._goal_error(exc)
 
 
+    def goal_approve_plan(self, goal_id: int, version: int | None = None,
+                          rationale: str | None = None,
+                          approver: str = "user") -> dict:
+        try:
+            result = self._goal_service().approve_plan(
+                goal_id, version=version, rationale=rationale,
+                approver=approver)
+        except Exception as exc:
+            return self._goal_error(exc)
+        return {"ok": True, **result}
+
+    def goal_approve(self, goal_id: int, version: int | None = None,
+                     rationale: str | None = None,
+                     approver: str = "user") -> dict:
+        return self.goal_approve_plan(goal_id, version=version,
+                                      rationale=rationale, approver=approver)
+
+    def goal_mission_tasks(self, goal_id: int) -> dict:
+        try:
+            result = self._goal_service().list_mission_tasks(goal_id)
+        except Exception as exc:
+            return self._goal_error(exc)
+        return {"ok": True, "state": "connected" if result.get("linked")
+                else "not_connected", **result}
+
+    def goal_queue_entries(self, goal_id: int) -> dict:
+        try:
+            result = self._goal_service().list_queue_entries(goal_id)
+        except Exception as exc:
+            return self._goal_error(exc)
+        return {"ok": True, "state": "connected" if result.get("linked")
+                else "not_connected", **result,
+                "queue": list(result.get("entries") or [])}
+
+    def goal_active_work(self, goal_id: int) -> dict:
+        try:
+            result = self._goal_service().list_active_work(goal_id)
+        except Exception as exc:
+            return self._goal_error(exc)
+        if not result.get("linked"):
+            state = "not_connected"
+        elif result.get("assigned_tasks") or result.get("supervisor_runs"):
+            state = "active"
+        else:
+            state = "idle"
+        return {"ok": True, "state": state, **result}
+
+
     # --- Events ---
 
     def recent_events(self, limit: int = 200) -> list[dict]:

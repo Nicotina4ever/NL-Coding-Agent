@@ -952,6 +952,8 @@ class GoalService:
                            for item in milestones],
             "rationale": "", "trigger": "baseline", "evidence_refs": [],
             "diff": {}, "supersedes": None, "is_current": True,
+            "approved": False, "approved_at": None, "approved_by": "",
+            "approval_note": "", "approval_status": "no_plan",
             "created_at": goal.get("created_at"),
         }
 
@@ -964,6 +966,89 @@ class GoalService:
         if record is None:
             raise GoalNotFoundError("plan version not found: " + str(version))
         return record.get("diff") or {}
+
+    def approve_plan(self, goal_id: int, version: int | None = None,
+                     rationale: str | None = None,
+                     approver: str = "user") -> dict:
+        """Explicitly approve one plan version; never executes/creates missions.
+
+        Approval is metadata only. A replan creates a new unapproved version; an
+        approved older version stays approved but is not applied by this method.
+        """
+        goal = self.get_goal(goal_id)
+        approver_text = _text(approver, "approver", max_len=200)
+        rationale_text = ("" if rationale is None else
+                          _text(rationale, "rationale", max_len=4000,
+                                allow_empty=True))
+        if version is None:
+            current = goal_store.get_current_plan_version(goal_id)
+            if current is None:
+                raise GoalNotFoundError(
+                    "goal has no plan version to approve: " + str(goal_id))
+            version = int(current["version"])
+        else:
+            version = _int_id(version, "version")
+        record = goal_store.get_plan_version(goal_id, version)
+        if record is None:
+            raise GoalNotFoundError("plan version not found: " + str(version))
+        approved = goal_store.approve_plan_version(
+            goal_id, version, approved_by=approver_text,
+            approval_note=rationale_text)
+        if approved is None:
+            raise GoalNotFoundError("plan version not found: " + str(version))
+        result = {
+            "goal_id": goal_id,
+            "version": int(version),
+            "approved": True,
+            "already_approved": bool(approved["already_approved"]),
+            "approval_status": "approved",
+            "approval_note": approved["version"].get("approval_note") or "",
+            "approved_by": approved["version"].get("approved_by") or "",
+            "approved_at": approved["version"].get("approved_at"),
+            "plan": approved["version"],
+            "goal": self.get_goal(goal_id),
+        }
+        if not approved["already_approved"]:
+            _audit("plan_approved",
+                   "Plan version approved: " + str(version),
+                   {"goal_id": goal_id, "version": int(version),
+                    "approved_by": approver_text},
+                   project_id=goal.get("project_id"))
+        return result
+
+    def plan_approval_status(self, goal_id: int,
+                             version: int | None = None) -> dict:
+        goal = self.get_goal(goal_id)
+        if version is None:
+            record = goal_store.get_current_plan_version(goal_id)
+            if record is None:
+                return {"goal_id": goal_id, "version": None,
+                        "approved": False, "approval_status": "no_plan",
+                        "approved_at": None, "approved_by": "",
+                        "approval_note": ""}
+        else:
+            record = goal_store.get_plan_version(goal_id, int(version))
+            if record is None:
+                raise GoalNotFoundError("plan version not found: " + str(version))
+        return {"goal_id": goal_id, "version": int(record["version"]),
+                "approved": bool(record.get("approved")),
+                "approval_status": record.get("approval_status"),
+                "approved_at": record.get("approved_at"),
+                "approved_by": record.get("approved_by") or "",
+                "approval_note": record.get("approval_note") or "",
+                "goal": goal}
+
+    def list_mission_tasks(self, goal_id: int) -> dict:
+        self.get_goal(goal_id)
+        return goal_store.list_linked_mission_tasks(goal_id)
+
+    def list_queue_entries(self, goal_id: int) -> dict:
+        self.get_goal(goal_id)
+        return goal_store.list_linked_queue_entries(goal_id)
+
+    def list_active_work(self, goal_id: int) -> dict:
+        self.get_goal(goal_id)
+        return goal_store.list_linked_active_work(goal_id)
 
     def list_goal_links(self, goal_id: int) -> list[dict]:
         self.get_goal(goal_id)
@@ -1105,3 +1190,8 @@ class GoalService:
     eligible_next_work = next_work
     summary = progress_summary
     list_eligible = eligible_milestones
+    approve = approve_plan
+    plan_status = plan_approval_status
+    list_goal_tasks = list_mission_tasks
+    list_goal_queue_entries = list_queue_entries
+    list_goal_active_work = list_active_work

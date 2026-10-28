@@ -256,6 +256,36 @@ class GoalCliTests(unittest.TestCase):
         self.assertEqual(code, 2)  # rationale required
 
 
+    def test_goal_approve_tasks_workers_cli(self):
+        from nl_coding_agent.app.services import AppServices
+        services = AppServices()
+        try:
+            goal = services.goal_create("CLI G8", title="CLI G8",
+                                        acceptance_criteria=["works"])["goal"]
+            goal_id = goal["id"]
+            services.goal_activate(goal_id)
+            services.goal_replan(goal_id, [{"title": "A"}], "initial",
+                                 trigger="manual")
+        finally:
+            services._db.close()
+        code, out, err = self.run_cli(["goal", "approve", str(goal_id),
+                                       "--rationale", "cli", "--json"])
+        self.assertEqual(code, 0, err)
+        self.assertTrue(json.loads(out)["approved"])
+        code, out, err = self.run_cli(["goal", "approve", str(goal_id)])
+        self.assertEqual(code, 0)
+        self.assertIn("already approved", out.lower())
+        code, out, err = self.run_cli(["goal", "tasks", str(goal_id), "--json"])
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["state"], "not_connected")
+        code, out, err = self.run_cli(["goal", "workers", str(goal_id)])
+        self.assertEqual(code, 0)
+        self.assertIn("no linked", out.lower())
+        code, out, err = self.run_cli(["goal", "approve", "9999", "--json"])
+        self.assertEqual(code, 1)
+        self.assertEqual(json.loads(out)["error"]["code"], "not_found")
+
+
     def test_static_no_execution_or_network_imports_in_goal_cli(self):
         source = (REPO_ROOT / "nl_coding_agent" / "cli.py").read_text(encoding="utf-8")
         start = source.index("def _dispatch_goal(")
