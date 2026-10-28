@@ -233,7 +233,7 @@ Intel/Apple Silicon. The full program plan is docs/CROSS_PLATFORM_PRIVATE_BETA_P
 | NL-BP-157 | PARTIAL + MANUAL-PENDING: optional-backend probes/declarations and graceful degradation implemented; no GPU/ASR/TTS backend installed or tested |
 | NL-BP-159/161 | NL-BP-161 VERIFIED (31 tests, redacted opt-in diagnostics, issue templates, runbooks); NL-BP-159 beta packages/checksums/instructions still to build |
 | NL-BP-162/163 | NL-BP-162 VERIFIED tooling (15 tests, re-run at final HEAD: CLEAR-WITH-REVIEW, blocking 0 after a documented synthetic-test-fixture allowlist; must re-run immediately before upload); NL-BP-163 owner authorization gates documented but external distribution still requires explicit owner authorization |
-| NL-BP-164 | PARTIAL: cross-platform acceptance matrix documented; real-hardware/clean-machine acceptance records still MANUAL-PENDING |
+| NL-BP-164 | PARTIAL: cross-platform acceptance matrix documented and generated in docs/evidence/beta_acceptance/ACCEPTANCE_MATRIX.md (six targets MANUAL-PENDING, 0 invalid records); real-hardware/clean-machine acceptance records still MANUAL-PENDING |
 
 No cross-platform support is claimed until the corresponding CI builds and real-hardware beta tests
 pass. Existing Windows acceptance evidence in this document remains valid and unchanged.

@@ -1,0 +1,247 @@
+{
+  "ci_support_claimed": false,
+  "gates": [
+    {
+      "configured": true,
+      "note": "CI workflow committed; results are headless/regression evidence and never real-hardware support",
+      "state": "partial"
+    },
+    {
+      "blocking_findings": 0,
+      "gate": "CLEAR-WITH-REVIEW",
+      "note": "owner review/authorization remains required; audit must be re-run at HEAD",
+      "state": "partial"
+    },
+    {
+      "gate": "real-hardware beta acceptance",
+      "note": "requires tester records with explicit per-step results; CI can never mark this verified",
+      "state": "MANUAL-PENDING"
+    }
+  ],
+  "generated_from": [
+    "installer/platform_targets.py",
+    "docs/HARNESS_ACCEPTANCE.md",
+    "docs/RELEASE_ACCEPTANCE.md",
+    "docs/SECRETS_AUDIT.md",
+    ".github/workflows/ci.yml",
+    "docs/evidence/beta_acceptance/records"
+  ],
+  "invalid_records": [],
+  "requirements": [
+    {
+      "evidence": [
+        "docs/PRODUCT_BACKLOG.md: NL-BP-140"
+      ],
+      "requirement_id": "NL-BP-140",
+      "state": "partial",
+      "title": "Release acceptance matrix runner with recorded evidence and manual-pending labels"
+    },
+    {
+      "evidence": [
+        "docs/RELEASE_ACCEPTANCE.md: NL-BP-164 | PARTIAL: cross-platform acceptance matrix documented; real-hardware/clean-machine acceptance records still MANUAL-PENDING |"
+      ],
+      "requirement_id": "NL-BP-164",
+      "state": "partial",
+      "title": "Cross-platform release acceptance with MANUAL-PENDING clean-machine and real-hardware matrix"
+    },
+    {
+      "evidence": [
+        "no committed real-hardware acceptance record; MANUAL-PENDING"
+      ],
+      "requirement_id": "NL-BP-165",
+      "state": "MANUAL-PENDING",
+      "title": "Cross-platform CI artifact provenance and real-hardware beta acceptance evidence"
+    }
+  ],
+  "schema_version": "1.0",
+  "summary": {
+    "invalid_records": 0,
+    "manual_pending": 6,
+    "no_ci_hardware_claim": true,
+    "partial": 0,
+    "targets": 6,
+    "verified": 0
+  },
+  "targets": [
+    {
+      "acceptance": {
+        "hardware_verified": false,
+        "manual_pending_steps": [
+          "install",
+          "startup",
+          "cli",
+          "gui",
+          "clipboard",
+          "mic",
+          "asr_tts",
+          "gpu",
+          "offline",
+          "restart"
+        ],
+        "note": "No real-hardware acceptance record; MANUAL-PENDING.",
+        "record_count": 0,
+        "records": [],
+        "state": "MANUAL-PENDING"
+      },
+      "arch": "x86_64",
+      "ci": {
+        "configured": true,
+        "note": "CI workflow committed; results are headless/regression evidence and never real-hardware support",
+        "state": "partial"
+      },
+      "display_name": "Windows 11 x64",
+      "os": "windows",
+      "target_id": "windows-x86_64"
+    },
+    {
+      "acceptance": {
+        "hardware_verified": false,
+        "manual_pending_steps": [
+          "install",
+          "startup",
+          "cli",
+          "gui",
+          "clipboard",
+          "mic",
+          "asr_tts",
+          "gpu",
+          "offline",
+          "restart"
+        ],
+        "note": "No real-hardware acceptance record; MANUAL-PENDING.",
+        "record_count": 0,
+        "records": [],
+        "state": "MANUAL-PENDING"
+      },
+      "arch": "arm64",
+      "ci": {
+        "configured": true,
+        "note": "CI workflow committed; results are headless/regression evidence and never real-hardware support",
+        "state": "partial"
+      },
+      "display_name": "Windows 11 ARM64",
+      "os": "windows",
+      "target_id": "windows-arm64"
+    },
+    {
+      "acceptance": {
+        "hardware_verified": false,
+        "manual_pending_steps": [
+          "install",
+          "startup",
+          "cli",
+          "gui",
+          "clipboard",
+          "mic",
+          "asr_tts",
+          "gpu",
+          "offline",
+          "restart"
+        ],
+        "note": "No real-hardware acceptance record; MANUAL-PENDING.",
+        "record_count": 0,
+        "records": [],
+        "state": "MANUAL-PENDING"
+      },
+      "arch": "x86_64",
+      "ci": {
+        "configured": true,
+        "note": "CI workflow committed; results are headless/regression evidence and never real-hardware support",
+        "state": "partial"
+      },
+      "display_name": "Linux x86_64",
+      "os": "linux",
+      "target_id": "linux-x86_64"
+    },
+    {
+      "acceptance": {
+        "hardware_verified": false,
+        "manual_pending_steps": [
+          "install",
+          "startup",
+          "cli",
+          "gui",
+          "clipboard",
+          "mic",
+          "asr_tts",
+          "gpu",
+          "offline",
+          "restart"
+        ],
+        "note": "No real-hardware acceptance record; MANUAL-PENDING.",
+        "record_count": 0,
+        "records": [],
+        "state": "MANUAL-PENDING"
+      },
+      "arch": "aarch64",
+      "ci": {
+        "configured": true,
+        "note": "CI workflow committed; results are headless/regression evidence and never real-hardware support",
+        "state": "partial"
+      },
+      "display_name": "Linux ARM64",
+      "os": "linux",
+      "target_id": "linux-aarch64"
+    },
+    {
+      "acceptance": {
+        "hardware_verified": false,
+        "manual_pending_steps": [
+          "install",
+          "startup",
+          "cli",
+          "gui",
+          "clipboard",
+          "mic",
+          "asr_tts",
+          "gpu",
+          "offline",
+          "restart"
+        ],
+        "note": "No real-hardware acceptance record; MANUAL-PENDING.",
+        "record_count": 0,
+        "records": [],
+        "state": "MANUAL-PENDING"
+      },
+      "arch": "x86_64",
+      "ci": {
+        "configured": true,
+        "note": "CI workflow committed; results are headless/regression evidence and never real-hardware support",
+        "state": "partial"
+      },
+      "display_name": "macOS Intel (x86_64)",
+      "os": "macos",
+      "target_id": "macos-x86_64"
+    },
+    {
+      "acceptance": {
+        "hardware_verified": false,
+        "manual_pending_steps": [
+          "install",
+          "startup",
+          "cli",
+          "gui",
+          "clipboard",
+          "mic",
+          "asr_tts",
+          "gpu",
+          "offline",
+          "restart"
+        ],
+        "note": "No real-hardware acceptance record; MANUAL-PENDING.",
+        "record_count": 0,
+        "records": [],
+        "state": "MANUAL-PENDING"
+      },
+      "arch": "arm64",
+      "ci": {
+        "configured": true,
+        "note": "CI workflow committed; results are headless/regression evidence and never real-hardware support",
+        "state": "partial"
+      },
+      "display_name": "macOS Apple Silicon (arm64)",
+      "os": "macos",
+      "target_id": "macos-arm64"
+    }
+  ]
+}

@@ -474,3 +474,24 @@ the pre-upload secrets/history audit re-run at final HEAD is CLEAR-WITH-REVIEW w
 findings after a documented synthetic-test-fixture allowlist. Stale release candidates under
 .workspace/dist/, da_eliminare/crewAI/ and any upload/publish action still require explicit owner
 authorization. See docs/ROOT_REORGANIZATION_REPORT.md.
+
+Stage-6 acceptance tooling (2026-10-28, round 2)
+
+Added and verified the remaining automatable stage-6 distribution/acceptance tooling:
+- scripts/build_beta_packages.py builds a deterministic private-beta package from a measured source
+  candidate (SHA256SUMS, beta-manifest with the six-target matrix marked unmeasured/release_ready
+  false, installer manifest templates without fabricated hashes, INSTALL.md plus six per-platform
+  install docs, source zip); the real .workspace/dist/beta-0.2.0 package has 13 verified checksum
+  entries and rebuilds byte-identically.
+- scripts/release_acceptance.py provides matrix/record/verify commands, enforces explicit
+  MANUAL-PENDING states and rejects false CI-as-hardware support; the tracked matrix evidence
+  (docs/evidence/beta_acceptance/) records all six targets as MANUAL-PENDING and 0 invalid records.
+- scripts/fetch_native_runtimes.py + installer/runtime_sources.json provide the release-runner path
+  to acquire and measure real native runtimes for all six targets (dry-run/offline/download, measured
+  manifest draft, no fabricated hashes); no real archives were downloaded here.
+
+Final verification for this round: full suite 677 passed; relocation gate 34/0; supervisor gate ok;
+SBOM OK; doctor/CLI/GUI smoke/portable staging dry-run/release-builder/beta-package checksums green.
+Remaining stage-6 items are external/manual: real native runtime archives and native candidates,
+actual GitHub Actions execution, clean-machine and real-hardware beta acceptance, signing/notarization,
+and explicit owner authorization for any upload/publish/distribution. No platform support is claimed.
