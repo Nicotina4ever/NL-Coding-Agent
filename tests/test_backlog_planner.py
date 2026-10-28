@@ -386,7 +386,7 @@ class RealIndexTests(PlannerTestCase):
         # Stage 7 (universal autonomy/research/Mega Suite) and stage 8 (universal
         # goal mode/document-driven planning) are queue-only extensions; stages 1-6 remain
         # the authoritative shipped-program track.
-        self.assertEqual(sorted(stage.stage for stage in index.stages), [1, 2, 3, 4, 5, 6, 7, 8, 9])
+        self.assertEqual(sorted(stage.stage for stage in index.stages), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
         fingerprint = hashlib.sha256(REAL_INDEX.read_bytes()).hexdigest()
         self.assertEqual(index.source_fingerprint, fingerprint)
         current = B.current_program_stage(index)

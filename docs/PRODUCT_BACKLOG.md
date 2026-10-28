@@ -16,6 +16,8 @@
 
 **Open-model directive v4.3 (2026-10-28, queue-only):** the Open Model & Provider Ecosystem directive was audited read-only (docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md): config-driven Ollama/OpenAI-compatible discovery with closed provider kind branch, Bearer-only auth, temperature-only params, read-only Model Hub GUI and an unwired tested router; capability states exist but measured-only gating; presets are hand-edited YAML. Ten extension gaps became planned NL-BP-224..233 in new pending stage 9; existing NL-BP-008/009/010/036/068/069/183/208 unchanged. No code/model/network/mission run. Totals: 185 requirements (33 verified / 77 partial / 72 planned / 3 blocked).
 
+**Release-publication directive v4.4 (2026-10-28, queue-only):** the Final Release Hygiene & GitHub Publication Gate directive was audited read-only (docs/RELEASE_PUBLICATION_GATE_AUDIT.md): read-only hygiene/distribution audits, root policy, packaging/beta/rehearsal/acceptance tooling and the verified secrets/history scanner NL-BP-162 exist, but there is no CI/hook enforcement, no integrated final readiness milestone and no publication-readiness verdict; real external acceptance stays MANUAL-PENDING. Three gaps became planned NL-BP-234..236 in new pending stage 10; existing requirements unchanged. No code/model/network/push/publish run. Totals: 188 requirements (33 verified / 77 partial / 75 planned / 3 blocked).
+
 ## How to use this backlog
 
 1. **Pick from the top, not from chat.** Execute only requirements that are READY (all dependencies done). P0 first, then P1; a single active requirement/milestone at a time unless write scopes are disjoint.
@@ -58,11 +60,13 @@ evidence only.
 | 7 | Universal autonomy, research intelligence and Mega Suite | PENDING | 46 | NL-BP 166-211 | 6 |
 | 8 | Universal Goal Mode and document-driven planning | PENDING | 12 | NL-BP 212-223 | 3, 7 |
 | 9 | Open model and provider ecosystem | PENDING | 10 | NL-BP 224-233 | 4, 7 |
+| 10 | Final release hygiene and GitHub publication gate | PENDING | 3 | NL-BP 234-236 | 6, 7, 8, 9 |
 
 Execution rule: a later stage starts only when the previous stage's gates pass, unless the
 Lead records an explicit evidence-backed exception for independent low-risk work. Stages 1-5
-are complete; stage 6 is in progress; stages 7, 8 and 9 are pending. SH-07 Tier B (real local
-models) remains BLOCKED in NL-BP-063 and is not relaxed by any queued directive.
+are complete; stage 6 is in progress; stages 7-10 are pending. SH-07 Tier B (real local models)
+remains BLOCKED in NL-BP-063 and blocks any final readiness verdict. Publication/push remains
+forbidden without explicit owner authorization.
 
 ## Summary
 
@@ -70,18 +74,18 @@ models) remains BLOCKED in NL-BP-063 and is not relaxed by any queued directive.
 |---|---|---|---|---|---|
 | verified | 20 | 13 | 0 | 0 | 33 |
 | partial | 37 | 28 | 11 | 1 | 77 |
-| planned | 44 | 18 | 9 | 1 | 72 |
+| planned | 46 | 19 | 9 | 1 | 75 |
 | blocked | 3 | 0 | 0 | 0 | 3 |
-| **Total** | **104** | **59** | **20** | **2** | **185** |
+| **Total** | **106** | **60** | **20** | **2** | **188** |
 
 | Area | Requirements | verified | partial | planned | blocked |
 |---|---|---|---|---|---|
 | Area 1 - CrewAI + CrewAI Flows first-class integration | 24 | 6 | 7 | 11 | 0 |
 | Area 2 - Studio GUI + multimodal chat | 35 | 3 | 24 | 8 | 0 |
 | Area 3 - Universal autonomous development | 60 | 16 | 18 | 25 | 1 |
-| Area 4 - Repository hygiene | 8 | 3 | 5 | 0 | 0 |
+| Area 4 - Repository hygiene | 9 | 3 | 5 | 1 | 0 |
 | Area 5 - Lightweight installation + portable distribution | 27 | 2 | 12 | 13 | 0 |
-| Area 6 - Release acceptance criteria | 31 | 3 | 11 | 15 | 2 |
+| Area 6 - Release acceptance criteria | 33 | 3 | 11 | 17 | 2 |
 
 ### Area ownership
 
@@ -95,6 +99,8 @@ models) remains BLOCKED in NL-BP-063 and is not relaxed by any queued directive.
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v4.4 (2026-10-28)** - Queue-only Final Release Hygiene & GitHub Publication Gate directive and mandatory pre-push secrets/content scan. Read-only audit (docs/RELEASE_PUBLICATION_GATE_AUDIT.md) confirmed: read-only distribution/repository-hygiene audits (090/091/095 verified; others partial), root-reorg/retention policy, packaging/beta/rehearsal/acceptance tooling (110-124/140/149/195-197), VERIFIED secrets/history scanner NL-BP-162 with redacted evidence and exit-code gate but NO CI wiring or Git hooks (core.hooksPath unset), owner gates/no-remote/private repo (163), and MANUAL-PENDING real-hardware/CI/beta acceptance. No integrated readiness milestone, blocking pre-push gate or publication verdict existed. Added planned NL-BP-234 (P0 final repository/distribution readiness milestone/refactor), NL-BP-235 (P0 mandatory blocking pre-push gate) and NL-BP-236 (P1 publication verdict + external-acceptance/sign-off gate) in new pending stage 10 (depends_on_stages [6,7,8,9]). Existing requirement IDs/acceptance and stages 1-9 untouched; addenda preserved; no code/model/network/push/publish run started. Totals: 188 requirements; 33 verified / 77 partial / 75 planned / 3 blocked.
 
 **v4.3 (2026-10-28)** - Queue-only Open Model & Provider Ecosystem directive. Read-only audit (docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md) confirmed: config-driven Ollama + generic OpenAI-compatible discovery, api_key_env Bearer headers, health/loaded/unload; dynamic Ollama tags/namespaces; a tested ModelRouter (override/project/role/fallback, capability/permission/resource gates, snapshots) not instantiated in product code; capability states measured/declared/unknown/unavailable with measured-only gating; read-only Model Hub GUI/Settings; presets exist only as hand-edited config/models.yaml; provider kind branch is closed; only temperature is passed. Requirements 008/009/010/036/068/069/183/208 retained unchanged; ten gaps added as planned NL-BP-224..233 in new pending stage 9 (depends_on_stages [4,7]). No existing ID/acceptance/status or stage 1-8 status rewritten; addenda preserved; no code/model/network/mission run started. Totals: 185 requirements; 33 verified / 77 partial / 72 planned / 3 blocked.
 
@@ -2346,6 +2352,25 @@ _Read-only audits, removal of duplicate/generated/obsolete artifacts, consolidat
 - **Sources:** specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md
 - **Note:** Only workspace rules exist; no product-side retention/naming policy is implemented or exposed.
 
+<a id="nl-bp-234"></a>
+### NL-BP-234 - Final repository/distribution readiness milestone with audit and justified refactor
+
+- **Area:** HYGIENE - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directive 2026-10-28: final release hygiene and GitHub publication gate)
+- **Dependencies:** NL-BP-090, NL-BP-095, NL-BP-096, NL-BP-110, NL-BP-140, NL-BP-149, NL-BP-162, NL-BP-197, NL-BP-198
+- **Acceptance gates:**
+  - A final audit produces the evidence deliverable: BEFORE/AFTER repository tree, exact moves/deletes/consolidations, disk and Git-history size analysis, security/licensing audit, and full regression/packaging results.
+  - Where justified and authorized, the milestone refactors structure/root clutter/obsolete code/temp files/redundant components, dependency/runtime organization/compatibility/licensing, shared-vs-duplicated models/environments/assets, build/cache/logs/dev-data/ignored dirs, and distribution allowlist/package contents/launchers/installer.
+  - Documentation is finalized for README, contributor setup, per-platform install, troubleshooting, limitations and release notes; cross-platform build reproduciblity and real-machine acceptance are reported honestly.
+  - Source repository, local workspace and distributable app remain separated; protected assets/user data/models/runtimes/evidence/stale candidates are never deleted without owner authorization; code is removed only after dependency analysis and regression verification.
+  - The public-source/beta-release readiness verdict lists explicit blockers (it cannot be a bare 'ready' claim).
+- **Evidence:**
+  - not started - queued only by task-70 from the user directive; read-only capability audit in docs/RELEASE_PUBLICATION_GATE_AUDIT.md; no code, model, network, push or publish run started
+  - capability evidence: audit sections 3-4 (read-only hygiene/audits and acceptance tooling exist; secrets scanner NL-BP-162 verified but not wired to CI/hooks; owner gates/manual-pending external acceptance; no publication verdict artifact)
+- **Sources:** user directive 2026-10-28: Final Release Hygiene & GitHub Publication Gate + mandatory pre-push secrets/content scan (task-70; audited in docs/RELEASE_PUBLICATION_GATE_AUDIT.md); docs/RELEASE_PUBLICATION_GATE_AUDIT.md; NL-BP-090; NL-BP-095; NL-BP-096; NL-BP-110; NL-BP-140; NL-BP-149; NL-BP-162; NL-BP-197; NL-BP-198
+- **Note:** Program-level integration of per-domain hygiene/distribution/acceptance requirements; no existing requirement rewritten.
+- **Program stage:** 10 - Final release hygiene and GitHub publication gate
+
 ## Area 5 - Lightweight installation + portable distribution
 
 _Online native bootstrapper, private runtimes into a user-selected location, no global Python/pip/uv/conda, optional components and offline packages, repair/update/cache management, shared downloads without isolation loss, Windows/Linux/macOS verified builds._
@@ -3349,6 +3374,41 @@ _Evidence gates for the final product: non-default install path; clean Windows w
 - **Note:** End-to-end acceptance for stage 9; real endpoints are permissioned/manual and cannot be claimed from fixtures alone.
 - **Program stage:** 9 - Open model and provider ecosystem
 
+<a id="nl-bp-235"></a>
+### NL-BP-235 - Mandatory blocking pre-push secrets/content scan gate
+
+- **Area:** RELEASE - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user directive 2026-10-28: final release hygiene and GitHub publication gate)
+- **Dependencies:** NL-BP-162, NL-BP-163
+- **Acceptance gates:**
+  - A separately runnable CLI gate plus Git hook and CI integration block a push/publication when the scan fails (fail closed, non-zero exit, no silent bypass).
+  - The gate scans staged changes, tracked files and Git history for credentials/tokens/secrets, private data, personal paths/sensitive configuration, embedded runtimes/vendor copies/large blobs and development data.
+  - Findings are redacted in output/reports; the gate itself never pushes, publishes or modifies the repository.
+  - The gate is runnable before ANY earlier public GitHub upload and must not be deferred to the final milestone; repeatably run at the actual release HEAD.
+- **Evidence:**
+  - not started - queued only by task-70 from the user directive; read-only capability audit in docs/RELEASE_PUBLICATION_GATE_AUDIT.md; no code, model, network, push or publish run started
+  - capability evidence: audit sections 3-4 (read-only hygiene/audits and acceptance tooling exist; secrets scanner NL-BP-162 verified but not wired to CI/hooks; owner gates/manual-pending external acceptance; no publication verdict artifact)
+- **Sources:** user directive 2026-10-28: Final Release Hygiene & GitHub Publication Gate + mandatory pre-push secrets/content scan (task-70; audited in docs/RELEASE_PUBLICATION_GATE_AUDIT.md); docs/RELEASE_PUBLICATION_GATE_AUDIT.md; NL-BP-162; NL-BP-163
+- **Note:** NL-BP-162 provides the verified scanner and exit-code upload gate but is manual (no hooks/CI wiring); 235 adds mandatory blocking enforcement without rewriting 162.
+- **Program stage:** 10 - Final release hygiene and GitHub publication gate
+
+<a id="nl-bp-236"></a>
+### NL-BP-236 - Publication readiness verdict and external-acceptance gate
+
+- **Area:** RELEASE - **Priority:** P1 - **Status:** planned
+- **Blueprint priority:** new (user directive 2026-10-28: final release hygiene and GitHub publication gate)
+- **Dependencies:** NL-BP-140, NL-BP-162, NL-BP-163, NL-BP-164, NL-BP-165, NL-BP-197, NL-BP-198
+- **Acceptance gates:**
+  - An evidence-backed public-source/beta-release readiness verdict is recorded with explicit blockers, linked acceptance evidence and the exact scanned HEAD.
+  - No 'publication ready' verdict may be recorded while real external acceptance (hardware/clean-machine/real-network/actual CI/beta records) remains unresolved or unverified; those items stay MANUAL-PENDING and block the verdict.
+  - Owner authorization and residual-risk sign-off are recorded for the specific artifact/scope, consistent with the owner gates; a queued requirement grants no standing authorization.
+- **Evidence:**
+  - not started - queued only by task-70 from the user directive; read-only capability audit in docs/RELEASE_PUBLICATION_GATE_AUDIT.md; no code, model, network, push or publish run started
+  - capability evidence: audit sections 3-4 (read-only hygiene/audits and acceptance tooling exist; secrets scanner NL-BP-162 verified but not wired to CI/hooks; owner gates/manual-pending external acceptance; no publication verdict artifact)
+- **Sources:** user directive 2026-10-28: Final Release Hygiene & GitHub Publication Gate + mandatory pre-push secrets/content scan (task-70; audited in docs/RELEASE_PUBLICATION_GATE_AUDIT.md); docs/RELEASE_PUBLICATION_GATE_AUDIT.md; NL-BP-140; NL-BP-162; NL-BP-163; NL-BP-164; NL-BP-165; NL-BP-197; NL-BP-198
+- **Note:** Consumes the verified acceptance matrix/secrets audit and owner gates; explicit verdict artifact is new.
+- **Program stage:** 10 - Final release hygiene and GitHub publication gate
+
 ## Addendum import v3.7 - Universal Autonomy/Research/Mega Suite dedupe mapping
 
 User-supplied addendum (2026-10-28) preserved unchanged at docs/product-blueprint/addenda/ (MANIFEST verified). Queue-only import by shared task-59: the spec was cross-checked against the 117 existing requirements; only genuinely missing capabilities were added. Existing IDs, acceptance criteria and statuses were not rewritten; stages 1-6 statuses were not changed.
@@ -3472,6 +3532,37 @@ New requirements are program stage 9, status planned. Blocked/external items pre
 - unknown/declared capability combinations warn for experimental use; hard refusals only where task/policy requires measured capability
 - real-endpoint acceptance (233) is permissioned/manual and distinct from fixture evidence
 - HF acquisition (208) and competence benchmarks (069/183) remain separate planned requirements; no downloads in this directive
+
+## Release-publication directive v4.4 - capability audit and dedupe mapping
+
+Read-only audit: docs/RELEASE_PUBLICATION_GATE_AUDIT.md (file:line evidence). Source: user directive 2026-10-28: Final Release Hygiene & GitHub Publication Gate + mandatory pre-push secrets/content scan. Queue-only: no implementation, no code/model/network/push/publish run.
+
+| Sub-capability | Existing coverage | New requirements | Decision |
+|---|---|---|---|
+| Repository hygiene/distribution read-only audits | NL-BP-090, NL-BP-091, NL-BP-092, NL-BP-093, NL-BP-094, NL-BP-095, NL-BP-096, NL-BP-097 | none (covered) | verified/partial per-domain audits retained; 234 integrates them |
+| Final integrated readiness milestone + BEFORE/AFTER + exact move/delete/consolidation report + disk/Git-history analysis + security/licensing + regression/packaging + verdict | - | NL-BP-234 | genuinely new program-level deliverable |
+| Duplicate runtimes/models/assets/dependencies and build/cache/logs/dev data consolidation | NL-BP-096, NL-BP-094, NL-BP-097, NL-BP-121, NL-BP-122, NL-BP-124 | NL-BP-234 | subtasks covered; integrated analysis/refactor is new |
+| Distribution allowlist/package/launchers/installer and clean builds | NL-BP-110, NL-BP-111, NL-BP-112, NL-BP-113, NL-BP-114, NL-BP-115, NL-BP-116, NL-BP-117, NL-BP-118, NL-BP-119, NL-BP-120, NL-BP-121, NL-BP-122, NL-BP-123, NL-BP-124, NL-BP-149, NL-BP-195, NL-BP-196, NL-BP-197 | NL-BP-234 | requirements retained; final readiness integration new |
+| Protected assets / no deletion without authorization | NL-BP-092, NL-BP-093, NL-BP-094, NL-BP-163 | none (covered) | policy retained; 234 must respect it |
+| Pre-push secrets/content scanner (tracked+history, redacted, exit-code) | NL-BP-162 | none (covered) | verified scanner retained |
+| Mandatory blocking pre-push gate with Git hook/CI/staged scan/fail-closed/no-push | - | NL-BP-235 | genuinely new enforcement layer |
+| Owner authorization gates (push/visibility/upload/history/collaborators) | NL-BP-163 | none (covered) | retained; 236 records sign-off |
+| Release acceptance matrix and readiness labels | NL-BP-140, NL-BP-198 | NL-BP-236 | matrix retained; explicit verdict artifact new |
+| Real hardware/clean-machine/real-network/CI/beta external acceptance | NL-BP-152, NL-BP-153, NL-BP-154, NL-BP-155, NL-BP-156, NL-BP-157, NL-BP-158, NL-BP-159, NL-BP-160, NL-BP-161, NL-BP-164, NL-BP-165 | NL-BP-236 | stays MANUAL-PENDING and blocks ready verdict; no duplicate |
+| Source-vs-binary release separation and public repository readiness | NL-BP-197, NL-BP-198 | NL-BP-234, NL-BP-236 | consumed by final milestone/verdict; retained |
+| Readiness taxonomy enforcement | NL-BP-198 | NL-BP-236 | 198 retained; 236 verdict references it |
+| Owner residual-risk sign-off | - | NL-BP-236 | new recorded artifact |
+
+New requirements are program stage 10, status planned. Blocked/external items preserved:
+- stage 10 is pending; depends_on_stages [6,7,8,9] and several of those stages are in progress/pending
+- publication/push/visibility/collaborator upload remain FORBIDDEN without explicit owner authorization (NL-BP-163; PRIVATE_BETA_RUNBOOK G-1..G-10); repository has no configured remote
+- real external acceptance (real hardware, clean machines, actual GitHub CI runs, non-Windows builds, beta tester records) remains MANUAL-PENDING and blocks any publication-ready verdict (NL-BP-236)
+- committed docs/SECRETS_AUDIT.md snapshot was measured at an earlier HEAD and must be re-run at the release HEAD; the bounded heuristic scanner cannot prove absence of custom/obfuscated secrets, LFS/submodules or deep history
+- no deletion of user data, live SQLite, python/ runtime, data/, da_eliminare/crewAI, models, evidence, backups or stale release candidates without owner authorization
+- SH-07 Tier B (NL-BP-063) stays BLOCKED and blocks a final readiness verdict
+- code removal only after dependency analysis and regression, inside a separately authorized scope
+- no git-history rewrite without verified backup and explicit owner authorization; leaked secrets in history are presumed compromised and require rotation
+- local static CI checks are not actual GitHub CI execution evidence; real CI runs remain pending (NL-BP-165)
 
 ## Deduplication and merge decisions
 
