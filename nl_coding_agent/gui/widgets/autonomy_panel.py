@@ -19,6 +19,29 @@ _ACTIVE_STATUSES = {
 }
 
 
+from nl_coding_agent.gui import i18n as _i18n
+
+
+def _tr(key, default=None, **values):
+    active = getattr(_i18n, "_INSTANCE", None)
+    if active is None or getattr(active, "_services", None) is None:
+        return _i18n.format_message(default if default is not None else key, **values)
+    try:
+        return active.tr(key, default, **values)
+    except Exception:
+        return default if default is not None else key
+
+
+def _register_retranslate(widget):
+    active = getattr(_i18n, "_INSTANCE", None)
+    register = getattr(active, "register_retranslate", None)
+    if callable(register):
+        try:
+            register(lambda *args: widget.retranslate())
+        except Exception:
+            pass
+
+
 class AutonomyPanel(QWidget):
     """Minimal autonomous-development controls backed by the supervisor service."""
 
@@ -43,15 +66,18 @@ class AutonomyPanel(QWidget):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(10)
 
-        title = QLabel("Autonomy status (read-only)")
+        self._title = QLabel(_tr(
+            "autonomy.title", "Autonomy status (read-only)"))
+        title = self._title
         title.setStyleSheet("font-size: 16px; font-weight: 700;")
         layout.addWidget(title)
 
-        subtitle = QLabel(
+        self._subtitle = QLabel(_tr(
+            "autonomy.subtitle",
             "Read-only supervisor status and mission queue. Mode, limits and Pause/Stop "
             "live under Settings > Advanced; nothing starts automatically. Off is the "
-            "default; cloud/network/delete still require explicit permission grants."
-        )
+            "default; cloud/network/delete still require explicit permission grants."))
+        subtitle = self._subtitle
         subtitle.setWordWrap(True)
         subtitle.setStyleSheet("color: #7E8798; font-size: 12px;")
         layout.addWidget(subtitle)
@@ -77,14 +103,14 @@ class AutonomyPanel(QWidget):
         form.addRow("Attempts per requirement", self._attempts_spin)
 
         buttons = QHBoxLayout()
-        self._start_btn = QPushButton("Start")
+        self._start_btn = QPushButton(_tr("autonomy.start", "Start"))
         self._start_btn.setObjectName("primaryButton")
         self._start_btn.clicked.connect(self._start)
-        self._pause_btn = QPushButton("Pause")
+        self._pause_btn = QPushButton(_tr("autonomy.pause", "Pause"))
         self._pause_btn.clicked.connect(self._pause)
-        self._resume_btn = QPushButton("Resume")
+        self._resume_btn = QPushButton(_tr("autonomy.resume", "Resume"))
         self._resume_btn.clicked.connect(self._resume)
-        self._stop_btn = QPushButton("Stop")
+        self._stop_btn = QPushButton(_tr("autonomy.stop", "Stop"))
         self._stop_btn.setObjectName("dangerButton")
         self._stop_btn.clicked.connect(self._stop)
         for button in (self._start_btn, self._pause_btn, self._resume_btn, self._stop_btn):
@@ -109,7 +135,8 @@ class AutonomyPanel(QWidget):
         self._controls_pointer.setStyleSheet("font-size: 12px; color: #AB83C6;")
         layout.addWidget(self._controls_pointer)
 
-        self._status_label = QLabel("Supervisor: idle")
+        self._status_label = QLabel(_tr(
+            "autonomy.supervisor_idle", "Supervisor: idle"))
         self._status_label.setWordWrap(True)
         self._status_label.setStyleSheet("font-size: 12px; color: #AB83C6;")
         layout.addWidget(self._status_label)
@@ -120,20 +147,44 @@ class AutonomyPanel(QWidget):
         layout.addWidget(self._notice_label)
 
         self._queue_table = QTableWidget(0, 5)
-        self._queue_table.setHorizontalHeaderLabels(
-            ["Requirement", "State", "Priority", "Attempts", "Mission"]
-        )
+        self._queue_table.setHorizontalHeaderLabels([
+            _tr("autonomy.header_requirement", "Requirement"),
+            _tr("autonomy.header_state", "State"),
+            _tr("autonomy.header_priority", "Priority"),
+            _tr("autonomy.header_attempts", "Attempts"),
+            _tr("autonomy.header_mission", "Mission")])
         self._queue_table.verticalHeader().setVisible(False)
         self._queue_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._queue_table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self._queue_table, 1)
+        _register_retranslate(self)
+
+    def retranslate(self) -> None:
+        self._title.setText(_tr(
+            "autonomy.title", "Autonomy status (read-only)"))
+        self._subtitle.setText(_tr(
+            "autonomy.subtitle",
+            "Read-only supervisor status and mission queue. Mode, limits and Pause/Stop "
+            "live under Settings > Advanced; nothing starts automatically. Off is the "
+            "default; cloud/network/delete still require explicit permission grants."))
+        self._start_btn.setText(_tr("autonomy.start", "Start"))
+        self._pause_btn.setText(_tr("autonomy.pause", "Pause"))
+        self._resume_btn.setText(_tr("autonomy.resume", "Resume"))
+        self._stop_btn.setText(_tr("autonomy.stop", "Stop"))
+        self._queue_table.setHorizontalHeaderLabels([
+            _tr("autonomy.header_requirement", "Requirement"),
+            _tr("autonomy.header_state", "State"),
+            _tr("autonomy.header_priority", "Priority"),
+            _tr("autonomy.header_attempts", "Attempts"),
+            _tr("autonomy.header_mission", "Mission")])
 
     # ----------------------------------------------------------------- project
 
     def set_project(self, project: dict | None) -> None:
         self._project = project
         if not project:
-            self._status_label.setText("Supervisor: no project open")
+            self._status_label.setText(_tr(
+                "autonomy.no_project", "Supervisor: no project open"))
         self._update_controls()
         self.refresh()
 

@@ -10,6 +10,29 @@ from PySide6.QtWidgets import (QDialog, QLabel, QLineEdit, QListWidget,
                                QListWidgetItem, QVBoxLayout)
 
 
+from nl_coding_agent.gui import i18n as _i18n
+
+
+def _tr(key, default=None, **values):
+    active = getattr(_i18n, "_INSTANCE", None)
+    if active is None or getattr(active, "_services", None) is None:
+        return _i18n.format_message(default if default is not None else key, **values)
+    try:
+        return active.tr(key, default, **values)
+    except Exception:
+        return default if default is not None else key
+
+
+def _register_retranslate(widget):
+    active = getattr(_i18n, "_INSTANCE", None)
+    register = getattr(active, "register_retranslate", None)
+    if callable(register):
+        try:
+            register(lambda *args: widget.retranslate())
+        except Exception:
+            pass
+
+
 @dataclass
 class CommandAction:
     action_id: str
@@ -28,18 +51,22 @@ class CommandPalette(QDialog):
 
     def __init__(self, actions=None, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Command Palette")
+        self.setWindowTitle(_tr(
+            "command_palette.window_title", "Command Palette"))
         self.setModal(True)
         self.setObjectName("commandPalette")
         self.setAccessibleName("Command palette")
         self.resize(620, 420)
         self._actions: list[CommandAction] = []
         layout = QVBoxLayout(self)
-        self._title = QLabel("COMMAND PALETTE")
+        self._title = QLabel(_tr(
+            "command_palette.title", "COMMAND PALETTE"))
         self._title.setStyleSheet("font-weight: 800; letter-spacing: 1px; color: #7531FE;")
         layout.addWidget(self._title)
         self._filter = QLineEdit()
-        self._filter.setPlaceholderText("Type to filter safe commands… (Enter runs, Esc closes)")
+        self._filter.setPlaceholderText(_tr(
+            "command_palette.filter",
+            "Type to filter safe commands… (Enter runs, Esc closes)"))
         self._filter.setAccessibleName("Command palette filter")
         self._filter.textChanged.connect(self._apply_filter)
         layout.addWidget(self._filter)
@@ -47,12 +74,28 @@ class CommandPalette(QDialog):
         self._list.setAccessibleName("Available commands")
         self._list.itemActivated.connect(lambda _item: self._activate_current())
         layout.addWidget(self._list, 1)
-        self._hint = QLabel("Safe actions only: open/switch/refresh/settings/read-only doctor. "
-                            "Destructive and model actions are never exposed here.")
+        self._hint = QLabel(_tr(
+            "command_palette.hint",
+            "Safe actions only: open/switch/refresh/settings/read-only doctor. "
+            "Destructive and model actions are never exposed here."))
         self._hint.setWordWrap(True)
         layout.addWidget(self._hint)
         if actions:
             self.set_actions(actions)
+        _register_retranslate(self)
+
+    def retranslate(self) -> None:
+        self.setWindowTitle(_tr(
+            "command_palette.window_title", "Command Palette"))
+        self._title.setText(_tr(
+            "command_palette.title", "COMMAND PALETTE"))
+        self._filter.setPlaceholderText(_tr(
+            "command_palette.filter",
+            "Type to filter safe commands… (Enter runs, Esc closes)"))
+        self._hint.setText(_tr(
+            "command_palette.hint",
+            "Safe actions only: open/switch/refresh/settings/read-only doctor. "
+            "Destructive and model actions are never exposed here."))
 
     def set_actions(self, actions) -> None:
         self._actions = list(actions)

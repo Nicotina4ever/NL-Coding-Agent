@@ -17,6 +17,29 @@ from PySide6.QtWidgets import (
 )
 
 
+from nl_coding_agent.gui import i18n as _i18n
+
+
+def _tr(key, default=None, **values):
+    active = getattr(_i18n, "_INSTANCE", None)
+    if active is None or getattr(active, "_services", None) is None:
+        return _i18n.format_message(default if default is not None else key, **values)
+    try:
+        return active.tr(key, default, **values)
+    except Exception:
+        return default if default is not None else key
+
+
+def _register_retranslate(widget):
+    active = getattr(_i18n, "_INSTANCE", None)
+    register = getattr(active, "register_retranslate", None)
+    if callable(register):
+        try:
+            register(lambda *args: widget.retranslate())
+        except Exception:
+            pass
+
+
 class ModelHubFetchThread(QThread):
     snapshot_ready = Signal(object)
     failed = Signal(str)
@@ -48,11 +71,12 @@ class ModelsPanel(QWidget):
         layout.setSpacing(10)
 
         header = QHBoxLayout()
-        title = QLabel("Model Hub")
+        self._title = QLabel(_tr("model_hub.title", "Model Hub"))
+        title = self._title
         title.setStyleSheet("font-size: 16px; font-weight: 700;")
         header.addWidget(title)
         header.addStretch()
-        self._refresh_btn = QPushButton("Refresh")
+        self._refresh_btn = QPushButton(_tr("model_hub.refresh", "Refresh"))
         self._refresh_btn.clicked.connect(self.refresh)
         header.addWidget(self._refresh_btn)
         layout.addLayout(header)
@@ -63,17 +87,30 @@ class ModelsPanel(QWidget):
         subtitle.setStyleSheet("color: #7E8798; font-size: 12px;")
         layout.addWidget(subtitle)
 
-        self._status_label = QLabel("Discovering providers.")
+        self._status_label = QLabel(_tr(
+            "model_hub.discovering", "Discovering providers."))
         self._status_label.setWordWrap(True)
         self._status_label.setStyleSheet("color: #7E8798; font-size: 12px;")
         layout.addWidget(self._status_label)
 
         self._tabs = QTabWidget()
-        self._tabs.addTab(self._build_models_tab(), "Models")
-        self._tabs.addTab(self._build_speech_tab(), "Speech")
-        self._tabs.addTab(self._build_hardware_tab(), "Hardware")
-        self._tabs.addTab(self._build_storage_tab(), "Storage")
+        self._tabs.addTab(self._build_models_tab(), _tr("model_hub.tab_models", "Models"))
+        self._tabs.addTab(self._build_speech_tab(), _tr("model_hub.tab_speech", "Speech"))
+        self._tabs.addTab(self._build_hardware_tab(), _tr("model_hub.tab_hardware", "Hardware"))
+        self._tabs.addTab(self._build_storage_tab(), _tr("model_hub.tab_storage", "Storage"))
         layout.addWidget(self._tabs, 1)
+        _register_retranslate(self)
+
+    def retranslate(self) -> None:
+        self._title.setText(_tr("model_hub.title", "Model Hub"))
+        self._subtitle.setText(_tr(
+            "model_hub.subtitle",
+            "Inference providers, local models, speech engines and resource status."))
+        self._refresh_btn.setText(_tr("model_hub.refresh", "Refresh"))
+        self._tabs.setTabText(0, _tr("model_hub.tab_models", "Models"))
+        self._tabs.setTabText(1, _tr("model_hub.tab_speech", "Speech"))
+        self._tabs.setTabText(2, _tr("model_hub.tab_hardware", "Hardware"))
+        self._tabs.setTabText(3, _tr("model_hub.tab_storage", "Storage"))
 
     def _build_models_tab(self) -> QWidget:
         tab = QWidget()
@@ -82,9 +119,10 @@ class ModelsPanel(QWidget):
         layout.setSpacing(8)
 
         filter_row = QHBoxLayout()
-        filter_row.addWidget(QLabel("Provider"))
+        self._provider_label = QLabel(_tr("model_hub.provider", "Provider"))
+        filter_row.addWidget(self._provider_label)
         self._provider_filter = QComboBox()
-        self._provider_filter.addItem("All providers", "")
+        self._provider_filter.addItem(_tr("model_hub.all_providers", "All providers"), "")
         self._provider_filter.currentIndexChanged.connect(self._render_models)
         filter_row.addWidget(self._provider_filter, 1)
         filter_row.addStretch()
@@ -106,7 +144,8 @@ class ModelsPanel(QWidget):
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         layout.addWidget(self._table, 1)
 
-        self._empty_label = QLabel("No models discovered yet.")
+        self._empty_label = QLabel(_tr(
+            "model_hub.no_models", "No models discovered yet."))
         self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._empty_label.setStyleSheet("color: #7E8798; font-size: 12px;")
         layout.addWidget(self._empty_label)

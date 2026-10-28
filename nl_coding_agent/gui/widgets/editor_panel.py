@@ -19,6 +19,29 @@ _RULES = {
 }
 
 
+from nl_coding_agent.gui import i18n as _i18n
+
+
+def _tr(key, default=None, **values):
+    active = getattr(_i18n, "_INSTANCE", None)
+    if active is None or getattr(active, "_services", None) is None:
+        return _i18n.format_message(default if default is not None else key, **values)
+    try:
+        return active.tr(key, default, **values)
+    except Exception:
+        return default if default is not None else key
+
+
+def _register_retranslate(widget):
+    active = getattr(_i18n, "_INSTANCE", None)
+    register = getattr(active, "register_retranslate", None)
+    if callable(register):
+        try:
+            register(lambda *args: widget.retranslate())
+        except Exception:
+            pass
+
+
 class CodeHighlighter(QSyntaxHighlighter):
     def __init__(self, document, language="python"):
         super().__init__(document)
@@ -69,15 +92,18 @@ class EditorPanel(QWidget):
         self.setAccessibleName("Project editor")
         layout = QVBoxLayout(self)
         header = QHBoxLayout()
-        title = QLabel("EDITOR")
+        self._title = QLabel(_tr("editor.title", "EDITOR"))
+        title = self._title
         title.setStyleSheet("font-weight: 800; letter-spacing: 1px; color: #7531FE;")
         header.addWidget(title)
-        self._path_label = QLabel("No file open")
+        self._path_label = QLabel(_tr(
+            "editor.no_file", "No file open"))
         self._path_label.setStyleSheet("color: #AB83C6;")
         header.addWidget(self._path_label, 1)
-        self._save_btn = QPushButton("Save")
+        self._save_btn = QPushButton(_tr("editor.save", "Save"))
         self._save_btn.setAccessibleName("Save current file")
-        self._save_btn.setToolTip("Explicit save of the current file (Ctrl+S)")
+        self._save_btn.setToolTip(_tr(
+            "editor.save_tooltip", "Explicit save of the current file (Ctrl+S)"))
         self._save_btn.clicked.connect(self.save_current)
         header.addWidget(self._save_btn)
         layout.addLayout(header)
@@ -87,10 +113,18 @@ class EditorPanel(QWidget):
         self._tabs_widget.tabCloseRequested.connect(self.close_tab)
         self._tabs_widget.currentChanged.connect(self._on_tab_changed)
         layout.addWidget(self._tabs_widget, 1)
-        self._status = QLabel("Open a file from the Files panel or the IDE page.")
+        self._status = QLabel(_tr(
+            "editor.open_file", "Open a file from the Files panel or the IDE page."))
         self._status.setWordWrap(True)
         layout.addWidget(self._status)
         QShortcut(QKeySequence("Ctrl+S"), self, activated=self.save_current)
+        _register_retranslate(self)
+
+    def retranslate(self) -> None:
+        self._title.setText(_tr("editor.title", "EDITOR"))
+        self._save_btn.setText(_tr("editor.save", "Save"))
+        self._save_btn.setToolTip(_tr(
+            "editor.save_tooltip", "Explicit save of the current file (Ctrl+S)"))
 
     def _default_confirm(self, rel_path):
         answer = QMessageBox.question(self, "Unsaved changes",
@@ -105,7 +139,9 @@ class EditorPanel(QWidget):
 
     def open_file(self, rel_path):
         if not self._project:
-            self._status.setText("Open a project before opening files.")
+            self._status.setText(_tr(
+                "editor.open_project",
+                "Open a project before opening files."))
             return False
         if rel_path in self._tabs:
             self._tabs_widget.setCurrentWidget(self._tabs[rel_path])

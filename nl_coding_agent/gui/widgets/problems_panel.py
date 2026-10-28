@@ -6,6 +6,29 @@ from PySide6.QtWidgets import (QHBoxLayout, QLabel, QPushButton, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 
+from nl_coding_agent.gui import i18n as _i18n
+
+
+def _tr(key, default=None, **values):
+    active = getattr(_i18n, "_INSTANCE", None)
+    if active is None or getattr(active, "_services", None) is None:
+        return _i18n.format_message(default if default is not None else key, **values)
+    try:
+        return active.tr(key, default, **values)
+    except Exception:
+        return default if default is not None else key
+
+
+def _register_retranslate(widget):
+    active = getattr(_i18n, "_INSTANCE", None)
+    register = getattr(active, "register_retranslate", None)
+    if callable(register):
+        try:
+            register(lambda *args: widget.retranslate())
+        except Exception:
+            pass
+
+
 class _Signals(QObject):
     done = Signal(dict)
 
@@ -34,27 +57,43 @@ class ProblemsPanel(QWidget):
         self.setAccessibleName("Problems and verification status")
         layout = QVBoxLayout(self)
         header = QHBoxLayout()
-        title = QLabel("PROBLEMS")
+        self._title = QLabel(_tr("problems.title", "PROBLEMS"))
+        title = self._title
         title.setStyleSheet("font-weight: 800; letter-spacing: 1px; color: #7531FE;")
         header.addWidget(title)
-        self._counts = QLabel("No problems loaded")
+        self._counts = QLabel(_tr(
+            "problems.no_problems", "No problems loaded"))
         self._counts.setStyleSheet("color: #AB83C6;")
         header.addWidget(self._counts, 1)
-        self._refresh_btn = QPushButton("Refresh")
+        self._refresh_btn = QPushButton(_tr("problems.refresh", "Refresh"))
         self._refresh_btn.setAccessibleName("Refresh problems")
         self._refresh_btn.setToolTip("Read-only verification + project scan refresh")
         self._refresh_btn.clicked.connect(self.refresh)
         header.addWidget(self._refresh_btn)
         layout.addLayout(header)
-        self._status = QLabel("Read-only: failed verification runs and bounded project scan findings.")
+        self._status = QLabel(_tr(
+            "problems.status",
+            "Read-only: failed verification runs and bounded project scan findings."))
         self._status.setWordWrap(True)
         layout.addWidget(self._status)
         self._table = QTableWidget(0, 3)
-        self._table.setHorizontalHeaderLabels(["Severity", "Source", "Message"])
+        self._table.setHorizontalHeaderLabels([
+            _tr("problems.header_severity", "Severity"),
+            _tr("problems.header_source", "Source"),
+            _tr("problems.header_message", "Message")])
         self._table.setAccessibleName("Problems table")
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self._table, 1)
+        _register_retranslate(self)
+
+    def retranslate(self) -> None:
+        self._title.setText(_tr("problems.title", "PROBLEMS"))
+        self._refresh_btn.setText(_tr("problems.refresh", "Refresh"))
+        self._table.setHorizontalHeaderLabels([
+            _tr("problems.header_severity", "Severity"),
+            _tr("problems.header_source", "Source"),
+            _tr("problems.header_message", "Message")])
 
     def set_project(self, project):
         self._project = dict(project) if project else None
@@ -62,8 +101,11 @@ class ProblemsPanel(QWidget):
             self.refresh()
         else:
             self._table.setRowCount(0)
-            self._counts.setText("No problems loaded")
-            self._status.setText("Open a project to inspect verification/test status.")
+            self._counts.setText(_tr(
+                "problems.no_problems", "No problems loaded"))
+            self._status.setText(_tr(
+                "problems.open_project",
+                "Open a project to inspect verification/test status."))
 
     def set_lsp_diagnostics(self, findings) -> None:
         """Merge read-only language-server diagnostics into the current table."""
@@ -94,7 +136,8 @@ class ProblemsPanel(QWidget):
         if not self._project:
             self._status.setText("Open a project to inspect verification/test status.")
             return
-        self._status.setText("Scanning (read-only)…")
+        self._status.setText(_tr(
+            "problems.scanning", "Scanning (read-only)…"))
         project = self._project
         self._pool.start(_Task(
             lambda: self._services.project_problems(project.get("id"), project["root"]),

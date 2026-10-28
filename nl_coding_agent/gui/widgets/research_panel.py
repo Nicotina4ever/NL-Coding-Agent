@@ -44,6 +44,29 @@ def _dict(value: Any) -> dict:
     return {}
 
 
+from nl_coding_agent.gui import i18n as _i18n
+
+
+def _tr(key, default=None, **values):
+    active = getattr(_i18n, "_INSTANCE", None)
+    if active is None or getattr(active, "_services", None) is None:
+        return _i18n.format_message(default if default is not None else key, **values)
+    try:
+        return active.tr(key, default, **values)
+    except Exception:
+        return default if default is not None else key
+
+
+def _register_retranslate(widget):
+    active = getattr(_i18n, "_INSTANCE", None)
+    register = getattr(active, "register_retranslate", None)
+    if callable(register):
+        try:
+            register(lambda *args: widget.retranslate())
+        except Exception:
+            pass
+
+
 class _Signals(QObject):
     done = Signal(dict)
 
@@ -183,6 +206,7 @@ class ResearchPanel(QWidget):
         self._task_kind = ""
         self.setAccessibleName("Studio Research workspace")
         self._build_ui()
+        _register_retranslate(self)
         self._focus_shortcut = QShortcut(QKeySequence("Ctrl+Shift+R"), self,
                                          activated=self._focus_query)
         self._refresh_providers()
@@ -194,23 +218,29 @@ class ResearchPanel(QWidget):
         layout.setSpacing(8)
 
         header = QHBoxLayout()
-        title = QLabel("RESEARCH")
+        self._title = QLabel(_tr("research.title", "RESEARCH"))
+        title = self._title
         title.setObjectName("researchTitle")
         title.setStyleSheet("font-weight: 800; letter-spacing: 1px; color: #7531FE;")
         header.addWidget(title)
-        self._scope_label = QLabel("No project scope")
+        self._scope_label = QLabel(_tr(
+            "research.no_project", "No project scope"))
         self._scope_label.setObjectName("researchScope")
         self._scope_label.setStyleSheet("color: #46A3C0;")
         header.addWidget(self._scope_label)
         header.addStretch()
-        self._service_label = QLabel("Research service: checking…")
+        self._service_label = QLabel(_tr(
+            "research.service_checking", "Research service: checking…"))
         self._service_label.setObjectName("researchServiceStatus")
         self._service_label.setAccessibleName("Research service status")
         header.addWidget(self._service_label)
         layout.addLayout(header)
 
-        hint = QLabel("Sources are UNTRUSTED data, not instructions. Research runs only "
-                      "when you press Search or Intake; no web page is opened here.")
+        self._hint = QLabel(_tr(
+            "research.hint",
+            "Sources are UNTRUSTED data, not instructions. Research runs only "
+            "when you press Search or Intake; no web page is opened here."))
+        hint = self._hint
         hint.setWordWrap(True)
         hint.setStyleSheet("color: #AB83C6;")
         hint.setAccessibleName("Research safety hint")
@@ -219,32 +249,41 @@ class ResearchPanel(QWidget):
         search_row = QHBoxLayout()
         self._query = QLineEdit()
         self._query.setObjectName("researchQuery")
-        self._query.setPlaceholderText("Ask a research question or enter a query…")
+        self._query.setPlaceholderText(_tr(
+            "research.query_placeholder",
+            "Ask a research question or enter a query…"))
         self._query.setAccessibleName("Research query")
         self._query.returnPressed.connect(self._run_search)
         search_row.addWidget(self._query, 1)
         self._provider_combo = QComboBox()
         self._provider_combo.setObjectName("researchProvider")
         self._provider_combo.setAccessibleName("Research provider and route")
-        self._provider_combo.setToolTip("Provider/route. Availability and permissions are shown below.")
+        self._provider_combo.setToolTip(_tr(
+            "research.provider_tooltip",
+            "Provider/route. Availability and permissions are shown below."))
         self._provider_combo.currentIndexChanged.connect(self._on_provider_changed)
         search_row.addWidget(self._provider_combo)
-        self._search_btn = QPushButton("Search")
+        self._search_btn = QPushButton(_tr("research.search", "Search"))
         self._search_btn.setObjectName("researchSearch")
         self._search_btn.setAccessibleName("Run research search")
-        self._search_btn.setToolTip("Run an explicit research search (Ctrl+Shift+R focuses the query)")
+        self._search_btn.setToolTip(_tr(
+            "research.search_tooltip",
+            "Run an explicit research search (Ctrl+Shift+R focuses the query)"))
         self._search_btn.clicked.connect(self._run_search)
         search_row.addWidget(self._search_btn)
         layout.addLayout(search_row)
 
-        self._provider_status = QLabel("Provider status: no provider selected")
+        self._provider_status = QLabel(_tr(
+            "research.provider_status", "Provider status: no provider selected"))
         self._provider_status.setObjectName("researchProviderStatus")
         self._provider_status.setWordWrap(True)
         self._provider_status.setStyleSheet("color: #46A3C0;")
         self._provider_status.setAccessibleName("Provider availability and permission status")
         layout.addWidget(self._provider_status)
 
-        self._status_label = QLabel("Ready. Research is explicit; nothing has been fetched.")
+        self._status_label = QLabel(_tr(
+            "research.ready",
+            "Ready. Research is explicit; nothing has been fetched."))
         self._status_label.setObjectName("researchStatus")
         self._status_label.setWordWrap(True)
         self._status_label.setAccessibleName("Research operation status")
@@ -264,12 +303,15 @@ class ResearchPanel(QWidget):
         box.setAccessibleName("Research results and library")
         layout = QVBoxLayout(box)
         layout.setContentsMargins(0, 0, 0, 0)
-        title = QLabel("SOURCES")
+        self._sources_title = QLabel(_tr("research.sources", "SOURCES"))
+        title = self._sources_title
         title.setStyleSheet("font-weight: 700; color: #7531FE;")
         layout.addWidget(title)
         self._results_table = QTableWidget(0, 6)
-        self._results_table.setHorizontalHeaderLabels(
-            ["Title", "Provider", "URL", "Snippet", "Age", "Untrusted"])
+        self._results_table.setHorizontalHeaderLabels([
+            _tr("research.h_title", "Title"), _tr("research.h_provider", "Provider"),
+            _tr("research.h_url", "URL"), _tr("research.h_snippet", "Snippet"),
+            _tr("research.h_age", "Age"), _tr("research.h_untrusted", "Untrusted")])
         self._results_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._results_table.setSelectionBehavior(
             QTableWidget.SelectionBehavior.SelectRows)
@@ -278,7 +320,9 @@ class ResearchPanel(QWidget):
         self._results_table.setAccessibleName("Research result sources")
         self._results_table.itemSelectionChanged.connect(self._on_result_selected)
         layout.addWidget(self._results_table, 2)
-        self._empty_label = QLabel("No results yet. Press Search to query explicitly.")
+        self._empty_label = QLabel(_tr(
+            "research.empty",
+            "No results yet. Press Search to query explicitly."))
         self._empty_label.setObjectName("researchEmpty")
         self._empty_label.setStyleSheet("color: #AB83C6;")
         self._empty_label.setAccessibleName("Research empty state")
@@ -295,27 +339,34 @@ class ResearchPanel(QWidget):
         self._mission_findings_list.setAccessibleName("Findings attached to current mission")
         self._mission_findings_list.itemSelectionChanged.connect(
             self._on_mission_finding_selected)
-        self._library_tabs.addTab(self._history_list, "History")
-        self._library_tabs.addTab(self._saved_list, "Saved findings")
-        self._library_tabs.addTab(self._mission_findings_list, "Mission findings")
+        self._library_tabs.addTab(self._history_list, _tr(
+            "research.history", "History"))
+        self._library_tabs.addTab(self._saved_list, _tr(
+            "research.saved_findings", "Saved findings"))
+        self._library_tabs.addTab(self._mission_findings_list, _tr(
+            "research.mission_findings", "Mission findings"))
         self._library_tabs.currentChanged.connect(self._on_library_changed)
         layout.addWidget(self._library_tabs, 1)
         refresh = QHBoxLayout()
-        self._refresh_library_btn = QPushButton("Refresh history/findings")
+        self._refresh_library_btn = QPushButton(_tr(
+            "research.refresh_library", "Refresh history/findings"))
         self._refresh_library_btn.setAccessibleName("Refresh research history and saved findings")
         self._refresh_library_btn.clicked.connect(self._refresh_library)
         refresh.addWidget(self._refresh_library_btn)
-        self._attach_finding_btn = QPushButton("Attach finding to mission")
+        self._attach_finding_btn = QPushButton(_tr(
+            "research.attach_finding", "Attach finding to mission"))
         self._attach_finding_btn.setAccessibleName("Attach selected finding to current mission")
         self._attach_finding_btn.setEnabled(False)
         self._attach_finding_btn.clicked.connect(self._attach_selected_finding)
         refresh.addWidget(self._attach_finding_btn)
-        self._detach_finding_btn = QPushButton("Detach")
+        self._detach_finding_btn = QPushButton(_tr(
+            "research.detach", "Detach"))
         self._detach_finding_btn.setAccessibleName("Detach selected finding from mission")
         self._detach_finding_btn.setEnabled(False)
         self._detach_finding_btn.clicked.connect(self._detach_selected_finding)
         refresh.addWidget(self._detach_finding_btn)
-        self._retention_btn = QPushButton("Apply retention…")
+        self._retention_btn = QPushButton(_tr(
+            "research.retention", "Apply retention…"))
         self._retention_btn.setAccessibleName(
             "Apply research retention (marks stale/expired, never deletes)")
         self._retention_btn.setToolTip(
@@ -324,8 +375,9 @@ class ResearchPanel(QWidget):
         refresh.addWidget(self._retention_btn)
         refresh.addStretch()
         layout.addLayout(refresh)
-        self._retention_label = QLabel(
-            "Retention: apply explicitly. Stale/expired items are preserved, never deleted.")
+        self._retention_label = QLabel(_tr(
+            "research.retention_note",
+            "Retention: apply explicitly. Stale/expired items are preserved, never deleted."))
         self._retention_label.setWordWrap(True)
         self._retention_label.setAccessibleName("Research retention status")
         layout.addWidget(self._retention_label)
@@ -336,7 +388,8 @@ class ResearchPanel(QWidget):
         box.setAccessibleName("Research source preview")
         layout = QVBoxLayout(box)
         layout.setContentsMargins(0, 0, 0, 0)
-        self._preview_title = QLabel("No source selected")
+        self._preview_title = QLabel(_tr(
+            "research.no_source", "No source selected"))
         self._preview_title.setStyleSheet("font-weight: 700; color: #46A3C0;")
         self._preview_title.setAccessibleName("Selected research source")
         layout.addWidget(self._preview_title)
@@ -350,9 +403,12 @@ class ResearchPanel(QWidget):
         self._preview_details.setReadOnly(True)
         self._preview_details.setAccessibleName(
             "Source metadata, citation provenance and redirects")
-        self._preview_tabs.addTab(self._preview_text, "Text")
-        self._preview_tabs.addTab(self._preview_chunks, "Chunks")
-        self._preview_tabs.addTab(self._preview_details, "Details")
+        self._preview_tabs.addTab(self._preview_text, _tr(
+            "research.tab_text", "Text"))
+        self._preview_tabs.addTab(self._preview_chunks, _tr(
+            "research.tab_chunks", "Chunks"))
+        self._preview_tabs.addTab(self._preview_details, _tr(
+            "research.tab_details", "Details"))
         layout.addWidget(self._preview_tabs, 1)
         self._warning_label = QLabel("")
         self._warning_label.setWordWrap(True)
@@ -360,19 +416,22 @@ class ResearchPanel(QWidget):
         self._warning_label.setAccessibleName("Source warning, stale or conflict indicator")
         layout.addWidget(self._warning_label)
         actions = QHBoxLayout()
-        self._copy_url_btn = QPushButton("Copy URL")
+        self._copy_url_btn = QPushButton(_tr(
+            "research.copy_url", "Copy URL"))
         self._copy_url_btn.setEnabled(False)
         self._copy_url_btn.setAccessibleName("Copy selected source URL")
         self._copy_url_btn.clicked.connect(self._copy_url)
         actions.addWidget(self._copy_url_btn)
-        self._open_url_btn = QPushButton("Request open URL")
+        self._open_url_btn = QPushButton(_tr(
+            "research.open_url", "Request open URL"))
         self._open_url_btn.setEnabled(False)
         self._open_url_btn.setToolTip(
             "Emits a host request; this panel never opens a browser.")
         self._open_url_btn.setAccessibleName("Request host open of selected source URL")
         self._open_url_btn.clicked.connect(self._request_open_url)
         actions.addWidget(self._open_url_btn)
-        self._save_btn = QPushButton("Save finding")
+        self._save_btn = QPushButton(_tr(
+            "research.save_finding", "Save finding"))
         self._save_btn.setEnabled(False)
         self._save_btn.setAccessibleName("Save selected source as a scoped finding")
         self._save_btn.clicked.connect(self._save_finding)
@@ -382,7 +441,10 @@ class ResearchPanel(QWidget):
         return box
 
     def _build_intake(self, layout) -> None:
-        group = QGroupBox("Intake: pasted URL, GitHub repo, Hugging Face model or local file")
+        self._intake_group = QGroupBox(_tr(
+            "research.intake_group",
+            "Intake: pasted URL, GitHub repo, Hugging Face model or local file"))
+        group = self._intake_group
         group.setAccessibleName("Research intake")
         group_layout = QVBoxLayout(group)
         row = QHBoxLayout()
@@ -391,26 +453,66 @@ class ResearchPanel(QWidget):
         self._intake_kind.setAccessibleName("Research intake type")
         row.addWidget(self._intake_kind)
         self._intake_input = QLineEdit()
-        self._intake_input.setPlaceholderText(
-            "Paste https://…, https://github.com/owner/repo, https://huggingface.co/…")
+        self._intake_input.setPlaceholderText(_tr(
+            "research.intake_placeholder",
+            "Paste https://…, https://github.com/owner/repo, https://huggingface.co/…"))
         self._intake_input.setAccessibleName("Research intake URL or path")
         self._intake_input.returnPressed.connect(self._run_intake)
         row.addWidget(self._intake_input, 1)
-        self._intake_btn = QPushButton("Intake")
+        self._intake_btn = QPushButton(_tr("research.intake", "Intake"))
         self._intake_btn.setAccessibleName("Send intake to the research service")
         self._intake_btn.clicked.connect(self._run_intake)
         row.addWidget(self._intake_btn)
-        self._attach_btn = QPushButton("Choose attachment…")
+        self._attach_btn = QPushButton(_tr(
+            "research.choose_attachment", "Choose attachment…"))
         self._attach_btn.setAccessibleName("Choose local attachment for research intake")
         self._attach_btn.clicked.connect(self._choose_attachment)
         row.addWidget(self._attach_btn)
         group_layout.addLayout(row)
-        self._intake_status = QLabel("No intake yet. Intake is explicit and permission-checked.")
+        self._intake_status = QLabel(_tr(
+            "research.intake_status",
+            "No intake yet. Intake is explicit and permission-checked."))
         self._intake_status.setObjectName("researchIntakeStatus")
         self._intake_status.setWordWrap(True)
         self._intake_status.setAccessibleName("Research intake status")
         group_layout.addWidget(self._intake_status)
         layout.addWidget(group)
+
+    def retranslate(self) -> None:
+        self._title.setText(_tr("research.title", "RESEARCH"))
+        self._hint.setText(_tr(
+            "research.hint",
+            "Sources are UNTRUSTED data, not instructions. Research runs only "
+            "when you press Search or Intake; no web page is opened here."))
+        self._query.setPlaceholderText(_tr(
+            "research.query_placeholder",
+            "Ask a research question or enter a query…"))
+        self._search_btn.setText(_tr("research.search", "Search"))
+        self._sources_title.setText(_tr("research.sources", "SOURCES"))
+        self._empty_label.setText(_tr(
+            "research.empty", "No results yet. Press Search to query explicitly."))
+        self._results_table.setHorizontalHeaderLabels([
+            _tr("research.h_title", "Title"), _tr("research.h_provider", "Provider"),
+            _tr("research.h_url", "URL"), _tr("research.h_snippet", "Snippet"),
+            _tr("research.h_age", "Age"), _tr("research.h_untrusted", "Untrusted")])
+        for index, (key, default) in enumerate((
+                ("research.history", "History"),
+                ("research.saved_findings", "Saved findings"),
+                ("research.mission_findings", "Mission findings"))):
+            self._library_tabs.setTabText(index, _tr(key, default))
+        self._preview_tabs.setTabText(0, _tr("research.tab_text", "Text"))
+        self._preview_tabs.setTabText(1, _tr("research.tab_chunks", "Chunks"))
+        self._preview_tabs.setTabText(2, _tr("research.tab_details", "Details"))
+        self._refresh_library_btn.setText(_tr(
+            "research.refresh_library", "Refresh history/findings"))
+        self._attach_finding_btn.setText(_tr(
+            "research.attach_finding", "Attach finding to mission"))
+        self._detach_finding_btn.setText(_tr("research.detach", "Detach"))
+        self._retention_btn.setText(_tr(
+            "research.retention", "Apply retention…"))
+        self._copy_url_btn.setText(_tr("research.copy_url", "Copy URL"))
+        self._open_url_btn.setText(_tr("research.open_url", "Request open URL"))
+        self._save_btn.setText(_tr("research.save_finding", "Save finding"))
 
     # ------------------------------------------------------------- providers
     def _refresh_providers(self) -> None:
@@ -423,8 +525,11 @@ class ResearchPanel(QWidget):
             statuses = self._api.provider_statuses()
         except Exception as exc:  # noqa: BLE001 - shown as unavailable
             statuses = []
-            self._service_label.setText("Research service: unavailable")
-            self._status_label.setText("Research unavailable: " + _redact(exc))
+            self._service_label.setText(_tr(
+                "research.service_unavailable", "Research service: unavailable"))
+            self._status_label.setText(_tr(
+                "research.unavailable_prefix", "Research unavailable: ")
+                + _redact(exc))
         self._provider_combo.blockSignals(True)
         self._provider_combo.clear()
         for raw in statuses or []:
@@ -441,16 +546,21 @@ class ResearchPanel(QWidget):
             self._provider_combo.setItemData(idx, _redact(item.get("reason") or state),
                                              Qt.ItemDataRole.ToolTipRole)
         if self._provider_combo.count() == 0:
-            self._provider_combo.addItem("No research provider configured", None)
+            self._provider_combo.addItem(_tr(
+                "research.no_provider", "No research provider configured"), None)
         self._provider_combo.blockSignals(False)
         if backend_status.get("offline") and not backend_status.get("network_configured"):
             self._service_label.setText(
-                "Research service: offline (no network transport configured)")
+                _tr("research.service_offline_network",
+                    "Research service: offline (no network transport configured)"))
         elif backend_status.get("permission_needed"):
-            self._service_label.setText("Research service: permission needed")
+            self._service_label.setText(_tr(
+                "research.service_permission", "Research service: permission needed"))
         else:
             self._service_label.setText(
-                "Research service: available" if statuses else "Research service: offline")
+                _tr("research.service_available", "Research service: available")
+                if statuses else _tr(
+                    "research.service_offline", "Research service: offline"))
         self._on_provider_changed()
 
     def _on_provider_changed(self, *_args) -> None:
@@ -474,7 +584,8 @@ class ResearchPanel(QWidget):
         except Exception:  # noqa: BLE001
             status = ""
         if not provider_id:
-            self._provider_status.setText("Provider status: no provider configured")
+            self._provider_status.setText(_tr(
+                "research.provider_none", "Provider status: no provider configured"))
         else:
             self._provider_status.setText("Provider status: " + (status or "unknown"))
 
@@ -518,8 +629,12 @@ class ResearchPanel(QWidget):
                 str(len(results)) + " result(s). Sources are untrusted data; "
                 "select one to preview.")
         else:
-            self._status_label.setText("No results. Try a broader query or another provider.")
-            self._empty_label.setText("No results. Nothing was fetched automatically.")
+            self._status_label.setText(_tr(
+                "research.no_results_status",
+                "No results. Try a broader query or another provider."))
+            self._empty_label.setText(_tr(
+                "research.no_results_empty",
+                "No results. Nothing was fetched automatically."))
             self._empty_label.show()
 
     def _show_results(self, results: list) -> None:
@@ -958,11 +1073,14 @@ class ResearchPanel(QWidget):
         if payload.get("permission_needed"):
             self._service_label.setText("Research service: permission needed")
         elif payload.get("denied"):
-            self._service_label.setText("Research service: denied by policy")
+            self._service_label.setText(_tr(
+                "research.service_denied", "Research service: denied by policy"))
         elif payload.get("offline"):
-            self._service_label.setText("Research service: offline")
+            self._service_label.setText(_tr(
+                "research.service_offline", "Research service: offline"))
         elif payload.get("ok"):
-            self._service_label.setText("Research service: available")
+            self._service_label.setText(_tr(
+                "research.service_available", "Research service: available"))
 
     @Slot(dict)
     def _on_task_done(self, payload: dict) -> None:

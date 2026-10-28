@@ -84,17 +84,46 @@ Translated through the injected translation service:
 - Inspector page title and principal project/file/mission labels;
 - Open Project dialog title/prompt/buttons/validation messages.
 
+## Secondary-panel coverage (U3, NL-BP-237 remaining strings)
+
+The following secondary surfaces now use the shared catalog/tr helper and registered
+retranslate hooks (selected principal strings, tooltips, empty/loading/error states,
+buttons, table headers and status labels):
+
+| Surface | Covered examples | Remaining |
+|---|---|---|
+| Task board | title, roadmap/refresh/run buttons, task-tree headers, empty queue/status | dynamic mission/task payload text, backend errors |
+| Chat composer | title, hint, input placeholder, dictate/stop/attach/remove/send buttons and tooltips, voice/status empty states | voice backend diagnostic codes and dynamic attachment errors |
+| Goals workspace | title, safety hint, tabs, list/detail headings, lifecycle/verify/replan/complete/approve buttons, tasks/queue/versions/evidence headers, empty states | dialogs' secondary body text, dynamic goal/audit/mission payloads |
+| Research workspace | title, safety hint, query/search/provider/status empty states, source/library/preview tabs and buttons, intake/retention labels | provider/backend diagnostics, dynamic result/preview payloads |
+| Autonomy page | title/subtitle, primary buttons, supervisor idle state, queue headers | dynamic supervisor notices/history |
+| Agents | title/subtitle, availability statuses, headers, policy, refresh | model names/notes and backend error details |
+| Model Hub | title/subtitle, tabs, provider filter, table headers, empty/loading states | provider/model/family payload values and diagnostic details |
+| Logs | title and clear action | log/event payload messages (backend owned) |
+| IDE editor | title, no-file/save labels/tooltips, open-file empty state | dynamic save/read-only/error detail strings |
+| Terminal | title, no-project/placeholder/run/clear/status labels | command/policy output and dynamic execution diagnostics |
+| Git | title, no-repository/refresh/status labels, diff/log tabs | branch/commit/diff/log payloads |
+| Problems | title, refresh, no-problems status, table headers | dynamic severity/source/message payloads |
+| Command palette | title/window title, filter placeholder, safety hint | command labels/categories supplied by MainWindow (principal surface owned by U1) |
+
+Tests `tests/test_i18n_coverage.py` verify catalog-key completeness, representative
+Italian and English strings and live retranslation for these panels, plus English/source
+fallback when no application translator is active.
+
 ## Coverage limits and remaining work
 
-- Many secondary strings remain untranslated: large autonomy/self-build, research,
-  Goals, chat, editor, terminal, Git, problems, agents, models and command-palette
-  surfaces; dynamic agent/model output; log/error payloads from the backend; and some
-  advanced Settings labels/notices. Untranslated text falls back to English/source.
+- Not every secondary string is translated. Remaining: dynamic agent/model/mission/
+  research/audit payloads and backend diagnostics; secondary dialogs/body copy; advanced
+  Settings labels/notices; command labels built by the main window; some dynamic status
+  notices and error descriptions. Untranslated text falls back to English/source.
 - No pluralization rules, locale-specific date/number formatting, right-to-left layout,
   rich-text markup in catalogs, translator tooling or machine translation at runtime.
 - Language changes do not alter running mission logs, already-generated responses,
   source code or documentation; those are intentionally separate.
 - OS detection uses the Qt system locale mapping; headless/embedded environments may
   report no useful locale, in which case System falls back to Italian.
+- Secondary panels without an active application translator intentionally stay
+  English/source for direct-construction compatibility; the shipped Studio creates the
+  translator before constructing its panels.
 - No network, model, GUI automation or translation service is used by the framework or
   its tests; the desktop GUI itself is exercised offscreen only.

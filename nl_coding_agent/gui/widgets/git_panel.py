@@ -6,6 +6,29 @@ from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListWidget, QPushButton,
                                QTabWidget, QPlainTextEdit, QVBoxLayout, QWidget)
 
 
+from nl_coding_agent.gui import i18n as _i18n
+
+
+def _tr(key, default=None, **values):
+    active = getattr(_i18n, "_INSTANCE", None)
+    if active is None or getattr(active, "_services", None) is None:
+        return _i18n.format_message(default if default is not None else key, **values)
+    try:
+        return active.tr(key, default, **values)
+    except Exception:
+        return default if default is not None else key
+
+
+def _register_retranslate(widget):
+    active = getattr(_i18n, "_INSTANCE", None)
+    register = getattr(active, "register_retranslate", None)
+    if callable(register):
+        try:
+            register(lambda *args: widget.retranslate())
+        except Exception:
+            pass
+
+
 class _Signals(QObject):
     done = Signal(dict)
 
@@ -33,20 +56,24 @@ class GitPanel(QWidget):
         self.setAccessibleName("Read-only Git panel")
         layout = QVBoxLayout(self)
         header = QHBoxLayout()
-        title = QLabel("GIT")
+        self._title = QLabel(_tr("git.title", "GIT"))
+        title = self._title
         title.setStyleSheet("font-weight: 800; letter-spacing: 1px; color: #7531FE;")
         header.addWidget(title)
-        self._branch = QLabel("No repository loaded")
+        self._branch = QLabel(_tr(
+            "git.no_repository", "No repository loaded"))
         self._branch.setStyleSheet("color: #AB83C6;")
         header.addWidget(self._branch, 1)
-        self._refresh_btn = QPushButton("Refresh")
+        self._refresh_btn = QPushButton(_tr("git.refresh", "Refresh"))
         self._refresh_btn.setAccessibleName("Refresh read-only git data")
         self._refresh_btn.setToolTip("Explicit refresh of branch/status/diff/log (read-only)")
         self._refresh_btn.clicked.connect(self.refresh)
         header.addWidget(self._refresh_btn)
         layout.addLayout(header)
-        self._status = QLabel("Read-only: status, branch, diff and log. "
-                              "No commit/push/reset/checkout is available.")
+        self._status = QLabel(_tr(
+            "git.status",
+            "Read-only: status, branch, diff and log. "
+            "No commit/push/reset/checkout is available."))
         self._status.setWordWrap(True)
         layout.addWidget(self._status)
         self._changes = QListWidget()
@@ -59,26 +86,36 @@ class GitPanel(QWidget):
         self._log = QPlainTextEdit()
         self._log.setReadOnly(True)
         self._log.setAccessibleName("Recent Git log")
-        self._tabs.addTab(self._diff, "Diff")
-        self._tabs.addTab(self._log, "Log")
+        self._tabs.addTab(self._diff, _tr("git.diff", "Diff"))
+        self._tabs.addTab(self._log, _tr("git.log", "Log"))
         layout.addWidget(self._tabs, 2)
+        _register_retranslate(self)
+
+    def retranslate(self) -> None:
+        self._title.setText(_tr("git.title", "GIT"))
+        self._refresh_btn.setText(_tr("git.refresh", "Refresh"))
+        self._tabs.setTabText(0, _tr("git.diff", "Diff"))
+        self._tabs.setTabText(1, _tr("git.log", "Log"))
 
     def set_project(self, project):
         self._project = dict(project) if project else None
         if project:
             self.refresh()
         else:
-            self._branch.setText("No repository loaded")
+            self._branch.setText(_tr(
+                "git.no_repository", "No repository loaded"))
             self._changes.clear()
             self._diff.clear()
             self._log.clear()
-            self._status.setText("Open a project to inspect its repository.")
+            self._status.setText(_tr(
+                "git.open_project", "Open a project to inspect its repository."))
 
     def refresh(self):
         if not self._project:
             self._status.setText("Open a project to inspect its repository.")
             return
-        self._status.setText("Loading Git data (read-only)…")
+        self._status.setText(_tr(
+            "git.loading", "Loading Git data (read-only)…"))
         root = self._project["root"]
         self._pool.start(_Task(lambda: {
             "status": self._services.git_status(root),

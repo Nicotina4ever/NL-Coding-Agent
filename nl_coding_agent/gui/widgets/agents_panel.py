@@ -8,6 +8,29 @@ from PySide6.QtWidgets import (
 )
 
 
+from nl_coding_agent.gui import i18n as _i18n
+
+
+def _tr(key, default=None, **values):
+    active = getattr(_i18n, "_INSTANCE", None)
+    if active is None or getattr(active, "_services", None) is None:
+        return _i18n.format_message(default if default is not None else key, **values)
+    try:
+        return active.tr(key, default, **values)
+    except Exception:
+        return default if default is not None else key
+
+
+def _register_retranslate(widget):
+    active = getattr(_i18n, "_INSTANCE", None)
+    register = getattr(active, "register_retranslate", None)
+    if callable(register):
+        try:
+            register(lambda *args: widget.retranslate())
+        except Exception:
+            pass
+
+
 class AgentFetchThread(QThread):
     data_ready = Signal(list, list, bool)
 
@@ -41,24 +64,30 @@ class AgentsPanel(QWidget):
         layout.setSpacing(12)
 
         header = QVBoxLayout()
-        title = QLabel("Agents")
+        self._title = QLabel(_tr("agents.title", "Agents"))
+        title = self._title
         title.setStyleSheet("font-size: 16px; font-weight: 700;")
         header.addWidget(title)
-        subtitle = QLabel(
+        self._subtitle = QLabel(_tr(
+            "agents.subtitle",
             "Configured roles and local Ollama model availability. "
-            "This panel never starts models or changes configuration."
-        )
+            "This panel never starts models or changes configuration."))
+        subtitle = self._subtitle
         subtitle.setWordWrap(True)
         subtitle.setStyleSheet("color: #7E8798; font-size: 12px;")
         header.addWidget(subtitle)
         layout.addLayout(header)
 
-        self._status_label = QLabel("Availability not checked yet.")
+        self._status_label = QLabel(_tr(
+            "agents.status_unknown", "Availability not checked yet."))
         self._status_label.setStyleSheet("color: #7E8798; font-size: 12px;")
         layout.addWidget(self._status_label)
 
         self._table = QTableWidget(0, 3)
-        self._table.setHorizontalHeaderLabels(["Role", "Model", "Availability"])
+        self._table.setHorizontalHeaderLabels([
+            _tr("agents.header_role", "Role"),
+            _tr("agents.header_model", "Model"),
+            _tr("agents.header_availability", "Availability")])
         self._table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.ResizeMode.ResizeToContents
         )
@@ -74,10 +103,11 @@ class AgentsPanel(QWidget):
         self._table.verticalHeader().setVisible(False)
         layout.addWidget(self._table)
 
-        policy = QLabel(
+        self._policy = QLabel(_tr(
+            "agents.policy",
             "Resource policy: local model stages run sequentially. "
-            "Cloud escalation is opt-in and disabled by default."
-        )
+            "Cloud escalation is opt-in and disabled by default."))
+        policy = self._policy
         policy.setWordWrap(True)
         policy.setStyleSheet(
             "color: #AB83C6; font-size: 12px; padding: 8px; "
@@ -85,16 +115,37 @@ class AgentsPanel(QWidget):
         )
         layout.addWidget(policy)
 
-        refresh_btn = QPushButton("Refresh availability")
+        self._refresh_btn = QPushButton(_tr(
+            "agents.refresh", "Refresh availability"))
+        refresh_btn = self._refresh_btn
         refresh_btn.clicked.connect(self.refresh)
         layout.addWidget(refresh_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
         self._render(self._services.get_agent_roles(), [], None)
+        _register_retranslate(self)
+
+    def retranslate(self) -> None:
+        self._title.setText(_tr("agents.title", "Agents"))
+        self._subtitle.setText(_tr(
+            "agents.subtitle",
+            "Configured roles and local Ollama model availability. "
+            "This panel never starts models or changes configuration."))
+        self._policy.setText(_tr(
+            "agents.policy",
+            "Resource policy: local model stages run sequentially. "
+            "Cloud escalation is opt-in and disabled by default."))
+        self._refresh_btn.setText(_tr(
+            "agents.refresh", "Refresh availability"))
+        self._table.setHorizontalHeaderLabels([
+            _tr("agents.header_role", "Role"),
+            _tr("agents.header_model", "Model"),
+            _tr("agents.header_availability", "Availability")])
 
     def refresh(self):
         if self._thread is not None and self._thread.isRunning():
             return
-        self._status_label.setText("Checking Ollama model availability...")
+        self._status_label.setText(_tr(
+            "agents.checking", "Checking Ollama model availability..."))
         self._status_label.setStyleSheet("color: #7E8798; font-size: 12px;")
         self._thread = AgentFetchThread(self._services)
         self._thread.data_ready.connect(self._on_data_ready)
@@ -140,18 +191,18 @@ class AgentsPanel(QWidget):
 
     def _availability(self, role: dict, available: dict, reachable: bool | None):
         if role.get("kind") == "deterministic":
-            return "Deterministic", Qt.GlobalColor.darkCyan
+            return _tr("agents.status_deterministic", "Deterministic"), Qt.GlobalColor.darkCyan
         model = str(role.get("model") or "")
         if not model:
-            return "Not configured", Qt.GlobalColor.red
+            return _tr("agents.status_not_configured", "Not configured"), Qt.GlobalColor.red
         if reachable is None:
-            return "Checking...", Qt.GlobalColor.gray
+            return _tr("agents.status_checking", "Checking..."), Qt.GlobalColor.gray
         if not reachable:
-            return "Unknown (offline)", Qt.GlobalColor.darkYellow
+            return _tr("agents.status_unknown_offline", "Unknown (offline)"), Qt.GlobalColor.darkYellow
         key = model[len("ollama/"):] if model.startswith("ollama/") else model
         installed = available.get(key)
         if installed is None:
-            return "Not installed", Qt.GlobalColor.red
+            return _tr("agents.status_not_installed", "Not installed"), Qt.GlobalColor.red
         if getattr(installed, "loaded", False):
-            return "Running", Qt.GlobalColor.green
-        return "Available", Qt.GlobalColor.darkGreen
+            return _tr("agents.status_running", "Running"), Qt.GlobalColor.green
+        return _tr("agents.status_available", "Available"), Qt.GlobalColor.darkGreen

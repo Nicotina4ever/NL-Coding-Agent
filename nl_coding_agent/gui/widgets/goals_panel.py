@@ -41,6 +41,29 @@ def _text(value: Any) -> str:
     return str(value if value is not None else "")
 
 
+from nl_coding_agent.gui import i18n as _i18n
+
+
+def _tr(key, default=None, **values):
+    active = getattr(_i18n, "_INSTANCE", None)
+    if active is None or getattr(active, "_services", None) is None:
+        return _i18n.format_message(default if default is not None else key, **values)
+    try:
+        return active.tr(key, default, **values)
+    except Exception:
+        return default if default is not None else key
+
+
+def _register_retranslate(widget):
+    active = getattr(_i18n, "_INSTANCE", None)
+    register = getattr(active, "register_retranslate", None)
+    if callable(register):
+        try:
+            register(lambda *args: widget.retranslate())
+        except Exception:
+            pass
+
+
 class CreateGoalDialog(QDialog):
     """Create-goal dialog: objective required; optional title/priority/etc."""
 
@@ -317,7 +340,46 @@ class GoalsPanel(QWidget):
         self._facade_ready = self._detect_facade()
         self.setAccessibleName("Goals workspace")
         self._build_ui()
+        _register_retranslate(self)
         self._set_no_project_state()
+
+    def retranslate(self) -> None:
+        self._title.setText(_tr("goals.title", "GOALS"))
+        self._hint.setText(_tr(
+            "goals.hint",
+            "Goals are explicit plans. This page never starts a mission or marks "
+            "a goal complete outside the verification-gated service action."))
+        self._create_btn.setText(_tr("goals.create", "Create goal…"))
+        self._refresh_btn.setText(_tr("goals.refresh", "Refresh"))
+        self._list_title.setText(_tr("goals.project_goals", "PROJECT GOALS"))
+        self._empty_label.setText(_tr(
+            "goals.no_goals", "No goals in this project."))
+        self._detail_title.setText(_tr(
+            "goals.no_goal_selected", "No goal selected"))
+        for index, (key, default) in enumerate((
+                ("goals.tab_overview", "Overview"),
+                ("goals.tab_milestones", "Milestones"),
+                ("goals.tab_missions", "Missions & Queue"),
+                ("goals.tab_activity", "Activity & Decisions"),
+                ("goals.tab_tasks", "Tasks & Active Workers"),
+                ("goals.tab_versions", "Plan Versions"),
+                ("goals.tab_evidence", "Evidence & Verification"),
+                ("goals.tab_next_work", "Next Work"))):
+            self._tabs.setTabText(index, _tr(key, default))
+        for action, label in (("activate", "Activate"), ("pause", "Pause"),
+                              ("resume", "Resume"), ("block", "Block"),
+                              ("unblock", "Unblock"), ("cancel", "Cancel")):
+            button = self._action_buttons.get(action)
+            if button is not None:
+                button.setText(_tr("goals.action_" + action, label))
+        self._verify_btn.setText(_tr("goals.verify", "Verify (read-only)"))
+        self._replan_btn.setText(_tr("goals.replan", "Replan…"))
+        self._complete_btn.setText(_tr(
+            "goals.complete", "Complete with evidence…"))
+        self._approval_label.setText(_tr(
+            "goals.approval_none", "Plan approval: no version selected"))
+        self._approve_plan_btn.setText(_tr(
+            "goals.approve_plan", "Approve plan…"))
 
     def _detect_facade(self) -> bool:
         return callable(getattr(self._services, "goal_list", None))
@@ -327,11 +389,13 @@ class GoalsPanel(QWidget):
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(8)
         header = QHBoxLayout()
-        title = QLabel("GOALS")
+        self._title = QLabel(_tr("goals.title", "GOALS"))
+        title = self._title
         title.setObjectName("goalsTitle")
         title.setStyleSheet("font-weight: 800; letter-spacing: 1px; color: #7531FE;")
         header.addWidget(title)
-        self._scope_label = QLabel("No project open")
+        self._scope_label = QLabel(_tr(
+            "goals.no_project", "No project open"))
         self._scope_label.setObjectName("goalsScope")
         self._scope_label.setStyleSheet("color: #46A3C0;")
         self._scope_label.setAccessibleName("Goals project scope")
@@ -342,8 +406,11 @@ class GoalsPanel(QWidget):
         self._facade_label.setAccessibleName("Goal service status")
         header.addWidget(self._facade_label)
         layout.addLayout(header)
-        hint = QLabel("Goals are explicit plans. This page never starts a mission or marks "
-                      "a goal complete outside the verification-gated service action.")
+        self._hint = QLabel(_tr(
+            "goals.hint",
+            "Goals are explicit plans. This page never starts a mission or marks "
+            "a goal complete outside the verification-gated service action."))
+        hint = self._hint
         hint.setWordWrap(True)
         hint.setStyleSheet("color: #AB83C6;")
         hint.setAccessibleName("Goals safety hint")
@@ -351,31 +418,34 @@ class GoalsPanel(QWidget):
 
         toolbar = QHBoxLayout()
         self._status_filter = QComboBox()
-        self._status_filter.addItem("All statuses", None)
+        self._status_filter.addItem(_tr("goals.all_statuses", "All statuses"), None)
         for status in GOAL_STATUSES:
             self._status_filter.addItem(status, status)
         self._status_filter.setAccessibleName("Goal status filter")
         toolbar.addWidget(self._status_filter)
         self._priority_filter = QComboBox()
-        self._priority_filter.addItem("All priorities", None)
+        self._priority_filter.addItem(_tr(
+            "goals.all_priorities", "All priorities"), None)
         for priority in PRIORITIES:
             self._priority_filter.addItem(priority, priority)
         self._priority_filter.setAccessibleName("Goal priority filter")
         toolbar.addWidget(self._priority_filter)
         self._status_filter.currentIndexChanged.connect(self._apply_filters)
         self._priority_filter.currentIndexChanged.connect(self._apply_filters)
-        self._create_btn = QPushButton("Create goal…")
+        self._create_btn = QPushButton(_tr("goals.create", "Create goal…"))
         self._create_btn.setAccessibleName("Create a goal")
-        self._create_btn.setToolTip("Create a goal; objective is required")
+        self._create_btn.setToolTip(_tr(
+            "goals.create_tooltip", "Create a goal; objective is required"))
         self._create_btn.clicked.connect(self._create_goal_dialog)
         toolbar.addWidget(self._create_btn)
-        self._refresh_btn = QPushButton("Refresh")
+        self._refresh_btn = QPushButton(_tr("goals.refresh", "Refresh"))
         self._refresh_btn.setAccessibleName("Refresh goals (read-only)")
         self._refresh_btn.clicked.connect(self.refresh)
         toolbar.addWidget(self._refresh_btn)
         toolbar.addStretch()
         layout.addLayout(toolbar)
-        self._status_label = QLabel("Open a project to load goals.")
+        self._status_label = QLabel(_tr(
+            "goals.open_project", "Open a project to load goals."))
         self._status_label.setObjectName("goalsStatus")
         self._status_label.setWordWrap(True)
         self._status_label.setAccessibleName("Goal operation status")
@@ -392,12 +462,18 @@ class GoalsPanel(QWidget):
         box.setAccessibleName("Goal list")
         layout = QVBoxLayout(box)
         layout.setContentsMargins(0, 0, 0, 0)
-        title = QLabel("PROJECT GOALS")
+        self._list_title = QLabel(_tr("goals.project_goals", "PROJECT GOALS"))
+        title = self._list_title
         title.setStyleSheet("font-weight: 700; color: #7531FE;")
         layout.addWidget(title)
         self._goals_table = QTableWidget(0, 6)
-        self._goals_table.setHorizontalHeaderLabels(
-            ["Title", "Status", "Priority", "Progress", "Dependencies", "Blocked"])
+        self._goals_table.setHorizontalHeaderLabels([
+            _tr("goals.header_title", "Title"),
+            _tr("goals.header_status", "Status"),
+            _tr("goals.header_priority", "Priority"),
+            _tr("goals.header_progress", "Progress"),
+            _tr("goals.header_dependencies", "Dependencies"),
+            _tr("goals.header_blocked", "Blocked")])
         self._goals_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._goals_table.setSelectionBehavior(
             QTableWidget.SelectionBehavior.SelectRows)
@@ -406,7 +482,8 @@ class GoalsPanel(QWidget):
         self._goals_table.setAccessibleName("Project goals")
         self._goals_table.itemSelectionChanged.connect(self._on_goal_selected)
         layout.addWidget(self._goals_table, 1)
-        self._empty_label = QLabel("No goals in this project.")
+        self._empty_label = QLabel(_tr(
+            "goals.no_goals", "No goals in this project."))
         self._empty_label.setStyleSheet("color: #AB83C6;")
         self._empty_label.setAccessibleName("Goals empty state")
         layout.addWidget(self._empty_label)
@@ -417,21 +494,22 @@ class GoalsPanel(QWidget):
         box.setAccessibleName("Goal detail")
         layout = QVBoxLayout(box)
         layout.setContentsMargins(0, 0, 0, 0)
-        self._detail_title = QLabel("No goal selected")
+        self._detail_title = QLabel(_tr(
+            "goals.no_goal_selected", "No goal selected"))
         self._detail_title.setStyleSheet("font-weight: 700; color: #46A3C0;")
         self._detail_title.setAccessibleName("Selected goal")
         layout.addWidget(self._detail_title)
         self._tabs = QTabWidget()
         self._tabs.setObjectName("goalDetailTabs")
         self._tabs.setAccessibleName("Goal detail tabs")
-        self._tabs.addTab(self._build_goal_tab(), "Overview")
-        self._tabs.addTab(self._build_milestones_tab(), "Milestones")
-        self._tabs.addTab(self._build_missions_tab(), "Missions & Queue")
-        self._tabs.addTab(self._build_activity_tab(), "Activity & Decisions")
-        self._tabs.addTab(self._build_tasks_tab(), "Tasks & Active Workers")
-        self._tabs.addTab(self._build_versions_tab(), "Plan Versions")
-        self._tabs.addTab(self._build_evidence_tab(), "Evidence & Verification")
-        self._tabs.addTab(self._build_next_work_tab(), "Next Work")
+        self._tabs.addTab(self._build_goal_tab(), _tr("goals.tab_overview", "Overview"))
+        self._tabs.addTab(self._build_milestones_tab(), _tr("goals.tab_milestones", "Milestones"))
+        self._tabs.addTab(self._build_missions_tab(), _tr("goals.tab_missions", "Missions & Queue"))
+        self._tabs.addTab(self._build_activity_tab(), _tr("goals.tab_activity", "Activity & Decisions"))
+        self._tabs.addTab(self._build_tasks_tab(), _tr("goals.tab_tasks", "Tasks & Active Workers"))
+        self._tabs.addTab(self._build_versions_tab(), _tr("goals.tab_versions", "Plan Versions"))
+        self._tabs.addTab(self._build_evidence_tab(), _tr("goals.tab_evidence", "Evidence & Verification"))
+        self._tabs.addTab(self._build_next_work_tab(), _tr("goals.tab_next_work", "Next Work"))
         layout.addWidget(self._tabs, 1)
         return box
 
@@ -451,20 +529,22 @@ class GoalsPanel(QWidget):
         for action, label in (("activate", "Activate"), ("pause", "Pause"),
                               ("resume", "Resume"), ("block", "Block"),
                               ("unblock", "Unblock"), ("cancel", "Cancel")):
-            button = QPushButton(label)
+            button = QPushButton(_tr("goals.action_" + action, label))
             button.setAccessibleName(label + " goal")
             button.clicked.connect(lambda checked=False, a=action: self._lifecycle(a))
             actions.addWidget(button)
             self._action_buttons[action] = button
-        self._verify_btn = QPushButton("Verify (read-only)")
+        self._verify_btn = QPushButton(_tr(
+            "goals.verify", "Verify (read-only)"))
         self._verify_btn.setAccessibleName("Verify goal evidence (read-only)")
         self._verify_btn.clicked.connect(self._verify_goal)
         actions.addWidget(self._verify_btn)
-        self._replan_btn = QPushButton("Replan…")
+        self._replan_btn = QPushButton(_tr("goals.replan", "Replan…"))
         self._replan_btn.setAccessibleName("Replan goal with rationale")
         self._replan_btn.clicked.connect(self._open_replan)
         actions.addWidget(self._replan_btn)
-        self._complete_btn = QPushButton("Complete with evidence…")
+        self._complete_btn = QPushButton(_tr(
+            "goals.complete", "Complete with evidence…"))
         self._complete_btn.setAccessibleName("Complete goal with verification evidence")
         self._complete_btn.clicked.connect(self._open_evidence_dialog)
         actions.addWidget(self._complete_btn)
@@ -481,11 +561,17 @@ class GoalsPanel(QWidget):
     def _build_missions_tab(self) -> QWidget:
         box = QWidget()
         layout = QVBoxLayout(box)
-        layout.addWidget(QLabel("Linked missions (read-only; no mission is created here)"))
+        self._missions_label = QLabel(_tr(
+            "goals.linked_missions",
+            "Linked missions (read-only; no mission is created here)"))
+        layout.addWidget(self._missions_label)
         self._missions_list = QListWidget()
         self._missions_list.setAccessibleName("Linked goal missions")
         layout.addWidget(self._missions_list, 1)
-        layout.addWidget(QLabel("Queue (read-only; explicit not-connected/empty state)"))
+        self._queue_label = QLabel(_tr(
+            "goals.queue_label",
+            "Queue (read-only; explicit not-connected/empty state)"))
+        layout.addWidget(self._queue_label)
         self._queue_list = QListWidget()
         self._queue_list.setAccessibleName("Goal mission queue")
         layout.addWidget(self._queue_list, 1)
@@ -513,29 +599,45 @@ class GoalsPanel(QWidget):
         box = QWidget()
         box.setAccessibleName("Goal tasks, queue and active workers")
         layout = QVBoxLayout(box)
-        layout.addWidget(QLabel("Linked mission tasks (read-only; no task is created/started here)"))
+        self._tasks_label = QLabel(_tr(
+            "goals.tasks_label",
+            "Linked mission tasks (read-only; no task is created/started here)"))
+        layout.addWidget(self._tasks_label)
         self._task_table = QTableWidget(0, 5)
         self._task_table.setHorizontalHeaderLabels(
-            ["ID", "Title", "Status", "Agent role", "Depends on"])
+            [_tr("goals.h_task_id", "ID"), _tr("goals.h_task_title", "Title"),
+             _tr("goals.h_task_status", "Status"), _tr("goals.h_task_role", "Agent role"),
+             _tr("goals.h_task_depends", "Depends on")])
         self._task_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._task_table.setAccessibleName("Linked mission tasks")
         layout.addWidget(self._task_table, 1)
-        layout.addWidget(QLabel("Mission queue (read-only state/priority/attempts/lease)"))
+        self._queue_entries_label = QLabel(_tr(
+            "goals.queue_entries_label",
+            "Mission queue (read-only state/priority/attempts/lease)"))
+        layout.addWidget(self._queue_entries_label)
         self._queue_table = QTableWidget(0, 8)
         self._queue_table.setHorizontalHeaderLabels(
-            ["Mission", "Queue ID", "State", "Priority", "Attempts",
-             "Lease owner", "Created", "Updated"])
+            [_tr("goals.h_queue_mission", "Mission"), _tr("goals.h_queue_id", "Queue ID"),
+             _tr("goals.h_queue_state", "State"), _tr("goals.h_queue_priority", "Priority"),
+             _tr("goals.h_queue_attempts", "Attempts"), _tr("goals.h_queue_lease", "Lease owner"),
+             _tr("goals.h_queue_created", "Created"), _tr("goals.h_queue_updated", "Updated")])
         self._queue_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._queue_table.setAccessibleName("Mission queue entries")
         layout.addWidget(self._queue_table, 1)
-        layout.addWidget(QLabel("Active supervisor runs/work (read-only)"))
+        self._workers_label = QLabel(_tr(
+            "goals.workers_label", "Active supervisor runs/work (read-only)"))
+        layout.addWidget(self._workers_label)
         self._workers_table = QTableWidget(0, 5)
         self._workers_table.setHorizontalHeaderLabels(
-            ["ID", "Mode", "Status", "Owner", "Heartbeat"])
+            [_tr("goals.h_worker_id", "ID"), _tr("goals.h_worker_mode", "Mode"),
+             _tr("goals.h_worker_status", "Status"), _tr("goals.h_worker_owner", "Owner"),
+             _tr("goals.h_worker_heartbeat", "Heartbeat")])
         self._workers_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._workers_table.setAccessibleName("Active supervisor runs and work")
         layout.addWidget(self._workers_table, 1)
-        refresh = QPushButton("Refresh tasks/queue/workers")
+        self._refresh_tasks_btn = QPushButton(_tr(
+            "goals.refresh_tasks", "Refresh tasks/queue/workers"))
+        refresh = self._refresh_tasks_btn
         refresh.setAccessibleName("Refresh tasks, queue and active workers (read-only)")
         refresh.setToolTip("Read-only facade refresh; never starts a mission or worker.")
         refresh.clicked.connect(self._refresh_tasks_workers)
@@ -547,17 +649,21 @@ class GoalsPanel(QWidget):
         layout = QVBoxLayout(box)
         self._versions_table = QTableWidget(0, 5)
         self._versions_table.setHorizontalHeaderLabels(
-            ["Version", "Current", "Trigger", "Rationale", "Milestone diff"])
+            [_tr("goals.h_version", "Version"), _tr("goals.h_current", "Current"),
+             _tr("goals.h_trigger", "Trigger"), _tr("goals.h_rationale", "Rationale"),
+             _tr("goals.h_diff", "Milestone diff")])
         self._versions_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._versions_table.setAccessibleName("Goal plan versions")
         self._versions_table.itemSelectionChanged.connect(self._on_version_selected)
         layout.addWidget(self._versions_table, 1)
         approval = QHBoxLayout()
-        self._approval_label = QLabel("Plan approval: no version selected")
+        self._approval_label = QLabel(_tr(
+            "goals.approval_none", "Plan approval: no version selected"))
         self._approval_label.setWordWrap(True)
         self._approval_label.setAccessibleName("Current plan approval state")
         approval.addWidget(self._approval_label, 1)
-        self._approve_plan_btn = QPushButton("Approve plan…")
+        self._approve_plan_btn = QPushButton(_tr(
+            "goals.approve_plan", "Approve plan…"))
         self._approve_plan_btn.setEnabled(False)
         self._approve_plan_btn.setAccessibleName("Approve selected goal plan version")
         self._approve_plan_btn.setToolTip(
@@ -575,13 +681,15 @@ class GoalsPanel(QWidget):
     def _build_evidence_tab(self) -> QWidget:
         box = QWidget()
         layout = QVBoxLayout(box)
-        self._verification_status = QLabel("No verification report loaded.")
+        self._verification_status = QLabel(_tr(
+            "goals.no_verification", "No verification report loaded."))
         self._verification_status.setWordWrap(True)
         self._verification_status.setAccessibleName("Verification verdict and outstanding status")
         layout.addWidget(self._verification_status)
         self._criteria_table = QTableWidget(0, 3)
         self._criteria_table.setHorizontalHeaderLabels(
-            ["Criterion", "Status", "Blockers"])
+            [_tr("goals.h_criterion", "Criterion"), _tr("goals.h_criterion_status", "Status"),
+             _tr("goals.h_blockers", "Blockers")])
         self._criteria_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._criteria_table.setAccessibleName("Acceptance criteria verification status")
         layout.addWidget(self._criteria_table, 1)
@@ -600,7 +708,9 @@ class GoalsPanel(QWidget):
         layout = QVBoxLayout(box)
         self._milestones_table = QTableWidget(0, 6)
         self._milestones_table.setHorizontalHeaderLabels(
-            ["Title", "Status", "Priority", "Depends", "Order", "Acceptance"])
+            [_tr("goals.h_ms_title", "Title"), _tr("goals.h_ms_status", "Status"),
+             _tr("goals.h_ms_priority", "Priority"), _tr("goals.h_ms_depends", "Depends"),
+             _tr("goals.h_ms_order", "Order"), _tr("goals.h_ms_acceptance", "Acceptance")])
         self._milestones_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._milestones_table.setAccessibleName("Goal milestones")
         layout.addWidget(self._milestones_table, 1)
@@ -1041,9 +1151,11 @@ class GoalsPanel(QWidget):
         self._versions_state = "not-connected"
         self._verifications_state = "not-connected"
         self._last_verification = {}
-        self._scope_label.setText("No project open")
+        self._scope_label.setText(_tr(
+            "goals.no_project", "No project open"))
         self._goals_table.setRowCount(0)
-        self._empty_label.setText("Open a project to load goals.")
+        self._empty_label.setText(_tr(
+            "goals.open_project", "Open a project to load goals."))
         self._empty_label.show()
         self._facade_label.setText(
             "Goal service: available" if self._facade_ready else "Goal service: unavailable")
@@ -1052,8 +1164,10 @@ class GoalsPanel(QWidget):
             button.setEnabled(False)
         self._create_btn.setToolTip("Open a project first.")
         self._refresh_btn.setToolTip("Open a project first.")
-        self._status_label.setText("Open a project to load goals.")
-        self._detail_title.setText("No goal selected")
+        self._status_label.setText(_tr(
+            "goals.open_project", "Open a project to load goals."))
+        self._detail_title.setText(_tr(
+            "goals.no_goal_selected", "No goal selected"))
         self._meta_label.setText("")
         self._objective_view.setPlainText("")
         self._blockers_view.setPlainText("")

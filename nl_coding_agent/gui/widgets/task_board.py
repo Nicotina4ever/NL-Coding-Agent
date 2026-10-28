@@ -15,6 +15,29 @@ from nl_coding_agent.app.services import AppServices
 _STATUS_ORDER = ["running", "pending", "failed", "blocked", "completed"]
 
 
+from nl_coding_agent.gui import i18n as _i18n
+
+
+def _tr(key, default=None, **values):
+    active = getattr(_i18n, "_INSTANCE", None)
+    if active is None or getattr(active, "_services", None) is None:
+        return _i18n.format_message(default if default is not None else key, **values)
+    try:
+        return active.tr(key, default, **values)
+    except Exception:
+        return default if default is not None else key
+
+
+def _register_retranslate(widget):
+    active = getattr(_i18n, "_INSTANCE", None)
+    register = getattr(active, "register_retranslate", None)
+    if callable(register):
+        try:
+            register(lambda *args: widget.retranslate())
+        except Exception:
+            pass
+
+
 class TaskBoardWidget(QWidget):
     """Displays missions, their task graph, progress, and run/resume controls."""
 
@@ -27,6 +50,7 @@ class TaskBoardWidget(QWidget):
         self._project: dict | None = None
         self._selected_mission_id: int | None = None
         self._build_ui()
+        _register_retranslate(self)
         self.refresh()
 
     def _build_ui(self):
@@ -35,21 +59,25 @@ class TaskBoardWidget(QWidget):
         layout.setSpacing(8)
 
         header = QHBoxLayout()
-        title = QLabel("Missions & Tasks")
+        self._title = QLabel(_tr("task_board.title", "Missions & Tasks"))
+        title = self._title
         title.setStyleSheet("font-size: 15px; font-weight: 700;")
         header.addWidget(title)
         header.addStretch()
 
-        self._roadmap_btn = QPushButton("Load Roadmap Mission")
-        self._roadmap_btn.setToolTip("Create a mission from docs/NEXT_SELF_BUILD_MISSION.md")
+        self._roadmap_btn = QPushButton(_tr(
+            "task_board.load_roadmap", "Load Roadmap Mission"))
+        self._roadmap_btn.setToolTip(_tr(
+            "task_board.load_roadmap_tooltip",
+            "Create a mission from docs/NEXT_SELF_BUILD_MISSION.md"))
         self._roadmap_btn.clicked.connect(self._load_roadmap)
         header.addWidget(self._roadmap_btn)
 
-        self._queue_label = QLabel("Queue: empty")
+        self._queue_label = QLabel(_tr("task_board.queue_empty", "Queue: empty"))
         self._queue_label.setStyleSheet("color: #7E8798; font-size: 12px;")
         header.addWidget(self._queue_label)
 
-        self._refresh_btn = QPushButton("Refresh")
+        self._refresh_btn = QPushButton(_tr("task_board.refresh", "Refresh"))
         self._refresh_btn.clicked.connect(self.refresh)
         header.addWidget(self._refresh_btn)
         layout.addLayout(header)
@@ -64,7 +92,11 @@ class TaskBoardWidget(QWidget):
         right = QSplitter(Qt.Orientation.Vertical)
 
         self._task_tree = QTreeWidget()
-        self._task_tree.setHeaderLabels(["Task", "Role", "Status", "Attempts"])
+        self._task_tree.setHeaderLabels([
+            _tr("task_board.header_task", "Task"),
+            _tr("task_board.header_role", "Role"),
+            _tr("task_board.header_status", "Status"),
+            _tr("task_board.header_attempts", "Attempts")])
         self._task_tree.setColumnWidth(0, 300)
         self._task_tree.setColumnWidth(1, 90)
         self._task_tree.setColumnWidth(2, 90)
@@ -87,17 +119,34 @@ class TaskBoardWidget(QWidget):
         self._progress.setMaximumWidth(220)
         footer.addWidget(self._progress)
 
-        self._status_label = QLabel("Select a mission")
+        self._status_label = QLabel(_tr(
+            "task_board.select_mission", "Select a mission"))
         self._status_label.setStyleSheet("color: #7E8798; font-size: 12px;")
         footer.addWidget(self._status_label)
         footer.addStretch()
 
-        self._run_btn = QPushButton("Run / Resume")
+        self._run_btn = QPushButton(_tr("task_board.run_resume", "Run / Resume"))
         self._run_btn.setObjectName("primaryButton")
         self._run_btn.setEnabled(False)
         self._run_btn.clicked.connect(self._run_selected)
         footer.addWidget(self._run_btn)
         layout.addLayout(footer)
+
+    def retranslate(self) -> None:
+        self._title.setText(_tr("task_board.title", "Missions & Tasks"))
+        self._roadmap_btn.setText(_tr(
+            "task_board.load_roadmap", "Load Roadmap Mission"))
+        self._roadmap_btn.setToolTip(_tr(
+            "task_board.load_roadmap_tooltip",
+            "Create a mission from docs/NEXT_SELF_BUILD_MISSION.md"))
+        self._refresh_btn.setText(_tr("task_board.refresh", "Refresh"))
+        self._run_btn.setText(_tr("task_board.run_resume", "Run / Resume"))
+        self._task_tree.setHeaderLabels([
+            _tr("task_board.header_task", "Task"),
+            _tr("task_board.header_role", "Role"),
+            _tr("task_board.header_status", "Status"),
+            _tr("task_board.header_attempts", "Attempts")])
+        self._update_queue_summary()
 
     # ------------------------------------------------------------------ project
 
@@ -143,8 +192,11 @@ class TaskBoardWidget(QWidget):
             self._selected_mission_id = None
             self._run_btn.setEnabled(False)
             self._task_tree.clear()
-            self._details.setPlainText("No missions yet. Create one from the CLI or load a roadmap mission.")
-            self._status_label.setText("No missions")
+            self._details.setPlainText(_tr(
+                "task_board.no_missions_detail",
+                "No missions yet. Create one from the CLI or load a roadmap mission."))
+            self._status_label.setText(_tr(
+                "task_board.no_missions", "No missions"))
             self._progress.setValue(0)
 
     def _queue_by_mission(self, project_id: int) -> dict[int, dict]:
@@ -162,21 +214,24 @@ class TaskBoardWidget(QWidget):
     def _update_queue_summary(self):
         project_id = self._project["id"] if self._project else None
         if project_id is None:
-            self._queue_label.setText("Queue: no project")
+            self._queue_label.setText(_tr(
+                "task_board.queue_no_project", "Queue: no project"))
             return
         try:
             items = self._services.supervisor_queue(project_id, limit=50)
         except Exception:
             items = []
         if not items:
-            self._queue_label.setText("Queue: empty")
+            self._queue_label.setText(_tr(
+                "task_board.queue_empty", "Queue: empty"))
             return
         counts: dict[str, int] = {}
         for item in items:
             state = str(item.get("state") or "?")
             counts[state] = counts.get(state, 0) + 1
         text = ", ".join(f"{state} {count}" for state, count in sorted(counts.items()))
-        self._queue_label.setText("Queue: " + text)
+        self._queue_label.setText(_tr(
+            "task_board.queue_prefix", "Queue: ") + text)
 
     @Slot(QListWidgetItem, QListWidgetItem)
     def _on_mission_selected(self, current, previous):

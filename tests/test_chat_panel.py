@@ -184,3 +184,5 @@ def test_main_window_integration_persists_mission_and_attachments(services, tmp_
     assert window._stack.currentIndex() == window._page_index["tasks"]
     window.close()
     app.processEvents()
+    from nl_coding_agent.gui.i18n import reset_i18n
+    reset_i18n()

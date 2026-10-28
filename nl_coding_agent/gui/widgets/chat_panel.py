@@ -9,6 +9,29 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QFileDialog, QHBoxLayout
                                QTextEdit, QVBoxLayout, QWidget)
 
 
+from nl_coding_agent.gui import i18n as _i18n
+
+
+def _tr(key, default=None, **values):
+    active = getattr(_i18n, "_INSTANCE", None)
+    if active is None or getattr(active, "_services", None) is None:
+        return _i18n.format_message(default if default is not None else key, **values)
+    try:
+        return active.tr(key, default, **values)
+    except Exception:
+        return default if default is not None else key
+
+
+def _register_retranslate(widget):
+    active = getattr(_i18n, "_INSTANCE", None)
+    register = getattr(active, "register_retranslate", None)
+    if callable(register):
+        try:
+            register(lambda *args: widget.retranslate())
+        except Exception:
+            pass
+
+
 class _Signals(QObject):
     done = Signal(dict)
     voice_done = Signal(dict)
@@ -75,18 +98,21 @@ class ChatPanel(QWidget):
         self.setAcceptDrops(True)
         self.setAccessibleName("Mission chat input")
         self._build_ui()
+        _register_retranslate(self)
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(8)
         header = QHBoxLayout()
-        title = QLabel("MISSION CHAT")
+        self._title = QLabel(_tr("chat.title", "MISSION CHAT"))
+        title = self._title
         title.setObjectName("chatTitle")
         title.setStyleSheet("font-weight: 800; letter-spacing: 1px; color: #7531FE;")
         header.addWidget(title)
         header.addStretch()
-        self._project_label = QLabel("No project open")
+        self._project_label = QLabel(_tr(
+            "chat.no_project", "No project open"))
         self._project_label.setObjectName("chatProject")
         header.addWidget(self._project_label)
         layout.addLayout(header)
@@ -100,7 +126,9 @@ class ChatPanel(QWidget):
         layout.addWidget(self._hint)
         self._input = ChatInput()
         self._input.setObjectName("chatInput")
-        self._input.setPlaceholderText("Describe the mission…  (Ctrl+Enter to submit)")
+        self._input.setPlaceholderText(_tr(
+            "chat.placeholder",
+            "Describe the mission…  (Ctrl+Enter to submit)"))
         self._input.setMinimumHeight(120)
         self._input.setAccessibleName("Mission message")
         self._input.setAccessibleDescription(
@@ -116,51 +144,59 @@ class ChatPanel(QWidget):
         layout.addWidget(self._attachments_list)
 
         voice = QHBoxLayout()
-        self._mic_btn = QPushButton("Dictate")
+        self._mic_btn = QPushButton(_tr("chat.dictate", "Dictate"))
         self._mic_btn.setObjectName("voiceButton")
         self._mic_btn.setAccessibleName("Start or stop dictation")
-        self._mic_btn.setToolTip("Start/stop local microphone dictation (Ctrl+Shift+M)")
+        self._mic_btn.setToolTip(_tr(
+            "chat.dictate_tooltip",
+            "Start/stop local microphone dictation (Ctrl+Shift+M)"))
         self._mic_btn.clicked.connect(self._toggle_voice)
         voice.addWidget(self._mic_btn)
-        self._voice_stop_btn = QPushButton("Stop")
+        self._voice_stop_btn = QPushButton(_tr("chat.stop", "Stop"))
         self._voice_stop_btn.setObjectName("secondaryButton")
         self._voice_stop_btn.setAccessibleName("Stop voice recording")
         self._voice_stop_btn.setEnabled(False)
         self._voice_stop_btn.clicked.connect(self._stop_voice)
         voice.addWidget(self._voice_stop_btn)
-        self._voice_status = QLabel("Voice: idle")
+        self._voice_status = QLabel(_tr("chat.voice_idle", "Voice: idle"))
         self._voice_status.setObjectName("voiceStatus")
         self._voice_status.setStyleSheet("color: #AB83C6;")
         self._voice_status.setAccessibleName("Voice status")
         voice.addWidget(self._voice_status, 1)
-        self._tts_toggle = QCheckBox("Read transcript aloud")
+        self._tts_toggle = QCheckBox(_tr(
+            "chat.read_aloud", "Read transcript aloud"))
         self._tts_toggle.setObjectName("ttsToggle")
         self._tts_toggle.setAccessibleName("Read transcript aloud")
         voice.addWidget(self._tts_toggle)
         layout.addLayout(voice)
         footer = QHBoxLayout()
-        self._attach_btn = QPushButton("Attach files…")
+        self._attach_btn = QPushButton(_tr(
+            "chat.attach_files", "Attach files…"))
         self._attach_btn.setObjectName("secondaryButton")
         self._attach_btn.setAccessibleName("Attach files")
-        self._attach_btn.setToolTip("Choose files (Ctrl+O)")
+        self._attach_btn.setToolTip(_tr(
+            "chat.attach_tooltip", "Choose files (Ctrl+O)"))
         self._attach_btn.clicked.connect(self._choose_files)
         footer.addWidget(self._attach_btn)
-        self._remove_btn = QPushButton("Remove")
+        self._remove_btn = QPushButton(_tr("chat.remove", "Remove"))
         self._remove_btn.setObjectName("secondaryButton")
         self._remove_btn.setAccessibleName("Remove selected attachment")
-        self._remove_btn.setToolTip("Remove selected attachment (Delete)")
+        self._remove_btn.setToolTip(_tr(
+            "chat.remove_tooltip", "Remove selected attachment (Delete)"))
         self._remove_btn.clicked.connect(self._remove_selected)
         footer.addWidget(self._remove_btn)
         footer.addStretch()
-        self._status = QLabel("Ready")
+        self._status = QLabel(_tr("chat.ready", "Ready"))
         self._status.setObjectName("chatStatus")
         self._status.setStyleSheet("color: #46A3C0;")
         self._status.setAccessibleName("Attachment preparation status")
         footer.addWidget(self._status)
-        self._submit_btn = QPushButton("Send mission")
+        self._submit_btn = QPushButton(_tr(
+            "chat.send_mission", "Send mission"))
         self._submit_btn.setObjectName("primaryButton")
         self._submit_btn.setAccessibleName("Submit mission")
-        self._submit_btn.setToolTip("Submit the mission (Ctrl+Enter)")
+        self._submit_btn.setToolTip(_tr(
+            "chat.submit_tooltip", "Submit the mission (Ctrl+Enter)"))
         self._submit_btn.clicked.connect(self._submit)
         footer.addWidget(self._submit_btn)
         layout.addLayout(footer)
@@ -172,11 +208,31 @@ class ChatPanel(QWidget):
                   activated=self._remove_selected)
 
     # ------------------------------------------------------------- project
+    def retranslate(self) -> None:
+        self._title.setText(_tr("chat.title", "MISSION CHAT"))
+        self._hint.setText(_tr(
+            "chat.hint",
+            "Drop files or folders here, or paste with Ctrl+V (text, files, images, "
+            "Windows screenshots). Ctrl+Enter submits."))
+        self._input.setPlaceholderText(_tr(
+            "chat.placeholder",
+            "Describe the mission…  (Ctrl+Enter to submit)"))
+        self._mic_btn.setText(_tr("chat.dictate", "Dictate"))
+        self._voice_stop_btn.setText(_tr("chat.stop", "Stop"))
+        self._tts_toggle.setText(_tr(
+            "chat.read_aloud", "Read transcript aloud"))
+        self._attach_btn.setText(_tr("chat.attach_files", "Attach files…"))
+        self._remove_btn.setText(_tr("chat.remove", "Remove"))
+        self._submit_btn.setText(_tr("chat.send_mission", "Send mission"))
+        self.set_project(self._project)
+
     def set_project(self, project) -> None:
         self._project = dict(project) if project else None
         self._project_label.setText(
-            (self._project or {}).get("root") or "No project open")
-        self._status.setText("Ready" if project else "Open a project to submit a mission")
+            (self._project or {}).get("root") or _tr(
+                "chat.no_project", "No project open"))
+        self._status.setText(_tr("chat.ready", "Ready") if project else _tr(
+            "chat.open_project", "Open a project to submit a mission"))
 
     @property
     def attachments(self) -> list[dict]:

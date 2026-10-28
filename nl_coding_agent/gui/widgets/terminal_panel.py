@@ -7,6 +7,29 @@ from PySide6.QtWidgets import (QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit,
                                QPushButton, QVBoxLayout, QWidget)
 
 
+from nl_coding_agent.gui import i18n as _i18n
+
+
+def _tr(key, default=None, **values):
+    active = getattr(_i18n, "_INSTANCE", None)
+    if active is None or getattr(active, "_services", None) is None:
+        return _i18n.format_message(default if default is not None else key, **values)
+    try:
+        return active.tr(key, default, **values)
+    except Exception:
+        return default if default is not None else key
+
+
+def _register_retranslate(widget):
+    active = getattr(_i18n, "_INSTANCE", None)
+    register = getattr(active, "register_retranslate", None)
+    if callable(register):
+        try:
+            register(lambda *args: widget.retranslate())
+        except Exception:
+            pass
+
+
 class _Signals(QObject):
     result = Signal(dict)
 
@@ -38,36 +61,41 @@ class TerminalPanel(QWidget):
         self._signals.result.connect(self._on_result)
         self.setAccessibleName("Project terminal")
         self._build_ui()
+        _register_retranslate(self)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
         header = QHBoxLayout()
-        title = QLabel("TERMINAL")
+        self._title = QLabel(_tr("terminal.title", "TERMINAL"))
+        title = self._title
         title.setStyleSheet("font-weight: 800; letter-spacing: 1px; color: #7531FE;")
         header.addWidget(title)
-        self._cwd_label = QLabel("No project open")
+        self._cwd_label = QLabel(_tr(
+            "terminal.no_project", "No project open"))
         self._cwd_label.setStyleSheet("color: #AB83C6;")
         header.addWidget(self._cwd_label, 1)
         layout.addLayout(header)
         row = QHBoxLayout()
         self._input = QLineEdit()
-        self._input.setPlaceholderText("Command (argument vector, no shell)…")
+        self._input.setPlaceholderText(_tr(
+            "terminal.placeholder", "Command (argument vector, no shell)…"))
         self._input.setAccessibleName("Terminal command")
         self._input.setToolTip("Runs as an argument vector without a shell; "
                                "destructive/network commands are refused by policy.")
         self._input.returnPressed.connect(self.run_command)
         row.addWidget(self._input, 1)
-        self._run_btn = QPushButton("Run")
+        self._run_btn = QPushButton(_tr("terminal.run", "Run"))
         self._run_btn.setAccessibleName("Run terminal command")
         self._run_btn.setToolTip("Run the explicit human command (Ctrl+Enter)")
         self._run_btn.clicked.connect(self.run_command)
         row.addWidget(self._run_btn)
-        self._clear_btn = QPushButton("Clear")
+        self._clear_btn = QPushButton(_tr("terminal.clear", "Clear"))
         self._clear_btn.setAccessibleName("Clear terminal output")
         self._clear_btn.clicked.connect(lambda: self._output.clear())
         row.addWidget(self._clear_btn)
         layout.addLayout(row)
-        self._status = QLabel("Explicit human commands only. No model executes terminal commands.")
+        self._status = QLabel(_tr(
+            "terminal.status", "Explicit human commands only. No model executes terminal commands."))
         self._status.setWordWrap(True)
         layout.addWidget(self._status)
         self._output = QPlainTextEdit()
@@ -77,6 +105,13 @@ class TerminalPanel(QWidget):
         layout.addWidget(self._output, 1)
         QShortcut(QKeySequence("Ctrl+Return"), self, activated=self.run_command)
 
+    def retranslate(self) -> None:
+        self._title.setText(_tr("terminal.title", "TERMINAL"))
+        self._input.setPlaceholderText(_tr(
+            "terminal.placeholder", "Command (argument vector, no shell)…"))
+        self._run_btn.setText(_tr("terminal.run", "Run"))
+        self._clear_btn.setText(_tr("terminal.clear", "Clear"))
+
     def set_project(self, project):
         self._project = dict(project) if project else None
         self._cwd_label.setText("cwd: " + (self._project or {}).get("root", "no project"))
@@ -85,7 +120,9 @@ class TerminalPanel(QWidget):
 
     def run_command(self, argv=None, *, cwd_rel="."):
         if not self._project:
-            self._status.setText("Open a project before running commands.")
+            self._status.setText(_tr(
+                "terminal.open_project",
+                "Open a project before running commands."))
             return
         command = argv if argv is not None else self._input.text().strip()
         if not command:

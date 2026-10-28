@@ -14,6 +14,29 @@ LEVEL_COLORS = {
 }
 
 
+from nl_coding_agent.gui import i18n as _i18n
+
+
+def _tr(key, default=None, **values):
+    active = getattr(_i18n, "_INSTANCE", None)
+    if active is None or getattr(active, "_services", None) is None:
+        return _i18n.format_message(default if default is not None else key, **values)
+    try:
+        return active.tr(key, default, **values)
+    except Exception:
+        return default if default is not None else key
+
+
+def _register_retranslate(widget):
+    active = getattr(_i18n, "_INSTANCE", None)
+    register = getattr(active, "register_retranslate", None)
+    if callable(register):
+        try:
+            register(lambda *args: widget.retranslate())
+        except Exception:
+            pass
+
+
 class LogPanel(QWidget):
     """Bottom log / event stream panel. Thread-safe via invokeMethod."""
 
@@ -26,11 +49,13 @@ class LogPanel(QWidget):
         layout.setSpacing(2)
 
         header = QHBoxLayout()
-        lbl = QLabel("Logs")
+        self._title = QLabel(_tr("log.title", "Logs"))
+        lbl = self._title
         lbl.setStyleSheet("font-weight: 600; font-size: 11px; color: #7E8798;")
         header.addWidget(lbl)
         header.addStretch()
-        clear_btn = QPushButton("Clear")
+        self._clear_btn = QPushButton(_tr("log.clear", "Clear"))
+        clear_btn = self._clear_btn
         clear_btn.setFixedSize(48, 20)
         clear_btn.setStyleSheet("font-size: 10px; padding: 1px 4px;")
         clear_btn.clicked.connect(self._clear)
@@ -42,6 +67,11 @@ class LogPanel(QWidget):
         self._output.setReadOnly(True)
         self._output.setMaximumBlockCount(2000)
         layout.addWidget(self._output)
+        _register_retranslate(self)
+
+    def retranslate(self) -> None:
+        self._title.setText(_tr("log.title", "Logs"))
+        self._clear_btn.setText(_tr("log.clear", "Clear"))
 
     @Slot(str, str, str)
     def append_log(self, source: str, level: str, message: str) -> None:

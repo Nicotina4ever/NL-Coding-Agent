@@ -33,6 +33,13 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
     window = MainWindow(services)
     assert started == [], "autonomy/self-build must never start on app open"
     assert window._stack.count() == 11
+    assert window._project_label.accessibleName() == "Opened project"
+    assert window._activity_label.accessibleName() == "Studio activity and current mission"
+    assert "IDLE" in window._activity_label.text().upper()
+    assert window._projects_panel._self_build_btn.objectName() == "subtleLinkButton"
+    assert "Advanced self-build" in window._projects_panel._self_build_btn.text()
+    assert window._inspector._cards and window._inspector._diagnostics
+    assert "Self-Build (This Agent)" in window._settings_panel._self_build_heading.text()
     assert window._page_index == {
         "projects": 0,
         "files": 1,
@@ -78,11 +85,12 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
     assert goals._goals_table.rowCount() == 0
     assert goals._goals_table.editTriggers() == (
         QTableWidget.EditTrigger.NoEditTriggers)
-    assert "No project" in goals._scope_label.text()
+    assert "Nessun progetto" in goals._scope_label.text()
     assert goals._tabs.count() == 8
     assert [goals._tabs.tabText(i) for i in range(8)] == [
-        "Overview", "Milestones", "Missions & Queue", "Activity & Decisions",
-        "Tasks & Active Workers", "Plan Versions", "Evidence & Verification", "Next Work"]
+        "Panoramica", "Milestone", "Missioni e coda", "Attività e decisioni",
+        "Attività e worker attivi", "Versioni piano", "Evidenza e verifica",
+        "Prossime attività"]
     assert goals._task_table.accessibleName() == "Linked mission tasks"
     assert goals._workers_table.accessibleName() == "Active supervisor runs and work"
     assert goals._approve_plan_btn.accessibleName() == "Approve selected goal plan version"
@@ -99,7 +107,7 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
     assert window._chat_panel._mic_btn.accessibleName() == "Start or stop dictation"
     assert window._chat_panel._voice_stop_btn.isEnabled() is False
     assert window._chat_panel._tts_toggle.accessibleName() == "Read transcript aloud"
-    assert "Voice: idle" in window._chat_panel._voice_status.text()
+    assert "Voce: inattiva" in window._chat_panel._voice_status.text()
     assert isinstance(window._stack.widget(3), AgentsPanel)
     assert isinstance(window._stack.widget(4), SettingsPanel)
     assert isinstance(window._stack.widget(6), AutonomyPanel)
@@ -145,6 +153,8 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
 
     window.close()
     app.processEvents()
+    from nl_coding_agent.gui.i18n import reset_i18n
+    reset_i18n()
 
 
 def test_gui_widgets_have_no_direct_database_or_crewai_imports():
