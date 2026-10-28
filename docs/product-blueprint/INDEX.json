@@ -5666,7 +5666,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "new (user directives 2026-10-28: Universal Goal Mode + document-driven planning)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-050",
         "NL-BP-051",
@@ -5681,7 +5681,8 @@
       ],
       "evidence": [
         "not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY_AUDIT.md; no code, mission or network run started",
-        "capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)"
+        "capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)",
+        "Implemented the first Universal Goal Mode increment: additive idempotent SQLite goals/milestones/goal_missions schema (reusing existing missions/tasks, never forking them), persistence/goal_store.py, and core/goals.py GoalService with natural-language objective creation plus project/attachments/reference metadata/acceptance criteria/priority/dependencies/template provenance, list/get/update, validated activate/pause/resume/block/unblock/cancel transitions, explicit-only completion (active + all milestones completed), goal/milestone dependency validation with cycle/missing checks, deterministic ordering, eligible next-work and progress summaries, mission links to existing missions only, and source='goals' audit events. 17 tests. Not yet implemented: GUI/CLI/API surfaces, multi-goal execution/continuation, template UI and independent verification."
       ],
       "source_refs": [
         "user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md)",
@@ -5693,7 +5694,7 @@
         "NL-BP-166"
       ],
       "primary_source": "user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md)",
-      "note": "Executable depth for the hierarchy concept in NL-BP-050 (kept unchanged); reuses 051/061/064 and the Trusted profile 166.",
+      "note": "Implemented the first Universal Goal Mode increment: additive idempotent SQLite goals/milestones/goal_missions schema (reusing existing missions/tasks, never forking them), persistence/goal_store.py, and core/goals.py GoalService with natural-language objective creation plus project/attachments/reference metadata/acceptance criteria/priority/dependencies/template provenance, list/get/update, validated activate/pause/resume/block/unblock/cancel transitions, explicit-only completion (active + all milestones completed), goal/milestone dependency validation with cycle/missing checks, deterministic ordering, eligible next-work and progress summaries, mission links to existing missions only, and source='goals' audit events. 17 tests. Not yet implemented: GUI/CLI/API surfaces, multi-goal execution/continuation, template UI and independent verification.",
       "backlog_anchor": "nl-bp-212",
       "program_stage": 8,
       "program_stage_name": "Universal Goal Mode and document-driven planning",
@@ -5708,7 +5709,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "new (user directives 2026-10-28: Universal Goal Mode + document-driven planning)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-212",
         "NL-BP-062"
@@ -5719,7 +5720,8 @@
       ],
       "evidence": [
         "not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY_AUDIT.md; no code, mission or network run started",
-        "capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)"
+        "capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)",
+        "Structured decomposition foundation implemented in GoalService.decompose_goal(structured plan): typed milestone items, unique keys/titles, priorities/acceptance/evidence, dependency resolution within the plan, and strict validation of empty/duplicate/unknown/missing/self/cyclic/title-collision/terminal cases with bulk creation in order. No LLM/network decomposition yet, and adaptive/versioned replanning on new evidence/failures/changing requirements remains to implement."
       ],
       "source_refs": [
         "user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md)",
@@ -5728,7 +5730,7 @@
         "NL-BP-062"
       ],
       "primary_source": "user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md)",
-      "note": "Replaces the fixed checklist/next-mission heuristic for goal mode; the indexed-backlog selector (062) remains a valid fallback.",
+      "note": "Structured decomposition foundation implemented in GoalService.decompose_goal(structured plan): typed milestone items, unique keys/titles, priorities/acceptance/evidence, dependency resolution within the plan, and strict validation of empty/duplicate/unknown/missing/self/cyclic/title-collision/terminal cases with bulk creation in order. No LLM/network decomposition yet, and adaptive/versioned replanning on new evidence/failures/changing requirements remains to implement.",
       "backlog_anchor": "nl-bp-213",
       "program_stage": 8,
       "program_stage_name": "Universal Goal Mode and document-driven planning",
@@ -5896,7 +5898,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "new (user directives 2026-10-28: Universal Goal Mode + document-driven planning)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-077",
         "NL-BP-043",
@@ -5909,7 +5911,8 @@
       ],
       "evidence": [
         "not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY_AUDIT.md; no code, mission or network run started",
-        "capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)"
+        "capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)",
+        "Bounded read-only DocumentCorpus implemented: consent-gated project roots/explicit files/folders/documentation archives/read-only Git docs/injected URL readers; includes README/AGENTS/Markdown/text/RST/JSON/YAML/TOML/CSV/HTML/docs/specs/architecture/roadmaps/checklists; PDF/Office only through existing optional extractors with explicit fail-closed reasons; ignores runtime/data/vendor/logs/caches/build directories, refuses symlinks and enforces file/byte/archive/section bounds; extracts title/headings/sections/sha256/size/content type/source provenance with duplicate-hash detection and authority-candidate flags; all content is immutably marked untrusted and never executed or fetched by the module. 8 tests. Reconciliation/authority resolution/planning persistence remain unimplemented."
       ],
       "source_refs": [
         "user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md)",
@@ -5919,7 +5922,7 @@
         "NL-BP-030"
       ],
       "primary_source": "user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md)",
-      "note": "New corpus pipeline; reuses project discovery (077), context retrieval (043), local extraction (030) and research readers where URLs are authorized.",
+      "note": "Bounded read-only DocumentCorpus implemented: consent-gated project roots/explicit files/folders/documentation archives/read-only Git docs/injected URL readers; includes README/AGENTS/Markdown/text/RST/JSON/YAML/TOML/CSV/HTML/docs/specs/architecture/roadmaps/checklists; PDF/Office only through existing optional extractors with explicit fail-closed reasons; ignores runtime/data/vendor/logs/caches/build directories, refuses symlinks and enforces file/byte/archive/section bounds; extracts title/headings/sections/sha256/size/content type/source provenance with duplicate-hash detection and authority-candidate flags; all content is immutably marked untrusted and never executed or fetched by the module. 8 tests. Reconciliation/authority resolution/planning persistence remain unimplemented.",
       "backlog_anchor": "nl-bp-218",
       "program_stage": 8,
       "program_stage_name": "Universal Goal Mode and document-driven planning",
@@ -6687,8 +6690,8 @@
     "total": 188,
     "by_status": {
       "verified": 33,
-      "partial": 78,
-      "planned": 74,
+      "partial": 81,
+      "planned": 71,
       "blocked": 3
     },
     "by_priority": {
@@ -6718,8 +6721,8 @@
       },
       "autonomy": {
         "verified": 16,
-        "partial": 18,
-        "planned": 25,
+        "partial": 21,
+        "planned": 22,
         "blocked": 1
       },
       "hygiene": {
@@ -6742,8 +6745,8 @@
     "by_priority_status": {
       "P0": {
         "verified": 20,
-        "partial": 38,
-        "planned": 45,
+        "partial": 41,
+        "planned": 42,
         "blocked": 3
       },
       "P1": {
@@ -8544,7 +8547,8 @@
     "v4.2_2026-10-28_goal_mode_directive": "Queue-only registration of the user's Universal Goal Mode + Document-Driven Goal Bootstrap & Planning directives. Read-only audit (docs/GOAL_MODE_CAPABILITY_AUDIT.md) confirmed the SQLite schema has missions/tasks/task_attempts/handoffs/verification_runs/mission_queue/supervisor_runs/leases/approvals/Flow tables but NO goals or milestones; the supervisor/queue/lease/Flow substrate and CLI supervisor commands exist; the GUI has Task Board/Autonomy/Research but no Goals page; document ingestion is local attachment extraction plus scanner filename summaries; GOAL_TEMPLATE.md is advisory only. Directives deduplicated against NL-BP-050/051/052/061/062/063/064/066-070/166-168/169-176/177-181/203/205-211; twelve genuine gaps were added as planned NL-BP-212..223 in a new pending program stage 8 'Universal Goal Mode and document-driven planning' (depends on stages 3 and 7). No existing ID/acceptance/status or stage 1-7 status was rewritten; addenda preserved; no code/model/network/mission run started. Totals: 175 requirements; 33 verified / 77 partial / 62 planned / 3 blocked.",
     "v4.3_2026-10-28_open_model_ecosystem": "Queue-only registration of the user's Open Model & Provider Ecosystem directive. Read-only audit (docs/OPEN_MODEL_ECOSYSTEM_AUDIT.md) found: Ollama + generic OpenAI-compatible providers with config-driven discovery, api_key_env Bearer headers, health/loaded/unload; dynamic Ollama tags/namespaces via /api/tags; a tested ModelRouter (override/project/role/fallback, capability filters, permission/resource gates, mission snapshots) that is NOT instantiated in product code; capability evidence states measured/declared/unknown/unavailable with measured-wins gating; and a read-only Model Hub GUI/Settings. Presets exist only as hand-edited config/models.yaml entries; the provider 'kind' branch is closed; params pass only temperature; per-model/per-role profiles, custom profiles/adapters, manual entry, capability warnings and provider/profile management are missing. Requirements 008/009/010/036/068/069/183/208 are retained unchanged; ten extension gaps were added as planned NL-BP-224..233 in new pending program stage 9 'Open model and provider ecosystem' (depends_on_stages [4,7]). No existing ID/acceptance/status or stage 1-8 status was rewritten; addenda preserved; no code/model/network/mission run started. Totals: 185 requirements; 33 verified / 77 partial / 72 planned / 3 blocked.",
     "v4.4_2026-10-28_release_publication_gate": "Queue-only registration of the user's Final Release Hygiene & GitHub Publication Gate directive plus the mandatory pre-push secrets/content scan. Read-only audit (docs/RELEASE_PUBLICATION_GATE_AUDIT.md) found: read-only distribution/repository-hygiene audits (090/091/095 verified; 092/093/094/096/097 partial), root-reorg/retention policy, packaging/beta/rehearsal/acceptance tooling (110-124/140/149/195-197), a VERIFIED secrets/history scanner NL-BP-162 with redacted evidence and exit-code gate but NOT wired into CI and no Git hooks (core.hooksPath unset), owner gates/no-remote/private repo (163), and MANUAL-PENDING real-hardware/CI/beta acceptance (152-165/164/165). No integrated final readiness milestone, no blocking pre-push gate and no publication-readiness verdict artifact existed. Three gaps added as planned NL-BP-234 (P0 hygiene final readiness milestone/refactor), NL-BP-235 (P0 mandatory blocking pre-push gate) and NL-BP-236 (P1 publication verdict + external-acceptance/sign-off gate) in new pending stage 10 'Final release hygiene and GitHub publication gate' (depends_on_stages [6,7,8,9]). No existing ID/acceptance/status or stage 1-9 status rewritten; addenda preserved; no code/model/network/push/publish run started. Totals: 188 requirements; 33 verified / 77 partial / 75 planned / 3 blocked.",
-    "v4.5_2026-10-28_research_facade_prepush_guard": "Stage-7 R6: real AppServices research facade wired to the Studio Research workspace (offline by default, explicit opt-in transports, provenance/permission evidence; 18 tests). Stage-10 R1: mandatory blocking pre-push secrets/content guard with CI secrets-scan job and 9 temp-repo tests (no canonical hook installed, no push, bounded history). Full suite 929 passed; no network/model/publish run."
+    "v4.5_2026-10-28_research_facade_prepush_guard": "Stage-7 R6: real AppServices research facade wired to the Studio Research workspace (offline by default, explicit opt-in transports, provenance/permission evidence; 18 tests). Stage-10 R1: mandatory blocking pre-push secrets/content guard with CI secrets-scan job and 9 temp-repo tests (no canonical hook installed, no push, bounded history). Full suite 929 passed; no network/model/publish run.",
+    "v4.6_2026-10-28_stage8_first_increments": "Stage-8 first increments: Universal Goal Mode G1 (goals/milestones schema on existing mission substrate, GoalService lifecycle/dependencies/structured decomposition/next-work/progress/audit, 17 tests) and document-driven planning D1 (bounded read-only document corpus discovery/ingestion with provenance and untrusted marking, 8 tests). Counts 33 verified / 81 partial / 71 planned / 3 blocked; full suite 954 passed. GUI/CLI/API, execution/continuation, replanning, reconciliation/extraction/planning and independent goal verification remain pending."
   },
   "program_order": {
     "schema_version": 1,
@@ -8870,7 +8874,7 @@
           "NL-BP-222",
           "NL-BP-223"
         ],
-        "note": "Queued by task-68. Execute after stages 3 and 7 gates pass or when the Lead records an explicit evidence-backed exception. Stages 1-7 statuses and all existing requirements are untouched. Goal mode reuses supervisor/SQLite/Flow; document-driven plans must be approved and independent completion verification remains mandatory. No deletion/publication/cloud authorization is granted."
+        "note": "Queued by task-68. Execute after stages 3 and 7 gates pass or when the Lead records an explicit evidence-backed exception. Stages 1-7 statuses and all existing requirements are untouched. Goal mode reuses supervisor/SQLite/Flow; document-driven plans must be approved and independent completion verification remains mandatory. No deletion/publication/cloud authorization is granted. First implementation increments landed: G1 (durable goals/milestones tables linked to existing missions, GoalService lifecycle/dependencies/structured decomposition/next-work/progress/audit; 17 tests) and D1 (bounded read-only document corpus discovery/ingestion with provenance and untrusted-content marking; 8 tests). Remaining: GUI/CLI/API surfaces, multi-goal continuation/execution, LLM-free adaptive replanning/versioning, document reconciliation/authority/conflict analysis, requirement extraction, plan preview/approval, independent goal verification and the end-to-end acceptance scenario."
       },
       {
         "stage": 9,
@@ -8921,7 +8925,7 @@
       }
     ]
   },
-  "updated_at": "2026-10-28T22:35:00+01:00",
+  "updated_at": "2026-10-28T22:50:00+01:00",
   "addendum_import": {
     "imported_at": "2026-10-28T21:08:26+01:00",
     "task": "shared task-59 (queue-only backlog import; no implementation)",

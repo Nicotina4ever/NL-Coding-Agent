@@ -637,3 +637,27 @@ Research facade wiring and pre-push guard (2026-10-28)
   remain MANUAL-PENDING. The guard is not a substitute for owner publication authorization.
 
 Full suite 929 passed; relocation/supervisor gates green; working tree clean.
+
+Stage-8 first implementation increments (2026-10-28)
+
+- G1 Universal Goal Mode foundation (NL-BP-212/213 partial): additive goals/milestones and
+  goal_missions tables built on the existing mission substrate (missions/tasks are linked, never
+  forked), persistence store, and GoalService covering natural-language goal creation with
+  attachments/reference metadata/acceptance criteria, priorities and validated goal/milestone
+  dependencies, lifecycle activate/pause/resume/block/unblock/cancel, explicit-only completion
+  (active + all milestones completed), strict structured-plan decomposition with cycle/duplicate
+  validation, eligible next-work respecting both dependency layers/priority/project filters,
+  progress summaries, mission links to existing missions only and source=goals audit events.
+  17 tests. No GUI/CLI/API surfaces, execution/continuation or LLM decomposition yet; adaptive
+  versioned replanning remains pending.
+- D1 document corpus discovery/ingestion (NL-BP-218 partial): bounded read-only DocumentCorpus for
+  project roots, explicit files/folders, documentation archives, read-only Git documentation and
+  injected URL readers; includes README/AGENTS/docs/specs/architecture/roadmaps/checklists and common
+  text formats; PDF/Office only via optional existing extractors with explicit fail-closed reasons;
+  runtime/data/vendor/logs/caches/build paths ignored, symlinks refused, archive traversal refusal
+  and file/byte/section bounds; records title/headings/sections/hash/size/content type/provenance,
+  duplicate-hash detection, authority-candidate flags and an immutable untrusted marker. 8 tests.
+  Reconciliation/authority/conflict analysis, requirement extraction, plan preview/approval and
+  persistence of derived plans remain pending.
+
+Full suite 954 passed; relocation/supervisor gates green; no network/model/GUI/autonomous run.
