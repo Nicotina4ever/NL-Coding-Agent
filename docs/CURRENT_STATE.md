@@ -495,3 +495,23 @@ SBOM OK; doctor/CLI/GUI smoke/portable staging dry-run/release-builder/beta-pack
 Remaining stage-6 items are external/manual: real native runtime archives and native candidates,
 actual GitHub Actions execution, clean-machine and real-hardware beta acceptance, signing/notarization,
 and explicit owner authorization for any upload/publish/distribution. No platform support is claimed.
+
+Stage-6 POSIX launchers and CI package smoke (2026-10-28, round 3)
+
+Linux/macOS launchers are now shipped: scripts/launchers/NL Coding Agent.sh, doctor.sh, status.sh,
+Self-Build Mode.sh and a macOS Finder NL Coding Agent.command wrapper. They resolve both the source
+and portable-payload layouts, use the provisioned python/bin/python3 runtime when present, warn only
+for an explicit developer system-python fallback, fail closed with installer/bootstrapper guidance
+when a packaged payload has no runtime, forward arguments, preserve exit codes and never auto-start
+a model mission. stage_portable maps them to the payload root and stages them executable; shell
+syntax is validated and the declarations/tests/matrix were updated, but no real non-Windows runtime
+exists here so execution remains MANUAL-PENDING.
+
+CI now also has a blocking package-smoke job (ubuntu-latest) which builds a source release candidate
+and a deterministic beta package in a managed temp workspace, runs the acceptance matrix (six
+targets, all MANUAL-PENDING, no CI hardware claim) and the native-runtime dry-run plan, then uploads
+reports only (package_smoke.json + SHA256SUMS, short retention). It is statically validated and
+locally PASS (9 CI tests, 6/6 smoke checks) but no actual GitHub Actions run has occurred.
+Full suite: 682 passed; relocation gate clean at the previous check. Real measured native runtime
+archives, native candidates, real CI runs, clean-machine/hardware beta acceptance, signing and owner
+distribution authorization remain MANUAL-PENDING; no platform support is claimed.

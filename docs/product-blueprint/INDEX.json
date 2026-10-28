@@ -3764,13 +3764,14 @@
       ],
       "evidence": [
         "not started; stage-6b candidate is Windows-only",
-        "Cross-platform provisioner/planning exists for all six targets (installer/provision.py, bootstrap.py provision CLI, release-builder six-platform manifests); no real native application candidates/packages have been built or tested on Linux/macOS/ARM64 yet."
+        "Cross-platform provisioner/planning exists for all six targets (installer/provision.py, bootstrap.py provision CLI, release-builder six-platform manifests); no real native application candidates/packages have been built or tested on Linux/macOS/ARM64 yet.",
+        "POSIX launchers now ship for Linux/macOS: scripts/launchers/NL Coding Agent.sh, doctor.sh, status.sh, Self-Build Mode.sh and a macOS .command wrapper, mapped by stage_portable to the payload root and staged executable; launchers resolve source vs payload layout, use provisioned python/bin/python3 when present, warn only for developer system-python fallback, fail closed when a packaged payload lacks a runtime, forward args and preserve exit codes. Native runtime archives and native candidates are still unmeasured/MANUAL-PENDING; launchers were statically/shell-syntax validated, not executed on a real non-Windows runtime."
       ],
       "source_refs": [
         "user cross-platform beta program directive 2026-10-28"
       ],
       "primary_source": "installer/bootstrap.py",
-      "note": "Cross-platform provisioner/planning exists for all six targets (installer/provision.py, bootstrap.py provision CLI, release-builder six-platform manifests); no real native application candidates/packages have been built or tested on Linux/macOS/ARM64 yet.",
+      "note": "POSIX launchers now ship for Linux/macOS: scripts/launchers/NL Coding Agent.sh, doctor.sh, status.sh, Self-Build Mode.sh and a macOS .command wrapper, mapped by stage_portable to the payload root and staged executable; launchers resolve source vs payload layout, use provisioned python/bin/python3 when present, warn only for developer system-python fallback, fail closed when a packaged payload lacks a runtime, forward args and preserve exit codes. Native runtime archives and native candidates are still unmeasured/MANUAL-PENDING; launchers were statically/shell-syntax validated, not executed on a real non-Windows runtime.",
       "backlog_anchor": "nl-bp-155",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)",
@@ -3795,13 +3796,14 @@
       ],
       "evidence": [
         "not started",
-        ".github/workflows/ci.yml implements the six-entry CI matrix (Windows x64 + experimental ARM64, Ubuntu x86_64 + experimental ARM64, macOS arm64 + Intel) with unit/integration/headless GUI/bootstrapper checks and report-only artifacts; 7 static/local-dry-run tests. Actual GitHub Actions execution and ARM64 runner availability remain MANUAL-PENDING; CI success is not platform support."
+        ".github/workflows/ci.yml implements the six-entry CI matrix (Windows x64 + experimental ARM64, Ubuntu x86_64 + experimental ARM64, macOS arm64 + Intel) with unit/integration/headless GUI/bootstrapper checks and report-only artifacts; 7 static/local-dry-run tests. Actual GitHub Actions execution and ARM64 runner availability remain MANUAL-PENDING; CI success is not platform support.",
+        "GitHub Actions CI now has the six-platform regression matrix plus a blocking package-smoke job on ubuntu-latest that builds a source candidate and beta package, runs the acceptance matrix (six targets, no CI hardware claim) and the native-runtime dry-run plan, uploading reports only; workflow is statically validated and locally dry-run (9 CI tests) but actual GitHub execution remains MANUAL-PENDING."
       ],
       "source_refs": [
         "user cross-platform beta program directive 2026-10-28"
       ],
       "primary_source": ".github/workflows/",
-      "note": ".github/workflows/ci.yml implements the six-entry CI matrix (Windows x64 + experimental ARM64, Ubuntu x86_64 + experimental ARM64, macOS arm64 + Intel) with unit/integration/headless GUI/bootstrapper checks and report-only artifacts; 7 static/local-dry-run tests. Actual GitHub Actions execution and ARM64 runner availability remain MANUAL-PENDING; CI success is not platform support.",
+      "note": "GitHub Actions CI now has the six-platform regression matrix plus a blocking package-smoke job on ubuntu-latest that builds a source candidate and beta package, runs the acceptance matrix (six targets, no CI hardware claim) and the native-runtime dry-run plan, uploading reports only; workflow is statically validated and locally dry-run (9 CI tests) but actual GitHub execution remains MANUAL-PENDING.",
       "backlog_anchor": "nl-bp-156",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)",
@@ -3914,13 +3916,14 @@
       ],
       "evidence": [
         "not started",
-        "docs/PLATFORM_COMPATIBILITY_MATRIX.md covers the 13 feature areas x six targets with verified/partial/unsupported + MANUAL-PENDING and native-dependency evidence; it is being re-synced to the current HEAD (task-47) and real CI/hardware evidence is still absent."
+        "docs/PLATFORM_COMPATIBILITY_MATRIX.md covers the 13 feature areas x six targets with verified/partial/unsupported + MANUAL-PENDING and native-dependency evidence; it is being re-synced to the current HEAD (task-47) and real CI/hardware evidence is still absent.",
+        "Compatibility matrix/launcher sections updated for shipped POSIX .sh/.command launchers and their payload mapping, with runtime unmeasured/MANUAL-PENDING and no support-level upgrade; CI package-smoke coverage documented."
       ],
       "source_refs": [
         "user cross-platform beta program directive 2026-10-28"
       ],
       "primary_source": "docs/PLATFORM_COMPATIBILITY_MATRIX.md",
-      "note": "docs/PLATFORM_COMPATIBILITY_MATRIX.md covers the 13 feature areas x six targets with verified/partial/unsupported + MANUAL-PENDING and native-dependency evidence; it is being re-synced to the current HEAD (task-47) and real CI/hardware evidence is still absent.",
+      "note": "Compatibility matrix/launcher sections updated for shipped POSIX .sh/.command launchers and their payload mapping, with runtime unmeasured/MANUAL-PENDING and no support-level upgrade; CI package-smoke coverage documented.",
       "backlog_anchor": "nl-bp-160",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)",
@@ -4068,13 +4071,14 @@
       "evidence": [
         "not started",
         "scripts/ci/checksums.py and CI report artifacts/checksums are implemented and tested; per-platform native packages and real-hardware beta acceptance records do not exist yet (MANUAL-PENDING).",
-        "Beta package builder produces checksummed/versioned candidate manifests; acceptance-matrix tool validates CI-vs-real-hardware evidence and rejects false CI support claims. Real per-platform runtime artifacts, CI execution and real-hardware acceptance records remain MANUAL-PENDING."
+        "Beta package builder produces checksummed/versioned candidate manifests; acceptance-matrix tool validates CI-vs-real-hardware evidence and rejects false CI support claims. Real per-platform runtime artifacts, CI execution and real-hardware acceptance records remain MANUAL-PENDING.",
+        "Package-smoke job produces deterministic package_smoke.json + SHA256SUMS report artifacts (reports-only upload, short retention) and validates source/beta package checksums, manifests and the acceptance matrix; real native artifacts, actual CI-triggered runs and real-hardware acceptance records remain MANUAL-PENDING."
       ],
       "source_refs": [
         "user cross-platform beta program directive 2026-10-28"
       ],
       "primary_source": "docs/RELEASE_ACCEPTANCE.md",
-      "note": "Beta package builder produces checksummed/versioned candidate manifests; acceptance-matrix tool validates CI-vs-real-hardware evidence and rejects false CI support claims. Real per-platform runtime artifacts, CI execution and real-hardware acceptance records remain MANUAL-PENDING.",
+      "note": "Package-smoke job produces deterministic package_smoke.json + SHA256SUMS report artifacts (reports-only upload, short retention) and validates source/beta package checksums, manifests and the acceptance matrix; real native artifacts, actual CI-triggered runs and real-hardware acceptance records remain MANUAL-PENDING.",
       "backlog_anchor": "nl-bp-165",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)",
@@ -5423,7 +5427,8 @@
     "v3.0_2026-10-28_cross_platform_beta": "Added NL-BP-152..165 (14 requirements) for the private cross-platform beta program: compatibility audit/matrix, platform abstraction, native runtime provisioning, native candidates, GitHub Actions CI matrix, optional GPU/ASR/TTS policy, macOS Universal 2 decision, beta packages/instructions, feedback workflow with redacted diagnostics, pre-upload secrets/history audit, owner authorization gates and manual-pending acceptance. Stage 6 reopened as in_progress (extension); total requirements 117.",
     "v3.1_2026-10-28_beta_c1c5": "Cross-platform private beta C1-C5 implemented: compatibility matrix/platform layer (31 tests), six-target installer runtime manifests/provisioner (57 tests), CI matrix + headless GUI/bootstrapper checks (7 tests), beta feedback workflow + redacted diagnostic generator (31 tests), pre-upload secrets/history audit (12 tests), and root Phase A cleanup. NL-BP-161/162 verified; 152-158/160/163-165 partial. No platform support claimed beyond Windows x64 evidence; manual-pending items recorded.",
     "v3.2_2026-10-28_root_reorganization": "Root reorganization Phases A-C complete: 32 -> 21 root items, launcher consolidation, archived repair scripts, crewAI staged in da_eliminare, .workspace build/dist/logs/temp/cache/state policy with python/ and data/ preserved, 628 full-suite tests passed, relocation/supervisor/SBOM/GUI/portable/release-builder checks green, secrets audit CLEAR-WITH-REVIEW blocking 0. NL-BP-095 verified, 094/097 partial. No deletion; staged/authorization items recorded.",
-    "v3.3_2026-10-28_stage6_tooling": "Stage-6c/6d/6e tooling: beta package builder (SHA256SUMS, versioned manifests, six-target install docs, byte-identical rebuild), release-acceptance matrix runner + beta record tool (manual-pending enforcement, generated tracked matrix evidence, no CI hardware claim), native runtime acquisition/measurement tooling (six targets, plan/offline/download, measured manifest draft, no fabricated hashes). NL-BP-140 verified; 159/164/165 partial. Full suite 677 passed. Real archives/CI/clean-machine/hardware acceptance and owner authorization remain MANUAL-PENDING."
+    "v3.3_2026-10-28_stage6_tooling": "Stage-6c/6d/6e tooling: beta package builder (SHA256SUMS, versioned manifests, six-target install docs, byte-identical rebuild), release-acceptance matrix runner + beta record tool (manual-pending enforcement, generated tracked matrix evidence, no CI hardware claim), native runtime acquisition/measurement tooling (six targets, plan/offline/download, measured manifest draft, no fabricated hashes). NL-BP-140 verified; 159/164/165 partial. Full suite 677 passed. Real archives/CI/clean-machine/hardware acceptance and owner authorization remain MANUAL-PENDING.",
+    "v3.4_2026-10-28_stage6_launchers_ci": "Stage-6f/6g: POSIX sh/.command launchers shipped (payload mapping, executable mode, fail-closed runtime handling, shell-syntax validated) and CI package-smoke job added with local PASS evidence (source/beta package checksums, acceptance matrix MANUAL-PENDING, native-runtime dry-run plan, reports-only artifacts). Full suite 682 passed. External/manual acceptance items unchanged."
   },
   "program_order": {
     "schema_version": 1,
@@ -5646,9 +5651,9 @@
           "NL-BP-150",
           "NL-BP-151"
         ],
-        "note": "Stage-6 Windows engineering closed and then extended by the cross-platform private beta directive. C1 platform audit/abstraction + matrix, C2 six-target native runtime manifests/provisioner and measured-only release builder, C3 GitHub Actions CI matrix + headless GUI/bootstrapper checks, C4 feedback workflow + opt-in redacted diagnostics + tester/owner runbooks, and C5 pre-upload secrets/history audit are implemented with automated evidence. Root reorganization Phase A (one root launcher, CLI launchers under scripts/launchers/, archived repair scripts, da_eliminare staging) is committed. No non-Windows support is claimed: real native runtime archives, GitHub Actions execution, clean-machine installs, clipboard/microphone/GPU hardware and real-hardware beta acceptance remain MANUAL-PENDING, and the secrets audit must be re-run before any upload; owner authorization is required for any external distribution. Root reorganization is now fully implemented and verified: one root GUI launcher, CLI/VoiceBridge launchers under scripts/launchers/, repair scripts archived to docs/history/legacy/temp-scripts/, unused crewAI checkout staged in da_eliminare, generated build/dist/logs/state consolidated under .workspace with a configurable policy (python/ and data/ deliberately preserved), and the pre-upload secrets/history audit re-run at final HEAD with gate CLEAR-WITH-REVIEW/blocking 0 after a documented synthetic-test-fixture allowlist. Stale release candidates and da_eliminare/crewAI remain for explicit owner authorization. Stage-6c/6d/6e tooling added: deterministic private-beta package builder (14-file source package with SHA256SUMS, versioned manifests, six-target install docs), release-acceptance matrix runner with manual-pending enforcement and generated tracked matrix evidence (all six targets MANUAL-PENDING, no CI hardware claim), and native runtime acquisition/measurement tooling (six-target source template, plan/offline/download modes, measured manifest draft, no fabricated hashes). Full suite 677 passed; relocation gate 34/0; supervisor/SBOM/GUI/portable/doctor/CLI smokes green. Stage 6 remains in_progress only because real native runtime archives, actual CI execution, clean-machine/hardware acceptance and owner authorization for distribution are external/manual actions."
+        "note": "Stage-6 Windows engineering closed and then extended by the cross-platform private beta directive. C1 platform audit/abstraction + matrix, C2 six-target native runtime manifests/provisioner and measured-only release builder, C3 GitHub Actions CI matrix + headless GUI/bootstrapper checks, C4 feedback workflow + opt-in redacted diagnostics + tester/owner runbooks, and C5 pre-upload secrets/history audit are implemented with automated evidence. Root reorganization Phase A (one root launcher, CLI launchers under scripts/launchers/, archived repair scripts, da_eliminare staging) is committed. No non-Windows support is claimed: real native runtime archives, GitHub Actions execution, clean-machine installs, clipboard/microphone/GPU hardware and real-hardware beta acceptance remain MANUAL-PENDING, and the secrets audit must be re-run before any upload; owner authorization is required for any external distribution. Root reorganization is now fully implemented and verified: one root GUI launcher, CLI/VoiceBridge launchers under scripts/launchers/, repair scripts archived to docs/history/legacy/temp-scripts/, unused crewAI checkout staged in da_eliminare, generated build/dist/logs/state consolidated under .workspace with a configurable policy (python/ and data/ deliberately preserved), and the pre-upload secrets/history audit re-run at final HEAD with gate CLEAR-WITH-REVIEW/blocking 0 after a documented synthetic-test-fixture allowlist. Stale release candidates and da_eliminare/crewAI remain for explicit owner authorization. Stage-6c/6d/6e tooling added: deterministic private-beta package builder (14-file source package with SHA256SUMS, versioned manifests, six-target install docs), release-acceptance matrix runner with manual-pending enforcement and generated tracked matrix evidence (all six targets MANUAL-PENDING, no CI hardware claim), and native runtime acquisition/measurement tooling (six-target source template, plan/offline/download modes, measured manifest draft, no fabricated hashes). Full suite 677 passed; relocation gate 34/0; supervisor/SBOM/GUI/portable/doctor/CLI smokes green. Stage 6 remains in_progress only because real native runtime archives, actual CI execution, clean-machine/hardware acceptance and owner authorization for distribution are external/manual actions. Stage-6f/6g added: POSIX .sh/.command launchers shipped and mapped into the payload root with fail-closed runtime handling and executable bits, and a CI package-smoke job (source candidate + beta package + acceptance matrix + native-runtime dry-run, reports-only artifacts) with static/local validation. Full suite 682 passed. Stage 6 still requires the external/manual items: real measured native runtime archives and native candidates, actual GitHub Actions runs on real runners, clean-machine/hardware beta acceptance records, signing/notarization and owner distribution authorization."
       }
     ]
   },
-  "updated_at": "2026-10-28T20:20:00+01:00"
+  "updated_at": "2026-10-28T20:30:00+01:00"
 }
