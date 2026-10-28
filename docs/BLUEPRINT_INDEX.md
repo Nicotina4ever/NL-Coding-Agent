@@ -17,7 +17,7 @@ Single index of every consolidated product requirement. Each row has a stable ID
 - **Stage 3 - Persistent autonomous supervisor and verified handoff**: completed (engineering; Tier B blocked evidence - docs/SH07_TIERB_EVIDENCE.md) (13 requirements; IDs in INDEX.json program_order; C3a-C3d implemented, SH-07 Tier A verified, Tier B pending)
 - **Stage 4 - Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities**: completed (engineering; C4a-C4e + F1/F2/F3a/F3b; hardware/desktop acceptance manual-pending - docs/HARNESS_ACCEPTANCE.md) (40 requirements; IDs in INDEX.json program_order)
 - **Stage 5 - Repository cleanup and optimization**: completed (audit + Lead-authorized safe cleanups; protected data preserved - docs/REPOSITORY_HYGIENE.md) (8 requirements; IDs in INDEX.json program_order)
-- **Stage 6 - Lightweight portable/bootstrapper and final release testing**: completed (engineering; portable candidate r2 smoke-tested from a non-default path; release acceptance manual-pending - docs/RELEASE_ACCEPTANCE.md) (26 requirements; IDs in INDEX.json program_order)
+- **Stage 6 - Lightweight portable/bootstrapper and final release testing**: in_progress (extension: cross-platform private beta NL-BP-152..165; Windows candidate r2 exists, all other platforms not yet built - docs/PLATFORM_COMPATIBILITY_MATRIX.md) (26 requirements; IDs in INDEX.json program_order)
 
 Every row below carries the same requirement ID and evidence; the stage mapping is
 authoritative in docs/product-blueprint/INDEX.json (program_stage).

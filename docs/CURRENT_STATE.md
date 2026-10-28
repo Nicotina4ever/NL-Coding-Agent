@@ -422,3 +422,20 @@ microphone/ASR/TTS hardware, signed installer/update, and full desktop mission e
 verified in this environment and remain manual-pending. The stale dist/portable-release, the
 revision-1 candidate and the stage-6a source candidate are retained until the user authorizes
 retirement/replacement.
+
+Cross-platform private beta program (2026-10-28)
+
+The repository owner requested a private cross-platform beta for two trusted external testers
+(one Linux, one macOS), with Windows x64/ARM64, Linux x86_64/ARM64 and macOS Intel/Apple Silicon
+support targets. This extends stage 6 (reopened as in_progress) and adds NL-BP-152..165 to the
+persistent indexed backlog (total 117 requirements): compatibility audit/matrix, platform
+abstraction with unsupported-configuration handling, native verified runtime/dependency manifests
+(never reusing the Windows embedded runtime on Linux/macOS), native bootstrapper/application
+candidates, GitHub Actions CI matrix (unit/integration/headless GUI/bootstrapper checks), optional
+CPU/GPU/ASR/TTS components with graceful degradation (no mandatory CUDA/ROCm/Metal/MLX), macOS
+Universal 2 evaluation or architecture-specific builds, private beta packages with checksums and
+non-developer instructions, compatibility matrix, GitHub-Issues feedback workflow and an opt-in
+diagnostic report generator with redaction, a pre-upload secrets/history/repository audit, owner-only
+authorization gates (no push, visibility change, collaborator invite or release upload), and
+MANUAL-PENDING clean-machine/real-hardware acceptance. No cross-platform support is claimed until
+CI builds and real-hardware beta tests pass.

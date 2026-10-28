@@ -46,7 +46,7 @@ evidence only.
 | 3 | Persistent autonomous supervisor and verified handoff | COMPLETE (Tier B blocked evidence) | 13 | NL-BP-12, 50-53, 61-64, 66, 67, 75, 77 | 2 |
 | 4 | Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities | COMPLETE | 40 | NL-BP-1, 2, 6-11, 13, 20-46, 68-71 | 3 |
 | 5 | Repository cleanup and optimization | COMPLETE | 8 | NL-BP-90-97 | 4 |
-| 6 | Lightweight portable/bootstrapper and final release testing | COMPLETE | 26 | NL-BP-110-124, 140-142, 144-151 | 5 |
+| 6 | Lightweight portable/bootstrapper and final release testing | IN PROGRESS |  40 | NL-BP-110-124, 140-142, 144-151 | 5 |
 
 Execution rule: a later stage starts only when the previous stage's gates pass, unless the
 Lead records an explicit evidence-backed exception for independent low-risk work. Stage 1 is
@@ -60,10 +60,10 @@ SH-07 Tier B (real local models) remains pending explicit authorization and bloc
 | Status | P0 | P1 | P2 | P3 | Total |
 |---|---|---|---|---|---|
 | verified | 19 | 10 | 0 | 0 | 29 |
-| partial | 15 | 24 | 9 | 0 | 48 |
-| planned | 9 | 5 | 6 | 2 | 22 |
-| blocked | 4 | 0 | 0 | 0 | 4 |
-| **Total** | 47 | 39 | 15 | 2 | 103 |
+| partial | 17 | 24 | 9 | 0 | 50 |
+| planned | 17 | 9 | 7 | 2 | 35 |
+| blocked | 3 | 0 | 0 | 0 | 3 |
+| **Total** | 56 | 43 | 16 | 2 | 117 |
 
 | Area | Requirements | verified | partial | planned | blocked |
 |---|---|---|---|---|---|
@@ -86,6 +86,8 @@ SH-07 Tier B (real local models) remains pending explicit authorization and bloc
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v3.0 (2026-10-28)** - Cross-platform private beta program added to the persistent backlog: NL-BP-152..165 (14 requirements) cover the Windows x64/ARM64, Linux x86_64/ARM64 and macOS Intel/Apple Silicon compatibility audit/matrix, platform abstraction and unsupported-config handling, native verified runtime manifests (never reusing Windows runtime on Linux/macOS), native bootstrapper candidates, GitHub Actions CI matrix (unit/integration/headless GUI/bootstrapper), optional CPU/GPU/ASR/TTS policy with graceful degradation, macOS Universal 2 decision, private beta packages/checksums/versioned manifests/non-developer instructions, beta feedback workflow with redacted diagnostics, pre-upload secrets/history audit, owner-only authorization gates (no push/publish/visibility change), and MANUAL-PENDING real-hardware cross-platform acceptance. Stage 6 is reopened as in_progress (extension); total requirements 117. No universal platform support is claimed until builds/tests pass and real-hardware beta acceptance is recorded.
 
 **v2.1 (2026-10-28)** - Stage 6 engineering complete: stage-6b portable candidate r2 (23,682 files / 1.40 GiB, single embedded runtime, flows + README, no dev-only files, relocation-safe) was smoke-tested from a managed non-default path: status/--help/doctor/imports/offscreen GUI PASS, reproducible tree hash. Revision-1's release-blocking status portability defect was fixed with regression tests (full suite 513 passed). Release acceptance remains PARTIAL: clean Windows without global Python, real clipboard/microphone/audio hardware, signed installer/update and full desktop mission execution are explicitly manual-pending; retiring the stale dist payloads (dist/portable-release, revision-1 candidate, stage6a source candidate) requires explicit user authorization.
 
