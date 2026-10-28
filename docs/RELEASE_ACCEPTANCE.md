@@ -216,3 +216,24 @@ PYTHONPATH):
 Revision-1 (dist/stage6b-portable-candidate, tree 80e4664...) remains on disk only as historical
 evidence; retiring it, dist/stage6a-source-candidate and the stale dist/portable-release still
 requires the explicit authorization requested in section 8.
+
+---
+
+## Cross-platform private beta extension (NL-BP-152..165, stage-6 extension)
+
+The repository owner extended the release acceptance criteria to a private cross-platform beta for
+two trusted testers (Linux and macOS), covering Windows x64/ARM64, Linux x86_64/ARM64 and macOS
+Intel/Apple Silicon. The full program plan is docs/CROSS_PLATFORM_PRIVATE_BETA_PROGRAM.md.
+
+| Requirement | Acceptance state |
+|---|---|
+| NL-BP-152/153/160 | MANUAL-PENDING: compatibility audit/matrix and platform abstraction not yet complete |
+| NL-BP-154/155/158 | MANUAL-PENDING: native runtime manifests and candidates only for Windows so far; no Windows runtime reuse allowed on Linux/macOS; Universal 2 decision pending |
+| NL-BP-156/165 | MANUAL-PENDING: CI matrix workflows being added; CI success will not be treated as platform support |
+| NL-BP-157 | MANUAL-PENDING: optional GPU/ASR/TTS capability probes and graceful degradation |
+| NL-BP-159/161 | MANUAL-PENDING: beta packages/checksums/instructions and feedback workflow |
+| NL-BP-162/163 | MANUAL-PENDING: pre-upload secrets/history audit and owner-only authorization runbook |
+| NL-BP-164 | MANUAL-PENDING: real-hardware acceptance must be recorded per tester (OS/arch, checksum, result) |
+
+No cross-platform support is claimed until the corresponding CI builds and real-hardware beta tests
+pass. Existing Windows acceptance evidence in this document remains valid and unchanged.
