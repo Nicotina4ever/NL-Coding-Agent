@@ -1,0 +1,296 @@
+"""F1: multimodal mission chat input (drag/drop, paste, previews, explicit submit)."""
+from __future__ import annotations
+
+from PySide6.QtCore import (QBuffer, QIODevice, QObject, QRunnable, QSize, Qt,
+                            QThreadPool, Signal, Slot)
+from PySide6.QtGui import QImage, QKeySequence, QPixmap, QShortcut
+from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel,
+                               QListWidget, QListWidgetItem, QPushButton,
+                               QTextEdit, QVBoxLayout, QWidget)
+
+
+class _Signals(QObject):
+    done = Signal(dict)
+
+
+class _Prepare(QRunnable):
+    def __init__(self, fn, signals: _Signals) -> None:
+        super().__init__()
+        self._fn, self._signals = fn, signals
+
+    def run(self) -> None:
+        try:
+            result = self._fn()
+        except Exception as exc:  # noqa: BLE001 - surfaced in the status label
+            result = {"attachments": [], "errors": [{"name": "attachment",
+                                                     "error": str(exc)}]}
+        self._signals.done.emit(result or {})
+
+
+class ChatInput(QTextEdit):
+    attachment_paste = Signal()
+
+    def insertFromMimeData(self, source) -> None:  # noqa: N802 - Qt override
+        if source is not None and (source.hasImage() or source.hasUrls()):
+            self.attachment_paste.emit()
+            return
+        super().insertFromMimeData(source)
+
+
+class ChatPanel(QWidget):
+    """Mission chat composer; attachment preparation runs off the UI thread."""
+
+    submitted = Signal(dict)
+
+    def __init__(self, services, parent=None) -> None:
+        super().__init__(parent)
+        self._services = services
+        self._project = None
+        self._attachments: list[dict] = []
+        self._pending = 0
+        self._pool = QThreadPool.globalInstance()
+        self._signals = _Signals()
+        self._signals.done.connect(self._on_prepared)
+        self.setAcceptDrops(True)
+        self.setAccessibleName("Mission chat input")
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(8)
+        header = QHBoxLayout()
+        title = QLabel("MISSION CHAT")
+        title.setObjectName("chatTitle")
+        title.setStyleSheet("font-weight: 800; letter-spacing: 1px; color: #7531FE;")
+        header.addWidget(title)
+        header.addStretch()
+        self._project_label = QLabel("No project open")
+        self._project_label.setObjectName("chatProject")
+        header.addWidget(self._project_label)
+        layout.addLayout(header)
+        self._hint = QLabel(
+            "Drop files or folders here, or paste with Ctrl+V (text, files, images, "
+            "Windows screenshots). Ctrl+Enter submits.")
+        self._hint.setObjectName("chatHint")
+        self._hint.setWordWrap(True)
+        self._hint.setStyleSheet("color: #AB83C6;")
+        self._hint.setAccessibleName("Mission chat hint")
+        layout.addWidget(self._hint)
+        self._input = ChatInput()
+        self._input.setObjectName("chatInput")
+        self._input.setPlaceholderText("Describe the mission…  (Ctrl+Enter to submit)")
+        self._input.setMinimumHeight(120)
+        self._input.setAccessibleName("Mission message")
+        self._input.setAccessibleDescription(
+            "Type the mission goal. Drop files/folders or paste attachments.")
+        self._input.attachment_paste.connect(self._paste_attachments)
+        layout.addWidget(self._input, 1)
+        self._attachments_list = QListWidget()
+        self._attachments_list.setObjectName("chatAttachments")
+        self._attachments_list.setMaximumHeight(150)
+        self._attachments_list.setIconSize(QSize(48, 48))
+        self._attachments_list.setAccessibleName("Prepared attachments")
+        layout.addWidget(self._attachments_list)
+        footer = QHBoxLayout()
+        self._attach_btn = QPushButton("Attach files…")
+        self._attach_btn.setObjectName("secondaryButton")
+        self._attach_btn.setAccessibleName("Attach files")
+        self._attach_btn.setToolTip("Choose files (Ctrl+O)")
+        self._attach_btn.clicked.connect(self._choose_files)
+        footer.addWidget(self._attach_btn)
+        self._remove_btn = QPushButton("Remove")
+        self._remove_btn.setObjectName("secondaryButton")
+        self._remove_btn.setAccessibleName("Remove selected attachment")
+        self._remove_btn.setToolTip("Remove selected attachment (Delete)")
+        self._remove_btn.clicked.connect(self._remove_selected)
+        footer.addWidget(self._remove_btn)
+        footer.addStretch()
+        self._status = QLabel("Ready")
+        self._status.setObjectName("chatStatus")
+        self._status.setStyleSheet("color: #46A3C0;")
+        self._status.setAccessibleName("Attachment preparation status")
+        footer.addWidget(self._status)
+        self._submit_btn = QPushButton("Send mission")
+        self._submit_btn.setObjectName("primaryButton")
+        self._submit_btn.setAccessibleName("Submit mission")
+        self._submit_btn.setToolTip("Submit the mission (Ctrl+Enter)")
+        self._submit_btn.clicked.connect(self._submit)
+        footer.addWidget(self._submit_btn)
+        layout.addLayout(footer)
+        QShortcut(QKeySequence("Ctrl+Return"), self, activated=self._submit)
+        QShortcut(QKeySequence("Ctrl+Enter"), self, activated=self._submit)
+        QShortcut(QKeySequence("Ctrl+O"), self, activated=self._choose_files)
+        QShortcut(QKeySequence("Delete"), self._attachments_list,
+                  activated=self._remove_selected)
+
+    # ------------------------------------------------------------- project
+    def set_project(self, project) -> None:
+        self._project = dict(project) if project else None
+        self._project_label.setText(
+            (self._project or {}).get("root") or "No project open")
+        self._status.setText("Ready" if project else "Open a project to submit a mission")
+
+    @property
+    def attachments(self) -> list[dict]:
+        return list(self._attachments)
+
+    def _set_status(self, text: str) -> None:
+        self._status.setText(str(text))
+
+    # ---------------------------------------------------------- preparation
+    def _start(self, fn) -> None:
+        self._pending += 1
+        self._submit_btn.setEnabled(False)
+        self._set_status("Preparing attachment(s)…")
+        self._pool.start(_Prepare(fn, self._signals))
+
+    @Slot(dict)
+    def _on_prepared(self, result: dict) -> None:
+        self._pending = max(0, self._pending - 1)
+        items = list(result.get("attachments") or [])
+        errors = list(result.get("errors") or [])
+        self._attachments.extend(items)
+        self._refresh()
+        if errors:
+            self._set_status("Rejected: " + str(errors[0].get("error"))[:140])
+        elif items:
+            self._set_status("Added " + str(len(items)) + " attachment(s)")
+        else:
+            self._set_status("Ready")
+        self._submit_btn.setEnabled(self._pending == 0)
+
+    def add_paths(self, paths, *, source: str = "drop") -> None:
+        cleaned = [str(item) for item in (paths or []) if str(item or "").strip()]
+        if not cleaned:
+            return
+        project_id = (self._project or {}).get("id")
+        self._start(lambda: self._services.prepare_attachment_paths(
+            project_id, cleaned, source=source))
+
+    def add_text(self, text: str) -> None:
+        if not str(text or "").strip():
+            return
+        project_id = (self._project or {}).get("id")
+        self._start(lambda: {"attachments": [
+            self._services.prepare_attachment_text(project_id, str(text))],
+            "errors": []})
+
+    def add_clipboard_image(self, image: QImage) -> None:
+        if image is None or image.isNull():
+            self._set_status("Clipboard image is empty")
+            return
+        buffer = QBuffer()
+        buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+        image.save(buffer, "PNG")
+        payload = bytes(buffer.data())
+        project_id = (self._project or {}).get("id")
+        self._start(lambda: {"attachments": [
+            self._services.prepare_attachment_clipboard_image(project_id, payload)],
+            "errors": []})
+
+    # ------------------------------------------------------------ clipboard
+    @Slot()
+    def _paste_attachments(self) -> None:
+        clipboard = QApplication.clipboard()
+        mime = clipboard.mimeData()
+        if mime is not None and mime.hasImage():
+            self.add_clipboard_image(clipboard.image())
+        elif mime is not None and mime.hasUrls():
+            paths = [u.toLocalFile() for u in mime.urls() if u.isLocalFile()]
+            self.add_paths(paths, source="paste")
+        elif clipboard.text().strip():
+            self.add_text(clipboard.text())
+
+    def _choose_files(self) -> None:
+        files, _ = QFileDialog.getOpenFileNames(self, "Attach files")
+        if files:
+            self.add_paths(files, source="upload")
+
+    # ------------------------------------------------------------ previews
+    def _remove_selected(self) -> None:
+        item = self._attachments_list.currentItem()
+        if item is None:
+            return
+        attachment_id = item.data(Qt.ItemDataRole.UserRole)
+        self._attachments = [a for a in self._attachments
+                             if a.get("id") != attachment_id]
+        self._refresh()
+        self._set_status("Attachment removed")
+
+    def clear_attachments(self) -> None:
+        self._attachments.clear()
+        self._refresh()
+
+    def _refresh(self) -> None:
+        self._attachments_list.clear()
+        for entry in self._attachments:
+            label = (str(entry.get("name") or "attachment") + "  ·  "
+                     + str(entry.get("kind") or "?") + "  ·  "
+                     + str(entry.get("size_bytes") or 0) + " B")
+            if entry.get("error"):
+                label += "  ·  extraction unavailable"
+            item = QListWidgetItem(label)
+            item.setData(Qt.ItemDataRole.UserRole, entry.get("id"))
+            item.setToolTip(str(entry.get("error") or entry.get("stored_path") or ""))
+            if entry.get("kind") == "image" and entry.get("stored_path"):
+                pixmap = QPixmap(str(entry.get("stored_path")))
+                if not pixmap.isNull():
+                    item.setIcon(pixmap.scaled(
+                        48, 48, Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation))
+            self._attachments_list.addItem(item)
+
+    # ------------------------------------------------------------ drag/drop
+    def dragEnterEvent(self, event) -> None:  # noqa: N802 - Qt override
+        if event.mimeData().hasUrls() or event.mimeData().hasImage():
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event) -> None:  # noqa: N802 - Qt override
+        if event.mimeData().hasUrls() or event.mimeData().hasImage():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event) -> None:  # noqa: N802 - Qt override
+        mime = event.mimeData()
+        if mime.hasUrls():
+            self.add_paths([u.toLocalFile() for u in mime.urls() if u.isLocalFile()],
+                           source="drop")
+            event.acceptProposedAction()
+        elif mime.hasImage():
+            self.add_clipboard_image(QImage(mime.imageData()))
+            event.acceptProposedAction()
+
+    # --------------------------------------------------------------- submit
+    def _submit(self) -> None:
+        if self._pending > 0:
+            self._set_status("Wait for attachment preparation to finish")
+            return
+        text = self._input.toPlainText().strip()
+        if not text and not self._attachments:
+            self._set_status("Write a mission or attach at least one file")
+            return
+        payload = {
+            "text": text,
+            "project_id": (self._project or {}).get("id"),
+            "attachments": [{"id": a.get("id"), "name": a.get("name"),
+                             "kind": a.get("kind"), "size_bytes": a.get("size_bytes"),
+                             "extraction_status": a.get("extraction_status")}
+                            for a in self._attachments],
+            "attachment_ids": [a.get("id") for a in self._attachments],
+        }
+        self.submitted.emit(payload)
+        self._set_status("Submitted mission with "
+                         + str(len(self._attachments)) + " attachment(s)")
+        self._input.clear()
+        self.clear_attachments()
+
+    def wait_for_idle(self, timeout_ms: int = 5000) -> bool:
+        import time
+        deadline = time.monotonic() + max(0.1, timeout_ms / 1000.0)
+        while time.monotonic() < deadline:
+            QApplication.processEvents()
+            if self._pending == 0:
+                QApplication.processEvents()
+                return True
+            time.sleep(0.01)
+        return False

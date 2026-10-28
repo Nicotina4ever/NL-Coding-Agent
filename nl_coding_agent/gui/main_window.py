@@ -24,6 +24,7 @@ from nl_coding_agent.gui.widgets.task_board import TaskBoardWidget
 from nl_coding_agent.gui.widgets.agents_panel import AgentsPanel
 from nl_coding_agent.gui.widgets.settings_panel import SettingsPanel
 from nl_coding_agent.gui.widgets.autonomy_panel import AutonomyPanel
+from nl_coding_agent.gui.widgets.chat_panel import ChatPanel
 
 
 _LOGO_PATH = Path(__file__).resolve().parents[2] / "assets" / "LogoMio.svg"
@@ -180,6 +181,11 @@ class MainWindow(QMainWindow):
         self._autonomy_panel = AutonomyPanel(services=self._services)
         self._stack.addWidget(self._autonomy_panel)
 
+        # Multimodal mission chat (F1): local attachment pipeline + explicit submit.
+        self._chat_panel = ChatPanel(services=self._services)
+        self._chat_panel.submitted.connect(self._on_chat_submitted)
+        self._stack.addWidget(self._chat_panel)  # index 7 = chat
+
         main_splitter.addWidget(self._stack)
 
         # Inspector panel
@@ -248,6 +254,7 @@ class MainWindow(QMainWindow):
             "settings": 4,
             "models":   5,
             "autonomy": 6,
+            "chat":     7,
         }
         self._settings_panel.autonomy_requested.connect(
             lambda: self._switch_page("autonomy")
@@ -287,6 +294,7 @@ class MainWindow(QMainWindow):
         self._tasks_panel.set_project(project)
         self._settings_panel.set_project(project)
         self._autonomy_panel.set_project(project)
+        self._chat_panel.set_project(project)
         self._update_supervisor_status()
         self._log_panel.append_log("projects", "info", f"Project opened: {project['name']}")
 
@@ -302,6 +310,38 @@ class MainWindow(QMainWindow):
                 content = f"[unreadable] {exc}"
         self._inspector.show_file(rel_path, content)
         self._log_panel.append_log("files", "info", f"Opened file: {rel_path}")
+
+    @Slot(dict)
+    def _on_chat_submitted(self, payload: dict):
+        """Persist a chat mission + attachment provenance; never starts a model run."""
+        if not self._current_project:
+            self._log_panel.append_log(
+                "chat", "warning", "Open a project before submitting a mission.")
+            return
+        text = str(payload.get("text") or "").strip()
+        attachment_ids = [int(item) for item in payload.get("attachment_ids") or []
+                          if item is not None]
+        title = (text[:60] if text else "Mission with attachments") or "Mission"
+        goal = text or "Review the attached files and describe the requested change."
+        try:
+            mission_id = self._services.create_mission(
+                self._current_project["id"], title, goal)
+            if attachment_ids:
+                self._services.attach_attachments_to_mission(
+                    mission_id, attachment_ids)
+        except Exception as exc:  # noqa: BLE001 - GUI boundary
+            self._log_panel.append_log("chat", "error",
+                                       "Mission submit failed: " + str(exc))
+            return
+        self._tasks_panel.refresh()
+        self._switch_page("tasks")
+        self.statusBar().showMessage(
+            "Mission #" + str(mission_id) + " created with "
+            + str(len(attachment_ids)) + " attachment(s)", 6000)
+        self._log_panel.append_log(
+            "chat", "info",
+            "Mission #" + str(mission_id) + " created from chat with "
+            + str(len(attachment_ids)) + " attachment(s) (no model run).")
 
     @Slot(int)
     def _on_mission_selected(self, mission_id: int):

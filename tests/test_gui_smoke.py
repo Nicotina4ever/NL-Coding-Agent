@@ -27,7 +27,7 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
 
     app = QApplication.instance() or QApplication([])
     window = MainWindow(services)
-    assert window._stack.count() == 7
+    assert window._stack.count() == 8
     assert window._page_index == {
         "projects": 0,
         "files": 1,
@@ -36,7 +36,10 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
         "settings": 4,
         "models": 5,
         "autonomy": 6,
+        "chat": 7,
     }
+    from nl_coding_agent.gui.widgets.chat_panel import ChatPanel
+    assert isinstance(window._stack.widget(7), ChatPanel)
     assert isinstance(window._stack.widget(3), AgentsPanel)
     assert isinstance(window._stack.widget(4), SettingsPanel)
     assert isinstance(window._stack.widget(6), AutonomyPanel)

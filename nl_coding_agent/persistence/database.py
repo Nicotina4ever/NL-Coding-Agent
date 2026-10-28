@@ -280,6 +280,25 @@ CREATE TABLE IF NOT EXISTS flow_pending_feedback (
     created_at   TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS mission_attachments (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id        INTEGER,
+    mission_id        INTEGER,
+    name              TEXT NOT NULL,
+    kind              TEXT NOT NULL,
+    mime              TEXT,
+    size_bytes        INTEGER NOT NULL,
+    sha256            TEXT NOT NULL,
+    source            TEXT NOT NULL DEFAULT 'upload',
+    stored_path       TEXT NOT NULL,
+    extraction_status TEXT NOT NULL DEFAULT 'pending',
+    text_chars        INTEGER NOT NULL DEFAULT 0,
+    extracted_text    TEXT,
+    error             TEXT,
+    metadata_json     TEXT NOT NULL DEFAULT '{}',
+    created_at        TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS flow_runs (
     flow_id           TEXT PRIMARY KEY,
     project_id        INTEGER NOT NULL,
@@ -345,6 +364,9 @@ CREATE INDEX IF NOT EXISTS idx_events_correlation ON events(correlation_id);
 CREATE INDEX IF NOT EXISTS idx_flow_states_uuid ON flow_states(flow_uuid, id DESC);
 CREATE INDEX IF NOT EXISTS idx_flow_runs_mission ON flow_runs(mission_id);
 CREATE INDEX IF NOT EXISTS idx_flow_runs_status ON flow_runs(status);
+CREATE INDEX IF NOT EXISTS idx_attachments_mission ON mission_attachments(mission_id, id);
+CREATE INDEX IF NOT EXISTS idx_attachments_project ON mission_attachments(project_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_attachments_sha ON mission_attachments(sha256);
 """
 
 

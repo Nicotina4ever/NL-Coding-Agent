@@ -224,6 +224,42 @@ class AppServices:
         log_event(self._db, f"Created mission #{m_id}: {title}", source="missions")
         return m_id
 
+    # ------------------------------------------------------- mission attachments
+    def prepare_attachment_paths(self, project_id: int | None, paths,
+                                 *, mission_id: int | None = None,
+                                 source: str = "drop") -> dict:
+        from nl_coding_agent.app import attachments
+        return attachments.AttachmentStore().prepare_paths(
+            paths, source=source, project_id=project_id, mission_id=mission_id)
+
+    def prepare_attachment_text(self, project_id: int | None, text: str,
+                                *, mission_id: int | None = None) -> dict:
+        from nl_coding_agent.app import attachments
+        return attachments.AttachmentStore().prepare_text(
+            text, project_id=project_id, mission_id=mission_id)
+
+    def prepare_attachment_clipboard_image(self, project_id: int | None,
+                                           image_bytes: bytes,
+                                           *, mission_id: int | None = None) -> dict:
+        from nl_coding_agent.app import attachments
+        return attachments.AttachmentStore().prepare_clipboard_image(
+            image_bytes, project_id=project_id, mission_id=mission_id)
+
+    def list_mission_attachments(self, *, mission_id: int | None = None,
+                                 project_id: int | None = None) -> list[dict]:
+        from nl_coding_agent.app import attachments
+        return attachments.list_attachments(mission_id=mission_id,
+                                            project_id=project_id)
+
+    def attach_attachments_to_mission(self, mission_id: int,
+                                      attachment_ids: list[int]) -> int:
+        from nl_coding_agent.app import attachments
+        return attachments.attach_to_mission(int(mission_id), attachment_ids)
+
+    def delete_attachment(self, attachment_id: int) -> bool:
+        from nl_coding_agent.app import attachments
+        return attachments.delete_attachment(int(attachment_id))
+
     def list_missions(self, project_id: int | None = None) -> list[dict]:
         from nl_coding_agent.persistence.missions import list_missions as _list_m
         return _list_m(project_id)

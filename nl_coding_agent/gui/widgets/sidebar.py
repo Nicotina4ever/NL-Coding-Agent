@@ -1,4 +1,4 @@
-﻿"""Sidebar navigation widget."""
+"""Sidebar navigation widget."""
 from __future__ import annotations
 
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QButtonGroup, QSpacerItem, QSizePolicy
@@ -9,6 +9,7 @@ PAGES = [
     ("Projects",  "projects"),
     ("Files",     "files"),
     ("Tasks",     "tasks"),
+    ("Chat",      "chat"),
     ("Agents",    "agents"),
     ("Model Hub", "models"),
     ("Settings",  "settings"),
