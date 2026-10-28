@@ -3657,7 +3657,7 @@
       "area": "distribution",
       "priority": "P0",
       "bp_priority": "new (cross-platform private beta directive 2026-10-28)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-149"
       ],
@@ -3668,13 +3668,14 @@
         "audit is evidence-based (imports, platform APIs, wheels, subprocess flags), not a claim list"
       ],
       "evidence": [
-        "not started; program directive 2026-10-28"
+        "not started; program directive 2026-10-28",
+        "Committed docs/PLATFORM_COMPATIBILITY_MATRIX.md (six-target, 13 feature rows incl. CI-vs-MANUAL-PENDING split, 17 Windows-first assumptions with file:line, 30-row native dependency matrix) and nl_coding_agent/core/platform_support.py + 31 tests. Audit/implementation evidence exists; non-Windows runtime/wheel availability remains unverified (no network) and only Windows x64 is locally exercised."
       ],
       "source_refs": [
         "user cross-platform beta program directive 2026-10-28"
       ],
       "primary_source": "docs/PLATFORM_COMPATIBILITY_MATRIX.md",
-      "note": "Compatibility classification is the prerequisite for all native beta packages.",
+      "note": "Committed docs/PLATFORM_COMPATIBILITY_MATRIX.md (six-target, 13 feature rows incl. CI-vs-MANUAL-PENDING split, 17 Windows-first assumptions with file:line, 30-row native dependency matrix) and nl_coding_agent/core/platform_support.py + 31 tests. Audit/implementation evidence exists; non-Windows runtime/wheel availability remains unverified (no network) and only Windows x64 is locally exercised.",
       "backlog_anchor": "nl-bp-152",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)",
@@ -3686,7 +3687,7 @@
       "area": "distribution",
       "priority": "P0",
       "bp_priority": "new (cross-platform private beta directive 2026-10-28)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-152"
       ],
@@ -3697,13 +3698,14 @@
         "no forked application codebase per OS"
       ],
       "evidence": [
-        "not started"
+        "not started",
+        "platform_support.py provides canonical six-target OS/CPU detection, fail-closed unsupported handling, feature declarations and read-only optional-backend probes (31 tests). Adapters are not yet wired through every GUI/CLI path; POSIX gaps identified in the matrix (detached flags, shell=True verification path, python.exe-only discovery, Windows resume strings, NVIDIA-only GPU probe)."
       ],
       "source_refs": [
         "user cross-platform beta program directive 2026-10-28"
       ],
       "primary_source": "nl_coding_agent/core/platform_support.py",
-      "note": "Adapters must not require CUDA/ROCm/Metal/MLX when unavailable.",
+      "note": "platform_support.py provides canonical six-target OS/CPU detection, fail-closed unsupported handling, feature declarations and read-only optional-backend probes (31 tests). Adapters are not yet wired through every GUI/CLI path; POSIX gaps identified in the matrix (detached flags, shell=True verification path, python.exe-only discovery, Windows resume strings, NVIDIA-only GPU probe).",
       "backlog_anchor": "nl-bp-153",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)",
@@ -3715,7 +3717,7 @@
       "area": "distribution",
       "priority": "P0",
       "bp_priority": "new (cross-platform private beta directive 2026-10-28)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-153",
         "NL-BP-114"
@@ -3727,13 +3729,14 @@
         "no global Python/pip/uv/conda required; manifests are validated by tests with fake artifacts"
       ],
       "evidence": [
-        "not started; stage-6a installer supports a single template manifest only"
+        "not started; stage-6a installer supports a single template manifest only",
+        "installer/platform_targets.py, runtime_manifest.py/json and provision.py implement six native targets, host detection, strict native-identity guard (no Windows runtime on Linux/macOS), measured-only sha256/size policy, six-target release_ready gate, offline/cache/atomic/repair/update reuse and macOS separate-arch decision; 57 targeted tests. Real native runtime/dependency archives and clean-host execution remain MANUAL-PENDING."
       ],
       "source_refs": [
         "user cross-platform beta program directive 2026-10-28"
       ],
       "primary_source": "installer/platform_manifest.py",
-      "note": "Real runtime URLs/hashes must be produced on a release runner, not fabricated.",
+      "note": "installer/platform_targets.py, runtime_manifest.py/json and provision.py implement six native targets, host detection, strict native-identity guard (no Windows runtime on Linux/macOS), measured-only sha256/size policy, six-target release_ready gate, offline/cache/atomic/repair/update reuse and macOS separate-arch decision; 57 targeted tests. Real native runtime/dependency archives and clean-host execution remain MANUAL-PENDING.",
       "backlog_anchor": "nl-bp-154",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)",
@@ -3745,7 +3748,7 @@
       "area": "distribution",
       "priority": "P0",
       "bp_priority": "new (cross-platform private beta directive 2026-10-28)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-154"
       ],
@@ -3756,13 +3759,14 @@
         "CI builds are distinguished from real-hardware acceptance (MANUAL-PENDING)"
       ],
       "evidence": [
-        "not started; stage-6b candidate is Windows-only"
+        "not started; stage-6b candidate is Windows-only",
+        "Cross-platform provisioner/planning exists for all six targets (installer/provision.py, bootstrap.py provision CLI, release-builder six-platform manifests); no real native application candidates/packages have been built or tested on Linux/macOS/ARM64 yet."
       ],
       "source_refs": [
         "user cross-platform beta program directive 2026-10-28"
       ],
       "primary_source": "installer/bootstrap.py",
-      "note": "Source-only and runtime-bundled variants may differ per platform.",
+      "note": "Cross-platform provisioner/planning exists for all six targets (installer/provision.py, bootstrap.py provision CLI, release-builder six-platform manifests); no real native application candidates/packages have been built or tested on Linux/macOS/ARM64 yet.",
       "backlog_anchor": "nl-bp-155",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)",
@@ -3774,7 +3778,7 @@
       "area": "distribution",
       "priority": "P0",
       "bp_priority": "new (cross-platform private beta directive 2026-10-28)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-152",
         "NL-BP-155"
@@ -3786,13 +3790,14 @@
         "CI success is not treated as full platform support (manual-pending remains)"
       ],
       "evidence": [
-        "not started"
+        "not started",
+        ".github/workflows/ci.yml implements the six-entry CI matrix (Windows x64 + experimental ARM64, Ubuntu x86_64 + experimental ARM64, macOS arm64 + Intel) with unit/integration/headless GUI/bootstrapper checks and report-only artifacts; 7 static/local-dry-run tests. Actual GitHub Actions execution and ARM64 runner availability remain MANUAL-PENDING; CI success is not platform support."
       ],
       "source_refs": [
         "user cross-platform beta program directive 2026-10-28"
       ],
       "primary_source": ".github/workflows/",
-      "note": "CI workflows must not push, publish or invite collaborators.",
+      "note": ".github/workflows/ci.yml implements the six-entry CI matrix (Windows x64 + experimental ARM64, Ubuntu x86_64 + experimental ARM64, macOS arm64 + Intel) with unit/integration/headless GUI/bootstrapper checks and report-only artifacts; 7 static/local-dry-run tests. Actual GitHub Actions execution and ARM64 runner availability remain MANUAL-PENDING; CI success is not platform support.",
       "backlog_anchor": "nl-bp-156",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)",
@@ -3804,7 +3809,7 @@
       "area": "distribution",
       "priority": "P1",
       "bp_priority": "new (cross-platform private beta directive 2026-10-28)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-153"
       ],
@@ -3815,13 +3820,14 @@
         "tests cover absent-backend paths"
       ],
       "evidence": [
-        "not started"
+        "not started",
+        "platform_support.py probes and declares optional GPU/ASR/TTS backends without executing hardware and never requires CUDA/ROCm/Metal/MLX; installer runtime manifests declare optional components with degradation notes. No real GPU/ASR/TTS backends installed/tested (MANUAL-PENDING)."
       ],
       "source_refs": [
         "user cross-platform beta program directive 2026-10-28"
       ],
       "primary_source": "docs/PLATFORM_COMPATIBILITY_MATRIX.md",
-      "note": "Metal/MLX/CUDA/ROCm are optional acceleration, not requirements.",
+      "note": "platform_support.py probes and declares optional GPU/ASR/TTS backends without executing hardware and never requires CUDA/ROCm/Metal/MLX; installer runtime manifests declare optional components with degradation notes. No real GPU/ASR/TTS backends installed/tested (MANUAL-PENDING).",
       "backlog_anchor": "nl-bp-157",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)",
@@ -3833,7 +3839,7 @@
       "area": "distribution",
       "priority": "P2",
       "bp_priority": "new (cross-platform private beta directive 2026-10-28)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-154",
         "NL-BP-156"
@@ -3844,13 +3850,14 @@
         "decision and evidence recorded, no unverified universal claim"
       ],
       "evidence": [
-        "not started"
+        "not started",
+        "macOS Universal 2 decision recorded: separate macos-x86_64/macos-arm64 runtimes are provisioned; universal artifact is only schema-legal when measured and shared by both targets. No macOS build has been produced/tested (MANUAL-PENDING)."
       ],
       "source_refs": [
         "user cross-platform beta program directive 2026-10-28"
       ],
       "primary_source": "docs/PLATFORM_COMPATIBILITY_MATRIX.md",
-      "note": "Universal 2 requires every native dependency to support both slices.",
+      "note": "macOS Universal 2 decision recorded: separate macos-x86_64/macos-arm64 runtimes are provisioned; universal artifact is only schema-legal when measured and shared by both targets. No macOS build has been produced/tested (MANUAL-PENDING).",
       "backlog_anchor": "nl-bp-158",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)",
@@ -3891,7 +3898,7 @@
       "area": "release",
       "priority": "P1",
       "bp_priority": "new (cross-platform private beta directive 2026-10-28)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-152"
       ],
@@ -3901,13 +3908,14 @@
         "matrix is kept in sync with CI evidence"
       ],
       "evidence": [
-        "not started"
+        "not started",
+        "docs/PLATFORM_COMPATIBILITY_MATRIX.md covers the 13 feature areas x six targets with verified/partial/unsupported + MANUAL-PENDING and native-dependency evidence; it is being re-synced to the current HEAD (task-47) and real CI/hardware evidence is still absent."
       ],
       "source_refs": [
         "user cross-platform beta program directive 2026-10-28"
       ],
       "primary_source": "docs/PLATFORM_COMPATIBILITY_MATRIX.md",
-      "note": "Docs must not claim unmeasured hardware behavior.",
+      "note": "docs/PLATFORM_COMPATIBILITY_MATRIX.md covers the 13 feature areas x six targets with verified/partial/unsupported + MANUAL-PENDING and native-dependency evidence; it is being re-synced to the current HEAD (task-47) and real CI/hardware evidence is still absent.",
       "backlog_anchor": "nl-bp-160",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)",
@@ -3919,7 +3927,7 @@
       "area": "release",
       "priority": "P1",
       "bp_priority": "new (cross-platform private beta directive 2026-10-28)",
-      "status": "planned",
+      "status": "verified",
       "dependencies": [
         "NL-BP-159"
       ],
@@ -3930,13 +3938,14 @@
         "report can be attached to a GitHub issue manually"
       ],
       "evidence": [
-        "not started"
+        "not started",
+        "tests/test_diagnostic_report.py (31 tests) proves opt-in local-only reports and redaction of API keys/tokens, private keys, credential URLs, cloud ids, usernames/home and personal absolute paths, plus not-collected project content/DB rows/env; .github/ISSUE_TEMPLATE beta forms validate; docs/BETA_TESTING.md and PRIVATE_BETA_RUNBOOK.md cover triage/authorization. Reports never upload automatically."
       ],
       "source_refs": [
         "user cross-platform beta program directive 2026-10-28"
       ],
       "primary_source": ".github/ISSUE_TEMPLATE/",
-      "note": "No automatic telemetry or upload.",
+      "note": "tests/test_diagnostic_report.py (31 tests) proves opt-in local-only reports and redaction of API keys/tokens, private keys, credential URLs, cloud ids, usernames/home and personal absolute paths, plus not-collected project content/DB rows/env; .github/ISSUE_TEMPLATE beta forms validate; docs/BETA_TESTING.md and PRIVATE_BETA_RUNBOOK.md cover triage/authorization. Reports never upload automatically.",
       "backlog_anchor": "nl-bp-161",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)",
@@ -3948,7 +3957,7 @@
       "area": "release",
       "priority": "P0",
       "bp_priority": "new (cross-platform private beta directive 2026-10-28)",
-      "status": "planned",
+      "status": "verified",
       "dependencies": [],
       "acceptance": [
         "read-only audit scans tracked files and Git history for secret patterns, DB/runtime/vendor/heavy files",
@@ -3957,13 +3966,14 @@
         "the existing private repository is preserved"
       ],
       "evidence": [
-        "not started"
+        "not started",
+        "scripts/audit_release_secrets.py + 12 temp-Git-fixture tests + docs/SECRETS_AUDIT.md: read-only tracked-files and bounded Git-history scan with redacted evidence, classifications and exit-code upload gate; measured HEAD b139065 snapshot 321 tracked files/50 commits, 0 blocking (CLEAR-WITH-REVIEW). Re-run required before any actual upload because the tree changed; no publishing action performed."
       ],
       "source_refs": [
         "user cross-platform beta program directive 2026-10-28"
       ],
       "primary_source": "docs/SECRETS_AUDIT.md",
-      "note": "Blocks any upload; must run before beta package distribution.",
+      "note": "scripts/audit_release_secrets.py + 12 temp-Git-fixture tests + docs/SECRETS_AUDIT.md: read-only tracked-files and bounded Git-history scan with redacted evidence, classifications and exit-code upload gate; measured HEAD b139065 snapshot 321 tracked files/50 commits, 0 blocking (CLEAR-WITH-REVIEW). Re-run required before any actual upload because the tree changed; no publishing action performed.",
       "backlog_anchor": "nl-bp-162",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)",
@@ -3975,7 +3985,7 @@
       "area": "release",
       "priority": "P0",
       "bp_priority": "new (cross-platform private beta directive 2026-10-28)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-162"
       ],
@@ -3986,13 +3996,14 @@
         "the existing private repository is not modified"
       ],
       "evidence": [
-        "not started"
+        "not started",
+        "docs/PRIVATE_BETA_RUNBOOK.md defines owner gates G-1..G-10 (no push/remote change, visibility change, collaborator invites, release upload, public posting, telemetry, history rewrite or evidence deletion without explicit owner authorization), pre-upload checklist, package content rules and per-release authorization template; CI/release static guards reject publish/push actions. Owner authorization for any external beta distribution is still required and pending."
       ],
       "source_refs": [
         "user cross-platform beta program directive 2026-10-28"
       ],
       "primary_source": "docs/PRIVATE_BETA_RUNBOOK.md",
-      "note": "Preserve the current private repository; owner authorization is mandatory.",
+      "note": "docs/PRIVATE_BETA_RUNBOOK.md defines owner gates G-1..G-10 (no push/remote change, visibility change, collaborator invites, release upload, public posting, telemetry, history rewrite or evidence deletion without explicit owner authorization), pre-upload checklist, package content rules and per-release authorization template; CI/release static guards reject publish/push actions. Owner authorization for any external beta distribution is still required and pending.",
       "backlog_anchor": "nl-bp-163",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)",
@@ -4004,7 +4015,7 @@
       "area": "release",
       "priority": "P0",
       "bp_priority": "new (cross-platform private beta directive 2026-10-28)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-141",
         "NL-BP-142",
@@ -4018,13 +4029,14 @@
         "beta acceptance records tester, OS/CPU, package checksum and result"
       ],
       "evidence": [
-        "not started"
+        "not started",
+        "docs/RELEASE_ACCEPTANCE.md now carries the cross-platform acceptance matrix for Windows x64/ARM64, Linux x86_64/ARM64 and macOS Intel/Apple Silicon with explicit MANUAL-PENDING real-hardware/clean-machine items; no real cross-platform acceptance has been recorded."
       ],
       "source_refs": [
         "user cross-platform beta program directive 2026-10-28"
       ],
       "primary_source": "docs/RELEASE_ACCEPTANCE.md",
-      "note": "Extends NL-BP-140..151 release acceptance.",
+      "note": "docs/RELEASE_ACCEPTANCE.md now carries the cross-platform acceptance matrix for Windows x64/ARM64, Linux x86_64/ARM64 and macOS Intel/Apple Silicon with explicit MANUAL-PENDING real-hardware/clean-machine items; no real cross-platform acceptance has been recorded.",
       "backlog_anchor": "nl-bp-164",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)",
@@ -4036,7 +4048,7 @@
       "area": "release",
       "priority": "P1",
       "bp_priority": "new (cross-platform private beta directive 2026-10-28)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-156",
         "NL-BP-159"
@@ -4048,13 +4060,14 @@
         "one authoritative beta acceptance report is maintained"
       ],
       "evidence": [
-        "not started"
+        "not started",
+        "scripts/ci/checksums.py and CI report artifacts/checksums are implemented and tested; per-platform native packages and real-hardware beta acceptance records do not exist yet (MANUAL-PENDING)."
       ],
       "source_refs": [
         "user cross-platform beta program directive 2026-10-28"
       ],
       "primary_source": "docs/RELEASE_ACCEPTANCE.md",
-      "note": "Evidence-first; no universal support claim from CI alone.",
+      "note": "scripts/ci/checksums.py and CI report artifacts/checksums are implemented and tested; per-platform native packages and real-hardware beta acceptance records do not exist yet (MANUAL-PENDING).",
       "backlog_anchor": "nl-bp-165",
       "program_stage": 6,
       "program_stage_name": "Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)",
@@ -4064,9 +4077,9 @@
   "counts": {
     "total": 117,
     "by_status": {
-      "verified": 29,
-      "partial": 50,
-      "planned": 35,
+      "verified": 31,
+      "partial": 61,
+      "planned": 22,
       "blocked": 3
     },
     "by_priority": {
@@ -4106,30 +4119,31 @@
       },
       "distribution": {
         "verified": 2,
-        "partial": 5,
-        "planned": 15
+        "partial": 12,
+        "planned": 8
       },
       "release": {
-        "partial": 7,
-        "planned": 10,
+        "verified": 2,
+        "partial": 11,
+        "planned": 4,
         "blocked": 2
       }
     },
     "by_priority_status": {
       "P0": {
-        "verified": 19,
-        "partial": 17,
-        "planned": 17,
+        "verified": 20,
+        "partial": 24,
+        "planned": 9,
         "blocked": 3
       },
       "P1": {
-        "verified": 10,
-        "partial": 24,
-        "planned": 9
+        "verified": 11,
+        "partial": 27,
+        "planned": 5
       },
       "P2": {
-        "partial": 9,
-        "planned": 7
+        "partial": 10,
+        "planned": 6
       },
       "P3": {
         "planned": 2
@@ -5399,7 +5413,8 @@
     "v1.9_2026-10-28_structural_hygiene": "Structural follow-up: one authoritative root README, legacy docs/patch evidence moved to docs/history/legacy (nothing deleted), repository ownership/retention/packaging policy documented, crewAI checkout audited read-only (not imported; kept protected), measured before/after root inventory; P-01..P-08 proposals recorded for explicit authorization. Stage-6a bootstrapper/reproducible-builder evidence added; stage 4 F1/F2 evidence added.",
     "v2.0_2026-10-28_stage4_complete": "Stage 4 engineering complete: C4a-C4e + F1/F2/F3a/F3b. Updated studio requirement statuses from measured evidence (029/031 verified; 025/026/027/028/030/033/034/035/037/038/039/040/041/042/044 partial). Hardware/desktop manual-pending items recorded explicitly. Counts recomputed. Stage 6 remains in progress (release acceptance evidence pending).",
     "v2.1_2026-10-28_stage6_complete": "Stage 6 engineering complete: stage-6b portable candidate r2 (1.40 GiB, single runtime, flows/README, reproducible) smoke-tested from a non-default path; status portability defect fixed + regression tests (513 passed). Release acceptance PARTIAL: clean-Windows/no-global-Python, hardware clipboard/mic/audio, signed installer/update and full desktop mission execution manual-pending; stale dist retirement requires explicit authorization.",
-    "v3.0_2026-10-28_cross_platform_beta": "Added NL-BP-152..165 (14 requirements) for the private cross-platform beta program: compatibility audit/matrix, platform abstraction, native runtime provisioning, native candidates, GitHub Actions CI matrix, optional GPU/ASR/TTS policy, macOS Universal 2 decision, beta packages/instructions, feedback workflow with redacted diagnostics, pre-upload secrets/history audit, owner authorization gates and manual-pending acceptance. Stage 6 reopened as in_progress (extension); total requirements 117."
+    "v3.0_2026-10-28_cross_platform_beta": "Added NL-BP-152..165 (14 requirements) for the private cross-platform beta program: compatibility audit/matrix, platform abstraction, native runtime provisioning, native candidates, GitHub Actions CI matrix, optional GPU/ASR/TTS policy, macOS Universal 2 decision, beta packages/instructions, feedback workflow with redacted diagnostics, pre-upload secrets/history audit, owner authorization gates and manual-pending acceptance. Stage 6 reopened as in_progress (extension); total requirements 117.",
+    "v3.1_2026-10-28_beta_c1c5": "Cross-platform private beta C1-C5 implemented: compatibility matrix/platform layer (31 tests), six-target installer runtime manifests/provisioner (57 tests), CI matrix + headless GUI/bootstrapper checks (7 tests), beta feedback workflow + redacted diagnostic generator (31 tests), pre-upload secrets/history audit (12 tests), and root Phase A cleanup. NL-BP-161/162 verified; 152-158/160/163-165 partial. No platform support claimed beyond Windows x64 evidence; manual-pending items recorded."
   },
   "program_order": {
     "schema_version": 1,
@@ -5622,9 +5637,9 @@
           "NL-BP-150",
           "NL-BP-151"
         ],
-        "note": "Stage-6 engineering closed for the Windows single-platform distribution, then EXTENDED by the user cross-platform private beta directive (2026-10-28): NL-BP-152..165 add the cross-platform compatibility audit, platform abstraction, native runtime manifests for Windows x64/ARM64, Linux x86_64/ARM64 and macOS Intel/Apple Silicon, native bootstrapper candidates, GitHub Actions CI matrix, Universal 2 evaluation, private beta packages/instructions, compatibility matrix, feedback workflow with redacted diagnostics, pre-upload secrets/history audit, owner authorization gates and manual-pending release acceptance. No universal platform support is claimed until builds/tests pass and real-hardware acceptance is recorded."
+        "note": "Stage-6 Windows engineering closed and then extended by the cross-platform private beta directive. C1 platform audit/abstraction + matrix, C2 six-target native runtime manifests/provisioner and measured-only release builder, C3 GitHub Actions CI matrix + headless GUI/bootstrapper checks, C4 feedback workflow + opt-in redacted diagnostics + tester/owner runbooks, and C5 pre-upload secrets/history audit are implemented with automated evidence. Root reorganization Phase A (one root launcher, CLI launchers under scripts/launchers/, archived repair scripts, da_eliminare staging) is committed. No non-Windows support is claimed: real native runtime archives, GitHub Actions execution, clean-machine installs, clipboard/microphone/GPU hardware and real-hardware beta acceptance remain MANUAL-PENDING, and the secrets audit must be re-run before any upload; owner authorization is required for any external distribution."
       }
     ]
   },
-  "updated_at": "2026-10-28T19:20:00+01:00"
+  "updated_at": "2026-10-28T19:35:00+01:00"
 }

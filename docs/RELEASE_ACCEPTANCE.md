@@ -227,13 +227,13 @@ Intel/Apple Silicon. The full program plan is docs/CROSS_PLATFORM_PRIVATE_BETA_P
 
 | Requirement | Acceptance state |
 |---|---|
-| NL-BP-152/153/160 | MANUAL-PENDING: compatibility audit/matrix and platform abstraction not yet complete |
-| NL-BP-154/155/158 | MANUAL-PENDING: native runtime manifests and candidates only for Windows so far; no Windows runtime reuse allowed on Linux/macOS; Universal 2 decision pending |
-| NL-BP-156/165 | MANUAL-PENDING: CI matrix workflows being added; CI success will not be treated as platform support |
-| NL-BP-157 | MANUAL-PENDING: optional GPU/ASR/TTS capability probes and graceful degradation |
-| NL-BP-159/161 | MANUAL-PENDING: beta packages/checksums/instructions and feedback workflow |
-| NL-BP-162/163 | MANUAL-PENDING: pre-upload secrets/history audit and owner-only authorization runbook |
-| NL-BP-164 | MANUAL-PENDING: real-hardware acceptance must be recorded per tester (OS/arch, checksum, result) |
+| NL-BP-152/153/160 | PARTIAL + MANUAL-PENDING: compatibility matrix/platform layer implemented (31 tests); non-Windows wheel/runtime availability and real hardware unverified |
+| NL-BP-154/155/158 | PARTIAL + MANUAL-PENDING: six-target manifests/provisioner and measured-only release builder implemented (57 tests); no real native runtime archives or non-Windows candidates exist yet; macOS Universal 2 deliberately not claimed (separate per-arch runtimes) |
+| NL-BP-156/165 | PARTIAL + MANUAL-PENDING: CI matrix/headless GUI/bootstrapper checks implemented (7 tests, not executed on GitHub); real CI runs, ARM64 runners, per-platform artifacts and real-hardware evidence absent |
+| NL-BP-157 | PARTIAL + MANUAL-PENDING: optional-backend probes/declarations and graceful degradation implemented; no GPU/ASR/TTS backend installed or tested |
+| NL-BP-159/161 | NL-BP-161 VERIFIED (31 tests, redacted opt-in diagnostics, issue templates, runbooks); NL-BP-159 beta packages/checksums/instructions still to build |
+| NL-BP-162/163 | NL-BP-162 VERIFIED tooling (12 tests, measured snapshot CLEAR-WITH-REVIEW; must re-run before upload); NL-BP-163 owner authorization gates documented but external distribution still requires explicit owner authorization |
+| NL-BP-164 | PARTIAL: cross-platform acceptance matrix documented; real-hardware/clean-machine acceptance records still MANUAL-PENDING |
 
 No cross-platform support is claimed until the corresponding CI builds and real-hardware beta tests
 pass. Existing Windows acceptance evidence in this document remains valid and unchanged.

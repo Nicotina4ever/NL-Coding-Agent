@@ -59,9 +59,9 @@ SH-07 Tier B (real local models) remains pending explicit authorization and bloc
 
 | Status | P0 | P1 | P2 | P3 | Total |
 |---|---|---|---|---|---|
-| verified | 19 | 10 | 0 | 0 | 29 |
-| partial | 17 | 24 | 9 | 0 | 50 |
-| planned | 17 | 9 | 7 | 2 | 35 |
+| verified | 20 | 11 | 0 | 0 | 31 |
+| partial | 24 | 27 | 10 | 0 | 61 |
+| planned | 9 | 5 | 6 | 2 | 22 |
 | blocked | 3 | 0 | 0 | 0 | 3 |
 | **Total** | 56 | 43 | 16 | 2 | 117 |
 
@@ -86,6 +86,8 @@ SH-07 Tier B (real local models) remains pending explicit authorization and bloc
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v3.1 (2026-10-28)** - Cross-platform private beta C1-C5 implemented: compatibility audit/matrix + platform abstraction (31 tests), six-target native runtime manifests/provisioner + measured-only release builder (57 tests), GitHub Actions CI matrix + headless GUI/bootstrapper checks (7 tests), beta feedback workflow + opt-in redacted diagnostic generator (31 tests), pre-upload secrets/history audit (12 tests), and root reorganization Phase A (one root launcher; CLI launchers under scripts/launchers/; repair scripts archived; da_eliminare staging). NL-BP-161/162 verified; 152-158/160/163-165 partial. All non-Windows runtime/CI/clean-machine/hardware acceptance remains MANUAL-PENDING; secrets audit must be re-run before any upload and owner authorization is required for external distribution.
 
 **v3.0 (2026-10-28)** - Cross-platform private beta program added to the persistent backlog: NL-BP-152..165 (14 requirements) cover the Windows x64/ARM64, Linux x86_64/ARM64 and macOS Intel/Apple Silicon compatibility audit/matrix, platform abstraction and unsupported-config handling, native verified runtime manifests (never reusing Windows runtime on Linux/macOS), native bootstrapper candidates, GitHub Actions CI matrix (unit/integration/headless GUI/bootstrapper), optional CPU/GPU/ASR/TTS policy with graceful degradation, macOS Universal 2 decision, private beta packages/checksums/versioned manifests/non-developer instructions, beta feedback workflow with redacted diagnostics, pre-upload secrets/history audit, owner-only authorization gates (no push/publish/visibility change), and MANUAL-PENDING real-hardware cross-platform acceptance. Stage 6 is reopened as in_progress (extension); total requirements 117. No universal platform support is claimed until builds/tests pass and real-hardware beta acceptance is recorded.
 

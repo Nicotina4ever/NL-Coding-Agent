@@ -440,3 +440,22 @@ diagnostic report generator with redaction, a pre-upload secrets/history/reposit
 authorization gates (no push, visibility change, collaborator invite or release upload), and
 MANUAL-PENDING clean-machine/real-hardware acceptance. No cross-platform support is claimed until
 CI builds and real-hardware beta tests pass.
+
+Cross-platform private beta progress (2026-10-28, C1-C5)
+
+Implemented and committed: evidence-based six-target compatibility matrix + stdlib platform support
+layer (31 tests); six-target native runtime/dependency manifests and provisioner with measured-only
+hashes, native-identity guards and offline/cache/repair paths (57 tests); GitHub Actions CI matrix
+(Windows x64/experimental ARM64, Ubuntu x86_64/experimental ARM64, macOS arm64/Intel) with unit,
+integration, headless GUI and bootstrapper checks (7 tests, CI not executed here); private-beta
+feedback workflow with opt-in redacted diagnostic report generator (31 tests) and tester/owner
+runbooks; pre-upload secrets/history/repository audit (12 tests, snapshot gate CLEAR-WITH-REVIEW);
+and root reorganization Phase A (one root GUI launcher, CLI launchers under scripts/launchers/,
+repair scripts archived to docs/history/legacy/temp-scripts/, da_eliminare review staging).
+
+Not yet done / MANUAL-PENDING: real native runtime archives for any non-Windows target, actual
+GitHub Actions execution, clean-machine installs, macOS/ARM64 builds, real clipboard/microphone/
+GPU/ASR/TTS hardware, per-platform beta packages/checksums and real-hardware beta acceptance. The
+secrets audit must be re-run before any upload, and the repository owner must explicitly authorize
+any push, visibility change, collaborator invitation or release upload. No non-Windows support is
+claimed.
