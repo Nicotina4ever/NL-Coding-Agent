@@ -1,0 +1,215 @@
+{
+  "project": "NL Coding Agent",
+  "artifact_type": "planning_docs_only",
+  "created": "2026-10-28",
+  "canonical_root_current": "K:\\AI\\Coding Agent",
+  "desired_root_future": "K:\\AI\\NL Coding Agent",
+  "no_runtime_or_code_included": true,
+  "workspace_migration_authorized": false,
+  "default_optimization_goal": "Maximum Verified Quality",
+  "active_priority": "P0 supervised protected self-build; no unattended until path enforcement, scoped rollback, adversarial stub test and consecutive local missions verified",
+  "files": [
+    {
+      "path": "00_MASTER_INDEX.md",
+      "sha256": "3c6c7379281414e6a3dbceaeb178d6621e82cfa780c8e88eef8c7f7182f723f6"
+    },
+    {
+      "path": "01_DECISIONI_E_PRIORITA.md",
+      "sha256": "3c6f28e7001984cd9b76fb460b6abeddfc55c6d4a91f2de15424c34b50cc9ea4"
+    },
+    {
+      "path": "02_STATO_REALE_DA_VERIFICARE.md",
+      "sha256": "0106a5af77426124eb02a6ba69e7b0d0a161fde9bbcefb22dfd138d20d4f1476"
+    },
+    {
+      "path": "03_MASTER_CHECKLIST.md",
+      "sha256": "a5160b33d0e5aa7f4b6791d5ca38e3934f548c5e600081acf908e82d61d9c531"
+    },
+    {
+      "path": "04_HANDOFF_MINIMO.md",
+      "sha256": "90002a517db4e61d04921d80bdaaa1fc34141e3f8c7aca08e764fdd441b78462"
+    },
+    {
+      "path": "05_TRACCIABILITA.md",
+      "sha256": "f78a20433c95c4f96ef38c3ab3966e716712920d3c007256d89340b62a05a4c1"
+    },
+    {
+      "path": "06_UNICO_HANDOFF_AUTONOMIA.md",
+      "sha256": "4e5120564659769a00397ef15d1839d93b25301d0a1c6a9dad9253dff520f68d"
+    },
+    {
+      "path": "AUDIT_E_MIGRAZIONE_SENZA_RISCHI.md",
+      "sha256": "f49fc72b2c09f65fccca3fe1c8a7d2542774cadac0284f113e565b4a602501ec"
+    },
+    {
+      "path": "NOTE_SULLE_SPECIFICHE_PRECEDENTI.md",
+      "sha256": "b5fd6bdc2fcb8015849de92aff23c04529d1f1c361e6cf9b5f1f50674208678b"
+    },
+    {
+      "path": "README_IMPORTANTE.md",
+      "sha256": "9d8edd8b7012daac8a545f516a819be3ca5192a76f5b124f1b3212da2705c89d"
+    },
+    {
+      "path": "V2_CHANGELOG.md",
+      "sha256": "326a7b6bbfc806ae075609c6ac9479d92cef3d90b0ed4d65048bdddc154bb2d5"
+    },
+    {
+      "path": "V3_CHANGELOG.md",
+      "sha256": "f160dbd7a35474a988c3fa49ff51c459e15ac88b9c7c3c1e10b668dae9aaca28"
+    },
+    {
+      "path": "V4_CHANGELOG.md",
+      "sha256": "98d9c34b5a6dd4340e2ceb85da60c1ce2659cbfb2ee84c5b168ea0e6d746f2ed"
+    },
+    {
+      "path": "V5_CHANGELOG.md",
+      "sha256": "22f3a5e17b5bce10d74c155e1dad2a93e8a1549af5eede97f4c0ab26f48f6599"
+    },
+    {
+      "path": "specifiche/01_ARCHITETTURA_E_RUNTIME.md",
+      "sha256": "6c09b88d16c5c03531c2bb5df41f88a17ba8411c80e707d138dc62bd50cfcf22"
+    },
+    {
+      "path": "specifiche/02A_RECOVERY_POINTS_ROLLBACK_CACHE.md",
+      "sha256": "afd8b13ded39fb7e3735a01e8cddfb16f9689a2ba704fba93dceecb463b075a7"
+    },
+    {
+      "path": "specifiche/02_SELF_BUILD_E_RECOVERY.md",
+      "sha256": "6c89b716a3abdf540eba688e103c2d729157aacd474a86bf1ea7d4e8dabe8a17"
+    },
+    {
+      "path": "specifiche/03_GOALS_MILESTONES_TASKS.md",
+      "sha256": "b014017ff0d0190e32ca9c04222abf179ad7ae8bd7855f96428f16da07a016bf"
+    },
+    {
+      "path": "specifiche/04_AGENT_FACTORY_E_TEAM_DINAMICI.md",
+      "sha256": "7f4041d1a34c0c27f369f8fdb993a5c6d8b5998a51009b8b5d187b5dc2db21a5"
+    },
+    {
+      "path": "specifiche/05_MODEL_HUB_PROVIDERS.md",
+      "sha256": "8a29991f90ad0d010f9106ddceca4ac0a9c44aca8aa58914d4edca99c4d3ab20"
+    },
+    {
+      "path": "specifiche/06_MODEL_ADVISOR_E_PARAMETRI.md",
+      "sha256": "0c6c84e40d6beb97e8b39d8bee017e7c22868e3ee6ffeb9c5d4bb17fa790c20b"
+    },
+    {
+      "path": "specifiche/07_QUALITY_GATES_E_BENCHMARK.md",
+      "sha256": "d7be3d700add366ecfe3b0d1526d0328a078c49f5c27a770f66a88be03684711"
+    },
+    {
+      "path": "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
+      "sha256": "68eddedbccbfb27fbeb28cd42bdfc8fd3822da6804d7fc0e25aa12a0803569ac"
+    },
+    {
+      "path": "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
+      "sha256": "3e68cc743c02c2cce14e30d85236c672799c6bcadd73be9308c844e827688a2d"
+    },
+    {
+      "path": "specifiche/10_SPEECH_ASR_MODELS.md",
+      "sha256": "952e1518a6ee2d0d42887dbb7bf977bb0211335b5a6b096e58710578ab88412d"
+    },
+    {
+      "path": "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
+      "sha256": "a4cf60a2656a70b53709c598751771554a1250c089ea2cdd3cf1cf99c7294829"
+    },
+    {
+      "path": "specifiche/12_PROJECT_DISCOVERY.md",
+      "sha256": "0a575705cf1d147353c03255d840ec74397925ef4a05175b66e9d861a8ec0400"
+    },
+    {
+      "path": "specifiche/13A_GPU_CONTENTION_CLOUD_FALLBACK.md",
+      "sha256": "fac90f2a0652baad60e5b1432631b08c536001deb31bc7a8e27edbb0d97b5275"
+    },
+    {
+      "path": "specifiche/13_RESOURCE_SCHEDULER.md",
+      "sha256": "c9ac1a236f79847dc48466f10f032b95ad3a6c1fe85a6715767a4dc32024aab8"
+    },
+    {
+      "path": "specifiche/14_STORAGE_E_MODEL_LIFECYCLE.md",
+      "sha256": "ef3a962d1a50801f2eb5c3071c0dae25341c1002601f56379e32c9a5693b02c3"
+    },
+    {
+      "path": "specifiche/15_SICUREZZA_E_PRIVACY.md",
+      "sha256": "7f63d380def22e42dd0b9394099e6b9a2b282e2cf78e9d01f9220bc2a321a140"
+    },
+    {
+      "path": "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
+      "sha256": "21098ca3de099936aee3396c11de6c57d333613865e668660bacd042eca89714"
+    },
+    {
+      "path": "specifiche/17_WINDOWS_LINUX_MACOS.md",
+      "sha256": "2992b9beac2ad46be4a8b5835c6682a5568f0ea43109184a30cd2290a32c3f15"
+    },
+    {
+      "path": "specifiche/18_SQLITE_SCHEMA_E_STATI.md",
+      "sha256": "7e63dca56e412eb4b9e4fe040a071a4fb587b0ff5c2cf1e1e808528be2682c74"
+    },
+    {
+      "path": "specifiche/19_TEST_MATRIX_E_GATE.md",
+      "sha256": "06be4214a352ad6c721b22038e0973feff73e6e0f1c1e4489f1e395ddfe9ec54"
+    },
+    {
+      "path": "specifiche/20_RELEASE_UPDATE_DIAGNOSTICA.md",
+      "sha256": "ce2ad9f02072833e2616ba6e614ff45f26be4d994a4414cdd8f50661b992e0e6"
+    },
+    {
+      "path": "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md",
+      "sha256": "4aa32a225cf6f303f30e9aa6f228caead917ab76a32fcb157f9817e2ed4b8c6b"
+    },
+    {
+      "path": "specifiche/22_MODEL_AGENT_COMPETENCE_INDEX.md",
+      "sha256": "78afe8af55db6b292c38e795229d36dca78af8da0664213205f7dd9d8f248956"
+    },
+    {
+      "path": "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
+      "sha256": "6afa0d5b9e476c5def6427c25946fb49b826833e518ba825384491c99cf7085e"
+    },
+    {
+      "path": "specifiche/24_OPERATIONS_SUPERVISION_HEALTH_AND_DIAGNOSTICS.md",
+      "sha256": "1302e7460e219aa1ee76139a0a95a222ddd3dc8896f6a029b4737d4b51317e5d"
+    },
+    {
+      "path": "specifiche/25_PERMISSIONS_AND_EXTERNAL_TOOLS.md",
+      "sha256": "13c98c928e7c3ce81dfdd642a3b15203b356033a8a43d8453f07700e4c556dac"
+    },
+    {
+      "path": "specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md",
+      "sha256": "fc2459a604bfa67f38f7b45de0c6bf541e8ffad325aecfeb0ef42f7f50eeb928"
+    },
+    {
+      "path": "specifiche/27_SELF_CHANGE_GATES_AND_DEPLOY.md",
+      "sha256": "53fb0d9ff4e5950fcc7923d090fa5a6cde0a3ddcb7dcd2f134f695bb4826505e"
+    },
+    {
+      "path": "templates/GOAL_TEMPLATE.md",
+      "sha256": "cdb8b750e0f59c4fd712e1d287773cc72712fec0480e2b260f2456501fe7de48"
+    },
+    {
+      "path": "templates/RELEASE_AUDIT_TEMPLATE.md",
+      "sha256": "9ffaea4d10afd71e361ce173c0dd8016999e2a93bf9f1fc3931e6ef6a0a85a4d"
+    },
+    {
+      "path": "templates/TASK_MISSION_TEMPLATE.md",
+      "sha256": "1125895ce8225955d7b49d29f45b30bbe5dfb3c8a2b0cb5bdc8c07d9660b9898"
+    },
+    {
+      "path": "tools/audit_external_builds.ps1",
+      "sha256": "f2f50e2347d55ea2ce9c1535331f14ddd944e716c3a39a4d232da61f3532e2f1"
+    }
+  ],
+  "blueprint_version": "v2",
+  "change_note": "SPEC-02A rollback/cache and SPEC-13A GPU contention; index, checklist and SPEC-14 updated",
+  "blueprint_revision": "v3",
+  "revision_notes": "Selective archived recovery points, trash/quarantine, validated restore; all requirements unverified pending source audit.",
+  "version": "v5",
+  "new_in_v4": [
+    "SPEC-21",
+    "SPEC-22",
+    "SPEC-23",
+    "SPEC-24",
+    "AUDIT_E_MIGRAZIONE_SENZA_RISCHI.md",
+    "tools/audit_external_builds.ps1"
+  ],
+  "description": "v5 complete blueprint with permissions/tools and one-time autonomous handoff"
+}

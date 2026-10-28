@@ -26,7 +26,12 @@ def _run_ollama(*args: str, timeout: int = 15) -> tuple[int, str, str]:
     try:
         r = subprocess.run(
             ["ollama", *args],
-            capture_output=True, text=True, timeout=timeout
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            stdin=subprocess.DEVNULL,
         )
         return r.returncode, r.stdout, r.stderr
     except FileNotFoundError:
@@ -37,24 +42,24 @@ def _run_ollama(*args: str, timeout: int = 15) -> tuple[int, str, str]:
         return -3, "", str(e)
 
 
-def check_ollama_reachable(base_url: str = OLLAMA_BASE_URL) -> bool:
+def check_ollama_reachable(base_url: str = OLLAMA_BASE_URL, timeout: float = 5.0) -> bool:
     """Returns True if Ollama API is reachable."""
     try:
-        with urllib.request.urlopen(f"{base_url}/api/tags", timeout=5) as resp:
+        with urllib.request.urlopen(f"{base_url}/api/tags", timeout=timeout) as resp:
             return resp.status == 200
     except Exception:
         return False
 
 
-def list_models(base_url: str = OLLAMA_BASE_URL) -> list[OllamaModel]:
+def list_models(base_url: str = OLLAMA_BASE_URL, timeout: float = 10.0) -> list[OllamaModel]:
     """Query Ollama for available models. Tries HTTP API first, falls back to CLI."""
     models: list[OllamaModel] = []
 
     # Try HTTP API
     try:
-        with urllib.request.urlopen(f"{base_url}/api/tags", timeout=10) as resp:
+        with urllib.request.urlopen(f"{base_url}/api/tags", timeout=timeout) as resp:
             data = json.loads(resp.read())
-        loaded_names = {m.name for m in list_loaded_models(base_url)}
+        loaded_names = {m.name for m in list_loaded_models(base_url, timeout=timeout)}
         for m in data.get("models", []):
             name = m.get("name", "")
             size = m.get("size", 0) / 1e9
@@ -72,7 +77,7 @@ def list_models(base_url: str = OLLAMA_BASE_URL) -> list[OllamaModel]:
     rc, out, _ = _run_ollama("list")
     if rc != 0:
         return []
-    loaded_names = {m.name for m in list_loaded_models(base_url)}
+    loaded_names = {m.name for m in list_loaded_models(base_url, timeout=timeout)}
     for line in out.strip().splitlines()[1:]:  # skip header
         parts = line.split()
         if parts:
@@ -83,10 +88,10 @@ def list_models(base_url: str = OLLAMA_BASE_URL) -> list[OllamaModel]:
     return models
 
 
-def list_loaded_models(base_url: str = OLLAMA_BASE_URL) -> list[OllamaModel]:
+def list_loaded_models(base_url: str = OLLAMA_BASE_URL, timeout: float = 5.0) -> list[OllamaModel]:
     """Query which models are currently loaded (running) in Ollama."""
     try:
-        with urllib.request.urlopen(f"{base_url}/api/ps", timeout=5) as resp:
+        with urllib.request.urlopen(f"{base_url}/api/ps", timeout=timeout) as resp:
             data = json.loads(resp.read())
         result = []
         for m in data.get("models", []):

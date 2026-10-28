@@ -20,6 +20,8 @@ LOG_ROOT = APP_ROOT / "logs"
 
 
 def load_yaml(path: Path) -> dict:
+    if not path.exists():
+        return {}
     with path.open("r", encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
@@ -43,7 +45,11 @@ def make_llm(role_cfg: dict, base_url: str) -> LLM:
 
 
 def ensure_project(project_cfg: dict) -> Path:
-    root = Path(project_cfg["project"]["root"]).resolve()
+    project = project_cfg.get("project") or {}
+    root_value = project.get("root")
+    if not root_value:
+        raise SystemExit("Project root not configured")
+    root = Path(root_value).resolve()
     if not root.exists() or not root.is_dir():
         raise SystemExit(f"Project root not found: {root}")
     return root
@@ -168,7 +174,7 @@ def doctor(models_cfg: dict, project_cfg: dict) -> int:
         root = ensure_project(project_cfg)
         print(f"Project: OK -> {root}")
     except SystemExit as e:
-        print(e); return 4
+        print(f"Project: not configured ({e})")
 
     try:
         required = []
@@ -334,49 +340,179 @@ def main() -> int:
     w.add_argument("--goal", required=True)
     sub.add_parser("status")
 
+    # Roadmap command
+    rm = sub.add_parser("roadmap", help="Show the next self-build mission from docs/NEXT_SELF_BUILD_MISSION.md")
+    rm.add_argument("--project", default=".")
+
     # Autonomous mission command
     m = sub.add_parser("mission", help="Execute or resume an autonomous multi-agent mission")
     m.add_argument("--project", default=".")
     m.add_argument("--goal", help="Goal of the mission")
     m.add_argument("--resume", type=int, help="Resume an existing mission by ID")
+    m.add_argument("--list", action="store_true", help="List missions")
+    m.add_argument("--show", type=int, help="Show details for a mission ID")
+    m.add_argument("--stop-after", choices=["developer", "tester"], help="Stop after a stage (for recovery testing)")
+    m.add_argument("--dev-model", help="Override the developer model")
+    m.add_argument("--reviewer-model", help="Override the reviewer model")
+    m.add_argument("--debug-model", help="Override the debugger model")
 
     # Self-build command
     sb = sub.add_parser("selfbuild", help="Run autonomous self-development on NL Coding Agent itself")
-    sb.add_argument("--goal", required=True, help="Goal of the self-build mission")
+    sb.add_argument("--goal", help="Goal of the self-build mission")
+    sb.add_argument("--from-roadmap", action="store_true", help="Use docs/NEXT_SELF_BUILD_MISSION.md")
+    sb.add_argument("--autonomous", "--loop", dest="autonomous", action="store_true",
+                    help="Resume durable work, then run the next roadmap mission in a bounded loop")
+    sb.add_argument("--resume", type=int, help="Resume this mission before selecting new work")
+    sb.add_argument("--max-missions", type=int, default=1,
+                    help="Maximum missions in one autonomous run (1-5, default 1)")
+    sb.add_argument("--project", default=str(APP_ROOT), help="Project root (defaults to this application)")
+    sb.add_argument("--stop-after", choices=["developer", "tester"], help="Stop after a stage (for recovery testing)")
+    sb.add_argument("--dev-model", help="Override the developer model")
+    sb.add_argument("--reviewer-model", help="Override the reviewer model")
+    sb.add_argument("--debug-model", help="Override the debugger model")
 
     # GUI subcommand
     sub.add_parser("gui")
 
     args = parser.parse_args()
 
+    if args.command == "roadmap":
+        from nl_coding_agent.core.roadmap import format_mission, next_mission
+        try:
+            mission = next_mission(Path(args.project).resolve())
+        except FileNotFoundError as exc:
+            raise SystemExit(str(exc))
+        print(format_mission(mission))
+        return 0
+
     if args.command == "mission":
         from nl_coding_agent.agents.orchestrator import MultiAgentOrchestrator
-        from nl_coding_agent.persistence.missions import create_mission
+        from nl_coding_agent.persistence.missions import (
+            create_mission, get_mission, get_tasks, list_missions,
+            set_mission_project,
+        )
+        from nl_coding_agent.projects.registry import open_project
         root = Path(args.project).resolve()
+        project = open_project(root)
+
+        if args.list:
+            for mission in list_missions():
+                print(
+                    f"#{mission['id']:>3}  {mission['status']:<11}  "
+                    f"{mission.get('title', '')[:70]}"
+                )
+            return 0
+
+        if args.show:
+            mission = get_mission(args.show)
+            if not mission:
+                raise SystemExit(f"Mission #{args.show} not found")
+            print(json.dumps({**mission, "tasks": get_tasks(args.show)}, indent=2, ensure_ascii=False))
+            return 0
+
         if args.resume:
             m_id = args.resume
-            goal = args.goal or "Resume mission"
+            mission = get_mission(m_id)
+            if not mission:
+                raise SystemExit(f"Mission #{m_id} not found")
+            if mission.get("project_id") is None:
+                set_mission_project(m_id, project["id"])
         else:
             if not args.goal:
                 raise SystemExit("Error: --goal is required for new missions")
-            m_id = create_mission(project_id=None, title=args.goal[:50], goal=args.goal)
+            m_id = create_mission(
+                project_id=project["id"], title=args.goal[:50], goal=args.goal,
+            )
+
         print(f"=== Running Multi-Agent Mission #{m_id} on {root} ===")
         orch = MultiAgentOrchestrator(root)
-        res = orch.run_mission(mission_id=m_id, goal=args.goal)
+        res = orch.run_mission(
+            mission_id=m_id,
+            goal=args.goal,
+            developer_model=args.dev_model,
+            reviewer_model=args.reviewer_model,
+            debug_model=args.debug_model,
+            stop_after=args.stop_after,
+        )
         print(f"Mission Status: {res['status']}")
-        print(f"Review: {res['review']}")
+        if res.get("error"):
+            print(f"Error: {res['error']}")
+        if res.get("diff_stat"):
+            print(f"Diff: {res['diff_stat']}")
+        if res.get("review"):
+            print(f"Review: {res['review']}")
         return 0 if res["status"] == "completed" else 1
 
     if args.command == "selfbuild":
+        root = Path(args.project).resolve()
+        if args.autonomous:
+            if args.goal:
+                raise SystemExit("Error: --autonomous selects work from durable state/roadmap; do not pass --goal")
+            from nl_coding_agent.core.mission_lock import MissionLockError, mission_lock
+            from nl_coding_agent.core.selfbuild_runner import run_autonomous
+            from nl_coding_agent.persistence.database import db_path
+
+            lock_path = db_path().parent / "selfbuild.lock"
+            try:
+                with mission_lock(-1, path=lock_path):
+                    result = run_autonomous(
+                        root,
+                        max_missions=args.max_missions,
+                        resume_mission_id=args.resume,
+                        developer_model=args.dev_model,
+                        reviewer_model=args.reviewer_model,
+                        debug_model=args.debug_model,
+                        stop_after=args.stop_after,
+                    )
+            except MissionLockError as exc:
+                print(f"Self-Build Mode is already running: {exc}")
+                return 1
+            print(f"Self-Build Mode Status: {result['status']}")
+            for mission in result.get("missions", []):
+                print(
+                    f"  Mission #{mission['id']}: {mission['status']} "
+                    f"{mission.get('verdict') or ''} {mission.get('diff_stat') or ''}"
+                )
+            if result.get("stopped_reason"):
+                print(f"Stopped: {result['stopped_reason']}")
+            print(f"Resume command: {result['resume_command']}")
+            return 0 if result["status"] in ("completed", "idle") else 1
+
         from nl_coding_agent.agents.orchestrator import MultiAgentOrchestrator
+        from nl_coding_agent.core.roadmap import format_mission, next_mission
         from nl_coding_agent.persistence.missions import create_mission
-        root = APP_ROOT
-        m_id = create_mission(project_id=None, title=f"Self-Build: {args.goal[:40]}", goal=args.goal)
+        from nl_coding_agent.projects.registry import open_project
+        project = open_project(root)
+        goal = args.goal
+        title = None
+        if args.from_roadmap or not goal:
+            try:
+                roadmap = next_mission(root)
+            except FileNotFoundError as exc:
+                raise SystemExit(str(exc))
+            goal = roadmap["goal"]
+            title = roadmap["title"]
+            print(format_mission(roadmap))
+        if not goal:
+            raise SystemExit("Error: provide --goal or --from-roadmap")
+        title = title or f"Self-Build: {goal[:40]}"
+        m_id = create_mission(project_id=project["id"], title=title, goal=goal)
         print(f"=== Starting Autonomous Self-Build Mission #{m_id} on {root} ===")
         orch = MultiAgentOrchestrator(root)
-        res = orch.run_mission(mission_id=m_id, goal=args.goal)
+        res = orch.run_mission(
+            mission_id=m_id,
+            goal=goal,
+            developer_model=args.dev_model,
+            reviewer_model=args.reviewer_model,
+            debug_model=args.debug_model,
+            stop_after=args.stop_after,
+        )
         print(f"Self-Build Mission #{m_id} Status: {res['status']}")
-        print(f"Review verdict: {res['review']}")
+        if res.get("error"):
+            print(f"Error: {res['error']}")
+        if res.get("diff_stat"):
+            print(f"Diff: {res['diff_stat']}")
+        print(f"Review verdict: {res.get('verdict') or res.get('review', '')}")
         return 0 if res["status"] == "completed" else 1
 
     if args.command == "gui":
@@ -390,7 +526,10 @@ def main() -> int:
             import crewai
             print(f"CrewAI: OK ({getattr(crewai, '__version__', 'not exposed')})")
             try:
-                r = subprocess.run(["ollama", "list"], capture_output=True, text=True, timeout=30)
+                r = subprocess.run(
+                    ["ollama", "list"], capture_output=True, text=True,
+                    encoding="utf-8", errors="replace", timeout=30,
+                )
                 print("Ollama: OK" if r.returncode == 0 else "Ollama: ERROR")
                 if r.stdout: print(r.stdout)
             except Exception as e:

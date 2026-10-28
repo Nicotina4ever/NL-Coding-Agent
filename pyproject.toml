@@ -10,7 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "PySide6",
     "psutil",
-    "crewai",
+    "crewai==1.15.32",
     "PyYAML",
 ]
 

@@ -1,9 +1,59 @@
 """Project-scoped shell execution tool."""
 from __future__ import annotations
 
+import locale
+import os
 import subprocess
 import time
 from pathlib import Path
+
+_UTF8_CHILD_ENV = {
+    "PYTHONUTF8": "1",
+    "PYTHONIOENCODING": "utf-8",
+    "NO_COLOR": "1",
+    "GIT_PAGER": "cat",
+    "PAGER": "cat",
+}
+
+
+def _windows_oem_encoding() -> str | None:
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes
+
+        return f"cp{ctypes.windll.kernel32.GetOEMCP()}"
+    except Exception:
+        return None
+
+
+def decode_output(data: bytes | None) -> str:
+    """Decode console bytes using UTF-8, then the Windows OEM code page, then locale."""
+    if not data:
+        return ""
+    if isinstance(data, str):
+        return data
+
+    candidates = ["utf-8", _windows_oem_encoding(), locale.getpreferredencoding(False), "cp1252"]
+    seen: set[str] = set()
+    for encoding in candidates:
+        if not encoding or encoding.lower() in seen:
+            continue
+        seen.add(encoding.lower())
+        try:
+            return data.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return data.decode("utf-8", errors="replace")
+
+
+def _build_env(env: dict | None) -> dict[str, str]:
+    merged = dict(os.environ)
+    for key, value in _UTF8_CHILD_ENV.items():
+        merged.setdefault(key, value)
+    if env:
+        merged.update({str(k): str(v) for k, v in env.items()})
+    return merged
 
 
 def scoped_run_command(
@@ -34,22 +84,23 @@ def scoped_run_command(
             cwd=str(root),
             shell=True,
             capture_output=True,
-            text=True,
+            text=False,
             timeout=timeout,
-            env=env,
+            env=_build_env(env),
+            stdin=subprocess.DEVNULL,
         )
         duration = round(time.time() - start_time, 3)
         return {
             "returncode": proc.returncode,
-            "stdout": proc.stdout,
-            "stderr": proc.stderr,
+            "stdout": decode_output(proc.stdout),
+            "stderr": decode_output(proc.stderr),
             "duration_s": duration,
             "timed_out": False,
         }
     except subprocess.TimeoutExpired as e:
         duration = round(time.time() - start_time, 3)
-        stdout = e.stdout if isinstance(e.stdout, str) else (e.stdout.decode("utf-8", errors="replace") if e.stdout else "")
-        stderr = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode("utf-8", errors="replace") if e.stderr else "")
+        stdout = decode_output(e.stdout)
+        stderr = decode_output(e.stderr)
         return {
             "returncode": -1,
             "stdout": stdout,

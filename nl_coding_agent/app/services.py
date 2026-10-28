@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import json
+import os
 import queue
 import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from nl_coding_agent.persistence.database import init_db, log_event
+from nl_coding_agent.persistence.database import db_path, init_db, log_event
 from nl_coding_agent.projects.registry import (
     open_project as _open_project,
     list_recent as _list_recent,
@@ -18,7 +19,12 @@ from nl_coding_agent.projects.registry import (
 from nl_coding_agent.models.ollama_registry import (
     check_ollama_reachable, list_models, list_loaded_models,
 )
+from nl_coding_agent.models.providers import ModelHub, build_providers
 from nl_coding_agent.resources.scheduler import get_scheduler
+
+
+APP_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_MODELS_CONFIG = APP_ROOT / "config" / "models.yaml"
 
 
 @dataclass
@@ -97,16 +103,100 @@ class AppServices:
     def get_project_facts(self, project_id: int) -> dict:
         return _get_project_facts(project_id)
 
+    def get_project(self, project_id: int) -> dict | None:
+        from nl_coding_agent.projects.registry import get_project
+        return get_project(project_id)
+
+    def read_project_file(self, project_root: str | Path, rel_path: str) -> str:
+        from nl_coding_agent.tools.filesystem import scoped_read_file
+        return scoped_read_file(project_root, rel_path)
+
+    def list_project_dir(self, project_root: str | Path, rel_path: str = ".") -> list[str]:
+        from nl_coding_agent.tools.filesystem import scoped_list_dir
+        return scoped_list_dir(project_root, rel_path)
+
     # --- Ollama / Models ---
 
     def check_ollama(self) -> bool:
-        return check_ollama_reachable()
+        return check_ollama_reachable(self.get_ollama_url())
 
     def list_models(self):
-        return list_models()
+        return list_models(self.get_ollama_url())
 
     def list_loaded_models(self):
-        return list_loaded_models()
+        return list_loaded_models(self.get_ollama_url())
+
+    def discover_models(self, timeout: float = 5.0):
+        providers = build_providers(self.get_model_config())
+        return ModelHub(providers).discover(timeout=timeout)
+
+    def unload_model(self, provider_id: str, name: str) -> bool:
+        providers = build_providers(self.get_model_config())
+        return ModelHub(providers).unload(provider_id, name)
+
+    def get_model_config_path(self) -> Path:
+        override = os.environ.get("NL_MODELS_CONFIG")
+        return Path(override) if override else DEFAULT_MODELS_CONFIG
+
+    def get_model_config(self) -> dict:
+        try:
+            import yaml
+            with self.get_model_config_path().open("r", encoding="utf-8") as fh:
+                return yaml.safe_load(fh) or {}
+        except Exception:
+            return {}
+
+    def get_database_path(self) -> Path:
+        return db_path()
+
+    def get_ollama_url(self) -> str:
+        config = self.get_model_config()
+        return str((config.get("ollama") or {}).get("base_url") or "http://127.0.0.1:11434")
+
+    def is_cloud_escalation_enabled(self) -> bool:
+        config = self.get_model_config()
+        fallback = (config.get("roles") or {}).get("fallback_cloud") or {}
+        return bool(fallback.get("enabled", False))
+
+    def get_agent_roles(self) -> list[dict]:
+        roles = self.get_model_config().get("roles") or {}
+
+        def role_model(role: str) -> str:
+            return str((roles.get(role) or {}).get("model") or "")
+
+        developer_model = role_model("developer")
+        debugger_model = role_model("debugger") or developer_model
+        return [
+            {"role": "architect", "model": role_model("architect"), "kind": "llm"},
+            {"role": "developer", "model": developer_model, "kind": "llm"},
+            {
+                "role": "tester",
+                "model": "Deterministic verification",
+                "kind": "deterministic",
+            },
+            {
+                "role": "debugger",
+                "model": debugger_model,
+                "kind": "llm",
+                "note": "" if role_model("debugger") else "defaults to developer",
+            },
+            {"role": "reviewer", "model": role_model("reviewer"), "kind": "llm"},
+        ]
+
+    def get_runtime_settings(self, project_root: str | Path | None = None) -> dict:
+        root = None
+        if project_root:
+            try:
+                root = str(Path(project_root).resolve())
+            except Exception:
+                root = str(project_root)
+        return {
+            "project_root": root,
+            "database_path": str(self.get_database_path().resolve()),
+            "ollama_base_url": self.get_ollama_url(),
+            "model_config_path": str(self.get_model_config_path().resolve()),
+            "cloud_escalation_enabled": self.is_cloud_escalation_enabled(),
+        }
 
     # --- Audit ---
 
@@ -126,21 +216,34 @@ class AppServices:
         return _list_m(project_id)
 
     def get_mission_details(self, mission_id: int) -> dict | None:
-        from nl_coding_agent.persistence.missions import get_mission, get_tasks, get_handoffs, get_verification_runs
+        from nl_coding_agent.persistence.missions import (
+            get_mission, get_tasks, get_handoffs, get_verification_runs,
+            get_task_attempts, mission_progress,
+        )
         m = get_mission(mission_id)
         if not m:
             return None
         m["tasks"] = get_tasks(mission_id)
         m["handoffs"] = get_handoffs(mission_id)
         m["verification_runs"] = get_verification_runs(mission_id)
+        m["attempts"] = get_task_attempts(mission_id)
+        m["progress"] = mission_progress(mission_id)
         return m
+
+    def next_roadmap_mission(self, project_root: str | Path) -> dict:
+        from nl_coding_agent.core.roadmap import next_mission
+        return next_mission(project_root)
 
     def run_mission(
         self,
         mission_id: int,
         project_root: str | Path,
-        goal: str,
+        goal: str | None = None,
         on_done: Callable | None = None,
+        developer_model: str | None = None,
+        reviewer_model: str | None = None,
+        debug_model: str | None = None,
+        stop_after: str | None = None,
     ) -> str:
         """Schedule autonomous multi-agent mission execution on the sequential scheduler."""
         task_id = f"mission-{mission_id}"
@@ -150,7 +253,14 @@ class AppServices:
             from nl_coding_agent.agents.orchestrator import MultiAgentOrchestrator
             orch = MultiAgentOrchestrator(root)
             try:
-                res = orch.run_mission(mission_id=mission_id, goal=goal)
+                res = orch.run_mission(
+                    mission_id=mission_id,
+                    goal=goal,
+                    developer_model=developer_model,
+                    reviewer_model=reviewer_model,
+                    debug_model=debug_model,
+                    stop_after=stop_after,
+                )
                 if on_done:
                     on_done(res)
                 return res

@@ -1,6 +1,7 @@
 ﻿"""Inspector panel — shows project/mission/agent/verification details."""
 from __future__ import annotations
 
+import html
 import json
 
 from PySide6.QtWidgets import (
@@ -57,6 +58,36 @@ class InspectorPanel(QWidget):
                 lines.append(f"<span style='color:#AB83C6;'>{k}:</span> {v}")
         lines.append("")
         lines.append(f"<span style='color:#7E8798;'>Last used: {project.get('last_used', '?')}</span>")
+        self._content.setHtml("<br>".join(lines))
+
+    def show_file(self, rel_path: str, content: str | None = None):
+        lines = [
+            "<b>File</b>",
+            f"<span style='color:#7E8798;'>{rel_path}</span>",
+        ]
+        if content is not None:
+            preview = content[:8000]
+            suffix = "\n… truncated …" if len(content) > len(preview) else ""
+            lines.extend([
+                "",
+                f"<pre style='white-space:pre-wrap;'>{html.escape(preview)}{suffix}</pre>",
+            ])
+        self._content.setHtml("<br>".join(lines))
+
+    def show_mission(self, mission: dict):
+        lines = [
+            f"<b>Mission #{mission.get('id')}</b>",
+            f"<span style='color:#7E8798;'>{mission.get('title', '')}</span>",
+            "",
+            f"<span style='color:#AB83C6;'>Status:</span> {mission.get('status', '?')}",
+            f"<span style='color:#AB83C6;'>Verdict:</span> {mission.get('review_verdict') or '—'}",
+            f"<span style='color:#AB83C6;'>Diff:</span> {mission.get('diff_stat') or '—'}",
+            f"<span style='color:#AB83C6;'>Resumes:</span> {mission.get('resume_count', 0)}",
+        ]
+        if mission.get("result_summary"):
+            lines.extend(["", "<b>Result</b>", str(mission["result_summary"])])
+        if mission.get("changed_paths"):
+            lines.extend(["", "<b>Changed paths</b>", str(mission["changed_paths"])])
         self._content.setHtml("<br>".join(lines))
 
     def show_message(self, msg: str):

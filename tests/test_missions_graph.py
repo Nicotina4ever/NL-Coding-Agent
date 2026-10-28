@@ -1,9 +1,7 @@
 """Tests for task graph dependencies, collision prevention, and SQLite mission persistence."""
-import tempfile
 import pytest
-from pathlib import Path
+import nl_coding_agent.persistence.database as database
 from nl_coding_agent.core.task_graph import TaskGraph, CyclicDependencyError
-from nl_coding_agent.persistence.database import init_db
 from nl_coding_agent.persistence.missions import (
     create_mission,
     get_mission,
@@ -60,7 +58,8 @@ def test_task_collision_prevention():
     assert graph.can_run_concurrently([t1], t2) is False
 
 
-def test_mission_persistence_roundtrip():
+def test_mission_persistence_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setattr(database, "_DB_PATH", tmp_path / "missions.sqlite3")
     m_id = create_mission(project_id=None, title="Self Build Test", goal="Add feature X")
     assert m_id > 0
 

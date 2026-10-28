@@ -32,6 +32,25 @@ Python validation already succeeded:
 - `python\python.exe -m pip check` -> no broken requirements.
 - importing `Agent, Crew, Task, Flow, LLM` from `crewai` -> succeeds.
 
+## Workspace containment and build outputs
+
+Canonical source repository: `K:\AI\Coding Agent`. Keep permanent project-owned files inside
+this repository. Do not create sibling directories under `K:\AI` without explicit user approval.
+
+- Permanent build artifacts: `dist\` (for example `dist\portable-release`).
+- Temporary build files: `build\`; remove them when the build or audit is finished.
+- Tests and fixtures: the normal project test/fixture directories, never a sibling workspace.
+- Packaging input must exclude `dist\`, `build\`, caches, logs, user data, vendor checkouts, and
+  test output to prevent recursive inclusion.
+- A portable independence smoke test may run outside the source tree only from a managed
+  temporary directory. Record its owner and cleanup path; do not leave a permanent installation.
+- Keep at most one verified release candidate. Do not accumulate duplicate payloads or duplicate
+  embedded Python/CrewAI runtimes; a standalone distribution may contain one independent runtime.
+- Never delete or move an existing build directory, user data, SQLite database, model checkpoint,
+  or test result without explicit user confirmation. Produce a cleanup report with exact paths,
+  sizes, unique contents, and recommended actions first.
+- NL Coding Agent must apply these same containment rules to every project it manages.
+
 ## No configuration ceremony
 
 The normal user must NOT have to create YAML files for every project.

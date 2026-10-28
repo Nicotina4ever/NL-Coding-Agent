@@ -1,0 +1,7 @@
+{
+  "nl_coding_agent/core/recovery_store.py": "d8319b71e65f9cc3cfbde14f4cb629c990960a4b05baca59132ffb541ad41b9c",
+  "nl_coding_agent/core/staging_broker.py": "84cde4f1c6ad66cf256ade2d2565a396d7509e1864db4103b78d780e3162504c",
+  "nl_coding_agent/core/code_integrity_gate.py": "39b0279758ef61ca9029daeeea00b692e8d5072d4a867ab0f747da312f4e18be",
+  "tests/test_staging_broker_adversarial.py": "cf4902ece2143949eb916c018ed88dc895035d600d357dd4aa9cae08583b74bd",
+  "tests/test_rollback_stub.py": "84dc98111ee9d459822e6f65feb9903e17ad716c267b9c435ae4f14eccd4c2ae"
+}

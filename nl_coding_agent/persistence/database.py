@@ -1,25 +1,40 @@
 """SQLite persistence layer for NL Coding Agent."""
 from __future__ import annotations
 
+import os
 import sqlite3
 import threading
 from pathlib import Path
 
-_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "nl_coding_agent.sqlite3"
+APP_ROOT = Path(__file__).resolve().parents[2]
+_DEFAULT_DATA_ROOT = APP_ROOT / "data"
+_DB_PATH = _DEFAULT_DATA_ROOT / "nl_coding_agent.sqlite3"
 _LOCK = threading.Lock()
 
 
+def data_root() -> Path:
+    override = os.environ.get("NL_DATA_DIR")
+    if override:
+        return Path(override).expanduser().resolve()
+    return _DB_PATH.parent
+
+
 def db_path() -> Path:
+    override = os.environ.get("NL_DATA_DIR")
+    if override:
+        return data_root() / "nl_coding_agent.sqlite3"
     return _DB_PATH
 
 
 def get_connection(path: Path | None = None) -> sqlite3.Connection:
-    p = path or _DB_PATH
+    p = path or db_path()
     p.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(p), check_same_thread=False)
+    conn = sqlite3.connect(str(p), check_same_thread=False, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA synchronous=NORMAL")
     return conn
 
 
@@ -122,6 +137,43 @@ CREATE TABLE IF NOT EXISTS verification_runs (
 );
 """
 
+# Columns added after the first operational baseline.  Migrations are additive
+# and idempotent so existing mission history is preserved.
+_MIGRATIONS: list[tuple[str, str, str]] = [
+    ("missions", "result_summary", "TEXT"),
+    ("missions", "review_verdict", "TEXT"),
+    ("missions", "diff_stat", "TEXT"),
+    ("missions", "changed_paths", "TEXT DEFAULT '[]'"),
+    ("missions", "resume_count", "INTEGER NOT NULL DEFAULT 0"),
+    ("missions", "started_at", "TEXT"),
+    ("missions", "finished_at", "TEXT"),
+    ("tasks", "write_paths", "TEXT DEFAULT '[]'"),
+    ("tasks", "attempts", "INTEGER NOT NULL DEFAULT 0"),
+    ("tasks", "last_error", "TEXT"),
+    ("tasks", "started_at", "TEXT"),
+    ("tasks", "finished_at", "TEXT"),
+]
+
+_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_missions_project ON missions(project_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_tasks_mission ON tasks(mission_id, id);
+CREATE INDEX IF NOT EXISTS idx_attempts_task ON task_attempts(task_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_handoffs_mission ON handoffs(mission_id, id);
+CREATE INDEX IF NOT EXISTS idx_verification_mission ON verification_runs(mission_id, id);
+CREATE INDEX IF NOT EXISTS idx_events_created ON events(id DESC);
+"""
+
+
+def _apply_migrations(conn: sqlite3.Connection) -> None:
+    for table, column, declaration in _MIGRATIONS:
+        existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
+    for statement in _INDEXES.split(";"):
+        stmt = statement.strip()
+        if stmt:
+            conn.execute(stmt)
+
 
 def init_db(path: Path | None = None) -> sqlite3.Connection:
     """Initialize database, run schema migrations, return connection."""
@@ -132,6 +184,7 @@ def init_db(path: Path | None = None) -> sqlite3.Connection:
                 stmt = statement.strip()
                 if stmt:
                     conn.execute(stmt)
+            _apply_migrations(conn)
     return conn
 
 

@@ -1,4 +1,8 @@
 @echo off
 cd /d "%~dp0"
-python\python.exe nl_coding_agent\cli.py doctor
+set "PYTHONPATH=%~dp0"
+set "PYTHONUTF8=1"
+set "PYTHONIOENCODING=utf-8"
+set "NO_COLOR=1"
+python\python.exe "%~dp0nl_agent.py" doctor
 pause

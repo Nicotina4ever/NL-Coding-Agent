@@ -2,15 +2,40 @@
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
 from datetime import datetime
+from typing import Iterator
+
 from nl_coding_agent.persistence.database import init_db
+
+
+def _now() -> str:
+    return datetime.now().isoformat(timespec="seconds")
+
+
+@contextmanager
+def _db() -> Iterator:
+    conn = init_db()
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def _json_list(value) -> list:
+    if isinstance(value, list):
+        return value
+    try:
+        parsed = json.loads(value or "[]")
+        return parsed if isinstance(parsed, list) else []
+    except Exception:
+        return []
 
 
 def create_mission(project_id: int | None, title: str, goal: str) -> int:
     """Create a new mission record in SQLite and return its ID."""
-    conn = init_db()
-    now = datetime.now().isoformat()
-    with conn:
+    now = _now()
+    with _db() as conn, conn:
         cur = conn.execute(
             """
             INSERT INTO missions (project_id, title, goal, status, created_at, updated_at)
@@ -23,32 +48,92 @@ def create_mission(project_id: int | None, title: str, goal: str) -> int:
 
 def get_mission(mission_id: int) -> dict | None:
     """Fetch mission details by ID."""
-    conn = init_db()
-    row = conn.execute("SELECT * FROM missions WHERE id=?", (mission_id,)).fetchone()
-    return dict(row) if row else None
+    with _db() as conn:
+        row = conn.execute("SELECT * FROM missions WHERE id=?", (mission_id,)).fetchone()
+        return dict(row) if row else None
 
 
 def list_missions(project_id: int | None = None) -> list[dict]:
     """List missions, optionally filtered by project_id."""
-    conn = init_db()
-    if project_id is not None:
-        rows = conn.execute(
-            "SELECT * FROM missions WHERE project_id=? ORDER BY id DESC",
-            (project_id,),
-        ).fetchall()
-    else:
-        rows = conn.execute("SELECT * FROM missions ORDER BY id DESC").fetchall()
-    return [dict(r) for r in rows]
+    with _db() as conn:
+        if project_id is not None:
+            rows = conn.execute(
+                "SELECT * FROM missions WHERE project_id=? ORDER BY id DESC",
+                (project_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM missions ORDER BY id DESC").fetchall()
+        return [dict(r) for r in rows]
+
+
+def set_mission_project(mission_id: int, project_id: int) -> None:
+    with _db() as conn, conn:
+        conn.execute(
+            "UPDATE missions SET project_id=? WHERE id=?",
+            (project_id, mission_id),
+        )
 
 
 def update_mission_status(mission_id: int, status: str) -> None:
-    """Update mission status ('pending', 'running', 'completed', 'failed', 'blocked')."""
-    conn = init_db()
-    now = datetime.now().isoformat()
-    with conn:
+    """Update mission status ('pending', 'running', 'completed', 'failed', 'blocked', 'interrupted')."""
+    now = _now()
+    with _db() as conn, conn:
         conn.execute(
-            "UPDATE missions SET status=?, updated_at=? WHERE id=?",
-            (status, now, mission_id),
+            "UPDATE missions SET status=?, updated_at=?, finished_at=CASE WHEN ? IN ('completed','failed','blocked','interrupted') THEN ? ELSE finished_at END WHERE id=?",
+            (status, now, status, now, mission_id),
+        )
+
+
+def mark_mission_started(mission_id: int) -> None:
+    now = _now()
+    with _db() as conn, conn:
+        conn.execute(
+            "UPDATE missions SET status='running', started_at=COALESCE(started_at, ?), updated_at=? WHERE id=?",
+            (now, now, mission_id),
+        )
+
+
+def increment_resume_count(mission_id: int) -> None:
+    with _db() as conn, conn:
+        conn.execute(
+            "UPDATE missions SET resume_count=resume_count+1, updated_at=? WHERE id=?",
+            (_now(), mission_id),
+        )
+
+
+def update_mission_result(
+    mission_id: int,
+    status: str,
+    result_summary: str | None = None,
+    review_verdict: str | None = None,
+    diff_stat: str | None = None,
+    changed_paths: list[str] | None = None,
+) -> None:
+    now = _now()
+    with _db() as conn, conn:
+        conn.execute(
+            """
+            UPDATE missions
+               SET status=?,
+                   result_summary=COALESCE(?, result_summary),
+                   review_verdict=COALESCE(?, review_verdict),
+                   diff_stat=COALESCE(?, diff_stat),
+                   changed_paths=COALESCE(?, changed_paths),
+                   updated_at=?,
+                   finished_at=CASE WHEN ? IN ('completed','failed','blocked','interrupted') THEN ? ELSE finished_at END
+             WHERE id=?
+            """,
+            (
+                status,
+                result_summary,
+                review_verdict,
+                diff_stat,
+                json.dumps(changed_paths) if changed_paths is not None else None,
+                now,
+                status,
+                now,
+                mission_id,
+            ),
         )
 
 
@@ -58,46 +143,85 @@ def add_task(
     description: str,
     agent_role: str,
     depends_on: list[int] | None = None,
+    write_paths: list[str] | None = None,
 ) -> int:
-    """Add a task with dependency links to a mission."""
-    conn = init_db()
-    now = datetime.now().isoformat()
+    """Add a task with dependency and write-scope links to a mission."""
+    now = _now()
     deps_json = json.dumps(depends_on or [])
-    with conn:
+    writes_json = json.dumps(write_paths or [])
+    with _db() as conn, conn:
         cur = conn.execute(
             """
-            INSERT INTO tasks (mission_id, title, description, status, agent_role, depends_on, created_at, updated_at)
-            VALUES (?, ?, ?, 'pending', ?, ?, ?, ?)
+            INSERT INTO tasks (mission_id, title, description, status, agent_role,
+                               depends_on, write_paths, created_at, updated_at)
+            VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?)
             """,
-            (mission_id, title, description, agent_role, deps_json, now, now),
+            (mission_id, title, description, agent_role, deps_json, writes_json, now, now),
         )
         return cur.lastrowid
 
 
+def get_task(task_id: int) -> dict | None:
+    with _db() as conn:
+        row = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        d["depends_on"] = _json_list(d.get("depends_on"))
+        d["write_paths"] = _json_list(d.get("write_paths"))
+        return d
+
+
 def get_tasks(mission_id: int) -> list[dict]:
     """Retrieve all tasks for a mission ordered by creation."""
-    conn = init_db()
-    rows = conn.execute(
-        "SELECT * FROM tasks WHERE mission_id=? ORDER BY id ASC",
-        (mission_id,),
-    ).fetchall()
-    results = []
-    for r in rows:
-        d = dict(r)
-        d["depends_on"] = json.loads(d["depends_on"] or "[]")
-        results.append(d)
-    return results
+    with _db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM tasks WHERE mission_id=? ORDER BY id ASC",
+            (mission_id,),
+        ).fetchall()
+        results = []
+        for r in rows:
+            d = dict(r)
+            d["depends_on"] = _json_list(d.get("depends_on"))
+            d["write_paths"] = _json_list(d.get("write_paths"))
+            results.append(d)
+        return results
 
 
-def update_task_status(task_id: int, status: str) -> None:
+def update_task_status(task_id: int, status: str, error: str | None = None) -> None:
     """Update task status ('pending', 'running', 'completed', 'failed', 'blocked')."""
-    conn = init_db()
-    now = datetime.now().isoformat()
-    with conn:
+    now = _now()
+    with _db() as conn, conn:
         conn.execute(
-            "UPDATE tasks SET status=?, updated_at=? WHERE id=?",
-            (status, now, task_id),
+            """
+            UPDATE tasks
+               SET status=?,
+                   last_error=COALESCE(?, last_error),
+                   updated_at=?,
+                   started_at=CASE WHEN ?='running' THEN COALESCE(started_at, ?) ELSE started_at END,
+                   finished_at=CASE WHEN ? IN ('completed','failed','blocked') THEN ? ELSE finished_at END
+             WHERE id=?
+            """,
+            (status, error, now, status, now, status, now, task_id),
         )
+
+
+def reset_interrupted_tasks(mission_id: int) -> list[int]:
+    """Reset tasks left in 'running' by a crashed process. Returns reset task ids."""
+    now = _now()
+    with _db() as conn:
+        rows = conn.execute(
+            "SELECT id FROM tasks WHERE mission_id=? AND status='running'",
+            (mission_id,),
+        ).fetchall()
+        ids = [r["id"] for r in rows]
+        if ids:
+            with conn:
+                conn.execute(
+                    f"UPDATE tasks SET status='pending', updated_at=? WHERE id IN ({','.join('?' for _ in ids)})",
+                    (now, *ids),
+                )
+        return ids
 
 
 def record_task_attempt(
@@ -106,10 +230,9 @@ def record_task_attempt(
     output: str = "",
     error: str = "",
 ) -> int:
-    """Record an execution attempt for a task."""
-    conn = init_db()
-    now = datetime.now().isoformat()
-    with conn:
+    """Record an execution attempt for a task and bump its attempt counter."""
+    now = _now()
+    with _db() as conn, conn:
         cur = conn.execute(
             """
             INSERT INTO task_attempts (task_id, started_at, finished_at, status, output, error)
@@ -117,7 +240,35 @@ def record_task_attempt(
             """,
             (task_id, now, now, status, output, error),
         )
+        conn.execute(
+            "UPDATE tasks SET attempts=attempts+1, last_error=CASE WHEN ?<>'' THEN ? ELSE last_error END, updated_at=? WHERE id=?",
+            (error, error, now, task_id),
+        )
         return cur.lastrowid
+
+
+def get_task_attempts(mission_id: int) -> list[dict]:
+    with _db() as conn:
+        rows = conn.execute(
+            """
+            SELECT a.*, t.agent_role, t.title AS task_title
+              FROM task_attempts a
+              JOIN tasks t ON t.id = a.task_id
+             WHERE t.mission_id=?
+             ORDER BY a.id ASC
+            """,
+            (mission_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_latest_attempt(task_id: int) -> dict | None:
+    with _db() as conn:
+        row = conn.execute(
+            "SELECT * FROM task_attempts WHERE task_id=? ORDER BY id DESC LIMIT 1",
+            (task_id,),
+        ).fetchone()
+        return dict(row) if row else None
 
 
 def record_handoff(
@@ -128,10 +279,9 @@ def record_handoff(
     payload: dict | None = None,
 ) -> int:
     """Record an agent-to-agent handoff in SQLite."""
-    conn = init_db()
-    now = datetime.now().isoformat()
-    payload_json = json.dumps(payload or {})
-    with conn:
+    now = _now()
+    payload_json = json.dumps(payload or {}, ensure_ascii=False)
+    with _db() as conn, conn:
         cur = conn.execute(
             """
             INSERT INTO handoffs (mission_id, from_role, to_role, summary, payload, created_at)
@@ -144,20 +294,20 @@ def record_handoff(
 
 def get_handoffs(mission_id: int) -> list[dict]:
     """Retrieve handoffs for a mission in chronological order."""
-    conn = init_db()
-    rows = conn.execute(
-        "SELECT * FROM handoffs WHERE mission_id=? ORDER BY id ASC",
-        (mission_id,),
-    ).fetchall()
-    results = []
-    for r in rows:
-        d = dict(r)
-        try:
-            d["payload"] = json.loads(d["payload"] or "{}")
-        except Exception:
-            pass
-        results.append(d)
-    return results
+    with _db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM handoffs WHERE mission_id=? ORDER BY id ASC",
+            (mission_id,),
+        ).fetchall()
+        results = []
+        for r in rows:
+            d = dict(r)
+            try:
+                d["payload"] = json.loads(d["payload"] or "{}")
+            except Exception:
+                pass
+            results.append(d)
+        return results
 
 
 def record_verification_run(
@@ -170,9 +320,8 @@ def record_verification_run(
     passed: bool,
 ) -> int:
     """Record build/test verification results."""
-    conn = init_db()
-    now = datetime.now().isoformat()
-    with conn:
+    now = _now()
+    with _db() as conn, conn:
         cur = conn.execute(
             """
             INSERT INTO verification_runs (mission_id, task_id, command, exit_code, stdout, stderr, passed, created_at)
@@ -185,9 +334,29 @@ def record_verification_run(
 
 def get_verification_runs(mission_id: int) -> list[dict]:
     """Retrieve verification runs for a mission."""
-    conn = init_db()
-    rows = conn.execute(
-        "SELECT * FROM verification_runs WHERE mission_id=? ORDER BY id ASC",
-        (mission_id,),
-    ).fetchall()
-    return [dict(r) for r in rows]
+    with _db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM verification_runs WHERE mission_id=? ORDER BY id ASC",
+            (mission_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def mission_progress(mission_id: int) -> dict:
+    """Return task counts used by the GUI progress display."""
+    with _db() as conn:
+        rows = conn.execute(
+            "SELECT status, COUNT(*) AS n FROM tasks WHERE mission_id=? GROUP BY status",
+            (mission_id,),
+        ).fetchall()
+        counts = {r["status"]: r["n"] for r in rows}
+        total = sum(counts.values())
+        completed = counts.get("completed", 0)
+        return {
+            "total": total,
+            "completed": completed,
+            "failed": counts.get("failed", 0),
+            "running": counts.get("running", 0),
+            "pending": counts.get("pending", 0),
+            "percent": round((completed / total) * 100) if total else 0,
+        }

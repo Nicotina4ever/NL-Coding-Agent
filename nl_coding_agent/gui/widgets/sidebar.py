@@ -10,7 +10,7 @@ PAGES = [
     ("Files",     "files"),
     ("Tasks",     "tasks"),
     ("Agents",    "agents"),
-    ("Models",    "models"),
+    ("Model Hub", "models"),
     ("Settings",  "settings"),
 ]
 

@@ -3,17 +3,38 @@ ollama:
   sequential_only: true
   unload_after_stage: true
 
+providers:
+  ollama:
+    enabled: true
+    kind: ollama
+    label: Ollama
+    base_url: "http://127.0.0.1:11434"
+
+  lm_studio:
+    enabled: false
+    kind: openai_compatible
+    label: LM Studio
+    base_url: "http://127.0.0.1:1234/v1"
+    api_key_env: "LM_STUDIO_API_KEY"
+
+  llama_cpp:
+    enabled: false
+    kind: openai_compatible
+    label: llama.cpp
+    base_url: "http://127.0.0.1:8080/v1"
+    api_key_env: "LLAMA_CPP_API_KEY"
+
 roles:
   architect:
     model: "ollama/muse-glimmer:30b-q4_K_M"
     temperature: 0.15
 
   developer:
-    model: "ollama/qwen3.5:9b"
+    model: "ollama/qwen2.5-coder:7b-instruct-q4_K_M"
     temperature: 0.10
 
   reviewer:
-    model: "ollama/qwen2.5-coder:7b-instruct-q4_K_M"
+    model: "ollama/qwen3.5:9b"
     temperature: 0.05
 
   fallback_cloud:

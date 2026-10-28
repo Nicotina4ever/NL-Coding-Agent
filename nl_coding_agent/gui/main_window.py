@@ -19,10 +19,13 @@ from nl_coding_agent.gui.widgets.log_panel import LogPanel
 from nl_coding_agent.gui.widgets.projects_panel import ProjectsPanel
 from nl_coding_agent.gui.widgets.inspector_panel import InspectorPanel
 from nl_coding_agent.gui.widgets.models_panel import ModelsPanel
+from nl_coding_agent.gui.widgets.file_viewer import FileViewerWidget
+from nl_coding_agent.gui.widgets.task_board import TaskBoardWidget
+from nl_coding_agent.gui.widgets.agents_panel import AgentsPanel
+from nl_coding_agent.gui.widgets.settings_panel import SettingsPanel
 
 
 _LOGO_PATH = Path(__file__).resolve().parents[2] / "assets" / "LogoMio.svg"
-_PLACEHOLDER_PAGES = ["files", "tasks", "agents", "settings"]
 
 
 class OllamaCheckThread(QThread):
@@ -59,6 +62,7 @@ class MainWindow(QMainWindow):
         self._current_project: dict | None = None
         self._ollama_thread: OllamaCheckThread | None = None
         self._audit_thread: AuditThread | None = None
+        self._closing = False
 
         self.setWindowTitle("NL Coding Agent")
         self.setMinimumSize(1100, 700)
@@ -70,8 +74,11 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._connect_event_bus()
 
-        # Start Ollama check
-        QTimer.singleShot(500, self._check_ollama)
+        # Start Ollama check (stoppable single-shot, not a bare singleShot)
+        self._initial_ollama_timer = QTimer(self)
+        self._initial_ollama_timer.setSingleShot(True)
+        self._initial_ollama_timer.timeout.connect(self._check_ollama)
+        self._initial_ollama_timer.start(500)
         # Periodic Ollama status refresh
         self._ollama_timer = QTimer(self)
         self._ollama_timer.timeout.connect(self._check_ollama)
@@ -143,11 +150,20 @@ class MainWindow(QMainWindow):
         self._projects_panel.audit_requested.connect(self._on_audit_requested)
         self._stack.addWidget(self._projects_panel)  # index 0 = projects
 
-        for _ in _PLACEHOLDER_PAGES:
-            placeholder = QLabel("Coming soon…")
-            placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            placeholder.setStyleSheet("color: #7E8798; font-size: 14px;")
-            self._stack.addWidget(placeholder)
+        self._files_panel = FileViewerWidget(services=self._services)
+        self._files_panel.file_opened.connect(self._on_file_opened)
+        self._stack.addWidget(self._files_panel)  # index 1 = files
+
+        self._tasks_panel = TaskBoardWidget(services=self._services)
+        self._tasks_panel.mission_selected.connect(self._on_mission_selected)
+        self._tasks_panel.mission_finished.connect(self._on_mission_finished)
+        self._stack.addWidget(self._tasks_panel)  # index 2 = tasks
+
+        self._agents_panel = AgentsPanel(services=self._services)
+        self._stack.addWidget(self._agents_panel)  # index 3 = agents
+
+        self._settings_panel = SettingsPanel(services=self._services)
+        self._stack.addWidget(self._settings_panel)  # index 4 = settings
 
         # Models page (last)
         self._models_panel = ModelsPanel(services=self._services)
@@ -220,6 +236,14 @@ class MainWindow(QMainWindow):
         self._stack.setCurrentIndex(idx)
         if key == "models":
             self._models_panel.refresh()
+        elif key == "files":
+            self._files_panel.refresh()
+        elif key == "tasks":
+            self._tasks_panel.refresh()
+        elif key == "agents":
+            self._agents_panel.refresh()
+        elif key == "settings":
+            self._settings_panel.refresh()
 
     @Slot(dict)
     def _on_project_opened(self, project: dict):
@@ -227,7 +251,43 @@ class MainWindow(QMainWindow):
         self._project_label.setText(project["name"])
         facts = self._services.get_project_facts(project["id"])
         self._inspector.show_project(project, facts)
+        self._files_panel.set_project(project)
+        self._tasks_panel.set_project(project)
+        self._settings_panel.set_project(project)
         self._log_panel.append_log("projects", "info", f"Project opened: {project['name']}")
+
+    @Slot(str)
+    def _on_file_opened(self, rel_path: str):
+        content = None
+        if self._current_project:
+            try:
+                content = self._services.read_project_file(
+                    self._current_project["root"], rel_path,
+                )
+            except Exception as exc:
+                content = f"[unreadable] {exc}"
+        self._inspector.show_file(rel_path, content)
+        self._log_panel.append_log("files", "info", f"Opened file: {rel_path}")
+
+    @Slot(int)
+    def _on_mission_selected(self, mission_id: int):
+        details = self._services.get_mission_details(mission_id)
+        if details:
+            self._inspector.show_mission(details)
+
+    @Slot(dict)
+    def _on_mission_finished(self, result: dict):
+        mission_id = result.get("mission_id")
+        status = result.get("status", "unknown")
+        self._log_panel.append_log(
+            "orchestrator", "info" if status == "completed" else "warning",
+            f"Mission #{mission_id} finished: {status}",
+        )
+        self._tasks_panel.refresh()
+        if mission_id:
+            details = self._services.get_mission_details(mission_id)
+            if details:
+                self._inspector.show_mission(details)
 
     @Slot(int)
     def _on_audit_requested(self, project_id: int):
@@ -238,6 +298,8 @@ class MainWindow(QMainWindow):
         self._services.run_audit(project_id)
 
     def _check_ollama(self):
+        if self._closing:
+            return
         if self._ollama_thread and self._ollama_thread.isRunning():
             return
         self._ollama_thread = OllamaCheckThread(self._services, self)
@@ -290,7 +352,26 @@ class MainWindow(QMainWindow):
         pending = sum(1 for t in scheduler.list_tasks() if t.status == "pending")
         self._tasks_label.setText(f"Tasks: {running} running, {pending} pending")
 
+    def _stop_threads(self):
+        self._closing = True
+        self._initial_ollama_timer.stop()
+        self._ollama_timer.stop()
+        self._res_timer.stop()
+        for panel in (self._models_panel, self._agents_panel):
+            shutdown = getattr(panel, "shutdown", None)
+            if shutdown:
+                shutdown()
+        for attr in ("_ollama_thread", "_audit_thread"):
+            thread = getattr(self, attr, None)
+            if thread is not None and thread.isRunning():
+                thread.requestInterruption()
+                thread.wait(10000)
+            setattr(self, attr, None)
+
     def closeEvent(self, event):
+        from PySide6.QtCore import QCoreApplication
         from nl_coding_agent.app.services import get_event_bus
+        self._stop_threads()
+        QCoreApplication.processEvents()
         get_event_bus().unsubscribe(self._on_bus_event)
         event.accept()
