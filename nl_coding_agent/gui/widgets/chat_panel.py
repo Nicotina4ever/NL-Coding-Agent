@@ -4,13 +4,28 @@ from __future__ import annotations
 from PySide6.QtCore import (QBuffer, QIODevice, QObject, QRunnable, QSize, Qt,
                             QThreadPool, Signal, Slot)
 from PySide6.QtGui import QImage, QKeySequence, QPixmap, QShortcut
-from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel,
-                               QListWidget, QListWidgetItem, QPushButton,
+from PySide6.QtWidgets import (QApplication, QCheckBox, QFileDialog, QHBoxLayout,
+                               QLabel, QListWidget, QListWidgetItem, QPushButton,
                                QTextEdit, QVBoxLayout, QWidget)
 
 
 class _Signals(QObject):
     done = Signal(dict)
+    voice_done = Signal(dict)
+    voice_failed = Signal(str)
+
+
+class _VoiceTask(QRunnable):
+    def __init__(self, fn, signals: _Signals) -> None:
+        super().__init__()
+        self._fn, self._signals = fn, signals
+
+    def run(self) -> None:
+        try:
+            self._signals.voice_done.emit(self._fn() or {})
+        except Exception as exc:  # noqa: BLE001 - shown as deterministic status
+            self._signals.voice_failed.emit(
+                getattr(exc, "code", "voice-unavailable") + ": " + str(exc))
 
 
 class _Prepare(QRunnable):
@@ -42,15 +57,21 @@ class ChatPanel(QWidget):
 
     submitted = Signal(dict)
 
-    def __init__(self, services, parent=None) -> None:
+    def __init__(self, services, parent=None, *, speech=None) -> None:
         super().__init__(parent)
         self._services = services
+        self._speech = speech
         self._project = None
         self._attachments: list[dict] = []
         self._pending = 0
+        self._voice_session = None
+        self._voice_busy = False
+        self._last_transcript = ""
         self._pool = QThreadPool.globalInstance()
         self._signals = _Signals()
         self._signals.done.connect(self._on_prepared)
+        self._signals.voice_done.connect(self._on_voice_done)
+        self._signals.voice_failed.connect(self._on_voice_failed)
         self.setAcceptDrops(True)
         self.setAccessibleName("Mission chat input")
         self._build_ui()
@@ -91,7 +112,32 @@ class ChatPanel(QWidget):
         self._attachments_list.setMaximumHeight(150)
         self._attachments_list.setIconSize(QSize(48, 48))
         self._attachments_list.setAccessibleName("Prepared attachments")
+
         layout.addWidget(self._attachments_list)
+
+        voice = QHBoxLayout()
+        self._mic_btn = QPushButton("Dictate")
+        self._mic_btn.setObjectName("voiceButton")
+        self._mic_btn.setAccessibleName("Start or stop dictation")
+        self._mic_btn.setToolTip("Start/stop local microphone dictation (Ctrl+Shift+M)")
+        self._mic_btn.clicked.connect(self._toggle_voice)
+        voice.addWidget(self._mic_btn)
+        self._voice_stop_btn = QPushButton("Stop")
+        self._voice_stop_btn.setObjectName("secondaryButton")
+        self._voice_stop_btn.setAccessibleName("Stop voice recording")
+        self._voice_stop_btn.setEnabled(False)
+        self._voice_stop_btn.clicked.connect(self._stop_voice)
+        voice.addWidget(self._voice_stop_btn)
+        self._voice_status = QLabel("Voice: idle")
+        self._voice_status.setObjectName("voiceStatus")
+        self._voice_status.setStyleSheet("color: #AB83C6;")
+        self._voice_status.setAccessibleName("Voice status")
+        voice.addWidget(self._voice_status, 1)
+        self._tts_toggle = QCheckBox("Read transcript aloud")
+        self._tts_toggle.setObjectName("ttsToggle")
+        self._tts_toggle.setAccessibleName("Read transcript aloud")
+        voice.addWidget(self._tts_toggle)
+        layout.addLayout(voice)
         footer = QHBoxLayout()
         self._attach_btn = QPushButton("Attach files…")
         self._attach_btn.setObjectName("secondaryButton")
@@ -121,6 +167,7 @@ class ChatPanel(QWidget):
         QShortcut(QKeySequence("Ctrl+Return"), self, activated=self._submit)
         QShortcut(QKeySequence("Ctrl+Enter"), self, activated=self._submit)
         QShortcut(QKeySequence("Ctrl+O"), self, activated=self._choose_files)
+        QShortcut(QKeySequence("Ctrl+Shift+M"), self, activated=self._toggle_voice)
         QShortcut(QKeySequence("Delete"), self._attachments_list,
                   activated=self._remove_selected)
 
@@ -284,12 +331,90 @@ class ChatPanel(QWidget):
         self._input.clear()
         self.clear_attachments()
 
+    # ------------------------------------------------------------------ voice
+    def _speech_backend(self):
+        if self._speech is not None:
+            return self._speech
+        return self._services.speech_manager()
+
+    def _toggle_voice(self) -> None:
+        if self._voice_session is None:
+            self._start_voice()
+        else:
+            self._stop_voice()
+
+    def _start_voice(self) -> None:
+        try:
+            session = self._speech_backend().start_recording(max_seconds=60)
+        except Exception as exc:  # noqa: BLE001 - deterministic UI status
+            code = getattr(exc, "code", "voice-unavailable")
+            self._voice_status.setText("Voice: " + code + " — " + str(exc))
+            return
+        self._voice_session = session
+        self._mic_btn.setText("Dictating…")
+        self._voice_stop_btn.setEnabled(True)
+        self._voice_status.setText("Voice: recording (max 60 s) — click Dictate again to stop")
+
+    def _stop_voice(self) -> None:
+        session = self._voice_session
+        if session is None:
+            return
+        self._voice_session = None
+        self._mic_btn.setText("Dictate")
+        self._voice_stop_btn.setEnabled(False)
+        self._voice_status.setText("Voice: transcribing locally…")
+        speech = self._speech_backend()
+
+        def _work():
+            recorded = speech.stop_recording(session["session_id"])
+            transcript = speech.transcribe(recorded["wav_path"])
+            return {"recorded": recorded, "transcript": transcript}
+
+        self._voice_busy = True
+        self._pool.start(_VoiceTask(_work, self._signals))
+
+    def _on_voice_done(self, result: dict) -> None:
+        self._voice_busy = False
+        if "spoken_result" in result:
+            self._voice_status.setText("Voice: spoken locally")
+            return
+        transcript = dict(result.get("transcript") or {})
+        text = str(transcript.get("text") or "").strip()
+        self._last_transcript = text
+        if text:
+            current = self._input.toPlainText()
+            separator = "\n" if current.strip() else ""
+            self._input.setPlainText(current + separator + text)
+            self._voice_status.setText(
+                "Voice: transcript inserted (editable; nothing submitted)")
+            if self._tts_toggle.isChecked():
+                self._speak(text)
+        else:
+            self._voice_status.setText("Voice: no speech detected in the recording")
+
+    def _on_voice_failed(self, message: str) -> None:
+        self._voice_busy = False
+        self._voice_session = None
+        self._mic_btn.setText("Dictate")
+        self._voice_stop_btn.setEnabled(False)
+        self._voice_status.setText("Voice unavailable: " + str(message)[:160])
+
+    def _speak(self, text: str = "") -> None:
+        content = str(text or self._last_transcript or "").strip()
+        if not content:
+            self._voice_status.setText("Voice: nothing to speak yet")
+            return
+        speech = self._speech_backend()
+        self._voice_busy = True
+        self._pool.start(_VoiceTask(
+            lambda: {"spoken_result": speech.speak(content)}, self._signals))
+
     def wait_for_idle(self, timeout_ms: int = 5000) -> bool:
         import time
         deadline = time.monotonic() + max(0.1, timeout_ms / 1000.0)
         while time.monotonic() < deadline:
             QApplication.processEvents()
-            if self._pending == 0:
+            if self._pending == 0 and not self._voice_busy:
                 QApplication.processEvents()
                 return True
             time.sleep(0.01)

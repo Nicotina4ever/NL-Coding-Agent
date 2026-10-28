@@ -40,6 +40,11 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
     }
     from nl_coding_agent.gui.widgets.chat_panel import ChatPanel
     assert isinstance(window._stack.widget(7), ChatPanel)
+    # F2 voice controls are present and honest about their state (no hardware touched).
+    assert window._chat_panel._mic_btn.accessibleName() == "Start or stop dictation"
+    assert window._chat_panel._voice_stop_btn.isEnabled() is False
+    assert window._chat_panel._tts_toggle.accessibleName() == "Read transcript aloud"
+    assert "Voice: idle" in window._chat_panel._voice_status.text()
     assert isinstance(window._stack.widget(3), AgentsPanel)
     assert isinstance(window._stack.widget(4), SettingsPanel)
     assert isinstance(window._stack.widget(6), AutonomyPanel)

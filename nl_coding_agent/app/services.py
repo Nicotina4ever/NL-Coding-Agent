@@ -260,6 +260,54 @@ class AppServices:
         from nl_coding_agent.app import attachments
         return attachments.delete_attachment(int(attachment_id))
 
+    # ------------------------------------------------------------- speech (F2)
+    def speech_manager(self):
+        manager = getattr(self, "_speech_manager", None)
+        if manager is None:
+            from nl_coding_agent.app.speech import SpeechManager
+            manager = SpeechManager()
+            self._speech_manager = manager
+        return manager
+
+    def speech_status(self) -> dict:
+        manager = self.speech_manager()
+        return {"capabilities": manager.capabilities.to_dict(),
+                "audio_backend": manager.audio_backend(),
+                "audio_available": manager.audio_backend() is not None,
+                "active_model": manager.active_model(),
+                "tts": manager.tts_status(), "cloud_asr": False, "telemetry": False}
+
+    def speech_catalog(self) -> dict:
+        return self.speech_manager().catalog()
+
+    def speech_install_plan(self, engine: str) -> dict:
+        return self.speech_manager().install_plan(engine)
+
+    def speech_switch_model(self, model_id: str) -> dict:
+        return self.speech_manager().switch_model(model_id)
+
+    def speech_unload_model(self) -> dict:
+        return self.speech_manager().unload_model()
+
+    def speech_devices(self) -> dict:
+        return self.speech_manager().list_input_devices()
+
+    def speech_start_recording(self, *, max_seconds: int = 60) -> dict:
+        return self.speech_manager().start_recording(max_seconds=max_seconds)
+
+    def speech_stop_recording(self, session_id: str) -> dict:
+        return self.speech_manager().stop_recording(session_id)
+
+    def speech_transcribe(self, wav_path: str, *, language: str | None = None) -> dict:
+        return self.speech_manager().transcribe(wav_path, language=language)
+
+    def speech_tts_status(self) -> dict:
+        return self.speech_manager().tts_status()
+
+    def speech_speak(self, text: str) -> dict:
+        return self.speech_manager().speak(text)
+
+
     def list_missions(self, project_id: int | None = None) -> list[dict]:
         from nl_coding_agent.persistence.missions import list_missions as _list_m
         return _list_m(project_id)
