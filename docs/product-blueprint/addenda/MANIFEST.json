@@ -1,0 +1,21 @@
+{
+  "generated": "2026-10-28",
+  "type": "addendum",
+  "files": [
+    {
+      "path": "docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md",
+      "sha256": "49a3fddf9572d56335c23ad962d91401e5d1b578327daac08621ef5c35df7ca3",
+      "bytes": 23254
+    },
+    {
+      "path": "docs/product-blueprint/addenda/2026-10-28_QUEUE_HANDOFF.md",
+      "sha256": "f4664b3d1284d41f1f76534421c40226a220e189acfece3752613b8544c04173",
+      "bytes": 2651
+    },
+    {
+      "path": "docs/product-blueprint/addenda/README_IMPORT.md",
+      "sha256": "a7d59c5ff6fcd8c1511d37e247835413f566989df16e9db3f122679e1e74bea8",
+      "bytes": 960
+    }
+  ]
+}
