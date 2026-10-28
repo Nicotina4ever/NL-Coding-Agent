@@ -395,6 +395,22 @@ CREATE TABLE IF NOT EXISTS goal_missions (
     created_at   TEXT NOT NULL,
     UNIQUE(goal_id, milestone_id, mission_id)
 );
+
+-- Stage-8 G3 independent goal completion verification (NL-BP-215, additive only).
+-- Append-only verification evidence records - goal status is never mutated here.
+CREATE TABLE IF NOT EXISTS goal_verifications (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    goal_id               INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+    verifier_version      TEXT NOT NULL,
+    verdict               TEXT NOT NULL,
+    criteria_json         TEXT NOT NULL DEFAULT '[]',
+    evidence_refs_json    TEXT NOT NULL DEFAULT '[]',
+    blockers_json         TEXT NOT NULL DEFAULT '[]',
+    self_declared         INTEGER NOT NULL DEFAULT 0,
+    self_declared_mismatch INTEGER NOT NULL DEFAULT 0,
+    goal_status           TEXT NOT NULL DEFAULT '',
+    created_at            TEXT NOT NULL
+);
 """
 
 # Columns added after the first operational baseline.  Migrations are additive
@@ -465,6 +481,8 @@ CREATE INDEX IF NOT EXISTS idx_milestones_goal_status
     ON milestones(goal_id, status, ordering, id);
 CREATE INDEX IF NOT EXISTS idx_goal_missions_goal
     ON goal_missions(goal_id, milestone_id, mission_id);
+CREATE INDEX IF NOT EXISTS idx_goal_verifications_goal
+    ON goal_verifications(goal_id, id DESC);
 """
 
 
