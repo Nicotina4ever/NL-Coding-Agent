@@ -39,6 +39,8 @@ __all__ = [
     "record_evidence", "list_evidence",
     "create_approval", "decide_approval", "get_approval", "list_approvals",
     "pending_approvals",
+    "FLOW_RUN_STATES", "start_flow_run", "update_flow_run", "get_flow_run",
+    "list_flow_runs",
 ]
 
 
@@ -83,6 +85,15 @@ QUEUE_TRANSITIONS: dict[str, tuple[str, ...]] = {
 BACKLOG_SUPERVISOR_STATES: tuple[str, ...] = (
     "READY", "IN_FLIGHT", "VERIFIED", "NEEDS_FIX", "BLOCKED", "SKIPPED",
 )
+FLOW_RUN_STATES: tuple[str, ...] = (
+    "RUNNING", "PAUSED_WAITING_APPROVAL", "INTERRUPTED", "COMPLETED",
+    "BLOCKED", "FAILED",
+)
+FLOW_RUN_PIPELINES: tuple[str, ...] = ("mission", "supervisor", "audit")
+FLOW_TERMINAL_STATES: tuple[str, ...] = (
+    "INTERRUPTED", "COMPLETED", "BLOCKED", "FAILED",
+)
+
 APPROVAL_STATUSES: tuple[str, ...] = ("pending", "approved", "denied", "expired")
 APPROVAL_ACTIONS: tuple[str, ...] = (
     "delete", "network", "cloud", "install", "publish", "migrate", "external_tool",
@@ -544,6 +555,113 @@ def get_active_run(project_id: int) -> dict | None:
         data = dict(row)
         data["config"] = _loads(data.get("config_json"), {})
         return data
+
+
+# --------------------------------------------------------------------------- #
+# CrewAI Flow runs (C4b additive; app-owned SQLite only)
+# --------------------------------------------------------------------------- #
+
+def _validate_flow_status(status: str) -> str:
+    text = str(status or "").strip().upper()
+    if text not in FLOW_RUN_STATES:
+        raise StoreError("Invalid flow run status: " + repr(status))
+    return text
+
+
+def start_flow_run(flow_id: str, project_id: int, *, mission_id: int | None = None,
+                   queue_id: int | None = None,
+                   supervisor_run_id: int | None = None,
+                   pipeline: str = "mission",
+                   status: str = "RUNNING") -> dict:
+    """Create or re-open one durable flow run row (idempotent by flow_id)."""
+    flow_key = _require_text(flow_id, "flow_id")
+    project_value = int(project_id)
+    pipeline_text = str(pipeline or "").strip()
+    if pipeline_text not in FLOW_RUN_PIPELINES:
+        raise StoreError("Invalid flow pipeline: " + repr(pipeline))
+    status_text = _validate_flow_status(status)
+    now = _now()
+    with _db() as conn, conn:
+        conn.execute(
+            """
+            INSERT INTO flow_runs
+                (flow_id, project_id, mission_id, queue_id, supervisor_run_id,
+                 pipeline, status, created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(flow_id) DO UPDATE SET
+                status=excluded.status,
+                updated_at=excluded.updated_at,
+                mission_id=COALESCE(excluded.mission_id, flow_runs.mission_id),
+                queue_id=COALESCE(excluded.queue_id, flow_runs.queue_id),
+                supervisor_run_id=COALESCE(excluded.supervisor_run_id,
+                                           flow_runs.supervisor_run_id)
+            """,
+            (flow_key, project_value,
+             int(mission_id) if mission_id is not None else None,
+             int(queue_id) if queue_id is not None else None,
+             int(supervisor_run_id) if supervisor_run_id is not None else None,
+             pipeline_text, status_text, now, now),
+        )
+    return get_flow_run(flow_key)
+
+
+def update_flow_run(flow_id: str, *, status: str | None = None,
+                    last_method: str | None = None,
+                    state_sha256: str | None = None,
+                    finished_at: str | None = None,
+                    mission_id: int | None = None) -> bool:
+    """Update selected flow-run columns; terminal status stamps finished_at once."""
+    flow_key = _require_text(flow_id, "flow_id")
+    values: dict[str, object] = {}
+    if status is not None:
+        values["status"] = _validate_flow_status(status)
+    if last_method is not None:
+        values["last_method"] = str(last_method)
+    if state_sha256 is not None:
+        values["state_sha256"] = str(state_sha256)
+    if finished_at is not None:
+        values["finished_at"] = str(finished_at)
+    if mission_id is not None:
+        values["mission_id"] = int(mission_id)
+    if not values:
+        return False
+    values["updated_at"] = _now()
+    assignments = ", ".join(column + "=?" for column in values)
+    with _db() as conn, conn:
+        cursor = conn.execute(
+            "UPDATE flow_runs SET " + assignments + " WHERE flow_id=?",
+            (*values.values(), flow_key),
+        )
+        return cursor.rowcount == 1
+
+
+def get_flow_run(flow_id: str) -> dict | None:
+    flow_key = str(flow_id or "").strip()
+    if not flow_key:
+        raise StoreError("flow_id is required")
+    with _db() as conn:
+        row = conn.execute(
+            "SELECT * FROM flow_runs WHERE flow_id=?", (flow_key,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def list_flow_runs(*, project_id: int | None = None,
+                   status: str | None = None) -> list[dict]:
+    clauses: list[str] = []
+    params: list[object] = []
+    if project_id is not None:
+        clauses.append("project_id=?")
+        params.append(int(project_id))
+    if status is not None:
+        clauses.append("status=?")
+        params.append(_validate_flow_status(status))
+    query = "SELECT * FROM flow_runs"
+    if clauses:
+        query += " WHERE " + " AND ".join(clauses)
+    query += " ORDER BY updated_at DESC, flow_id DESC"
+    with _db() as conn:
+        return [dict(row) for row in conn.execute(query, params).fetchall()]
 
 
 def set_run_flags(run_id: int, *, pause: bool | None = None,

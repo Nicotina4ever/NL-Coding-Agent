@@ -260,6 +260,40 @@ CREATE TABLE IF NOT EXISTS machine_leases (
     heartbeat_at TEXT NOT NULL,
     expires_at  TEXT NOT NULL
 );
+
+-- Stage-4 CrewAI Flow state (C4b additive, app-owned SQLite only).
+CREATE TABLE IF NOT EXISTS flow_states (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    flow_uuid    TEXT NOT NULL,
+    method_name  TEXT NOT NULL,
+    timestamp    TEXT NOT NULL,
+    state_sha256 TEXT NOT NULL,
+    state_json   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS flow_pending_feedback (
+    flow_uuid    TEXT PRIMARY KEY,
+    approval_id  INTEGER,
+    method_name  TEXT NOT NULL,
+    context_json TEXT NOT NULL,
+    state_json   TEXT NOT NULL,
+    created_at   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS flow_runs (
+    flow_id           TEXT PRIMARY KEY,
+    project_id        INTEGER NOT NULL,
+    mission_id        INTEGER,
+    queue_id          INTEGER,
+    supervisor_run_id INTEGER,
+    pipeline          TEXT NOT NULL,
+    status            TEXT NOT NULL,
+    last_method       TEXT,
+    state_sha256      TEXT,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    finished_at       TEXT
+);
 """
 
 # Columns added after the first operational baseline.  Migrations are additive
@@ -288,6 +322,8 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("events", "mission_id", "INTEGER"),
     ("events", "correlation_id", "TEXT"),
     ("events", "event_kind", "TEXT"),
+    # Stage-4 Flow run link (C4b, additive; NULL for sequential missions).
+    ("missions", "flow_id", "TEXT"),
 ]
 
 _INDEXES = """
@@ -306,6 +342,9 @@ CREATE INDEX IF NOT EXISTS idx_evidence_mission ON mission_evidence(mission_id, 
 CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(project_id, status, id);
 CREATE INDEX IF NOT EXISTS idx_runs_project ON supervisor_runs(project_id, id DESC);
 CREATE INDEX IF NOT EXISTS idx_events_correlation ON events(correlation_id);
+CREATE INDEX IF NOT EXISTS idx_flow_states_uuid ON flow_states(flow_uuid, id DESC);
+CREATE INDEX IF NOT EXISTS idx_flow_runs_mission ON flow_runs(mission_id);
+CREATE INDEX IF NOT EXISTS idx_flow_runs_status ON flow_runs(status);
 """
 
 

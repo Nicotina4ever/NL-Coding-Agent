@@ -84,6 +84,34 @@ def set_promotion_status(mission_id: int, promotion_status: str | None) -> None:
         )
 
 
+def set_mission_flow(mission_id: int, flow_id: str | None) -> None:
+    """Link a mission to its durable CrewAI Flow run (NULL clears the link)."""
+    with _db() as conn, conn:
+        conn.execute(
+            "UPDATE missions SET flow_id=?, updated_at=? WHERE id=?",
+            (str(flow_id) if flow_id else None, _now(), mission_id),
+        )
+
+
+def get_mission_flow(mission_id: int) -> str | None:
+    """Return the linked Flow id for a mission, or None for sequential missions."""
+    with _db() as conn:
+        row = conn.execute(
+            "SELECT flow_id FROM missions WHERE id=?", (int(mission_id),)
+        ).fetchone()
+        return str(row["flow_id"]) if row and row["flow_id"] else None
+
+
+def find_mission_by_flow_id(flow_id: str) -> dict | None:
+    """Find the mission linked to a durable Flow run id."""
+    with _db() as conn:
+        row = conn.execute(
+            "SELECT * FROM missions WHERE flow_id=? ORDER BY id DESC LIMIT 1",
+            (str(flow_id),),
+        ).fetchone()
+        return dict(row) if row else None
+
+
 def find_mission_by_staging_dir(staging_dir: str) -> dict | None:
     """Find the mission owning a staging directory (used by promotion preflight)."""
     with _db() as conn:
