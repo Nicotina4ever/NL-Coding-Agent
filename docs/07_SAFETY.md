@@ -259,3 +259,58 @@ read/write/execute/delete/network/cloud scopes. No legacy deny or gate semantics
   It does not constrain arbitrary subprocesses; future research/tool code must
   call `check_capability` at the execution boundary.
 
+## Independent auto-review and autonomy profiles (stage 7, NL-BP-166/167, implemented 2026-10-28)
+
+Additive policy layer in nl_coding_agent/core/auto_review.py, built on the
+NL-BP-168 capability boundary. It is not wired into the GUI, supervisor or any
+execution path yet: callers must evaluate one proposed action descriptor at the
+execution boundary before acting.
+
+- **Four profiles:** Manual, Assisted, Trusted Auto Review and Full Autonomy;
+  the fail-closed default is Manual. Manual auto-approves nothing; Assisted also
+  auto-approves reads, local model inference and test execution; Trusted Auto
+  Review also auto-approves authorized writes/staged edits, local private installs
+  with an explicit grant and approved network research under its controls; Full
+  Autonomy is explicit opt-in broad execution.
+- **Seven independent controls:** tool auto-authorization, automated code review,
+  background mission continuation, external network, cloud LLM use, user-file
+  access and release/deployment. An action declares/derives the controls it needs;
+  a disabled required control forces human approval. Enabling one control never
+  enables another (verified by tests).
+- **Deterministic decision:** auto_approved / needs_human_approval / denied with a
+  reason, stable reason code, capability risk class, matched policy/grant id,
+  durable approval id when pending, required controls and
+  independent_review_required. The engine always calls
+  permissions.check_capability for grant/approval/deny/expiry/revocation
+  semantics and never reimplements them; unknown capabilities/scopes/profiles/
+  controls raise ValueError; permission-store or audit failures fail closed
+  (Denied, never auto-approved).
+- **High-impact rule:** delete, publish-release, secret-use, install-system,
+  git-push and network-write are never auto-approved without an explicit
+  owner-scoped durable grant covering that exact capability and scope. Their
+  default decision stays denied; Trusted Auto Review still asks a human even with
+  a grant; Full Autonomy auto-approves them only with that grant and the matching
+  control where one exists (for example release_deployment).
+- **Independent review stays mandatory:** for write/git-commit capabilities and
+  staged code edits/promotions, independent_review_required remains true in every
+  profile including Full Autonomy. It does not replace or weaken the existing
+  staged-candidate validation, candidate+oracle verification, reviewer gate or
+  promotion-last CAS/journal gates.
+- **Truthful profile descriptors:** every profile carries an OS-rights disclosure
+  stating that policies are application-level filters, not an OS sandbox, and that
+  code running with the current user's privileges can bypass them. Full Autonomy
+  limits explicitly state it is not unrestricted, high-impact actions stay
+  separately gated, independent review can reject, emergency stop/revocation stay
+  authoritative, no total reversibility is claimed and no forced unlimited mission
+  count is granted by the descriptor.
+- **Audit without leakage:** every decision appends one events row (source
+  'permissions', event_kind 'capability_auto_review') containing capability,
+  profile, outcome, reason code, risk, required/enabled controls, independent
+  review flag and policy/approval ids only. Commands, target paths, hosts,
+  descriptions, scope values and arbitrary context values are never logged.
+- **Honest limitations:** no GUI/execution wiring exists yet; approvals remain
+  deterministic local SQLite policy (NL-BP-168), not an OS sandbox; the engine is
+  a policy foundation for future trusted/full autonomy increments (NL-BP-166/167
+  stay planned/partial until wired and acceptance-tested end to end).
+
+
