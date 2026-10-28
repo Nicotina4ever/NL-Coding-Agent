@@ -59,9 +59,9 @@ SH-07 Tier B (real local models) remains pending explicit authorization and bloc
 
 | Status | P0 | P1 | P2 | P3 | Total |
 |---|---|---|---|---|---|
-| verified | 20 | 11 | 0 | 0 | 31 |
-| partial | 24 | 27 | 10 | 0 | 61 |
-| planned | 9 | 5 | 6 | 2 | 22 |
+| verified | 20 | 12 | 0 | 0 | 32 |
+| partial | 24 | 26 | 11 | 1 | 62 |
+| planned | 9 | 5 | 5 | 1 | 20 |
 | blocked | 3 | 0 | 0 | 0 | 3 |
 | **Total** | 56 | 43 | 16 | 2 | 117 |
 
@@ -86,6 +86,8 @@ SH-07 Tier B (real local models) remains pending explicit authorization and bloc
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v3.2 (2026-10-28)** - Root reorganization implemented (not audit-only): 32 -> 21 top-level root items; one root launcher plus scripts/launchers/; repair scripts archived to docs/history/legacy/temp-scripts/; unused crewAI checkout moved to da_eliminare/crewAI; build/dist/logs/state consolidated under .workspace with configurable policy; python/ and data/ preserved. Full suite 628 passed, relocation 33/0/1, supervisor/SBOM/GUI/portable/release-builder/doctor/CLI green, secrets audit CLEAR-WITH-REVIEW blocking 0. NL-BP-095 verified, 094/097 partial; no deletion, stale candidates and da_eliminare require owner authorization.
 
 **v3.1 (2026-10-28)** - Cross-platform private beta C1-C5 implemented: compatibility audit/matrix + platform abstraction (31 tests), six-target native runtime manifests/provisioner + measured-only release builder (57 tests), GitHub Actions CI matrix + headless GUI/bootstrapper checks (7 tests), beta feedback workflow + opt-in redacted diagnostic generator (31 tests), pre-upload secrets/history audit (12 tests), and root reorganization Phase A (one root launcher; CLI launchers under scripts/launchers/; repair scripts archived; da_eliminare staging). NL-BP-161/162 verified; 152-158/160/163-165 partial. All non-Windows runtime/CI/clean-machine/hardware acceptance remains MANUAL-PENDING; secrets audit must be re-run before any upload and owner authorization is required for external distribution.
 

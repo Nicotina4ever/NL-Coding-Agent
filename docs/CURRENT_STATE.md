@@ -459,3 +459,18 @@ GPU/ASR/TTS hardware, per-platform beta packages/checksums and real-hardware bet
 secrets audit must be re-run before any upload, and the repository owner must explicitly authorize
 any push, visibility change, collaborator invitation or release upload. No non-Windows support is
 claimed.
+
+Root reorganization implemented (2026-10-28)
+
+The repository root is now clean and policy-driven: one GUI launcher (NL Coding Agent.bat), CLI and
+VoiceBridge launchers under scripts/launchers/, archived repair scripts under
+docs/history/legacy/temp-scripts/, the unused crewAI checkout staged in da_eliminare/crewAI/, and
+generated outputs consolidated under .workspace/{build,dist,logs,temp,cache,state} with
+NL_WORKSPACE_DIR override (nl_coding_agent/core/workspace.py). python/ (embedded runtime) and data/
+(live SQLite/user data) stay at their historical paths by design. Root items went 32 -> 21 with no
+deletions. Verification: full suite 628 passed, relocation 33/0/1, supervisor gate ok, SBOM OK,
+doctor/CLI/GUI smoke PASS, portable staging and release-builder smoke PASS, SHA256_MANIFEST 5/5, and
+the pre-upload secrets/history audit re-run at final HEAD is CLEAR-WITH-REVIEW with 0 blocking
+findings after a documented synthetic-test-fixture allowlist. Stale release candidates under
+.workspace/dist/, da_eliminare/crewAI/ and any upload/publish action still require explicit owner
+authorization. See docs/ROOT_REORGANIZATION_REPORT.md.

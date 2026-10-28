@@ -232,8 +232,12 @@ Intel/Apple Silicon. The full program plan is docs/CROSS_PLATFORM_PRIVATE_BETA_P
 | NL-BP-156/165 | PARTIAL + MANUAL-PENDING: CI matrix/headless GUI/bootstrapper checks implemented (7 tests, not executed on GitHub); real CI runs, ARM64 runners, per-platform artifacts and real-hardware evidence absent |
 | NL-BP-157 | PARTIAL + MANUAL-PENDING: optional-backend probes/declarations and graceful degradation implemented; no GPU/ASR/TTS backend installed or tested |
 | NL-BP-159/161 | NL-BP-161 VERIFIED (31 tests, redacted opt-in diagnostics, issue templates, runbooks); NL-BP-159 beta packages/checksums/instructions still to build |
-| NL-BP-162/163 | NL-BP-162 VERIFIED tooling (12 tests, measured snapshot CLEAR-WITH-REVIEW; must re-run before upload); NL-BP-163 owner authorization gates documented but external distribution still requires explicit owner authorization |
+| NL-BP-162/163 | NL-BP-162 VERIFIED tooling (15 tests, re-run at final HEAD: CLEAR-WITH-REVIEW, blocking 0 after a documented synthetic-test-fixture allowlist; must re-run immediately before upload); NL-BP-163 owner authorization gates documented but external distribution still requires explicit owner authorization |
 | NL-BP-164 | PARTIAL: cross-platform acceptance matrix documented; real-hardware/clean-machine acceptance records still MANUAL-PENDING |
 
 No cross-platform support is claimed until the corresponding CI builds and real-hardware beta tests
 pass. Existing Windows acceptance evidence in this document remains valid and unchanged.
+
+Note: the development repository layout was reorganized (root 32 -> 21 items, generated outputs under
+.workspace/, launchers/scripts consolidated, da_eliminare staging) without changing release
+acceptance states; details and authorization items are in docs/ROOT_REORGANIZATION_REPORT.md.
