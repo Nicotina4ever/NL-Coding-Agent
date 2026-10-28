@@ -24,6 +24,7 @@ from nl_coding_agent.gui.widgets.task_board import TaskBoardWidget
 from nl_coding_agent.gui.widgets.agents_panel import AgentsPanel
 from nl_coding_agent.gui.widgets.settings_panel import SettingsPanel
 from nl_coding_agent.gui.widgets.autonomy_panel import AutonomyPanel
+from nl_coding_agent.gui.widgets.research_panel import ResearchPanel
 from nl_coding_agent.gui.widgets.chat_panel import ChatPanel
 from nl_coding_agent.gui.widgets.editor_panel import EditorPanel
 from nl_coding_agent.gui.widgets.terminal_panel import TerminalPanel
@@ -373,6 +374,10 @@ class MainWindow(QMainWindow):
         self._ide_tabs.addTab(self._problems_panel, "Problems")
         self._stack.addWidget(self._ide_tabs)  # index 8 = IDE
 
+        # Studio Research workspace (R5): explicit search/intake only.
+        self._research_panel = ResearchPanel(self._services)
+        self._stack.addWidget(self._research_panel)  # index 9 = research
+
         main_splitter.addWidget(self._stack)
 
         # Inspector panel
@@ -453,6 +458,7 @@ class MainWindow(QMainWindow):
             "autonomy": 6,
             "chat":     7,
             "ide":      8,
+            "research": 9,
         }
         self._settings_panel.autonomy_requested.connect(
             lambda: self._switch_page("autonomy")
@@ -466,7 +472,8 @@ class MainWindow(QMainWindow):
         actions = []
         pages = [("projects", "Projects"), ("files", "Files"), ("tasks", "Tasks"),
                  ("chat", "Mission Chat"), ("ide", "Studio IDE"),
-                 ("settings", "Settings"), ("autonomy", "Autonomy")]
+                 ("research", "Research"), ("settings", "Settings"),
+                 ("autonomy", "Autonomy")]
         for key, label in pages:
             actions.append(CommandAction("page-" + key, "Switch to " + label,
                                          (lambda k=key: self._switch_page(k)),
@@ -551,6 +558,8 @@ class MainWindow(QMainWindow):
             self._settings_panel.refresh()
         elif key == "autonomy":
             self._autonomy_panel.refresh()
+        elif key == "research":
+            self._research_panel.on_page_shown()
 
     @Slot(dict)
     def _on_project_opened(self, project: dict):
@@ -567,6 +576,7 @@ class MainWindow(QMainWindow):
         self._terminal_panel.set_project(project)
         self._git_panel.set_project(project)
         self._problems_panel.set_project(project)
+        self._research_panel.set_project(project)
         self._update_supervisor_status()
         self._log_panel.append_log("projects", "info", f"Project opened: {project['name']}")
 
@@ -734,7 +744,7 @@ class MainWindow(QMainWindow):
         self._ollama_timer.stop()
         self._res_timer.stop()
         self._supervisor_timer.stop()
-        for panel in (self._models_panel, self._agents_panel):
+        for panel in (self._models_panel, self._agents_panel, self._research_panel):
             shutdown = getattr(panel, "shutdown", None)
             if shutdown:
                 shutdown()

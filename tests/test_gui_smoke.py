@@ -32,7 +32,7 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
     services.supervisor_start = lambda *a, **k: started.append(1) or {"ok": True}
     window = MainWindow(services)
     assert started == [], "autonomy/self-build must never start on app open"
-    assert window._stack.count() == 9
+    assert window._stack.count() == 10
     assert window._page_index == {
         "projects": 0,
         "files": 1,
@@ -43,6 +43,7 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
         "autonomy": 6,
         "chat": 7,
         "ide": 8,
+        "research": 9,
     }
     from nl_coding_agent.gui.widgets.chat_panel import ChatPanel
     assert isinstance(window._stack.widget(7), ChatPanel)
@@ -61,6 +62,13 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
     assert window._terminal_panel._output.isReadOnly() is True
     assert window._git_panel._diff.isReadOnly() is True
     assert window._problems_panel._table.rowCount() == 0
+    from nl_coding_agent.gui.widgets.research_panel import ResearchPanel
+    research = window._stack.widget(9)
+    assert isinstance(research, ResearchPanel)
+    assert research._results_table.rowCount() == 0
+    assert research._query.accessibleName() == "Research query"
+    assert research._provider_combo.accessibleName() == "Research provider and route"
+    assert research._preview_text.isReadOnly() is True
     from nl_coding_agent.gui.widgets.command_palette import CommandPalette
     actions = window._command_palette_actions()
     assert any(action.action_id == "doctor" and action.enabled for action in actions)
@@ -127,3 +135,6 @@ def test_gui_widgets_have_no_direct_database_or_crewai_imports():
         assert "from sqlite3" not in lowered, path.name
         assert "import crewai" not in lowered, path.name
         assert "from crewai" not in lowered, path.name
+        for network in ("import requests", "from requests", "urllib.request",
+                        "http.client", "import socket"):
+            assert network not in lowered, (path.name, network)
