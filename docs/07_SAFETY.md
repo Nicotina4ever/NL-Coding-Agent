@@ -198,3 +198,21 @@ the supervisor default mode stays off. See docs/SH07_TIERB_EVIDENCE.md.
 - **No silent cloud fallback.** Unknown/declared capabilities never satisfy a role requirement,
   cloud/remote models require explicit grants, and ```permissions.assert_model_permitted```
   remains the only gate before LLM construction.
+
+
+## LSP / MCP / debugger surfaces and command palette (stage 4 F3b)
+
+- **LSP is diagnosis-only.** Servers are detected locally and started only on explicit user
+  action; no installs/downloads/network are performed. Diagnostics are untrusted editor data,
+  not verified truth; hover/completion/symbols never edit files automatically.
+- **MCP tool calls are human-gated.** Config is local JSON, discovery is read-only, and a tool
+  invocation requires explicit human approval; network-declared servers additionally require the
+  NETWORK permission. No model may call an MCP tool and discovery never auto-executes tools.
+- **Debugger surface is explicit and fail-closed.** debugpy/pdb are detected read-only; no
+  debugger starts silently, no arbitrary code is executed by detection, and absent adapters
+  produce a clear refusal. DAP transport/UI remains future work.
+- **Command palette exposes safe actions only** (navigation/refresh/read-only doctor); disabled
+  actions show the reason. Destructive, model and MCP-invocation actions are never listed.
+- **The terminal policy is still not an OS sandbox.** Allowed commands run with user privileges;
+  network commands are denied unless granted, but isolation and hardware/GUI verification remain
+  manual-pending. No claim of sandboxing, verified hardware or verified DPI behaviour is made.

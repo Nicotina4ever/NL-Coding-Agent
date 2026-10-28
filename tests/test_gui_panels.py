@@ -94,7 +94,8 @@ def test_panels_do_not_import_database_or_crewai():
     widgets = Path("nl_coding_agent/gui/widgets")
     for name in ("agents_panel.py", "settings_panel.py", "autonomy_panel.py",
                  "task_board.py", "chat_panel.py", "editor_panel.py",
-                 "terminal_panel.py", "git_panel.py", "problems_panel.py"):
+                 "terminal_panel.py", "git_panel.py", "problems_panel.py",
+                 "command_palette.py"):
         source = (widgets / name).read_text(encoding="utf-8")
         assert "PyQt5" not in source
         assert "sqlite3" not in source

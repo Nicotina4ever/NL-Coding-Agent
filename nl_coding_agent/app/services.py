@@ -102,6 +102,69 @@ class AppServices:
             ))
         return ok
 
+    # ----------------------------------------------------- LSP/MCP/debug (F3b)
+    def _lsp_manager(self, project_root):
+        root = str(Path(project_root).resolve())
+        managers = getattr(self, "_lsp_managers", None)
+        if managers is None:
+            managers = self._lsp_managers = {}
+        if root not in managers:
+            from nl_coding_agent.app.lsp import LspManager
+            managers[root] = LspManager(Path(root))
+        return managers[root]
+
+    def lsp_catalog(self) -> list[dict]:
+        from nl_coding_agent.app.lsp import detect_language_servers
+        return [server.to_dict() for server in detect_language_servers()]
+
+    def lsp_start(self, project_root, language: str) -> dict:
+        return self._lsp_manager(project_root).start(language)
+
+    def lsp_diagnostics(self, project_root, language: str) -> dict:
+        return self._lsp_manager(project_root).diagnostics(language)
+
+    def lsp_problems(self, project_root, language: str) -> list[dict]:
+        rows = []
+        diagnostics = self.lsp_diagnostics(project_root, language)
+        for uri, items in diagnostics.items():
+            for item in items:
+                rows.append({"severity": "error" if int(item.get("severity") or 1) <= 2 else "warning",
+                             "source": "lsp", "message": str(item.get("message") or ""),
+                             "path": uri, "line": item.get("line")})
+        return rows
+
+    def mcp_servers(self) -> list[dict]:
+        from nl_coding_agent.app.mcp import McpManager
+        return McpManager(getattr(self, "_current_project_id", None)).servers()
+
+    def mcp_tools(self, server_name: str) -> list[dict]:
+        from nl_coding_agent.app.mcp import McpManager
+        return McpManager(getattr(self, "_current_project_id", None)).list_tools(server_name)
+
+    def mcp_invoke_tool(self, server_name: str, tool_name: str, arguments=None, *,
+                        human_approved: bool = False) -> dict:
+        from nl_coding_agent.app.mcp import McpManager
+        return McpManager(getattr(self, "_current_project_id", None)).invoke_tool(
+            server_name, tool_name, arguments or {}, human_approved=human_approved)
+
+    def debug_status(self) -> dict:
+        from nl_coding_agent.app.debug import DebugManager
+        manager = getattr(self, "_debug_manager", None)
+        if manager is None:
+            manager = self._debug_manager = DebugManager()
+        return manager.status()
+
+    def debug_start(self, *, adapter=None, script=None) -> dict:
+        from nl_coding_agent.app.debug import DebugManager
+        manager = getattr(self, "_debug_manager", None)
+        if manager is None:
+            manager = self._debug_manager = DebugManager()
+        return manager.start(script=script, adapter=adapter)
+
+    def debug_stop(self) -> dict:
+        manager = getattr(self, "_debug_manager", None)
+        return manager.stop() if manager is not None else {"stopped": False}
+
     def get_project_facts(self, project_id: int) -> dict:
         return _get_project_facts(project_id)
 

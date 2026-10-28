@@ -346,3 +346,24 @@ program stage 4 are still outstanding. Stage 5 (repository hygiene) is complete 
 outstanding stage-4 GUI/multimodal work and on explicit authorization for replacing the stale
 dist/portable-release payload. No safety gate was weakened and the sequential pipeline remains the
 default (Flow opt-in).
+
+
+### 10. Stage-4 F3b: LSP / MCP / debugger readiness / command palette (2026-10-28)
+- **LSP**: read-only detection of locally installed servers (pylsp/pyright/basedpyright/
+  clangd/typescript/gopls) and a minimal JSON-RPC stdio client scoped to the open project.
+  Diagnostics flow into the Problems panel; hover/completion/symbols are explicit actions.
+  No server is installed, downloaded or started automatically; when absent the feature fails
+  closed with a clear message. Manual-pending: real language-server diagnostics/hover latency
+  was not hardware-verified; tests use a fake transport.
+- **MCP**: local JSON config for stdio servers is read-only; tool listing is explicit, and
+  tool invocation requires explicit human approval plus the NETWORK grant for
+  network-declared servers. No auto-execution and no model-issued tool calls.
+- **Debugger/DAP readiness**: read-only debugpy/pdb detection; explicit adapter interface with
+  fail-closed behaviour. No debugger starts silently and no arbitrary code is executed by
+  detection; full DAP UI remains future work.
+- **Command palette**: Ctrl+Shift+P opens a filterable keyboard palette of safe actions only
+  (page switching, open-project page, refresh IDE panels, read-only doctor, disabled
+  LSP/debug entries with reasons). Destructive/model actions are never listed.
+- **Accessibility/responsiveness**: accessible names/tooltips/shortcuts, loading/empty/error
+  states and non-blocking refresh paths. DPI scaling and real keyboard focus order remain
+  manual-pending on the reference machine.

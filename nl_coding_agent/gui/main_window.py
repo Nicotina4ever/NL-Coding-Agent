@@ -29,6 +29,7 @@ from nl_coding_agent.gui.widgets.editor_panel import EditorPanel
 from nl_coding_agent.gui.widgets.terminal_panel import TerminalPanel
 from nl_coding_agent.gui.widgets.git_panel import GitPanel
 from nl_coding_agent.gui.widgets.problems_panel import ProblemsPanel
+from nl_coding_agent.gui.widgets.command_palette import CommandAction, CommandPalette
 
 
 _LOGO_PATH = Path(__file__).resolve().parents[2] / "assets" / "LogoMio.svg"
@@ -281,12 +282,74 @@ class MainWindow(QMainWindow):
         # Command-palette stub: visible affordance for the F3b palette.
         from PySide6.QtGui import QKeySequence, QShortcut
         QShortcut(QKeySequence("Ctrl+Shift+P"), self,
-                  activated=self._show_command_palette_stub)
+                  activated=self._show_command_palette)
 
-    def _show_command_palette_stub(self):
-        self.statusBar().showMessage(
-            "Command palette is planned for F3b; current shortcuts: Ctrl+S save, "
-            "Ctrl+Enter terminal, Ctrl+Shift+M dictation.", 6000)
+    def _command_palette_actions(self):
+        """Safe actions only: open/project navigation/refresh/settings/read-only doctor."""
+        actions = []
+        pages = [("projects", "Projects"), ("files", "Files"), ("tasks", "Tasks"),
+                 ("chat", "Mission Chat"), ("ide", "Studio IDE"),
+                 ("settings", "Settings"), ("autonomy", "Autonomy")]
+        for key, label in pages:
+            actions.append(CommandAction("page-" + key, "Switch to " + label,
+                                         (lambda k=key: self._switch_page(k)),
+                                         category="navigation"))
+        actions.append(CommandAction(
+            "open-project", "Open project…",
+            lambda: self._switch_page("projects"), shortcut="", category="project"))
+        actions.append(CommandAction(
+            "refresh-ide", "Refresh IDE panels",
+            self._refresh_ide_panels, category="refresh"))
+        actions.append(CommandAction(
+            "doctor", "Run read-only doctor", self._run_readonly_doctor,
+            category="diagnostics"))
+        try:
+            debug = self._services.debug_status()
+            available = bool(debug.get("available"))
+        except Exception:
+            available = False
+        actions.append(CommandAction(
+            "debug-start", "Start debug session",
+            None, enabled=False,
+            disabled_reason=("no local debugger detected (F3b adapter interface only)"
+                             if not available else
+                             "explicit debug adapter not configured"),
+            category="debug"))
+        try:
+            servers = self._services.lsp_catalog()
+            lsp_available = any(server.get("available") for server in servers)
+        except Exception:
+            lsp_available = False
+        actions.append(CommandAction(
+            "lsp-diagnostics", "Refresh LSP diagnostics",
+            lambda: self.statusBar().showMessage(
+                "LSP diagnostics require an installed local server; none started silently.", 6000),
+            enabled=lsp_available,
+            disabled_reason="no local language server detected",
+            category="diagnostics"))
+        return actions
+
+    def _refresh_ide_panels(self):
+        if not self._current_project:
+            self.statusBar().showMessage("Open a project first.", 4000)
+            return
+        self._git_panel.refresh()
+        self._problems_panel.refresh()
+
+    def _run_readonly_doctor(self):
+        try:
+            settings = self._services.get_runtime_settings()
+            summary = "doctor: database=" + str(settings.get("database_path"))
+        except Exception as exc:
+            summary = "doctor: unavailable (" + str(exc) + ")"
+        self.statusBar().showMessage("Read-only " + summary, 8000)
+        self._log_panel.append_log("doctor", "info", "Read-only doctor: " + summary)
+
+    def _show_command_palette(self):
+        palette = CommandPalette(self._command_palette_actions(), self)
+        palette.triggered.connect(lambda action_id: self._log_panel.append_log(
+            "palette", "info", "Command: " + str(action_id)))
+        palette.exec()
 
     def _connect_event_bus(self):
         bus = get_event_bus()

@@ -56,6 +56,12 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
     assert window._terminal_panel._output.isReadOnly() is True
     assert window._git_panel._diff.isReadOnly() is True
     assert window._problems_panel._table.rowCount() == 0
+    from nl_coding_agent.gui.widgets.command_palette import CommandPalette
+    actions = window._command_palette_actions()
+    assert any(action.action_id == "doctor" and action.enabled for action in actions)
+    assert any(action.action_id == "open-project" for action in actions)
+    debug_action = next(action for action in actions if action.action_id == "debug-start")
+    assert debug_action.enabled is False and debug_action.disabled_reason
     # F2 voice controls are present and honest about their state (no hardware touched).
     assert window._chat_panel._mic_btn.accessibleName() == "Start or stop dictation"
     assert window._chat_panel._voice_stop_btn.isEnabled() is False

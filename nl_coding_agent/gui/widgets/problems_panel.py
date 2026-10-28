@@ -65,6 +65,31 @@ class ProblemsPanel(QWidget):
             self._counts.setText("No problems loaded")
             self._status.setText("Open a project to inspect verification/test status.")
 
+    def set_lsp_diagnostics(self, findings) -> None:
+        """Merge read-only language-server diagnostics into the current table."""
+        self._lsp_rows = list(findings or [])
+        self._render_problems(self._lsp_rows)
+
+    def _render_problems(self, lsp_rows=None) -> None:
+        rows = list(lsp_rows if lsp_rows is not None else self._lsp_rows or [])
+        if not rows:
+            return
+        existing = getattr(self, "_last_rows", [])
+        merged = existing + rows if existing else rows
+        self._last_rows = merged
+        self._table.setRowCount(0)
+        for row in merged:
+            index = self._table.rowCount()
+            self._table.insertRow(index)
+            for column, value in enumerate((row.get("severity"), row.get("source"),
+                                            row.get("message"))):
+                from PySide6.QtWidgets import QTableWidgetItem
+                item = QTableWidgetItem(str(value or ""))
+                item.setToolTip(str(value or ""))
+                self._table.setItem(index, column, item)
+        self._counts.setText(str(len(merged)) + " finding(s) including LSP diagnostics")
+        self._status.setText("Read-only findings loaded (verification + scan + LSP).")
+
     def refresh(self):
         if not self._project:
             self._status.setText("Open a project to inspect verification/test status.")
