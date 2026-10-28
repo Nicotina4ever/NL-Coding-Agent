@@ -1,5 +1,9 @@
 # Completed Missions — NL Coding Agent
 
+> **Relocation note (2026-10-28):** this repository was renamed from `K:\AI\Coding Agent` to
+> `K:\AI\NL Coding Agent`. Any pre-rename path quoted in the mission records below is historical
+> evidence preserved verbatim; the current canonical root is `K:\AI\NL Coding Agent`.
+
 This file records self-build missions that have been implemented and verified. The active
 roadmap lives in `docs/NEXT_SELF_BUILD_MISSION.md`.
 

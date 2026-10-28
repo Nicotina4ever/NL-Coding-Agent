@@ -6,10 +6,10 @@ Obiettivo: conservare il quadro completo concordato per NL Coding Agent, senza b
 
 ## Prima di tutto
 
-- **Ora il repository rimane `K:\AI\Coding Agent`.** NON rinominarlo, spostarlo, copiarlo o avviare migrazioni durante una sessione attiva. In futuro il nome desiderato è `K:\AI\NL Coding Agent`, ma solo dopo approvazione esplicita e arresto dei processi.
+- **La radice canonica del repository è `K:\AI\NL Coding Agent`** (rinomina completata e verificata il 2026-10-28; record in `docs/WORKSPACE_MIGRATION.md`). Non spostarlo, copiarlo o avviare nuove migrazioni durante una sessione attiva: un'ulteriore migrazione richiede approvazione esplicita e arresto dei processi.
 - **Un'unica priorità attiva iniziale:** verificare fino in fondo il self-build tramite modelli locali, fino alla ripresa dopo interruzione. Non iniziare contemporaneamente il resto.
 - **Non trattare i rapporti di Antigravity/OpenCode come prove:** controllare sorgenti, test, diff, SQLite, log e riavvio.
-- Questo archivio va **estratto in una cartella documentale**, idealmente `K:\AI\Coding Agent\docs\product-blueprint\`, e non nella radice dove potrebbe sovrascrivere file omonimi.
+- Questo archivio va **estratto in una cartella documentale**, idealmente `K:\AI\NL Coding Agent\docs\product-blueprint\`, e non nella radice dove potrebbe sovrascrivere file omonimi.
 - **Non applicare automaticamente** tutta la checklist: è un backlog di prodotto, non un comando a implementare 100 funzioni contemporaneamente.
 
 ## Leggi nell'ordine

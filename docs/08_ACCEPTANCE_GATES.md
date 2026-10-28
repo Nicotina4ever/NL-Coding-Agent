@@ -25,7 +25,7 @@
 
 ## Gate D — GUI
 
-- launcher works from `K:\AI\Coding Agent`;
+- launcher works from the repository root (`K:\AI\NL Coding Agent`);
 - logo renders from the supplied SVG;
 - design tokens are centralized;
 - no text/code/log glow;

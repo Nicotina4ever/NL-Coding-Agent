@@ -208,5 +208,5 @@ NL Coding Agent is a local-first, multi-agent software development workstation. 
   - Live stop-after developer run returned `blocked` with `--resume 41`; resume completed `APPROVE` (`6 file(s), +284/-0`).
   - State reconciled immediately to mission #41 fingerprint `16e8502...` (`updated_at` 2026-10-28T10:01:29); external `docs/product-blueprint/` files (copy-in at 09:37) archived as `data/mission_baselines/41.mission_start.json`; review baseline rebuilt to exclude them from mission diff.
   - Full test suite: **69 passed**.
-  - Next command: `python\python.exe nl_agent.py selfbuild --autonomous --project "K:\AI\Coding Agent"` (update `docs/NEXT_SELF_BUILD_MISSION.md` before continuing).
+  - Next command: `python\python.exe nl_agent.py selfbuild --autonomous --project "K:\AI\NL Coding Agent"` (update `docs/NEXT_SELF_BUILD_MISSION.md` before continuing).
 

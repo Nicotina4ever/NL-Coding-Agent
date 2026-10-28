@@ -17,7 +17,7 @@ Read `START_HERE_ANTIGRAVITY.md` before implementing major work.
 
 Workspace root on the user's machine:
 
-`K:\AI\Coding Agent`
+`K:\AI\NL Coding Agent`
 
 Existing paths:
 - `python\` — dedicated disposable Python 3.12 embedded runtime. Use this Python. Do not create
@@ -34,7 +34,7 @@ Python validation already succeeded:
 
 ## Workspace containment and build outputs
 
-Canonical source repository: `K:\AI\Coding Agent`. Keep permanent project-owned files inside
+Canonical source repository: `K:\AI\NL Coding Agent`. Keep permanent project-owned files inside
 this repository. Do not create sibling directories under `K:\AI` without explicit user approval.
 
 - Permanent build artifacts: `dist\` (for example `dist\portable-release`).

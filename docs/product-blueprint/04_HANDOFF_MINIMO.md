@@ -20,9 +20,10 @@ future goals in the existing persistent backlog; do not execute them now.
 Keep exactly the next actionable task active and update durable state at
 meaningful checkpoints. Observed test results outweigh agent opinions.
 
-CRITICAL: Do NOT rename, move, copy or migrate K:\AI\Coding Agent. Future
-root K:\AI\NL Coding Agent requires explicit user authorization after
-all processes stop. Do NOT create external sibling build directories.
+CRITICAL: the repository root is now K:\AI\NL Coding Agent (relocation
+completed and verified 2026-10-28). Do NOT move, copy or migrate it again
+without a new explicit user authorization after all processes stop. Do NOT
+create external sibling build directories.
 
 Self-development controls belong under Settings > Advanced, NOT as a
 prominent home-screen call to action. Keep mission status and emergency stop

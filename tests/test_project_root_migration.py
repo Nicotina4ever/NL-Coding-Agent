@@ -313,6 +313,58 @@ class StateMergeTests(RelocationTestBase):
         self.assertIn("relocated_from", entry)
 
 
+class CliTests(RelocationTestBase):
+    def _cli(self):
+        import importlib.util
+
+        path = Path(__file__).resolve().parents[1] / "scripts" / "migrate_project_root.py"
+        spec = importlib.util.spec_from_file_location("migrate_project_root", path)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        return module
+
+    def _argv(self):
+        return [
+            "--db", str(self.db),
+            "--state", str(self.state),
+            "--data-dir", str(self.data),
+            "--new-root", str(self.new),
+        ]
+
+    def test_plain_dry_run_on_migrated_repo_says_already_migrated(self):
+        import contextlib
+        import io
+
+        self.make_db([{"id": 1, "name": "NL Coding Agent", "root": str(self.new)}], [(43, 1)])
+        self.write_state({
+            rel.canonical(self.new): {
+                "last_completed_mission_id": 43,
+                "last_completed_fingerprint": "a" * 64,
+            }
+        })
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            exit_code = self._cli().main(self._argv())
+        self.assertEqual(exit_code, 0)
+        self.assertIn("ALREADY MIGRATED", buffer.getvalue())
+        self.assertIn("Missions total: 1", buffer.getvalue())
+
+    def test_apply_migrates_a_stale_root(self):
+        import contextlib
+        import io
+
+        self.make_db([{"id": 1, "name": "Coding Agent", "root": str(self.old)}], [(43, 1)])
+        self.write_state({str(self.old): {"last_completed_mission_id": 43}})
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            exit_code = self._cli().main(self._argv() + ["--apply"])
+        self.assertEqual(exit_code, 0)
+        self.assertIn("APPLIED", buffer.getvalue())
+        self.assertEqual(self.project_rows()[0]["root"], rel.canonical(self.new))
+        self.assertEqual(list(self.state_data()["projects"]), [rel.canonical(self.new)])
+
+
 class ReadinessTests(RelocationTestBase):
     def test_fresh_install_is_allowed(self):
         result = rel.check_selfbuild_readiness(self.db, self.state, self.new)

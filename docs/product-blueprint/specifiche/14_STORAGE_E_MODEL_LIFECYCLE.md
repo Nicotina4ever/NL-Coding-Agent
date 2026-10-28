@@ -2,7 +2,7 @@
 
 ## Radice e migrazione
 
-**ATTUALE:** `K:\AI\Coding Agent`. **FUTURA EVENTUALE:** `K:\AI\NL Coding Agent`. **NON RINOMINARE, SPOSTARE O COPIARE ADESSO.** La rinomina futura richiede autorizzazione esplicita dopo arresto OpenCode, NL Coding Agent, subprocess/packaging; esportare stato e controllare hardcoded path/SQLite/session associations; evitare copia da 2 GB.
+**ATTUALE/CANONICA:** `K:\AI\NL Coding Agent` (rinomina completata e verificata il 2026-10-28; in precedenza `Coding Agent`). **NON SPOSTARE O COPIARE** ulteriormente: un'eventuale nuova migrazione richiede autorizzazione esplicita dopo arresto OpenCode, NL Coding Agent, subprocess/packaging; esportare stato e controllare hardcoded path/SQLite/session associations; evitare copia da 2 GB.
 
 Le tre cartelle sibling `K:\AI\nl-coding-agent-portable`, `-clean`, `-final` risultavano ognuna ~1,46 GB nel resoconto utente. Fare audit read-only: funzionamento reale, unique files, hashes, secrets/user data, contenuto. **Non assumere quale “final” sia buona; non eliminare o spostare senza conferma.** Nuove build sotto `build/` e `dist/` interne al progetto, escluderle dagli input per impedire recursive packaging.
 

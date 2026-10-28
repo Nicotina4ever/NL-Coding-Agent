@@ -7,7 +7,7 @@ Ollama agents.
 ## What already works
 
 On the target machine:
-- CrewAI is installed in `K:\AI\Coding Agent\python`.
+- CrewAI is installed in `K:\AI\NL Coding Agent\python`.
 - `pip check` reports no broken requirements.
 - importing `Agent`, `Crew`, `Task`, `Flow`, and `LLM` succeeds.
 - Ollama is already installed and contains multiple local models.
@@ -34,7 +34,7 @@ The user should be able to launch a Windows desktop application from the workspa
 7. Create a task/mission without creating YAML.
 8. See orchestration state, handoffs and logs.
 9. Preserve the old CLI entry points or provide backward-compatible replacements.
-10. Open `K:\AI\Coding Agent` itself as a project for future self-development.
+10. Open `K:\AI\NL Coding Agent` itself as a project for future self-development.
 
 ## Strong implementation preferences
 

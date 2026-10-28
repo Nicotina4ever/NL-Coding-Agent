@@ -8,7 +8,7 @@
 - `selfbuild --autonomous` attualmente impone `--max-missions` da 1 a 5: loop **limitato**, non supervisor sempre attivo.
 - OpenCode ha dichiarato missione #42 completata e 69 test verdi, ma ha **riparato manualmente** file danneggiati dal modello locale. Perciò l'autonomia continuativa senza supervisione non è ancora dimostrata.
 - Git è già inizializzato, ma ci sono molte modifiche/untracked; i TODO di OpenCode non sono il backlog di prodotto e non devono essere considerati verità.
-- La radice attuale **resta `K:\AI\Coding Agent`**. Non spostarla, copiarla o rinominarla.
+- La radice canonica è **`K:\AI\NL Coding Agent`** (rinomina completata e verificata il 2026-10-28). Non spostarla, copiarla o rinominarla ulteriormente.
 
 ## Unica consegna da impartire (una volta soltanto)
 

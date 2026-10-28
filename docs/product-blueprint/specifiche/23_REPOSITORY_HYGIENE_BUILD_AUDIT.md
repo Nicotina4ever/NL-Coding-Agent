@@ -6,7 +6,7 @@
 
 | Percorso | Dimensione riportata | File | Ruolo da verificare |
 |---|---:|---:|---|
-| `K:\AI\Coding Agent` | 2,07 GB | 75.706 | Canonical source repository attuale |
+| `K:\AI\NL Coding Agent` | 2,07 GB | 75.706 | Canonical source repository attuale (rinominato il 2026-10-28) |
 | `K:\AI\nl-coding-agent-portable` | 1,46 GB | 25.753 | Prima portable |
 | `K:\AI\nl-coding-agent-portable-clean` | 1,46 GB | 25.752 | Tentativo pulito |
 | `K:\AI\nl-coding-agent-portable-final` | 1,46 GB | 25.750 | Candidata finale NON ancora provata |
@@ -18,7 +18,7 @@ Tre portable: **circa 4,38 GB** complessivi, potenzialmente recuperabili **solo 
 
 - **NON** creare, spostare, rinominare, copiare o cancellare directory sibling sotto `K:\AI` durante P0.
 - Non eliminare i quattro percorsi esterni sopra elencati prima di inventario, verifica univocità, diagnostica release e conferma esplicita dell'utente.
-- Non rinominare `K:\AI\Coding Agent` in `K:\AI\NL Coding Agent` finché l'utente non autorizza **separatamente** la migrazione e tutte le sessioni/processi legati al vecchio path sono chiusi.
+- La rinomina `Coding Agent` → `NL Coding Agent` è stata autorizzata, eseguita e verificata il 2026-10-28 (vedi `docs/WORKSPACE_MIGRATION.md`); non eseguire ulteriori rinominazioni o spostamenti senza nuova autorizzazione separata e senza la chiusura di tutte le sessioni/processi legati alla radice.
 - Conservare `.git` e modifiche non committate, `data/*.sqlite*`, state, configurazioni, credenziali (senza copiarle in pacchetti), log importanti, recovery point, checkpoint condivisi e installazioni dipendenti.
 - Non eseguire `git clean -fd`, `git reset --hard`, cancellazioni ricorsive o pulizia implicita di altri progetti.
 - Analisi symlink/junction/reparse points in modalità *no follow* per evitare attraversamenti accidentali e recuperi di spazio falsati.
@@ -33,11 +33,11 @@ Tre portable: **circa 4,38 GB** complessivi, potenzialmente recuperabili **solo 
 6. Preparare anteprima delle azioni con path esatti, proprietario, dimensione, possibili file unici, eventuali lock/processi, downgrade e rollback disponibili. L'utente autorizza individualmente.
 7. Dopo autorizzazione: preferire cestino/quarantena dove supportati e quando ragionevole; eliminazione permanente solo se scelta esplicitamente. Ricontrollare i path e i fingerprint immediatamente prima dell'operazione.
 
-## Futuro layout (solo policy, NON migrazione ora)
+## Layout del repository (policy)
 
-- `K:\AI\Coding Agent\build\` per intermedi e risultati di build effimeri.
-- `K:\AI\Coding Agent\dist\` per poche release verificate, registrate con manifest.
-- `K:\AI\Coding Agent\cache\`, `temp\`, `logs\`, `data\recovery\` per **solo dati di proprietà di NL Coding Agent**, con policy separata dalla persistente SQLite.
+- `K:\AI\NL Coding Agent\build\` per intermedi e risultati di build effimeri.
+- `K:\AI\NL Coding Agent\dist\` per poche release verificate, registrate con manifest.
+- `K:\AI\NL Coding Agent\cache\`, `temp\`, `logs\`, `data\recovery\` per **solo dati di proprietà di NL Coding Agent**, con policy separata dalla persistente SQLite.
 - Artifact staging: input di packaging esclusi da `build/`, `dist/`, cache, tests, `.git`, modelli/cache Hugging Face esterni e directory già distribuite.
 - Build script con `out_dir` esplicito, non `../` o path relativo ambiguo che crei sibling. Smoke test in temp directory gestita e documentata, senza contaminare repo o creare cartelle permanenti nel parent.
 - Non duplicare runtimes o checkpoint per ogni progetto. Una distribuzione indipendente può avere una sola copia del runtime necessario: questo NON è un duplicato inutile.

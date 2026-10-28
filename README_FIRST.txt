@@ -1,6 +1,6 @@
 # NL Coding Agent — Antigravity Self-Build Pack
 
-This pack is an **overlay** for the existing `K:\AI\Coding Agent` workspace.
+This pack is an **overlay** for the existing `K:\AI\NL Coding Agent` workspace.
 It does not contain or replace the embedded Python, CrewAI checkout, CrewAI Tools checkout, or
 current source.
 
@@ -8,7 +8,7 @@ current source.
 
 Extract/copy the contents of this pack into:
 
-`K:\AI\Coding Agent`
+`K:\AI\NL Coding Agent`
 
 Allow merging folders.
 
@@ -23,7 +23,7 @@ Important files:
 
 ## Start in Antigravity
 
-1. Create/open an Antigravity Project pointing at `K:\AI\Coding Agent`.
+1. Create/open an Antigravity Project pointing at `K:\AI\NL Coding Agent`.
 2. Prefer a normal/local project for this first bootstrap if you want the agent to modify the real
    workspace directly; use an isolated worktree if your root is already a clean Git repo and you
    deliberately want that isolation.

@@ -37,6 +37,10 @@ K:\AI\Coding Agent\python\Lib\site-packages
 1.15.32
 ```
 
+The two paths above are the observed pre-relocation output of 2026-10-28 and are preserved as
+historical evidence. The runtime currently lives under the canonical repository root:
+`K:\AI\NL Coding Agent\python\Lib\site-packages`.
+
 `tests/test_crewai_runtime.py` asserts that the imported package lives under the runtime's
 `site-packages` directory, is not inside the repository's `crewAI/` checkout, and reports the
 pinned version.

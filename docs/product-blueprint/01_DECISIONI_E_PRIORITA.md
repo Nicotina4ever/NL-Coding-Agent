@@ -2,7 +2,7 @@
 
 ## Decisioni approvate
 
-- Nome prodotto: **NL Coding Agent**. Radice attuale **`K:\AI\Coding Agent`**, da mantenere; nome cartella futuro desiderato `K:\AI\NL Coding Agent`, solo con autorizzazione distinta.
+- Nome prodotto: **NL Coding Agent**. Radice canonica **`K:\AI\NL Coding Agent`** (rinomina completata e verificata il 2026-10-28); un'ulteriore migrazione richiede autorizzazione distinta.
 - Prodotto **desktop locale-first, non locale-only**: cloud opzionale con opt-in esplicito, trasparenza sulla privacy e nessun costo nascosto.
 - Motore esistente **CrewAI**, integrato senza dipendere da repository vendor clonati nella distribuzione.
 - Provider non fissato a Ollama: architettura a plugin/adattatori, discovery e strumenti per Ollama, llama.cpp, LM Studio e endpoint compatibili.

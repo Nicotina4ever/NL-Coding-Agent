@@ -139,7 +139,7 @@ Writer scheduling rules:
 
 ## Phase 7 — Self-Build
 
-Open `K:\AI\Coding Agent` like any other project.
+Open the repository root (`K:\AI\NL Coding Agent`) like any other project.
 
 Self-build task requirements:
 - baseline tests pass before modification;
@@ -320,12 +320,21 @@ requirements, runs an end-to-end diagnostic and supports CPU-only operation wher
 Never silently download large models, use paid services or modify global environments. Maintain
 reproducible manifests/lockfiles and build native artifacts on their target OS/architecture.
 
-## Workspace migration readiness
+## Workspace migration — completed 2026-10-28
 
-Do not rename, move, copy or migrate `K:\AI\Coding Agent` now. Do not create `K:\AI\NL Coding
-Agent`. Prepare `docs/WORKSPACE_MIGRATION.md` and identify hardcoded paths; the user will authorize
-the actual rename only after OpenCode and all related processes have stopped. Do not relocate
-OpenCode sessions or databases.
+The workspace was renamed to the canonical root `K:\AI\NL Coding Agent` and the relocation was
+verified (see `docs/WORKSPACE_MIGRATION.md` for the completed record, verification evidence and
+rollback procedure).
+
+**Historical rationale — SUPERSEDED by the completed relocation above, kept for traceability:**
+the original instruction was not to rename, move, copy or migrate the pre-relocation workspace root
+while OpenCode and related processes were live, and not to create the new root before explicit user
+authorization after all related processes and sessions had stopped; the concern was split project
+identity in SQLite, persisted state keys and hardcoded paths. That authorization was given and the
+rename was executed with a verified backup, so the prohibition no longer applies.
+
+Do not relocate the repository again, and do not create sibling workspace copies, without a new
+explicit user authorization. Do not relocate OpenCode sessions or databases without authorization.
 
 ## Expansion priority
 

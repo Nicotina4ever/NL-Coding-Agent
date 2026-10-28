@@ -9,10 +9,11 @@ claim that the staged folder has passed clean-directory acceptance tests.
 ## Command
 
 ```powershell
-python\python.exe scripts\stage_portable.py --source "K:\AI\Coding Agent" --output "K:\AI\nl-coding-agent-portable" --dry-run
+python\python.exe scripts\stage_portable.py --source "." --output "K:\AI\nl-coding-agent-portable" --dry-run
 ```
 
-The output directory must be outside the source tree and must be absent or empty. Use the same
+Run the command from the repository root (`K:\AI\NL Coding Agent`); `--source` defaults to the
+current directory. The output directory must be outside the source tree and must be absent or empty. Use the same
 command without `--dry-run` to copy the payload and write `payload_manifest.json`.
 
 ## Measured Staging Plan

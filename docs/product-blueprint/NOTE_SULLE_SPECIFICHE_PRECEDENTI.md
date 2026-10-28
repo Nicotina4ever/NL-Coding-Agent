@@ -13,6 +13,6 @@ Evoluzioni importanti rispetto al pacchetto iniziale:
 5. GUI diventa Studio con allegati/screenshot/audio/video, Qwen3-ASR opzionale e strumenti IDE.
 6. Self-Build attivazione spostata **nelle Impostazioni Avanzate**, non come grande tasto promozionale.
 7. Distribuzione bootstrapper leggero per piattaforma, nessuna installazione globale obbligatoria, nessun uv.
-8. No migrazione/spostamento cartella `K:\AI\Coding Agent` finché l'utente non lo autorizza.
+8. Rinomina della cartella completata il 2026-10-28 (radice canonica `K:\AI\NL Coding Agent`); nessun ulteriore spostamento o migrazione senza autorizzazione dell'utente.
 9. Niente pulizie/cancellazioni automatiche di build, cache o modelli condivisi.
 10. Nuove richieste sono backlog, **non missioni da eseguire contemporaneamente**.

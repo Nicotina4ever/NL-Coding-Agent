@@ -4,14 +4,14 @@ DESTINAZIONE
 ------------
 Copia il contenuto di questo pacchetto dentro:
 
-K:\AI\Coding Agent\
+K:\AI\NL Coding Agent\
 
 La cartella python\ NON è inclusa: deve essere quella che hai già.
 Le cartelle crewAI\ e crewAI-tools\ possono restare dove sono.
 
 STRUTTURA FINALE MINIMA
 ------------------------
-K:\AI\Coding Agent\
+K:\AI\NL Coding Agent\
   python\
   crewAI\
   crewAI-tools\

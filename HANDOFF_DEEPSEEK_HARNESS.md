@@ -1,5 +1,9 @@
 # Nuova conversazione DeepSeek Harness — handoff completo
 
+> **RELOCATION UPDATE (2026-10-28):** il repository è ora `K:\AI\NL Coding Agent`. Le indicazioni
+> di percorso contenute in questo documento sono contesto storico precedente alla rinomina e sono
+> conservate così come sono state scritte; la radice canonica corrente è `K:\AI\NL Coding Agent`.
+
 ## Contesto
 
 Progetto Windows: `K:\AI\Coding Agent`. Obiettivo: NL Coding Agent, sistema locale multi-agent di coding con CLI `nl_agent.py`, CrewAI, Ollama, SQLite e GUI Qt. Il repository è già avviato; **non va rifatto né spostato**. Hardware: NVIDIA RTX 4060 Ti 8GB, 32GB RAM. LLM principali disponibili localmente: `qwen3.5:9b`, `ornith-1.5:9b`, `granite4.2:3b`, `qwen2.5-coder:7b-instruct-q4_K_M`. Uso DeepSeek-V4.1-Flash via API consentito se autorizzato dall'utente in Harness; modello API ufficiale `deepseek-flash`. Cloud **non** automaticamente abilitato dall'app NL Coding Agent.

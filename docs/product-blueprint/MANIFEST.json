@@ -2,10 +2,11 @@
   "project": "NL Coding Agent",
   "artifact_type": "planning_docs_only",
   "created": "2026-10-28",
-  "canonical_root_current": "K:\\AI\\Coding Agent",
+  "canonical_root_current": "K:\\AI\\NL Coding Agent",
   "desired_root_future": "K:\\AI\\NL Coding Agent",
   "no_runtime_or_code_included": true,
-  "workspace_migration_authorized": false,
+  "workspace_migration_authorized": true,
+  "workspace_migration_completed": "2026-10-28",
   "default_optimization_goal": "Maximum Verified Quality",
   "active_priority": "P0 supervised protected self-build; no unattended until path enforcement, scoped rollback, adversarial stub test and consecutive local missions verified",
   "files": [
@@ -15,11 +16,11 @@
     },
     {
       "path": "01_DECISIONI_E_PRIORITA.md",
-      "sha256": "3c6f28e7001984cd9b76fb460b6abeddfc55c6d4a91f2de15424c34b50cc9ea4"
+      "sha256": "61d81a26a7d8e4dca8dfa2edb9b2b51dbafa19586c3082188dd4cdfb018ee8e0"
     },
     {
       "path": "02_STATO_REALE_DA_VERIFICARE.md",
-      "sha256": "0106a5af77426124eb02a6ba69e7b0d0a161fde9bbcefb22dfd138d20d4f1476"
+      "sha256": "d1871efbc5d04857e381f36505e7bfec7ac4f568759f9fb8097af931b8c790d3"
     },
     {
       "path": "03_MASTER_CHECKLIST.md",
@@ -27,7 +28,7 @@
     },
     {
       "path": "04_HANDOFF_MINIMO.md",
-      "sha256": "90002a517db4e61d04921d80bdaaa1fc34141e3f8c7aca08e764fdd441b78462"
+      "sha256": "5a912f99bb4300751b7e496767682bb4aed1dacc76231497a09e1ac55c2b3094"
     },
     {
       "path": "05_TRACCIABILITA.md",
@@ -35,19 +36,19 @@
     },
     {
       "path": "06_UNICO_HANDOFF_AUTONOMIA.md",
-      "sha256": "4e5120564659769a00397ef15d1839d93b25301d0a1c6a9dad9253dff520f68d"
+      "sha256": "33e4d8844d062feb50468c532200bf3247adc831fafaa0e6068c1600276c0532"
     },
     {
       "path": "AUDIT_E_MIGRAZIONE_SENZA_RISCHI.md",
-      "sha256": "f49fc72b2c09f65fccca3fe1c8a7d2542774cadac0284f113e565b4a602501ec"
+      "sha256": "2b05c0ed2d84ed2b5d26bd442a26874d4bc6737b442f311aaff1363c1c08661e"
     },
     {
       "path": "NOTE_SULLE_SPECIFICHE_PRECEDENTI.md",
-      "sha256": "b5fd6bdc2fcb8015849de92aff23c04529d1f1c361e6cf9b5f1f50674208678b"
+      "sha256": "9ff9478870fdef5aaca586d7e2b52b947b3051945414baa71c1a87ae3d17aa49"
     },
     {
       "path": "README_IMPORTANTE.md",
-      "sha256": "9d8edd8b7012daac8a545f516a819be3ca5192a76f5b124f1b3212da2705c89d"
+      "sha256": "19b26c61081df324bb7cf9304b1cbc052fd590f0191485ad6a5ba1db4d2ff285"
     },
     {
       "path": "V2_CHANGELOG.md",
@@ -67,11 +68,11 @@
     },
     {
       "path": "specifiche/01_ARCHITETTURA_E_RUNTIME.md",
-      "sha256": "6c09b88d16c5c03531c2bb5df41f88a17ba8411c80e707d138dc62bd50cfcf22"
+      "sha256": "f4efbc8648fb89f2394239c549deab903c68785ded3e845730e72a6f0cca8248"
     },
     {
       "path": "specifiche/02A_RECOVERY_POINTS_ROLLBACK_CACHE.md",
-      "sha256": "afd8b13ded39fb7e3735a01e8cddfb16f9689a2ba704fba93dceecb463b075a7"
+      "sha256": "fd3c0274fd2b2c50d31702b97bfa6af79af736e34da9abbd6020f8b3ff81dd68"
     },
     {
       "path": "specifiche/02_SELF_BUILD_E_RECOVERY.md",
@@ -127,7 +128,7 @@
     },
     {
       "path": "specifiche/14_STORAGE_E_MODEL_LIFECYCLE.md",
-      "sha256": "ef3a962d1a50801f2eb5c3071c0dae25341c1002601f56379e32c9a5693b02c3"
+      "sha256": "102b5b83fcc7a9e307b89e23610c815c34091753d07772f530efd64f4aee2bb2"
     },
     {
       "path": "specifiche/15_SICUREZZA_E_PRIVACY.md",
@@ -163,7 +164,7 @@
     },
     {
       "path": "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
-      "sha256": "6afa0d5b9e476c5def6427c25946fb49b826833e518ba825384491c99cf7085e"
+      "sha256": "8960f8e43c20b438c76a63afc84c43b1b3e03f22fe1e3e84a05c0d25ecd3c588"
     },
     {
       "path": "specifiche/24_OPERATIONS_SUPERVISION_HEALTH_AND_DIAGNOSTICS.md",
@@ -195,13 +196,14 @@
     },
     {
       "path": "tools/audit_external_builds.ps1",
-      "sha256": "f2f50e2347d55ea2ce9c1535331f14ddd944e716c3a39a4d232da61f3532e2f1"
+      "sha256": "df69873b3cb6bd3e0833beea7b3abec5412c1c05ee36221e75bc7f8a3b224377"
     }
   ],
   "blueprint_version": "v2",
   "change_note": "SPEC-02A rollback/cache and SPEC-13A GPU contention; index, checklist and SPEC-14 updated",
   "blueprint_revision": "v3",
   "revision_notes": "Selective archived recovery points, trash/quarantine, validated restore; all requirements unverified pending source audit.",
+  "relocation_note": "Repository relocated to the canonical root K:\\AI\\NL Coding Agent on 2026-10-28; path references updated and SHA-256 entries refreshed for the documentation files edited during the relocation.",
   "version": "v5",
   "new_in_v4": [
     "SPEC-21",

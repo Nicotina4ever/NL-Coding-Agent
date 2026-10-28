@@ -48,7 +48,7 @@ Consentire all'utente e agli agenti di **annullare selettivamente una missione f
 
 ## 5. Policy di cartelle e cache
 
-**Nel repository di sviluppo attuale** `K:\AI\Coding Agent` (non rinominare ora):
+**Nel repository di sviluppo attuale** `K:\AI\NL Coding Agent` (radice canonica dal 2026-10-28; non spostare):
 
 ```text
 data/

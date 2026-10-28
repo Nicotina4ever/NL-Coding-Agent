@@ -81,6 +81,39 @@ def main(argv: list[str] | None = None) -> int:
             dry_run=not args.apply,
         )
     except RelocationError as exc:
+        # A plain dry run against an already-migrated repository has no
+        # un-migrated root to detect. Report the verified canonical state
+        # instead of failing with a confusing error.
+        if args.old_root is None:
+            try:
+                verification = verify_identity(db_path, state_path, new_root)
+            except RelocationError:
+                verification = None
+            if verification is not None and verification.get("ok"):
+                already = {
+                    "already_migrated": True,
+                    "requires_apply": False,
+                    "applied": False,
+                    "old_root": None,
+                    "new_root": new_root,
+                    "db_path": str(db_path),
+                    "state_path": str(state_path),
+                    "verification": verification,
+                }
+                if args.json:
+                    print(json.dumps(already, indent=2, ensure_ascii=False))
+                else:
+                    print("Status   : ALREADY MIGRATED (no changes required)")
+                    print("New root : " + new_root)
+                    print("Database : " + str(db_path))
+                    print("State    : " + str(state_path))
+                    print("Post-migration verification: OK")
+                    if verification.get("project"):
+                        print("  Project id: " + str(verification["project"]["id"])
+                              + " root: " + str(verification["project"]["root"]))
+                    print("  Missions total: " + str(verification.get("missions_total"))
+                          + " owned by project: " + str(verification.get("owned_missions")))
+                return 0
         print("ERROR: " + str(exc), file=sys.stderr)
         return 2
 

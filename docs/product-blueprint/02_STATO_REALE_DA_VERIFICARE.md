@@ -4,7 +4,7 @@
 
 ## Elementi riferiti dall'utente o dai log (DA VERIFICARE)
 
-- `K:\AI\Coding Agent`: cartella sorgente, misurata a ~2,07 GB e ~75.706 file nel resoconto dell'utente.
+- `K:\AI\NL Coding Agent`: cartella sorgente (denominata `Coding Agent` fino alla rinomina del 2026-10-28), misurata a ~2,07 GB e ~75.706 file nel resoconto dell'utente.
 - Tre cartelle sibling `nl-coding-agent-portable`, `-clean`, `-final`: ciascuna ~1,46 GB e ~25.750 file. `portable-smoke-project` ~2 file. **I nomi non provano quale build funzioni.** Non cancellare automaticamente.
 - Runtime `python\python.exe`, Python 3.12.10; in precedenza import CrewAI e pip check funzionavano. Ripetere check sull'installazione corrente.
 - GUI PySide6 vista in screenshot, con navigation `Models` e intestazione **Ollama Models**. Tabella mostrava **Fetching models...**: non prova né successo né bug persistente.

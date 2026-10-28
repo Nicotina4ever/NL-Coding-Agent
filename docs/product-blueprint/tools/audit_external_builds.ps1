@@ -1,8 +1,10 @@
 # Read-only NL Coding Agent external build inventory. Does not move/copy/delete anything.
-# Paths are explicit user-reported K:\AI directories. No external process is modified.
+# The repository root resolves relative to this script; the portable siblings are explicit
+# user-reported K:\AI directories. No external process is modified.
 $ErrorActionPreference = 'Stop'
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $roots = @(
-  'K:\AI\Coding Agent',
+  $repoRoot,
   'K:\AI\nl-coding-agent-portable',
   'K:\AI\nl-coding-agent-portable-clean',
   'K:\AI\nl-coding-agent-portable-final',
