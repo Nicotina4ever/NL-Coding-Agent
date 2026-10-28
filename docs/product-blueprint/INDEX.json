@@ -1827,7 +1827,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "P0 (03_MASTER_CHECKLIST P0-14, P0-15, P0-18)",
-      "status": "partial",
+      "status": "verified",
       "dependencies": [
         "NL-BP-051"
       ],
@@ -1837,10 +1837,10 @@
         "Stop/Pause/Resume honored; no duplicate or conflicting claims; tests"
       ],
       "evidence": [
-        "nl_coding_agent/core/selfbuild_runner.py run_autonomous bounded by --max-missions 1-5 (cli.py); data/selfbuild.lock + data/selfbuild_state.json",
-        "tests/test_selfbuild_runner.py 9 tests PASS (selection/reconcile/resume command)",
-        "selfbuild_runner now calls promotion.preflight and filters legacy (harness_version != 2) missions (C5, lines ~68-120 and ~219); no always-on daemon, lease/heartbeat table or durable queue yet",
-        "AUDIT_REALE_E_LIMITI.md item 7: run_autonomous still reads fixed NEXT_SELF_BUILD_MISSION.md, not the durable planner"
+        "C3a d81a168: additive supervisor schema + persistence/supervisor_store.py; tests/test_supervisor_store.py 17 tests PASS (lease CAS/TTL with pid/host proof, heartbeat renew, queue claim/state machine/idempotency, backlog mirror, evidence, approvals)",
+        "C3c b9ec909: nl_coding_agent/core/supervisor.py Supervisor (lease/heartbeat thread, 15-check fail-closed preflight, reconcile-on-start, queue loop, run control, resource gate) + core/run_control.py + core/resource_gate.py; tests/test_supervisor_core.py 33 tests PASS",
+        "tests/test_supervisor_sh07.py 7 tests PASS: two consecutive missions from a fixture INDEX.json plus restart/pause/stop/resume idempotency",
+        "C3d dbe3c3b: CLI supervisor group + background SupervisorService + tests/test_supervisor_cli.py 20 tests PASS; scripts/verify_supervisor.py read-only gate PASS"
       ],
       "source_refs": [
         "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md",
@@ -1850,7 +1850,7 @@
         "03_MASTER_CHECKLIST.md#P0-18"
       ],
       "primary_source": "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md",
-      "note": "A bounded autonomous runner exists (plain loop, state JSON, lock); it is not an always-on supervisor and lacks lease/heartbeat/preflight.",
+      "note": "Implemented as a process/thread supervisor with durable SQLite queue/lease/state and CLI/GUI controls; not an OS service (no reboot survival); stale leases are reclaimed only after TTL + liveness proof.",
       "backlog_anchor": "nl-bp-061",
       "program_stage": 3,
       "program_stage_name": "Persistent autonomous supervisor and verified handoff",
@@ -1864,7 +1864,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "P0 (03_MASTER_CHECKLIST P0-14, P0-18)",
-      "status": "partial",
+      "status": "verified",
       "dependencies": [
         "NL-BP-061"
       ],
@@ -1874,9 +1874,10 @@
         "two consecutive selection runs verified live"
       ],
       "evidence": [
-        "nl_coding_agent/core/autonomous_roadmap_planner.py select_next_task/write_roadmap_mission (78 lines) - grep shows no importer",
-        "selfbuild_runner.py imports next_mission from core/roadmap and reads docs/NEXT_SELF_BUILD_MISSION.md",
-        "AUDIT_REALE_E_LIMITI.md item 7; missions #42/#43 were driven through a manually updated roadmap document"
+        "C3b c91e0c9: nl_coding_agent/core/backlog.py fail-closed INDEX.json loader (schema/program_order/requirements), program-stage gate, dependency/priority ordering, content hash, idempotency keys, goal composition; tests/test_backlog_planner.py 20 tests PASS",
+        "SQLite backlog_items mirror + supervisor selection from it; no dependency on docs/NEXT_SELF_BUILD_MISSION.md (static test asserts it)",
+        "tests/test_supervisor_sh07.py 7 tests PASS: two consecutive requirements selected and completed from a fixture indexed backlog without a new prompt; identical idempotency key never duplicates a queue row/mission",
+        "scripts/run_supervisor_sh07.py --mode fake PASS, evidence in build/phase3/evidence/sh07-fake-<UTC>/evidence.json"
       ],
       "source_refs": [
         "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md",
@@ -1885,7 +1886,7 @@
         "03_MASTER_CHECKLIST.md#P0-18"
       ],
       "primary_source": "specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md",
-      "note": "A small planner exists (parses the checklist, writes a roadmap mission) but it is dead code: nothing imports it, and the runner still consumes the fixed Markdown roadmap.",
+      "note": "Selection is implemented and proven with fake-model end-to-end evidence; the live two-consecutive-selection arm is covered by the Tier B SH-07 gate (NL-BP-063), which stays blocked until real local-model evidence exists.",
       "backlog_anchor": "nl-bp-062",
       "program_stage": 3,
       "program_stage_name": "Persistent autonomous supervisor and verified handoff",
@@ -1918,7 +1919,9 @@
         "SQLite: mission #44 blocked REJECT (supervisor continuous execution); mission #45 blocked after stub overwrite (result summary)",
         "data/selfbuild_state.json audit_note_42/43: stub restore and manual repair recorded",
         "HANDOFF_DEEPSEEK_HARNESS.md: previous cycle #43/#45 produced stubs; protections not integrated",
-        "docs/CURRENT_STATE.md known boundaries: no unattended proof"
+        "docs/CURRENT_STATE.md known boundaries: no unattended proof",
+        "Tier A (fake model) PASS: tests/test_supervisor_sh07.py 7 tests - two consecutive staged-candidate missions with candidate+oracle verification, one promotion per mission, restart/pause/stop idempotency and fail-closed negatives; evidence via scripts/run_supervisor_sh07.py --mode fake",
+        "Tier B (real local models) NOT executed: scripts/run_supervisor_sh07.py --mode live --confirm-live --worktree <isolated worktree> requires explicit authorization and records evidence under build/phase3/evidence/"
       ],
       "source_refs": [
         "specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md",
@@ -1926,7 +1929,7 @@
         "03_MASTER_CHECKLIST.md#P0-18"
       ],
       "primary_source": "specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
-      "note": "BLOCKED by the harness integration and by recorded real incidents: #42/#43 needed manual restoration of stub-overwritten files; #44 blocked; #45 blocked after live overwrite.",
+      "note": "Remains BLOCKED: Tier A fake-model evidence cannot prove local-model reliability; NL-BP-063 becomes verified only after Tier B real local-model two-mission evidence is recorded and reviewed.",
       "backlog_anchor": "nl-bp-063",
       "program_stage": 3,
       "program_stage_name": "Persistent autonomous supervisor and verified handoff",
@@ -1940,7 +1943,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "P0 (03_MASTER_CHECKLIST P0-15; SPEC-26)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-061"
       ],
@@ -1950,8 +1953,9 @@
         "no cloud activation by default; budget/attempt limits enforced; stop/pause honored"
       ],
       "evidence": [
-        "cli.py selfbuild flags only (--autonomous/--loop, --max-missions, --stop-after); no modes in DB or GUI",
-        "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md GUI modes; specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md modes"
+        "C3c b9ec909: SupervisorConfig persisted via app_settings (supervisor.global / supervisor.project.<id>) with validated budgets; mode off default; durable stop/pause/resume commands honoured at safe mission boundaries; tests/test_supervisor_core.py 33 tests PASS",
+        "C3d dbe3c3b: CLI supervisor group with --mode/--confirm-assisted, background SupervisorService, Autonomy GUI page and emergency STOP; tests/test_supervisor_cli.py 20 tests PASS + GUI smoke/panels PASS",
+        "approvals table + pending/decide helpers exist; cloud/network/delete remain denied by default via the permission gate (tests/test_permissions.py)"
       ],
       "source_refs": [
         "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md",
@@ -1959,7 +1963,7 @@
         "03_MASTER_CHECKLIST.md#P0-15"
       ],
       "primary_source": "specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md",
-      "note": "Only CLI flags exist; modes, budgets and approval policies are not implemented or persisted.",
+      "note": "Modes, budgets and stop/pause are implemented and persisted; the assisted-approval request/decision workflow and full GUI are only partial, so status stays partial.",
       "backlog_anchor": "nl-bp-064",
       "program_stage": 3,
       "program_stage_name": "Persistent autonomous supervisor and verified handoff",
@@ -2329,16 +2333,17 @@
         "diagnostic export is redacted; tests for 429/timeout paths"
       ],
       "evidence": [
-        "SQLite events table 77 rows + logs/*.log evidence; no correlation fields in schema (id/source/level/message/payload/created_at)",
-        "no retry/backoff/dead-letter code (grep); historical 429 incident in 02_STATO_REALE_DA_VERIFICARE.md",
-        "specifiche/24_OPERATIONS_SUPERVISION_HEALTH_AND_DIAGNOSTICS.md"
+        "C3a d81a168: additive events columns project_id/mission_id/correlation_id/event_kind; supervisor run events carry correlation ids",
+        "C3c b9ec909: retry/backoff schedule, failure signatures, dead-letter/blocked queue states, WAITING_FOR_RESOURCES/APPROVAL outcomes; scripts/verify_supervisor.py --json read-only diagnostic gate",
+        "C3d dbe3c3b: supervisor status --json, CLI exit codes, background service/queue status, GUI supervisor status label; tests/test_supervisor_core.py + tests/test_supervisor_cli.py PASS",
+        "no full Health & Diagnostics dashboard and no measured 429/timeout matrix yet; specifiche/24_OPERATIONS_SUPERVISION_HEALTH_AND_DIAGNOSTICS.md"
       ],
       "source_refs": [
         "specifiche/24_OPERATIONS_SUPERVISION_HEALTH_AND_DIAGNOSTICS.md",
         "03_MASTER_CHECKLIST.md#P1-14"
       ],
       "primary_source": "specifiche/24_OPERATIONS_SUPERVISION_HEALTH_AND_DIAGNOSTICS.md",
-      "note": "Structured events table and log files exist; there is no diagnostics dashboard, retry/backoff policy or dead-letter queue.",
+      "note": "Correlation ids, retry/backoff/dead-letter queue and a read-only diagnostic gate exist; the full diagnostics dashboard and 429/timeout test matrix remain missing, so status stays partial.",
       "backlog_anchor": "nl-bp-075",
       "program_stage": 3,
       "program_stage_name": "Persistent autonomous supervisor and verified handoff",
@@ -4941,7 +4946,8 @@
     ],
     "2026-10-28_program_order": "2026-10-28: added authoritative 6-stage program execution order and program_stage/program_stage_dependencies on every requirement (user directive; no new requirement IDs, no duplicates).",
     "v1.1_2026-10-28_stage2": "C6/C7 wired the staged-candidate harness end-to-end; NL-BP-004/054/055/056/057/058/059/060/074 verified with fake-model tests (full suite 149 passed). No new requirement IDs.",
-    "v1.2_2026-10-28_stage2_complete": "Stage 2 closed: permission model + cloud gate (C9a), tool registry + recovery retention + repair evidence (C9b); NL-BP-065/072/073/076 verified (25 verified/29 partial/45 planned/4 blocked). Stage 3 started with the persisted supervisor plan."
+    "v1.2_2026-10-28_stage2_complete": "Stage 2 closed: permission model + cloud gate (C9a), tool registry + recovery retention + repair evidence (C9b); NL-BP-065/072/073/076 verified (25 verified/29 partial/45 planned/4 blocked). Stage 3 started with the persisted supervisor plan.",
+    "v1.3_2026-10-28_stage3_supervisor": "Stage 3 supervisor implemented C3a-C3d; SH-07 Tier A fake-model acceptance PASS (7 tests; runner evidence). NL-BP-061/062 verified, NL-BP-064 partial, NL-BP-075 evidence refreshed (partial), NL-BP-063 stays blocked pending Tier B real local-model evidence. Stage 3 remains in_progress; automatic mode stays off by default. Counts: 27 verified/31 partial/41 planned/4 blocked."
   },
   "program_order": {
     "schema_version": 1,
@@ -5006,7 +5012,10 @@
           2
         ],
         "evidence": [
-          "docs/PHASE3_SUPERVISOR_PLAN.md (persistent supervisor design, C3a-C3e, SH-07 Tier A/B)"
+          "docs/PHASE3_SUPERVISOR_PLAN.md (persistent supervisor design, C3a-C3e, SH-07 Tier A/B)",
+          "C3a d81a168 schema/store; C3b c91e0c9 backlog planner; C3c b9ec909 supervisor core; C3d dbe3c3b CLI/service/GUI + selfbuild shim",
+          "C3e: tests/test_supervisor_sh07.py 7 PASS (Tier A two consecutive fake-model missions); scripts/run_supervisor_sh07.py --mode fake evidence; scripts/verify_supervisor.py PASS",
+          "Tier B real local-model evidence NOT executed; NL-BP-063 stays blocked; stage 3 remains in progress"
         ],
         "requirement_ids": [
           "NL-BP-012",

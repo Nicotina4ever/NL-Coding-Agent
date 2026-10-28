@@ -387,6 +387,19 @@ class Supervisor:
         self._event("Supervisor lease acquired", payload={"expires_at": self.lease.expires_at})
         return self.lease
 
+    def _adopt_machine_lease(self) -> None:
+        """Refresh the local machine-slot handle from the durable row (typed Lease)."""
+        raw = store.get_machine_lease(resource_gate.INFERENCE_RESOURCE)
+        if raw is None:
+            self.machine_lease = None
+            return
+        self.machine_lease = store.Lease(
+            project_id=0,
+            owner_id=str(raw.get("owner_id") or ""),
+            version=int(raw.get("version") or 0),
+            expires_at=str(raw.get("expires_at") or ""),
+        )
+
     def heartbeat(self) -> store.Lease | None:
         """Renew the project lease (and machine slot); None means the lease was lost."""
         if self.lease is None:
@@ -1118,7 +1131,7 @@ class Supervisor:
         if not acquired:
             return {"status": "waiting_for_resources",
                     "error": "Machine inference slot is busy.", "mission_id": int(mission_id)}
-        self.machine_lease = store.get_machine_lease(resource_gate.INFERENCE_RESOURCE)
+        self._adopt_machine_lease()
         try:
             return self._invoke_orchestrator(int(mission_id), None)
         finally:
@@ -1201,7 +1214,7 @@ class Supervisor:
             return Outcome("WAIT_RESOURCE", "WAIT_RESOURCE", None,
                            int(self.config.backoff_schedule_s[0]),
                            {"reason": "Machine inference slot is busy."})
-        self.machine_lease = store.get_machine_lease(resource_gate.INFERENCE_RESOURCE)
+        self._adopt_machine_lease()
         # Reuse a durable claim token when re-claiming a retried/resumed row; the queue
         # CAS accepts NULL-or-matching tokens and this supervisor owns the lease.
         token = str(fresh.get("claim_token") or uuid.uuid4().hex)
@@ -1323,18 +1336,24 @@ class Supervisor:
              "runs": verification},
             record_key="verification",
         )
-        self._record_evidence(
-            mission_id, queue_id, "review",
-            {"verdict": str(result.get("verdict") or ""),
-             "notes": _truncate(str(result.get("review") or ""), 2000)},
-            record_key="review",
-        )
-        self._record_evidence(
-            mission_id, queue_id, "promotion",
-            {"promotion_status": str(result.get("promotion_status") or ""),
-             "changed_paths": changed},
-            record_key="promotion",
-        )
+        promotion_status = str(result.get("promotion_status") or "")
+        if str(result.get("status") or "") == "completed" or result.get("verdict"):
+            self._record_evidence(
+                mission_id, queue_id, "review",
+                {"verdict": str(result.get("verdict") or ""),
+                 "notes": _truncate(str(result.get("review") or ""), 2000)},
+                record_key="review",
+            )
+        if str(result.get("status") or "") == "completed" or promotion_status in (
+            "promoted", "promoting", "cas_conflict", "cas-conflict",
+            "rollback_conflict", "rollback-conflict", "promotion_failed",
+        ):
+            self._record_evidence(
+                mission_id, queue_id, "promotion",
+                {"promotion_status": promotion_status,
+                 "changed_paths": changed},
+                record_key="promotion",
+            )
         if outcome.failure_class and outcome.failure_class != "VERIFIED":
             if outcome.failure_class == "BUDGET_EXHAUSTED":
                 self._record_evidence(

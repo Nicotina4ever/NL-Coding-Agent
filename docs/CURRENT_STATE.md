@@ -42,10 +42,10 @@ NL Coding Agent is a local-first, multi-agent software development workstation. 
 - **Single-writer lock**: `nl_coding_agent.core.mission_lock` prevents two processes from modifying the same working tree.
 - **Persistence**: missions, tasks, attempts, handoffs, verification runs, diffs, changed paths, verdicts and resume counts are stored in SQLite.
 - **Recovery**: interrupted tasks are reset; a persisted mission baseline allows the reviewer to see the original mission diff after a restart. `--stop-after developer|tester` supports deliberate interruption tests.
-- **Roadmap**: `nl_coding_agent.core.roadmap` parses `docs/NEXT_SELF_BUILD_MISSION.md`; `selfbuild --from-roadmap` creates and runs the next mission without per-project YAML.
-- **Self-Build Mode**: `selfbuild --autonomous` / `--loop` resumes durable work, then runs the next roadmap mission in a bounded loop (`--max-missions` 1-5, default 1). State is `data/selfbuild_state.json`; lock is `data/selfbuild.lock`; log is `logs/selfbuild.log`.
-- **Autonomous completion guard**: a completed roadmap fingerprint is not rerun; the runner reports the completed mission and asks for a new `docs/NEXT_SELF_BUILD_MISSION.md`.
-- **Handoff verification**: `scripts/verify_handoff_and_resume.py` checks launcher wiring, CLI flags, SQLite handoffs, autonomous state, recovery evidence, lock hygiene, and the full test suite. `scripts/run_tracked_selfbuild_test.py` launches one real tracked cycle through the autonomous CLI.
+- **Roadmap (legacy manual path)**: `nl_coding_agent.core.roadmap` parses `docs/NEXT_SELF_BUILD_MISSION.md`; `selfbuild --from-roadmap` creates and runs the next mission without per-project YAML. The persistent supervisor does **not** read this file.
+- **Self-Build Mode (deprecated shim)**: `selfbuild --autonomous` / `--loop` now delegates to the stage-3 supervisor through `nl_coding_agent.core.selfbuild_runner` (legacy result shape preserved; C5/C7 fail-closed guards retained; `data/selfbuild_state.json` remains historical). It prints a deprecation warning; use `supervisor run`.
+- **Persistent supervisor (stage 3)**: `nl_coding_agent.core.supervisor` with durable `mission_queue`, `supervisor_leases`/`supervisor_runs`, `backlog_items` mirror, `mission_evidence` and `approvals`; selection comes from `docs/product-blueprint/INDEX.json` program order (no fixed Markdown dependency); CLI/service/GUI surfaces start/stop/pause/resume it. See the new section 8 and `docs/PHASE3_SUPERVISOR_PLAN.md`.
+- **Handoff verification**: `scripts/verify_handoff_and_resume.py` checks launcher wiring, CLI flags, SQLite handoffs, autonomous state, recovery evidence, lock hygiene, and the full test suite. `scripts/run_tracked_selfbuild_test.py` launches one real tracked cycle through the autonomous CLI. Stage-3 acceptance uses `tests/test_supervisor_sh07.py`, `scripts/run_supervisor_sh07.py` and the read-only `scripts/verify_supervisor.py`.
 
 ### 6. Desktop GUI (PySide6)
 - **Entry**: `NL Coding Agent.bat` or `python\python.exe nl_agent.py gui`.
@@ -75,6 +75,33 @@ NL Coding Agent is a local-first, multi-agent software development workstation. 
   - `gui`
 - Shared flags: `--stop-after`, `--dev-model`, `--reviewer-model`, `--debug-model`.
 - Dedicated launcher: `Self-Build Mode.bat` (embedded Python, default reviewer `ollama/qwen3.5:9b`).
+- Persistent supervisor (stage 3): `supervisor run|start|stop|pause|resume|status|index|recover|advance-stage`
+  with `--project/--mode/--max-missions/--json/--confirm-assisted` and documented exit codes
+  0/1/2/3/4; `selfbuild --autonomous` is a deprecated compatibility shim.
+
+### 8. Persistent Autonomous Supervisor (Stage 3, C3a-C3d)
+- **Module**: `nl_coding_agent.core.supervisor` + `persistence.supervisor_store` + `core.backlog`,
+  `core.run_control` and `core.resource_gate`.
+- **Durable state**: `mission_queue` (idempotency keys, claim tokens, retry/back-off,
+  dead-letter), `supervisor_leases`/`supervisor_runs` (CAS lease + heartbeat), `backlog_items`
+  (SQLite mirror of the authored index), `mission_evidence`, `approvals`, `supervisor_commands`.
+- **Selection**: `docs/product-blueprint/INDEX.json` program order + requirement dependencies;
+  the supervisor does not consume `docs/NEXT_SELF_BUILD_MISSION.md` and fails closed on a
+  missing/corrupt index.
+- **Preflight**: relocation readiness, promotion journals, stale stage sweep, mission lock,
+  legacy missions, backlog sync, permissions (read/write/execute), model/resource gate, config
+  sanity, read-only git state; blockers return an exact resume command.
+- **Execution**: one mission at a time drives the staged-candidate orchestrator; queue,
+  backlog, evidence and run counters are updated after each outcome; repair/retry is bounded
+  and hard failures stop fail-fast.
+- **Control**: Off/Assisted/Automatic modes, budgets, durable stop/pause/resume commands,
+  deterministic exit codes; stop is cooperative at safe checkpoints (never mid-promotion).
+- **GUI/service**: background `SupervisorService` thread (non-blocking), Autonomy page,
+  status-bar supervisor state and emergency STOP; Settings shows the read-only permission
+  policy.
+- **Evidence**: SH-07 **Tier A verified** (`tests/test_supervisor_sh07.py`, 7 tests; runner
+  evidence in `build/phase3/evidence/`); **Tier B (real local models) pending explicit
+  authorization** — NL-BP-063 stays blocked and automatic mode remains opt-in.
 
 ## Verified Evidence
 
@@ -167,7 +194,9 @@ NL Coding Agent is a local-first, multi-agent software development workstation. 
   - `scripts/run_tracked_selfbuild_test.py --max-missions 1` returned `idle` with mission #30
     completed and `APPROVE`, proving the duplicate-work guard.
 - Legacy mission **#7** remains in the database as historical evidence of an earlier interrupted run. Its old developer output replaced `status.py` with placeholders; that file has since been replaced by the real psutil implementation.
-- GUI smoke test: offscreen `MainWindow` constructs with six stack pages, opens the project, previews `nl_coding_agent/core/version.py`, shows mission #16, and closes cleanly (exit 0).
+- GUI smoke test: offscreen `MainWindow` constructs with seven stack pages (including the
+  Autonomy page), opens the project, previews `nl_coding_agent/core/version.py`, shows mission
+  #16, and closes cleanly (exit 0).
 - Models page smoke test: Ollama reachable, 18 models listed, 0 loaded at check time; GUI teardown no longer crashes after waiting for the model-fetch thread.
 
 ## Roadmap
@@ -178,9 +207,15 @@ NL Coding Agent is a local-first, multi-agent software development workstation. 
   (`docs/COMPLETED_MISSIONS.md`).
 - Handoff gate: verified. The autonomous engine, durable resume, launcher, SQLite evidence,
   duplicate-work guard, and exact blocked-resume command have all been exercised.
-- Next: define and run the next small self-build mission. Packaging, installer, licensing, and
-  final clean-directory acceptance remain future work and must not start until the handoff is
-  accepted.
+- **Program stage 3 (persistent supervisor and verified handoff) - in progress:** C3a-C3d are
+  implemented (durable queue/lease/preflight/backlog planner, CLI/service/GUI control surfaces,
+  selfbuild shim) and SH-07 **Tier A** (fake model, two consecutive staged-candidate missions)
+  is verified by `tests/test_supervisor_sh07.py` (7 tests) with runner evidence under
+  `build/phase3/evidence/`. **Tier B** (real local models on an isolated worktree) is NOT yet
+  executed and requires explicit Lead/user authorization; until then NL-BP-063 stays blocked,
+  program stage 3 stays in progress, and automatic mode remains opt-in/off by default.
+- Next: run/authorize Tier B SH-07 evidence, then close program stage 3. Packaging, installer,
+  licensing, and final clean-directory acceptance remain future work.
 - Deferred: lightweight cross-platform bootstrapper and native platform validation
   (`docs/09_DISTRIBUTION.md` and the future backlog).
 
@@ -195,6 +230,11 @@ NL Coding Agent is a local-first, multi-agent software development workstation. 
   failed or externally interrupted mission.
 - State reconciliation after a resumed mission currently happens on the next idle autonomous run,
   not immediately when the resumed mission completes.
+- Persistent supervisor limitations: it is a process/thread loop, not an OS service (no reboot
+  survival); stop is cooperative at safe checkpoints and can wait for a running model call;
+  candidate/test code still runs with the user's OS privileges (no OS sandbox/network
+  isolation); the machine inference slot serializes local inference only within one app-data
+  database. Tier B real-model acceptance is outstanding.
 - The distribution audit, native CrewAI integration, and portable payload staging are complete.
   Clean-directory validation, installer, licensing, and final acceptance remain deferred.
 

@@ -137,3 +137,31 @@ it is not a claim of a complete OS sandbox.
 - **Recovery retention** is auditable and explicit: read-only inventory, verified zip
   archives, and cleanup only after confirmation against a validated archive manifest.
   Nothing is deleted automatically.
+
+## Persistent autonomous supervisor (stage 3, implemented C3a-C3d, 2026-10-28)
+
+- The supervisor is **non-LLM policy code** in `nl_coding_agent/core/supervisor.py`; it
+  owns a durable queue, lease/heartbeat, preflight and evidence ledger, and drives the
+  existing staged-candidate orchestrator. The model cannot select its own next task,
+  grant permissions, change modes/budgets or disable stop/pause.
+- **Autonomy is opt-in and off by default.** Modes Off/Assisted/Automatic are persisted per
+  project; every mode still needs read/write/execute grants, and cloud/network/delete stay
+  denied unless explicitly granted. There is no flag or environment variable that bypasses
+  the permission gate.
+- **Start/stop/pause/resume are independent of any chat**: durable commands are consumed by
+  the loop, and the GUI/CLI send the same commands. Stop is **cooperative at safe
+  checkpoints** (never between the reviewer APPROVE and the promotion write); it can take as
+  long as the current model/verification call. Pause is honoured at mission boundaries.
+- **Honest limitations:** the supervisor is a process/thread loop, not an OS service — a
+  reboot or crash requires restarting it, and the stale lease is reclaimed only after TTL +
+  process-liveness proof. Candidate and test code still execute with the user's OS
+  privileges (no OS sandbox, no network isolation). The machine inference slot serializes
+  local inference only within one app-data database; cross-install GPU contention remains
+  future work (NL-BP-070/071).
+- **Evidence and fail-closed behavior:** queue/backlog/evidence/run transitions are durable
+  before success is reported; unresolved promotion journals, live leases/locks, invalid
+  backlog indexes, missing grants or missing local models block or wait with an exact resume
+  command. The read-only gate is `scripts/verify_supervisor.py`.
+- **Tier B (real local-model two-mission) evidence is not yet recorded**; automatic mode
+  remains opt-in and SH-07 Tier A (fake model) is the only supervisor acceptance evidence so
+  far (NL-BP-063 stays blocked).

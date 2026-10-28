@@ -50,16 +50,18 @@ evidence only.
 
 Execution rule: a later stage starts only when the previous stage's gates pass, unless the
 Lead records an explicit evidence-backed exception for independent low-risk work. Stage 1 is
-complete (verified relocation: see docs/WORKSPACE_MIGRATION.md); Stage 2 is in progress
-with the audited safety-foundation harness (C1-C5 done, C6-C8 next).
+complete (verified relocation: see docs/WORKSPACE_MIGRATION.md); Stage 2 is complete (verified
+harness C1-C9b, permissions/tool registry, SH-06); Stage 3 is in progress: the persistent
+supervisor core/CLI/service/GUI (C3a-C3d) and SH-07 Tier A (fake model) are implemented, while
+SH-07 Tier B (real local models) remains pending explicit authorization and blocks NL-BP-063.
 
 ## Summary
 
 | Status | P0 | P1 | P2 | P3 | Total |
 |---|---|---|---|---|---|
-| verified | 16 | 9 | 0 | 0 | 25 |
-| partial | 8 | 22 | 2 | 0 | 32 |
-| planned | 19 | 8 | 13 | 2 | 42 |
+| verified | 18 | 9 | 0 | 0 | 27 |
+| partial | 7 | 22 | 2 | 0 | 31 |
+| planned | 18 | 8 | 13 | 2 | 41 |
 | blocked | 4 | 0 | 0 | 0 | 4 |
 | **Total** | **47** | **39** | **15** | **2** | **103** |
 
@@ -67,7 +69,7 @@ with the audited safety-foundation harness (C1-C5 done, C6-C8 next).
 |---|---|---|---|---|---|
 | Area 1 - CrewAI + CrewAI Flows first-class integration | 13 | 6 | 4 | 3 | 0 |
 | Area 2 - Studio GUI + multimodal chat | 27 | 1 | 7 | 19 | 0 |
-| Area 3 - Universal autonomous development | 28 | 14 | 7 | 6 | 1 |
+| Area 3 - Universal autonomous development | 28 | 16 | 6 | 5 | 1 |
 | Area 4 - Repository hygiene | 8 | 2 | 4 | 2 | 0 |
 | Area 5 - Lightweight installation + portable distribution | 15 | 2 | 5 | 8 | 0 |
 | Area 6 - Release acceptance criteria | 12 | 0 | 5 | 4 | 3 |
@@ -84,6 +86,8 @@ with the audited safety-foundation harness (C1-C5 done, C6-C8 next).
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v1.3 (2026-10-28)** - Stage 3 supervisor implemented through C3d + SH-07 Tier A. C3a d81a168 additive supervisor schema/store, C3b c91e0c9 indexed-backlog loader/planner, C3c b9ec909 supervisor core (lease/heartbeat, preflight, reconcile, queue loop, run control, resource gate), C3d dbe3c3b CLI/service/GUI + selfbuild shim, C3e (this change) SH-07 Tier A end-to-end acceptance + runner/verifier scripts + docs. NL-BP-061/062 moved to verified (fake-model/end-to-end evidence + read-only gate); NL-BP-064 moved to partial (modes/budgets/stop/pause implemented, approvals flow partial); NL-BP-075 evidence refreshed but stays partial (no dashboard/429 matrix); NL-BP-063 stays blocked pending Tier B real local-model evidence. Stage 3 stays in progress; automatic mode remains off by default. Counts: 27 verified / 31 partial / 41 planned / 4 blocked.
 
 **v1.2 (2026-10-28)** - Stage 2 closed (C1-C9b). Permission model + cloud/network gate (C9a 641c333), tool registry + recovery retention + repair evidence (C9b 283a94e): NL-BP-065/072/073/076 verified. Counts: 25 verified / 29 partial / 45 planned / 4 blocked. Stage 3 started from docs/PHASE3_SUPERVISOR_PLAN.md; NL-BP-003 real-model end-to-end and SH-07 remain the stage-3 gate.
 
@@ -935,7 +939,7 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
 <a id="nl-bp-061"></a>
 ### NL-BP-061 - Supervisor daemon independent of the chat/LLM with durable queue, lease and preflight
 
-- **Area:** AUTONOMY - **Priority:** P0 - **Status:** partial
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** verified
 - **Blueprint priority:** P0 (03_MASTER_CHECKLIST P0-14, P0-15, P0-18)
 - **Dependencies:** NL-BP-051
 - **Acceptance gates:**
@@ -943,17 +947,19 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - startup preflight blocks when an unresolved promotion journal/stage exists
   - Stop/Pause/Resume honored; no duplicate or conflicting claims; tests
 - **Evidence:**
-  - nl_coding_agent/core/selfbuild_runner.py run_autonomous bounded by --max-missions 1-5 (cli.py); data/selfbuild.lock + data/selfbuild_state.json
-  - tests/test_selfbuild_runner.py 9 tests PASS (selection/reconcile/resume command)
-  - selfbuild_runner now calls promotion.preflight and filters legacy (harness_version != 2) missions (C5, lines ~68-120 and ~219); no always-on daemon, lease/heartbeat table or durable queue yet
-  - AUDIT_REALE_E_LIMITI.md item 7: run_autonomous still reads fixed NEXT_SELF_BUILD_MISSION.md, not the durable planner
+  - C3a d81a168: additive supervisor schema + tests/test_supervisor_store.py 17 tests (lease CAS/TTL with pid/host proof, heartbeat renew, queue claim/state machine/idempotency, backlog mirror, evidence, approvals)
+  - C3c b9ec909: nl_coding_agent/core/supervisor.py Supervisor (lease acquisition/heartbeat thread, 15-check fail-closed preflight, reconcile-on-start, queue loop, run control, resource gate) + core/run_control.py + core/resource_gate.py
+  - tests/test_supervisor_core.py 33 tests PASS (off-mode default, preflight matrix, reconciliation matrix, stop/pause, retry/dead-letter, lease conflict/lost, real-orchestrator RunStopped hook)
+  - tests/test_supervisor_sh07.py 7 tests PASS: two consecutive missions from a fixture INDEX.json, plus restart/pause/stop/resume idempotency
+  - C3d dbe3c3b: CLI supervisor group + background SupervisorService + tests/test_supervisor_cli.py 20 tests PASS
+  - scripts/verify_supervisor.py read-only gate PASS (schema, no active lease, no live run, no journal, queue/backlog consistency, default mode off, valid index)
 - **Sources:** specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md; specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md; 03_MASTER_CHECKLIST.md#P0-14; 03_MASTER_CHECKLIST.md#P0-15; 03_MASTER_CHECKLIST.md#P0-18
-- **Note:** A bounded autonomous runner exists (plain loop, state JSON, lock); it is not an always-on supervisor and lacks lease/heartbeat/preflight.
+- **Note:** Implemented as a process/thread supervisor with durable SQLite queue/lease/state and CLI/GUI controls; it is not an OS service (no reboot survival), stale leases are reclaimed only after TTL + liveness proof.
 
 <a id="nl-bp-062"></a>
 ### NL-BP-062 - Automatic next-mission selection from the indexed backlog
 
-- **Area:** AUTONOMY - **Priority:** P0 - **Status:** partial
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** verified
 - **Blueprint priority:** P0 (03_MASTER_CHECKLIST P0-14, P0-18)
 - **Dependencies:** NL-BP-061
 - **Acceptance gates:**
@@ -961,11 +967,12 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - dedupe by stable requirement ID/fingerprint; roadmap/state updated automatically
   - two consecutive selection runs verified live
 - **Evidence:**
-  - nl_coding_agent/core/autonomous_roadmap_planner.py select_next_task/write_roadmap_mission (78 lines) - grep shows no importer
-  - selfbuild_runner.py imports next_mission from core/roadmap and reads docs/NEXT_SELF_BUILD_MISSION.md
-  - AUDIT_REALE_E_LIMITI.md item 7; missions #42/#43 were driven through a manually updated roadmap document
+  - C3b c91e0c9: nl_coding_agent/core/backlog.py fail-closed INDEX.json loader (schema/program_order/requirements), program-stage gate, dependency/priority ordering, content hash, idempotency keys, goal composition; tests/test_backlog_planner.py 20 tests PASS
+  - SQLite backlog_items mirror (sync/read/progress) + supervisor selection from it; no dependency on docs/NEXT_SELF_BUILD_MISSION.md (static test asserts it)
+  - tests/test_supervisor_sh07.py 7 tests PASS: two consecutive requirements selected and completed from a fixture indexed backlog without a new prompt; same idempotency key never duplicates a queue row/mission; a third run selects nothing
+  - scripts/run_supervisor_sh07.py --mode fake PASS, evidence in build/phase3/evidence/sh07-fake-<UTC>/evidence.json
 - **Sources:** specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md; specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md; 03_MASTER_CHECKLIST.md#P0-14; 03_MASTER_CHECKLIST.md#P0-18
-- **Note:** A small planner exists (parses the checklist, writes a roadmap mission) but it is dead code: nothing imports it, and the runner still consumes the fixed Markdown roadmap.
+- **Note:** Selection is fully implemented and proven with fake-model end-to-end evidence; the "two consecutive selection runs verified live" arm is covered by the Tier B SH-07 gate (NL-BP-063), which stays blocked until real local-model evidence exists.
 
 <a id="nl-bp-063"></a>
 ### NL-BP-063 - Two consecutive missions with local models and no manual repair
@@ -982,13 +989,15 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - data/selfbuild_state.json audit_note_42/43: stub restore and manual repair recorded
   - HANDOFF_DEEPSEEK_HARNESS.md: previous cycle #43/#45 produced stubs; protections not integrated
   - docs/CURRENT_STATE.md known boundaries: no unattended proof
+  - Tier A (fake model) now PASS: tests/test_supervisor_sh07.py 7 tests - two consecutive staged-candidate missions with candidate+oracle verification, one promotion per mission, restart/pause/stop idempotency and fail-closed negatives; evidence via scripts/run_supervisor_sh07.py --mode fake
+  - Tier B (real local models) NOT executed: scripts/run_supervisor_sh07.py --mode live --confirm-live --worktree <isolated worktree> requires explicit authorization and records evidence under build/phase3/evidence/
 - **Sources:** specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md; specifiche/28_SELF_HEALING_AGENT_HARNESS.md#7; 03_MASTER_CHECKLIST.md#P0-18
-- **Note:** BLOCKED by the harness integration and by recorded real incidents: #42/#43 needed manual restoration of stub-overwritten files; #44 blocked; #45 blocked after live overwrite.
+- **Note:** Remains BLOCKED: Tier A is deterministic fake-model evidence only and cannot prove local-model reliability; NL-BP-063 becomes verified only after Tier B real local-model two-mission evidence is recorded and reviewed.
 
 <a id="nl-bp-064"></a>
 ### NL-BP-064 - Autonomy modes Off/Assisted/Automatic with budgets, approvals and stop/pause
 
-- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** partial
 - **Blueprint priority:** P0 (03_MASTER_CHECKLIST P0-15; SPEC-26)
 - **Dependencies:** NL-BP-061
 - **Acceptance gates:**
@@ -996,10 +1005,12 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - risky operations (delete, migrate, publish, cloud, install) require explicit approval policies
   - no cloud activation by default; budget/attempt limits enforced; stop/pause honored
 - **Evidence:**
-  - cli.py selfbuild flags only (--autonomous/--loop, --max-missions, --stop-after); no modes in DB or GUI
-  - specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md GUI modes; specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md modes
+  - C3c b9ec909: SupervisorConfig persisted via app_settings (supervisor.global / supervisor.project.<id>) with validated budgets (missions, attempts, wall clock, backoff, consecutive failures); mode off is the default
+  - durable stop/pause/resume via supervisor_commands + supervisor_runs flags, honoured at safe mission boundaries (never mid-promotion); tests/test_supervisor_core.py 33 tests PASS
+  - C3d dbe3c3b: CLI supervisor group with --mode/--confirm-assisted, background SupervisorService, Autonomy GUI page and emergency STOP; tests/test_supervisor_cli.py 20 tests PASS + tests/test_gui_smoke.py/test_gui_panels.py PASS
+  - approvals table + pending_approvals/decide_approval helpers exist; cloud/network/delete stay denied by default via the permission gate (tests/test_permissions.py)
 - **Sources:** specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md; specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md; 03_MASTER_CHECKLIST.md#P0-15
-- **Note:** Only CLI flags exist; modes, budgets and approval policies are not implemented or persisted.
+- **Note:** Modes, budgets and stop/pause are implemented and persisted; the approval request/decision flow is only partially integrated (no complete assisted-approval UI/mission resume workflow yet), so status stays partial.
 
 <a id="nl-bp-065"></a>
 ### NL-BP-065 - Bounded repair loop driven by structured diagnostics
@@ -1185,11 +1196,12 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - Health & Diagnostics view exposes versions, providers, models, last test pass/fail, blocked tasks, space audit and owned processes
   - diagnostic export is redacted; tests for 429/timeout paths
 - **Evidence:**
-  - SQLite events table 77 rows + logs/*.log evidence; no correlation fields in schema (id/source/level/message/payload/created_at)
-  - no retry/backoff/dead-letter code (grep); historical 429 incident in 02_STATO_REALE_DA_VERIFICARE.md
-  - specifiche/24_OPERATIONS_SUPERVISION_HEALTH_AND_DIAGNOSTICS.md
+  - C3a d81a168: additive events columns project_id/mission_id/correlation_id/event_kind; supervisor logs correlation ids per run; schema/index tests PASS
+  - C3c b9ec909: retry backoff schedule, failure signatures, dead-letter/blocked queue states and WAITING_FOR_RESOURCES/APPROVAL outcomes; scripts/verify_supervisor.py --json read-only diagnostic gate (schema, lease, journals, queue/backlog consistency, no live supervisor, mode default, index validity)
+  - C3d dbe3c3b: supervisor status --json, CLI exit codes, background service/queue status, GUI supervisor status label; tests/test_supervisor_core.py + tests/test_supervisor_cli.py PASS
+  - no full Health & Diagnostics dashboard, no measured 429/timeout matrix yet; specifiche/24_OPERATIONS_SUPERVISION_HEALTH_AND_DIAGNOSTICS.md
 - **Sources:** specifiche/24_OPERATIONS_SUPERVISION_HEALTH_AND_DIAGNOSTICS.md; 03_MASTER_CHECKLIST.md#P1-14
-- **Note:** Structured events table and log files exist; there is no diagnostics dashboard, retry/backoff policy or dead-letter queue.
+- **Note:** Correlation ids, retry/backoff/dead-letter queue and a read-only diagnostic gate exist; the full diagnostics dashboard and 429/timeout test matrix remain missing, so status stays partial.
 
 <a id="nl-bp-076"></a>
 ### NL-BP-076 - Cloud escalation enforcement: local-only default, explicit consent

@@ -326,6 +326,25 @@ requirements, runs an end-to-end diagnostic and supports CPU-only operation wher
 Never silently download large models, use paid services or modify global environments. Maintain
 reproducible manifests/lockfiles and build native artifacts on their target OS/architecture.
 
+## Program stage 3 — persistent supervisor and verified handoff (in progress, 2026-10-28)
+
+The bounded self-build loop has been replaced by a persistent, non-LLM supervisor
+(`nl_coding_agent/core/supervisor.py`) built on the staged-candidate harness:
+durable mission queue with idempotency keys and claim tokens, project lease with
+heartbeat and fail-closed preflight, SQLite mirror of the indexed blueprint
+(`docs/product-blueprint/INDEX.json`) for next-mission selection (no fixed Markdown
+roadmap dependency), per-mission budgets/retry/dead-letter, evidence ledger, and
+CLI/service/GUI start/stop/pause/resume independent of any chat. C3a-C3d are
+committed; `selfbuild --autonomous` is a deprecated compatibility shim.
+
+Acceptance status: **SH-07 Tier A verified** with a deterministic fake model
+(`tests/test_supervisor_sh07.py`: two consecutive staged-candidate missions,
+promotion only per mission, restart/pause/resume idempotency, fail-closed negatives;
+runner evidence under `build/phase3/evidence/`). **SH-07 Tier B** (real local Ollama
+models on an isolated git worktree) is not executed and requires explicit
+authorization; until its evidence is recorded, NL-BP-063 stays blocked, automatic
+mode stays off by default, and program stage 3 remains in progress.
+
 ## Workspace migration — completed 2026-10-28
 
 The workspace was renamed to the canonical root `K:\AI\NL Coding Agent` and the relocation was
