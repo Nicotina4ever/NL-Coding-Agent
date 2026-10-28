@@ -32,18 +32,58 @@ def _json_list(value) -> list:
         return []
 
 
-def create_mission(project_id: int | None, title: str, goal: str) -> int:
+# Mirrors nl_coding_agent.core.promotion.HARNESS_VERSION without importing it
+# (persistence must not depend on orchestration modules).
+HARNESS_VERSION = 2
+
+
+def create_mission(
+    project_id: int | None,
+    title: str,
+    goal: str,
+    *,
+    harness_version: int = HARNESS_VERSION,
+) -> int:
     """Create a new mission record in SQLite and return its ID."""
     now = _now()
     with _db() as conn, conn:
         cur = conn.execute(
             """
-            INSERT INTO missions (project_id, title, goal, status, created_at, updated_at)
-            VALUES (?, ?, ?, 'pending', ?, ?)
+            INSERT INTO missions (project_id, title, goal, status, created_at, updated_at,
+                                  harness_version)
+            VALUES (?, ?, ?, 'pending', ?, ?, ?)
             """,
-            (project_id, title, goal, now, now),
+            (project_id, title, goal, now, now, int(harness_version)),
         )
         return cur.lastrowid
+
+
+def set_mission_staging(mission_id: int, staging_dir: str | None) -> None:
+    """Record the staging directory owned by a mission (NULL clears it)."""
+    with _db() as conn, conn:
+        conn.execute(
+            "UPDATE missions SET staging_dir=?, updated_at=? WHERE id=?",
+            (staging_dir, _now(), mission_id),
+        )
+
+
+def set_promotion_status(mission_id: int, promotion_status: str | None) -> None:
+    """Record the durable candidate-promotion state of a mission."""
+    with _db() as conn, conn:
+        conn.execute(
+            "UPDATE missions SET promotion_status=?, updated_at=? WHERE id=?",
+            (promotion_status, _now(), mission_id),
+        )
+
+
+def find_mission_by_staging_dir(staging_dir: str) -> dict | None:
+    """Find the mission owning a staging directory (used by promotion preflight)."""
+    with _db() as conn:
+        row = conn.execute(
+            "SELECT * FROM missions WHERE staging_dir=? ORDER BY id DESC LIMIT 1",
+            (staging_dir,),
+        ).fetchone()
+        return dict(row) if row else None
 
 
 def get_mission(mission_id: int) -> dict | None:

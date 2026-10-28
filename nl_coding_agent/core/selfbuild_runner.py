@@ -4,16 +4,19 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
+from nl_coding_agent.core import promotion
 from nl_coding_agent.core.roadmap import next_mission
 from nl_coding_agent.core.recovery_store import save_snapshot, rollback_from_snapshot
 from nl_coding_agent.core.code_integrity_gate import detect_stub, detect_weak_test
 from nl_coding_agent.persistence.database import db_path
 from nl_coding_agent.persistence.missions import (
     create_mission,
+    find_mission_by_staging_dir,
     get_mission,
     list_missions,
 )
@@ -62,11 +65,21 @@ def roadmap_fingerprint(roadmap: dict) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def select_resumable_mission(missions: list[dict]) -> dict | None:
+def _is_harness_mission(mission: dict, harness_version: int) -> bool:
+    return mission.get("harness_version") == harness_version
+
+
+def select_resumable_mission(
+    missions: list[dict], *, harness_version: int = promotion.HARNESS_VERSION
+) -> dict | None:
+    """Select resumable work, never a mission that predates the staged-candidate harness."""
     for status in RESUMABLE_STATUSES:
         for mission in missions:
-            if mission.get("status") == status:
-                return mission
+            if mission.get("status") != status:
+                continue
+            if not _is_harness_mission(mission, harness_version):
+                continue
+            return mission
     return None
 
 
@@ -84,11 +97,18 @@ def completed_roadmap_mission(missions: list[dict], roadmap: dict) -> dict | Non
     return None
 
 
-def pending_roadmap_mission(missions: list[dict], roadmap: dict) -> dict | None:
+def pending_roadmap_mission(
+    missions: list[dict],
+    roadmap: dict,
+    *,
+    harness_version: int = promotion.HARNESS_VERSION,
+) -> dict | None:
     title = str(roadmap.get("title") or "")
     goal = str(roadmap.get("goal") or "")
     for mission in missions:
         if mission.get("status") != "pending":
+            continue
+        if not _is_harness_mission(mission, harness_version):
             continue
         if str(mission.get("title") or "") != title:
             continue
@@ -139,6 +159,17 @@ def _resume_command(root: Path, mission_id: int | None = None) -> str:
     return base
 
 
+def _first_journal_mission_id(root: Path) -> int | None:
+    basedir = root / "data" / "staging"
+    if not basedir.is_dir():
+        return None
+    for journal in sorted(basedir.glob("*/promotion-journal.json")):
+        match = re.match(r"mission-(\d+)-", journal.parent.name)
+        if match:
+            return int(match.group(1))
+    return None
+
+
 def _resume_command_for_results(
     root: Path, status: str, results: list[dict]
 ) -> str:
@@ -172,6 +203,33 @@ def run_autonomous(
 
     _log(f"Self-Build Mode starting in {root} (max missions: {limit})", on_event)
 
+    missions_at_start = list_missions(project_id)
+    legacy_resumable = [
+        mission
+        for mission in missions_at_start
+        if mission.get("status") in RESUMABLE_STATUSES
+        and not _is_harness_mission(mission, promotion.HARNESS_VERSION)
+    ]
+    if legacy_resumable:
+        _log(
+            "Ignoring legacy mission(s) from before the staged-candidate harness: "
+            + ", ".join("#" + str(m["id"]) for m in legacy_resumable),
+            on_event,
+        )
+    blocking = promotion.preflight(root, mission_lookup=find_mission_by_staging_dir)
+    if blocking:
+        stopped_reason = (
+            "Unresolved candidate promotion state: " + " | ".join(blocking)
+            + "; resume the mission to reconcile before starting new work."
+        )
+        _log(stopped_reason, on_event)
+        return {
+            "status": "blocked",
+            "missions": [],
+            "stopped_reason": stopped_reason,
+            "resume_command": _resume_command(root, _first_journal_mission_id(root)),
+        }
+
     for index in range(limit):
         missions = list_missions(project_id)
         mission = None
@@ -181,6 +239,20 @@ def run_autonomous(
             mission = get_mission(next_resume_id)
             if not mission:
                 raise ValueError(f"Mission #{next_resume_id} not found")
+            if not _is_harness_mission(mission, promotion.HARNESS_VERSION):
+                stopped_reason = (
+                    f"Mission #{mission['id']} predates the staged-candidate harness "
+                    "(harness_version != 2) and cannot be resumed safely. "
+                    "Create a new mission instead."
+                )
+                _log(stopped_reason, on_event)
+                _save_state(state)
+                return {
+                    "status": "blocked",
+                    "missions": [],
+                    "stopped_reason": stopped_reason,
+                    "resume_command": _resume_command(root),
+                }
             if mission.get("project_id") is None:
                 from nl_coding_agent.persistence.missions import set_mission_project
 
@@ -189,7 +261,9 @@ def run_autonomous(
             next_resume_id = None
             _log(f"Selected explicit mission #{mission['id']} for resume", on_event)
         else:
-            mission = select_resumable_mission(missions)
+            mission = select_resumable_mission(
+                missions, harness_version=promotion.HARNESS_VERSION
+            )
             if mission is not None:
                 _log(
                     f"Selected durable mission #{mission['id']} "
@@ -234,7 +308,9 @@ def run_autonomous(
                 _log(stopped_reason, on_event)
                 break
 
-            pending = pending_roadmap_mission(missions, roadmap)
+            pending = pending_roadmap_mission(
+                missions, roadmap, harness_version=promotion.HARNESS_VERSION
+            )
             if pending is not None:
                 mission = pending
                 _log(f"Reusing pending roadmap mission #{mission['id']}", on_event)

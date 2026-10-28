@@ -19,19 +19,19 @@ from nl_coding_agent.core.selfbuild_runner import (
 class TestSelfBuildSelection(unittest.TestCase):
     def test_resumable_priority(self):
         missions = [
-            {"id": 3, "status": "pending"},
-            {"id": 2, "status": "interrupted"},
-            {"id": 1, "status": "running"},
-            {"id": 4, "status": "completed"},
+            {"id": 3, "status": "pending", "harness_version": 2},
+            {"id": 2, "status": "interrupted", "harness_version": 2},
+            {"id": 1, "status": "running", "harness_version": 2},
+            {"id": 4, "status": "completed", "harness_version": 2},
         ]
         selected = select_resumable_mission(missions)
         self.assertEqual(selected["id"], 1)
 
     def test_no_resumable_work(self):
         missions = [
-            {"id": 1, "status": "completed"},
-            {"id": 2, "status": "blocked"},
-            {"id": 3, "status": "failed"},
+            {"id": 1, "status": "completed", "harness_version": 2},
+            {"id": 2, "status": "blocked", "harness_version": 2},
+            {"id": 3, "status": "failed", "harness_version": 2},
         ]
         self.assertIsNone(select_resumable_mission(missions))
 
@@ -40,7 +40,8 @@ class TestSelfBuildSelection(unittest.TestCase):
         missions = [
             {"id": 1, "title": "A mission", "goal": "Do the work", "status": "completed"},
             {"id": 2, "title": "A mission", "goal": "Do other work", "status": "completed"},
-            {"id": 3, "title": "A mission", "goal": "Do the work", "status": "pending"},
+            {"id": 3, "title": "A mission", "goal": "Do the work", "status": "pending",
+             "harness_version": 2},
         ]
         self.assertEqual(completed_roadmap_mission(missions, roadmap)["id"], 1)
         self.assertEqual(pending_roadmap_mission(missions, roadmap)["id"], 3)
@@ -99,6 +100,7 @@ class TestSelfBuildSelection(unittest.TestCase):
             "title": "Recovery",
             "goal": "Fix controls",
             "project_id": 1,
+            "harness_version": 2,
         }
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp).resolve()
@@ -155,6 +157,7 @@ class TestSelfBuildSelection(unittest.TestCase):
             "title": "Recovery",
             "goal": "Fix controls",
             "project_id": 1,
+            "harness_version": 2,
         }
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp).resolve()
@@ -211,6 +214,66 @@ class TestSelfBuildSelection(unittest.TestCase):
             )
         self.assertFalse(changed)
         self.assertEqual(project_state, {})
+
+
+class HarnessSelectionTests(unittest.TestCase):
+    def test_legacy_missions_are_never_selected_as_resumable(self):
+        missions = [
+            {"id": 44, "status": "blocked", "harness_version": None},
+            {"id": 45, "status": "pending", "harness_version": None},
+            {"id": 46, "status": "interrupted", "harness_version": 2},
+        ]
+        selected = select_resumable_mission(missions)
+        self.assertEqual(selected["id"], 46)
+
+    def test_legacy_pending_roadmap_mission_is_not_reused(self):
+        roadmap = {"title": "A mission", "goal": "Do the work"}
+        missions = [{"id": 44, "title": "A mission", "goal": "Do the work",
+                     "status": "pending", "harness_version": None}]
+        self.assertIsNone(pending_roadmap_mission(missions, roadmap))
+
+    def test_explicit_legacy_resume_is_blocked_without_running_a_mission(self):
+        ran = []
+        mission = {
+            "id": 44, "status": "blocked", "title": "Legacy",
+            "goal": "Old work", "project_id": 1, "harness_version": None,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            with patch("nl_coding_agent.core.selfbuild_runner._log"), \
+                    patch("nl_coding_agent.core.selfbuild_runner._load_state",
+                          return_value={"projects": {}}), \
+                    patch("nl_coding_agent.core.selfbuild_runner._save_state"), \
+                    patch("nl_coding_agent.core.selfbuild_runner.open_project",
+                          return_value={"id": 1}), \
+                    patch("nl_coding_agent.core.selfbuild_runner.list_missions",
+                          return_value=[]), \
+                    patch("nl_coding_agent.core.selfbuild_runner.get_mission",
+                          return_value=mission):
+                result = run_autonomous(
+                    root, max_missions=1, resume_mission_id=44,
+                    orchestrator_factory=lambda _: ran.append(True),
+                )
+        self.assertEqual(result["status"], "blocked")
+        self.assertIn("predates the staged-candidate harness", result["stopped_reason"])
+        self.assertEqual(ran, [])
+
+    def test_unreconciled_promotion_journal_blocks_new_work(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            with patch("nl_coding_agent.core.selfbuild_runner._log"), \
+                    patch("nl_coding_agent.core.selfbuild_runner._load_state",
+                          return_value={"projects": {}}), \
+                    patch("nl_coding_agent.core.selfbuild_runner._save_state"), \
+                    patch("nl_coding_agent.core.selfbuild_runner.open_project",
+                          return_value={"id": 1}), \
+                    patch("nl_coding_agent.core.selfbuild_runner.list_missions",
+                          return_value=[]), \
+                    patch("nl_coding_agent.core.selfbuild_runner.promotion.preflight",
+                          return_value=["Mission #77 has an unreconciled promotion journal"]):
+                result = run_autonomous(root, max_missions=1)
+        self.assertEqual(result["status"], "blocked")
+        self.assertIn("Unresolved candidate promotion state", result["stopped_reason"])
 
 
 if __name__ == "__main__":

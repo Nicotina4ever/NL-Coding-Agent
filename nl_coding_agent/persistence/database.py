@@ -152,6 +152,10 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("tasks", "last_error", "TEXT"),
     ("tasks", "started_at", "TEXT"),
     ("tasks", "finished_at", "TEXT"),
+    # Staged-candidate harness identity/metadata (phase 2, additive only).
+    ("missions", "harness_version", "INTEGER"),
+    ("missions", "staging_dir", "TEXT"),
+    ("missions", "promotion_status", "TEXT"),
 ]
 
 _INDEXES = """
@@ -161,6 +165,7 @@ CREATE INDEX IF NOT EXISTS idx_attempts_task ON task_attempts(task_id, id DESC);
 CREATE INDEX IF NOT EXISTS idx_handoffs_mission ON handoffs(mission_id, id);
 CREATE INDEX IF NOT EXISTS idx_verification_mission ON verification_runs(mission_id, id);
 CREATE INDEX IF NOT EXISTS idx_events_created ON events(id DESC);
+CREATE INDEX IF NOT EXISTS idx_missions_staging ON missions(staging_dir);
 """
 
 
