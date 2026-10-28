@@ -69,6 +69,7 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
     assert research._query.accessibleName() == "Research query"
     assert research._provider_combo.accessibleName() == "Research provider and route"
     assert research._preview_text.isReadOnly() is True
+    assert "offline" in research._service_label.text().lower()
     from nl_coding_agent.gui.widgets.command_palette import CommandPalette
     actions = window._command_palette_actions()
     assert any(action.action_id == "doctor" and action.enabled for action in actions)

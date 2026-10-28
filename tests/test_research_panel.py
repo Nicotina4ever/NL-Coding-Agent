@@ -256,6 +256,105 @@ def test_copy_and_open_url_request_never_launch_browser():
     panel.shutdown()
 
 
+
+def _real_research_service(tmp_path, permission_factory=None):
+    from nl_coding_agent.core import auto_review, permissions
+    from nl_coding_agent.research import fetch
+    from nl_coding_agent.research.providers import KnownUrl, default_registry
+    from nl_coding_agent.research.service import ResearchService
+    from nl_coding_agent.research.store import ResearchStore
+
+    class FakeTransport:
+        def __init__(self):
+            self.calls = []
+
+        def open(self, request):
+            self.calls.append(request)
+            return fetch.TransportResponse(
+                status_code=200,
+                headers=(("content-type", "text/html; charset=utf-8"),),
+                body=b"<html><head><title>Alpha</title></head><body><p>Alpha text.</p></body></html>")
+
+    def allowed(capability, scope, context):
+        return permissions.Allowed(capability, "allowed by test")
+
+    class Review:
+        def __call__(self, action, profile=None, controls=None):
+            return {"outcome": auto_review.OUTCOME_AUTO_APPROVED, "reason": "ok"}
+
+    return ResearchService(
+        store=ResearchStore(),
+        registry=default_registry(known_urls=[
+            KnownUrl("https://example.com/alpha", "Alpha source", "Alpha snippet")]),
+        fetch_transport=FakeTransport(),
+        permission_checker=permission_factory or allowed,
+        auto_reviewer=Review(),
+        profile=auto_review.PROFILE_TRUSTED)
+
+
+def test_real_appservices_facade_offline_default_and_no_auto_search(tmp_path, monkeypatch):
+    monkeypatch.setenv("NL_DATA_DIR", str(tmp_path / "data"))
+    from nl_coding_agent.app.services import AppServices
+    from nl_coding_agent.gui.widgets.research_panel import ResearchPanel
+
+    app = _app()
+    services = AppServices()
+    try:
+        panel = ResearchPanel(services)
+        assert "offline" in panel._service_label.text().lower()
+        assert panel._results_table.rowCount() == 0
+        assert panel._provider_combo.count() == 1
+        assert "No research provider configured" in panel._provider_combo.itemText(0)
+        panel._query.setText("alpha")
+        panel._run_search()
+        _flush()
+        assert panel._results_table.rowCount() == 0
+        assert "offline" in panel._status_label.text().lower()
+        panel.shutdown()
+    finally:
+        services._db.close()
+
+
+def test_real_facade_configured_search_preview_and_permission_needed(tmp_path, monkeypatch):
+    monkeypatch.setenv("NL_DATA_DIR", str(tmp_path / "data"))
+    from nl_coding_agent.core import permissions
+    from nl_coding_agent.app.services import AppServices
+    from nl_coding_agent.gui.widgets.research_panel import ResearchPanel
+
+    _app()
+    services = AppServices()
+    try:
+        service = _real_research_service(tmp_path)
+        services.configure_research(service=service)
+        panel = ResearchPanel(services)
+        assert "available" in panel._service_label.text().lower()
+        assert panel._provider_combo.count() == 1
+        panel._query.setText("alpha")
+        panel._run_search()
+        _flush()
+        assert panel._results_table.rowCount() == 1
+        assert panel._results_table.item(0, 0).text() == "Alpha source"
+        assert panel._results_table.item(0, 5).text() == "UNTRUSTED"
+        _flush()
+        assert "Alpha text" in panel._preview_text.toPlainText()
+        assert "Provenance" in panel._preview_details.toPlainText()
+        panel.shutdown()
+
+        needs = _real_research_service(
+            tmp_path, permission_factory=lambda c, s, ctx: permissions.NeedsApproval(
+                c, "human approval for " + c))
+        services.configure_research(service=needs)
+        panel2 = ResearchPanel(services)
+        panel2._query.setText("alpha")
+        panel2._run_search()
+        _flush()
+        assert "Permission needed" in panel2._status_label.text()
+        assert "permission needed" in panel2._service_label.text().lower()
+        panel2.shutdown()
+    finally:
+        services._db.close()
+
+
 def test_no_network_sqlite_or_crewai_imports_and_no_auto_search():
     source = (REPO / "nl_coding_agent" / "gui" / "widgets" / "research_panel.py").read_text(
         encoding="utf-8")

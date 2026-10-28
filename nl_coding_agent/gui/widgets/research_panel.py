@@ -81,6 +81,10 @@ class _ResearchAdapter:
                     return fn
         return None
 
+    def status(self):
+        fn = self.method("research_status", "status")
+        return fn() if fn is not None else None
+
     def provider_statuses(self):
         fn = self.method("provider_statuses", "providers", "research_provider_statuses")
         if fn is None:
@@ -348,6 +352,11 @@ class ResearchPanel(QWidget):
 
     # ------------------------------------------------------------- providers
     def _refresh_providers(self) -> None:
+        backend_status = {}
+        try:
+            backend_status = _dict(self._api.status())
+        except Exception:  # noqa: BLE001 - offline metadata is optional
+            backend_status = {}
         try:
             statuses = self._api.provider_statuses()
         except Exception as exc:  # noqa: BLE001 - shown as unavailable
@@ -372,8 +381,14 @@ class ResearchPanel(QWidget):
         if self._provider_combo.count() == 0:
             self._provider_combo.addItem("No research provider configured", None)
         self._provider_combo.blockSignals(False)
-        self._service_label.setText(
-            "Research service: available" if statuses else "Research service: offline")
+        if backend_status.get("offline") and not backend_status.get("network_configured"):
+            self._service_label.setText(
+                "Research service: offline (no network transport configured)")
+        elif backend_status.get("permission_needed"):
+            self._service_label.setText("Research service: permission needed")
+        else:
+            self._service_label.setText(
+                "Research service: available" if statuses else "Research service: offline")
         self._on_provider_changed()
 
     def _on_provider_changed(self, *_args) -> None:
@@ -727,6 +742,8 @@ class ResearchPanel(QWidget):
                 "Research " + operation + " error: " + _redact(payload.get("error")))
         if payload.get("permission_needed"):
             self._service_label.setText("Research service: permission needed")
+        elif payload.get("denied"):
+            self._service_label.setText("Research service: denied by policy")
         elif payload.get("offline"):
             self._service_label.setText("Research service: offline")
         elif payload.get("ok"):

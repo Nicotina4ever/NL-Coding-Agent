@@ -77,6 +77,13 @@ class AppServices:
         self._bus = _bus
         self._supervisor_services: dict[int, object] = {}
         self._supervisor_lock = threading.Lock()
+        # Research facade is lazy: no research service, store scan or network
+        # transport is created until a research method/status is requested.
+        self._research_service_obj = None
+        self._research_lock = threading.Lock()
+        self._research_config: dict = {}
+        self._research_network_configured = False
+        self.research = _ResearchFacade(self)
 
     # --- Project ---
 
@@ -1175,6 +1182,308 @@ class AppServices:
         scheduler.submit(task_id, _do_audit, label=f"Audit: {root.name}")
         return task_id
 
+    # ------------------------------------------------------------ research
+    def configure_research(self, *, service=None, network_configured=None,
+                           **options) -> dict:
+        """Explicitly configure the research backend (no network is created here)."""
+        with self._research_lock:
+            self._research_config = dict(options)
+            self._research_service_obj = service
+            if network_configured is None:
+                network_configured = any(
+                    options.get(key) is not None for key in (
+                        "fetch_transport", "http_transport", "github_client",
+                        "huggingface_client"))
+                if service is not None:
+                    network_configured = any(
+                        getattr(service, attr, None) is not None for attr in (
+                            "_fetch_transport", "_http_transport",
+                            "_github_client", "_huggingface_client"))
+            self._research_network_configured = bool(network_configured)
+        return self.research_status()
+
+    def _research_service(self):
+        with self._research_lock:
+            if self._research_service_obj is not None:
+                return self._research_service_obj
+            from nl_coding_agent.research.providers import KnownUrl, default_registry
+            from nl_coding_agent.research.service import ResearchService
+            from nl_coding_agent.research.store import ResearchStore
+            config = dict(self._research_config)
+            config.pop("service", None)
+            store = config.pop("store", None) or ResearchStore(db_path())
+            try:
+                rows = store.list_sources(limit=100)
+            except Exception:
+                rows = []
+            known = [KnownUrl(row["canonical_url"], title=row.get("title") or "",
+                              snippet=(row.get("excerpt") or "")[:200])
+                     for row in rows if row.get("canonical_url")]
+            registry = config.pop("registry", None) or default_registry(known_urls=known)
+            self._research_service_obj = ResearchService(store=store,
+                                                         registry=registry,
+                                                         **config)
+            return self._research_service_obj
+
+    def _research_status_providers(self, service) -> list[dict]:
+        providers = []
+        try:
+            for provider_id in service.registry.provider_ids():
+                definition = service.registry.definition(provider_id)
+                if definition is None:
+                    continue
+                status = service.registry.status(provider_id)
+                caps = definition.capabilities
+                providers.append({
+                    "provider_id": provider_id, "name": caps.name,
+                    "available": bool(status.available),
+                    "status": "available" if status.available else status.reason,
+                    "reason": status.detail or status.reason,
+                    "offline": bool(caps.offline or not self._research_network_configured),
+                    "auth_required": bool(caps.auth_required),
+                    "cost_class": caps.cost_class,
+                    "latency_class": caps.latency_class,
+                    "search_types": list(caps.search_types),
+                    "capabilities": list(caps.search_types),
+                    "permission": "web-search",
+                    "limitations": list(caps.limitations),
+                })
+        except Exception as exc:
+            return providers + [{
+                "provider_id": "unavailable", "name": "Research providers",
+                "available": False, "status": "unavailable",
+                "reason": type(exc).__name__ + ": " + str(exc),
+                "offline": True, "auth_required": False,
+                "capabilities": [], "permission": "web-search"}]
+        return providers
+
+    def research_status(self) -> dict:
+        try:
+            service = self._research_service()
+            providers = self._research_status_providers(service)
+            store_ok = True
+            store_error = ""
+        except Exception as exc:
+            providers = []
+            store_ok = False
+            store_error = type(exc).__name__ + ": " + str(exc)
+        offline = not self._research_network_configured
+        return {
+            "ok": store_ok, "status": "offline" if offline else "available",
+            "offline": offline,
+            "network_configured": bool(self._research_network_configured),
+            "providers": providers, "provider_count": len(providers),
+            "store_ok": store_ok, "store_error": store_error,
+            "permission_state": "checked per action",
+            "permission_guidance": (
+                "web-search and web-fetch require explicit capability/auto-review "
+                "approval; no default network transport is configured"),
+            "untrusted": True,
+            "reason": ("no explicit network transport/client configured; offline/"
+                       "known-URL research only" if offline
+                       else "explicit research transport/client configured"),
+        }
+
+    def _research_payload(self, result) -> dict:
+        base = result.to_dict() if hasattr(result, "to_dict") else dict(result or {})
+        payload = dict(base.get("payload") or {})
+        offline = not self._research_network_configured
+        output = {
+            "ok": bool(base.get("allowed")),
+            "outcome": str(base.get("outcome") or ""),
+            "capability": str(base.get("capability") or ""),
+            "reason": str(base.get("reason") or ""),
+            "boundary": dict(base.get("boundary") or {}),
+            "offline": bool(offline and base.get("outcome") in
+                            ("allowed", "unavailable", "error")),
+            "untrusted": True,
+        }
+        if base.get("needs_approval"):
+            output["permission_needed"] = (base.get("reason")
+                                             or "research capability approval required")
+        if base.get("denied"):
+            output["denied"] = True
+            output["reason"] = base.get("reason") or "denied by policy"
+        if base.get("error") and not output.get("permission_needed"):
+            output["error"] = base.get("reason") or "research operation failed"
+        for key, value in payload.items():
+            if key not in output:
+                output[key] = value
+        return output
+
+    def _research_offline_payload(self, operation: str) -> dict:
+        return {
+            "ok": False,
+            "outcome": "unavailable",
+            "offline": True,
+            "operation": operation,
+            "error": ("Research offline: no explicit research network transport/"
+                      "client is configured. Configure one explicitly; no implicit "
+                      "urllib/cloud request is made."),
+            "untrusted": True,
+        }
+
+    def research_search(self, query: str, provider_id: str | None = None, *,
+                        project_id: int | None = None, mission_id: int | None = None,
+                        task_id: int | None = None, max_results: int = 10) -> dict:
+        if not self._research_network_configured:
+            return self._research_offline_payload("search")
+        try:
+            service = self._research_service()
+            result = service.search(query, provider=provider_id,
+                                    project_id=project_id, mission_id=mission_id,
+                                    task_id=task_id, max_results=max_results)
+        except Exception as exc:
+            return self._research_failure("search", exc)
+        payload = self._research_payload(result)
+        routing = payload.get("routing") or {}
+        payload["provider_id"] = routing.get("selected_provider")
+        payload["results"] = list(payload.get("results") or [])
+        return payload
+
+    def research_fetch_read(self, url: str, *, project_id: int | None = None,
+                            mission_id: int | None = None,
+                            task_id: int | None = None,
+                            headers: dict | None = None) -> dict:
+        if not self._research_network_configured:
+            return self._research_offline_payload("fetch_read")
+        try:
+            service = self._research_service()
+            result = service.fetch_read(url, project_id=project_id,
+                                        mission_id=mission_id, task_id=task_id,
+                                        headers=headers)
+        except Exception as exc:
+            return self._research_failure("fetch_read", exc)
+        payload = self._research_payload(result)
+        page = payload.get("page") or {}
+        text = str(page.get("text") or "")
+        chunks = [line for line in text.splitlines() if line.strip()][:40]
+        payload.setdefault("title", page.get("title") or payload.get("title") or "")
+        payload["url"] = payload.get("canonical_url") or url
+        payload["text"] = text
+        payload["chunks"] = chunks
+        payload["metadata"] = {"kind": page.get("kind") or "",
+                               "truncated": bool(page.get("truncated")),
+                               "supported": bool(payload.get("supported", False))}
+        payload["provenance"] = dict(payload.get("provenance") or {})
+        payload["redirects"] = list(payload["provenance"].get("redirect_chain") or [])
+        return payload
+
+    def research_github_lookup(self, *, action: str = "repository", **kwargs) -> dict:
+        project_id = kwargs.pop("project_id", None)
+        mission_id = kwargs.pop("mission_id", None)
+        task_id = kwargs.pop("task_id", None)
+        if not self._research_network_configured:
+            return self._research_offline_payload("github_lookup")
+        try:
+            service = self._research_service()
+            result = service.github_lookup(action=action, project_id=project_id,
+                                           mission_id=mission_id,
+                                           task_id=task_id, **kwargs)
+        except Exception as exc:
+            return self._research_failure("github_lookup", exc)
+        payload = self._research_payload(result)
+        payload["provider"] = "github"
+        return payload
+
+    def research_huggingface_lookup(self, *, action: str = "search_models",
+                                    **kwargs) -> dict:
+        project_id = kwargs.pop("project_id", None)
+        mission_id = kwargs.pop("mission_id", None)
+        task_id = kwargs.pop("task_id", None)
+        if not self._research_network_configured:
+            return self._research_offline_payload("huggingface_lookup")
+        try:
+            service = self._research_service()
+            result = service.huggingface_lookup(action=action, project_id=project_id,
+                                                mission_id=mission_id,
+                                                task_id=task_id, **kwargs)
+        except Exception as exc:
+            return self._research_failure("huggingface_lookup", exc)
+        payload = self._research_payload(result)
+        payload["provider"] = "huggingface"
+        return payload
+
+    def research_save_finding(self, question: str, answer: str = "", *,
+                              source_ids=None, confidence: float = 0.5,
+                              project_id: int | None = None,
+                              mission_id: int | None = None,
+                              task_id: int | None = None,
+                              metadata: dict | None = None) -> dict:
+        try:
+            service = self._research_service()
+            result = service.save_finding(
+                question, answer, source_ids=source_ids or (),
+                confidence=confidence, project_id=project_id,
+                mission_id=mission_id, task_id=task_id, metadata=metadata)
+        except Exception as exc:
+            return self._research_failure("save_finding", exc)
+        payload = self._research_payload(result)
+        payload["id"] = payload.get("finding_id")
+        return payload
+
+    def research_list_findings(self, *, project_id: int | None = None,
+                               mission_id: int | None = None,
+                               task_id: int | None = None,
+                               text: str | None = None,
+                               include_stale: bool = True, limit: int = 50,
+                               offset: int = 0) -> dict:
+        try:
+            service = self._research_service()
+            result = service.list_findings(
+                project_id=project_id, mission_id=mission_id, task_id=task_id,
+                text=text, include_stale=include_stale, limit=limit, offset=offset)
+        except Exception as exc:
+            return self._research_failure("list_findings", exc)
+        payload = self._research_payload(result)
+        payload["findings"] = list(payload.get("findings") or [])
+        return payload
+
+    def research_search_saved(self, text: str = "", *, project_id: int | None = None,
+                              mission_id: int | None = None,
+                              task_id: int | None = None,
+                              include_stale: bool = True, limit: int = 50,
+                              offset: int = 0) -> dict:
+        try:
+            service = self._research_service()
+            result = service.search_saved(
+                text, project_id=project_id, mission_id=mission_id, task_id=task_id,
+                include_stale=include_stale, limit=limit, offset=offset)
+        except Exception as exc:
+            return self._research_failure("search_saved", exc)
+        payload = self._research_payload(result)
+        payload["sources"] = list(payload.get("sources") or [])
+        payload["findings"] = list(payload.get("findings") or [])
+        return payload
+
+    def research_mark_stale(self, *, source_id: int | None = None,
+                            finding_id: int | None = None,
+                            reason: str = "") -> dict:
+        try:
+            service = self._research_service()
+            result = service.mark_stale(source_id=source_id, finding_id=finding_id,
+                                        reason=reason)
+        except Exception as exc:
+            return self._research_failure("mark_stale", exc)
+        return self._research_payload(result)
+
+    def research_refresh_source(self, source_id: int, *, excerpt: str | None = None,
+                                content_sha256: str | None = None) -> dict:
+        try:
+            service = self._research_service()
+            result = service.refresh_source(source_id, excerpt=excerpt,
+                                            content_sha256=content_sha256)
+        except Exception as exc:
+            return self._research_failure("refresh_source", exc)
+        return self._research_payload(result)
+
+    def _research_failure(self, operation: str, exc: Exception) -> dict:
+        return {"ok": False, "outcome": "error", "operation": operation,
+                "error": type(exc).__name__ + ": " + str(exc),
+                "offline": not self._research_network_configured,
+                "untrusted": True}
+
+
     # --- Events ---
 
     def recent_events(self, limit: int = 200) -> list[dict]:
@@ -1182,6 +1491,74 @@ class AppServices:
             "SELECT * FROM events ORDER BY id DESC LIMIT ?", (limit,)
         ).fetchall()
         return [dict(r) for r in reversed(rows)]
+
+
+class _ResearchFacade:
+    """Thin duck-typed facade used by the Studio Research panel (no network)."""
+
+    def __init__(self, app):
+        self._app = app
+
+    def research_status(self) -> dict:
+        return self._app.research_status()
+
+    def provider_statuses(self) -> list[dict]:
+        return list(self._app.research_status().get("providers") or [])
+
+    def search(self, query: str, provider_id: str | None = None) -> dict:
+        return self._app.research_search(query, provider_id)
+
+    def preview(self, url: str) -> dict:
+        return self._app.research_fetch_read(url)
+
+    def history(self, project_id=None, mission_id=None, limit: int = 50) -> list[dict]:
+        result = self._app.research_search_saved(project_id=project_id,
+                                                 mission_id=mission_id,
+                                                 limit=limit)
+        return list(result.get("sources") or [])
+
+    def saved_findings(self, project_id=None, mission_id=None,
+                       limit: int = 50) -> list[dict]:
+        result = self._app.research_list_findings(project_id=project_id,
+                                                  mission_id=mission_id, limit=limit)
+        return list(result.get("findings") or [])
+
+    def save_finding(self, finding: dict, project_id=None, mission_id=None) -> dict:
+        finding = dict(finding or {})
+        question = (finding.get("title") or finding.get("url")
+                    or "Saved research finding")
+        answer = finding.get("text") or finding.get("snippet") or ""
+        source_id = finding.get("source_id")
+        source_ids = [source_id] if source_id else []
+        result = self._app.research_save_finding(
+            str(question)[:500], str(answer)[:4000], source_ids=source_ids,
+            project_id=project_id, mission_id=mission_id)
+        if result.get("ok"):
+            result["id"] = result.get("finding_id") or result.get("id")
+        return result
+
+    def intake(self, kind: str, value: str, project_id=None,
+               mission_id=None) -> dict:
+        kind = str(kind or "")
+        value = str(value or "").strip()
+        if kind == "url":
+            return self._app.research_fetch_read(
+                value, project_id=project_id, mission_id=mission_id)
+        if kind == "github":
+            parts = [part for part in value.split("/") if part]
+            repo = "/".join(parts[-2:]) if len(parts) >= 2 else ""
+            return self._app.research_github_lookup(
+                action="repository", full_name=repo,
+                project_id=project_id, mission_id=mission_id)
+        if kind == "huggingface":
+            repo_id = value.rstrip("/").split("/")[-1]
+            return self._app.research_huggingface_lookup(
+                action="model_info", repo_id=repo_id,
+                project_id=project_id, mission_id=mission_id)
+        return {"ok": False, "offline": True,
+                "error": "Local attachment intake is not supported by the research "
+                         "backend; no file content is uploaded or fetched."}
+
 
 
 # Singleton
