@@ -8,6 +8,8 @@ Single index of every consolidated product requirement. Each row has a stable ID
 
 **v3.7 addendum import (2026-10-28, queue-only):** user-supplied Universal Autonomy/Research/Mega Suite addendum imported after a read-only dedupe cross-check. **39 new planned requirements NL-BP-166..204** added under a new **pending program stage 7**. No existing requirement ID, acceptance criterion or stage 1-6 status was rewritten; no implementation, mission or network run started. Totals: **156 requirements** (33 verified / 64 partial / 56 planned / 3 blocked).
 
+**v3.8 web-research directive (2026-10-28, queue-only):** user directive Universal Web Research & Intelligence Engine audited read-only in [WEB_RESEARCH_CAPABILITY_AUDIT.md](WEB_RESEARCH_CAPABILITY_AUDIT.md): only stdlib urllib loopback probes, human-gated local-stdio MCP with no bundled servers, fail-closed NETWORK/CLOUD scopes unused by research tools, and a local-only attachment pipeline exist. Existing research requirements NL-BP-169..176/203 were preserved; seven genuine gaps were added as **NL-BP-205..211** in stage 7. No existing ID/acceptance/status or stage 1-6 status was rewritten; no code/model/network run started. Totals: **163 requirements** (33 verified / 64 partial / 63 planned / 3 blocked).
+
 ## Program execution order (authoritative)
 
 - **Stage 1 - Repository relocation and path reconciliation**: completed (1 requirements; NL-BP 143)
@@ -16,7 +18,7 @@ Single index of every consolidated product requirement. Each row has a stable ID
 - **Stage 4 - Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities**: completed (40 requirements; NL-BP 1-2, 6-11, 13, 20-46, 68-71)
 - **Stage 5 - Repository cleanup and optimization**: completed (8 requirements; NL-BP 90-97)
 - **Stage 6 - Lightweight portable/bootstrapper and final release testing**: in progress (40 requirements; NL-BP 110-124, 140-142, 144-165)
-- **Stage 7 - Universal autonomy, research intelligence and Mega Suite**: pending (39 requirements; NL-BP 166-204) - queued addendum scope; no implementation started
+- **Stage 7 - Universal autonomy, research intelligence and Mega Suite**: pending (46 requirements; NL-BP 166-211) - queued scope; no implementation started
 
 Every row below carries the same requirement ID and evidence; the stage mapping is authoritative in docs/product-blueprint/INDEX.json (program_stage). Stage 7 is pending and must not start before stage 6 gates or an explicit evidence-backed Lead exception.
 
@@ -29,7 +31,7 @@ Every row below carries the same requirement ID and evidence; the stage mapping 
 
 ## Requirement index
 
-### Area 1 - CrewAI + CrewAI Flows first-class integration (CORE, 15 requirements)
+### Area 1 - CrewAI + CrewAI Flows first-class integration (CORE, 16 requirements)
 
 | ID | Requirement | Source | BP priority | Status | Evidence (primary) | Backlog |
 |---|---|---|---|---|---|---|
@@ -48,8 +50,9 @@ Every row below carries the same requirement ID and evidence; the stage mapping 
 | NL-BP-013 | Windows console/Unicode encoding hardening at the application boundary | SPEC-01 | P0 (03_MASTER_CHECKLIST P0-10) | verified | nl_coding_agent/tools/shell.py decode_output + UTF-8 child env (_UTF8_CHILD_ENV) | [NL-BP-013](PRODUCT_BACKLOG.md#nl-bp-013) |
 | NL-BP-183 | Model Competence Lab: multi-backend inspection, capability verification and role benchmarks | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-183](PRODUCT_BACKLOG.md#nl-bp-183) |
 | NL-BP-187 | Plugin/SDK extension ecosystem with documented interfaces | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-187](PRODUCT_BACKLOG.md#nl-bp-187) |
+| NL-BP-208 | Hugging Face acquisition workflow with compatibility evidence and explicit license/gated approval | user directive 2026-10-28 (web research) | new (user directive 2026-10-28: universal web research & intelligence engine) | planned | not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILI... | [NL-BP-208](PRODUCT_BACKLOG.md#nl-bp-208) |
 
-### Area 2 - Studio GUI + multimodal chat (STUDIO, 32 requirements)
+### Area 2 - Studio GUI + multimodal chat (STUDIO, 33 requirements)
 
 | ID | Requirement | Source | BP priority | Status | Evidence (primary) | Backlog |
 |---|---|---|---|---|---|---|
@@ -85,8 +88,9 @@ Every row below carries the same requirement ID and evidence; the stage mapping 
 | NL-BP-192 | Multi-window / multi-session workspace | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-192](PRODUCT_BACKLOG.md#nl-bp-192) |
 | NL-BP-193 | Advanced IDE parity: profiling, merge conflicts, code actions and quick-open | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-193](PRODUCT_BACKLOG.md#nl-bp-193) |
 | NL-BP-194 | OCR-on-demand extraction for images, screenshots and documents | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-194](PRODUCT_BACKLOG.md#nl-bp-194) |
+| NL-BP-210 | Studio Research workspace: search history, source previews, permission status and saved findings | user directive 2026-10-28 (web research) | new (user directive 2026-10-28: universal web research & intelligence engine) | planned | not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILI... | [NL-BP-210](PRODUCT_BACKLOG.md#nl-bp-210) |
 
-### Area 3 - Universal autonomous development (AUTONOMY, 46 requirements)
+### Area 3 - Universal autonomous development (AUTONOMY, 50 requirements)
 
 | ID | Requirement | Source | BP priority | Status | Evidence (primary) | Backlog |
 |---|---|---|---|---|---|---|
@@ -136,6 +140,10 @@ Every row below carries the same requirement ID and evidence; the stage mapping 
 | NL-BP-181 | Integration Dashboard: readiness, conflicts, disk savings and reversible rollout | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-181](PRODUCT_BACKLOG.md#nl-bp-181) |
 | NL-BP-182 | Project-specific permission profiles for external projects | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-182](PRODUCT_BACKLOG.md#nl-bp-182) |
 | NL-BP-188 | Task-specific automation with controlled notifications | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-188](PRODUCT_BACKLOG.md#nl-bp-188) |
+| NL-BP-205 | Search Provider Registry: capability matrix, no-key/public modes and explicit routing policy | user directive 2026-10-28 (web research) | new (user directive 2026-10-28: universal web research & intelligence engine) | planned | not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILI... | [NL-BP-205](PRODUCT_BACKLOG.md#nl-bp-205) |
+| NL-BP-206 | Web retrieval safety policy: domain allow/deny, SSRF/private-IP, redirect and download limits, caching provenance | user directive 2026-10-28 (web research) | new (user directive 2026-10-28: universal web research & intelligence engine) | planned | not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILI... | [NL-BP-206](PRODUCT_BACKLOG.md#nl-bp-206) |
+| NL-BP-207 | Research connectors registered through the existing tool registry/MCP with typed read-only permissions | user directive 2026-10-28 (web research) | new (user directive 2026-10-28: universal web research & intelligence engine) | planned | not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILI... | [NL-BP-207](PRODUCT_BACKLOG.md#nl-bp-207) |
+| NL-BP-209 | Version-aware official documentation research: SDK/API versions, changelogs and migration guides | user directive 2026-10-28 (web research) | new (user directive 2026-10-28: universal web research & intelligence engine) | planned | not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILI... | [NL-BP-209](PRODUCT_BACKLOG.md#nl-bp-209) |
 
 ### Area 4 - Repository hygiene (HYGIENE, 8 requirements)
 
@@ -182,7 +190,7 @@ Every row below carries the same requirement ID and evidence; the stage mapping 
 | NL-BP-195 | Mega Suite modular installer with shared model cache and storage plan | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-195](PRODUCT_BACKLOG.md#nl-bp-195) |
 | NL-BP-196 | Self-update with atomic deployment, verified manifests and previous-app fallback | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-196](PRODUCT_BACKLOG.md#nl-bp-196) |
 
-### Area 6 - Release acceptance criteria (RELEASE, 28 requirements)
+### Area 6 - Release acceptance criteria (RELEASE, 29 requirements)
 
 | ID | Requirement | Source | BP priority | Status | Evidence (primary) | Backlog |
 |---|---|---|---|---|---|---|
@@ -214,6 +222,7 @@ Every row below carries the same requirement ID and evidence; the stage mapping 
 | NL-BP-202 | Trusted Auto Review acceptance scenario | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-202](PRODUCT_BACKLOG.md#nl-bp-202) |
 | NL-BP-203 | Research engine acceptance: real network vs fixtures | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-203](PRODUCT_BACKLOG.md#nl-bp-203) |
 | NL-BP-204 | Multi-project Genome/Integration Forge acceptance on real projects | addendum 2026-10-28 (Mega Suite) | new (user addendum 2026-10-28: universal autonomy, research and Mega Suite) | planned | not started - queued only by task-59 from the user addendum; no code, mission or network run was started | [NL-BP-204](PRODUCT_BACKLOG.md#nl-bp-204) |
+| NL-BP-211 | Research acceptance extension: fixture-vs-real-network matrix and cross-project evidence reuse | user directive 2026-10-28 (web research) | new (user directive 2026-10-28: universal web research & intelligence engine) | planned | not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILI... | [NL-BP-211](PRODUCT_BACKLOG.md#nl-bp-211) |
 
 ## Source inventory
 
@@ -301,6 +310,7 @@ Every row below carries the same requirement ID and evidence; the stage mapping 
 | docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md | addendum | universal autonomy/research/Mega Suite requirements (v3.7 import) | yes |
 | docs/product-blueprint/addenda/2026-10-28_QUEUE_HANDOFF.md | addendum | queue-only handoff constraints for the v3.7 import | yes |
 | docs/product-blueprint/addenda/README_IMPORT.md | addendum | addendum import rules (merge, do not replace live index) | yes |
+| USER-DIRECTIVE 2026-10-28 universal web research & intelligence engine (task-60 brief) | external-brief | web-research capability audit + dedupe mapping + NL-BP-205..211 | external |
 
 ## Addendum import v3.7 - dedupe mapping (queue-only)
 
@@ -329,11 +339,46 @@ user-supplied addendum bundle preserved and committed unchanged at docs/product-
 | G19 | Operating metrics and readiness taxonomy | #8 | NL-BP-075, NL-BP-140, NL-BP-151, NL-BP-164 | NL-BP-189, NL-BP-198 | Diagnostics dashboard/status vocabulary exist; user-visible metrics and enforced readiness labels are new. |
 | G20 | End-to-end cross-app / Full Autonomy / Mega Suite / research / genome acceptance scenarios | #8 | NL-BP-140, NL-BP-164, NL-BP-165, NL-BP-063 | NL-BP-199, NL-BP-200, NL-BP-201, NL-BP-203, NL-BP-204 | Individual acceptance tooling exists; the addendum's program-level scenarios are new. |
 
-Blocked / external items preserved by this import:
+Blocked / external items preserved by the addendum import:
 - SH-07 Tier B (real local models) remains BLOCKED in NL-BP-063; the addendum explicitly forbids relaxing it
 - owner authorization still required for publication, deletion, cloud use and external distribution
 - real-hardware, clean-machine, external CI execution and manual GUI/clipboard/microphone checks remain MANUAL-PENDING
 - this addendum grants no deletion/publication/cloud authorization by itself
+
+## Web-research directive v3.8 - capability audit and dedupe mapping (queue-only)
+
+Audit: [WEB_RESEARCH_CAPABILITY_AUDIT.md](WEB_RESEARCH_CAPABILITY_AUDIT.md). Source: user directive 2026-10-28: Universal Web Research & Intelligence Engine.
+
+| Sub-capability | Existing coverage | New requirements | Decision |
+|---|---|---|---|
+| multi-provider search router | NL-BP-169 | NL-BP-205 | 169 owns the router; 205 adds provider registry/capability matrix/no-key modes/routing policy |
+| provider capability matrix, availability/no-key/public modes | - | NL-BP-205 | new |
+| explicit provider selection + intelligent routing | NL-BP-169 | NL-BP-205 | 169 owns query routing; 205 owns explicit policy/selection |
+| cost/privacy/rate policy and no silent paid use | NL-BP-168, NL-BP-072 | NL-BP-205 | 205 implements provider policy; permission scopes stay in 168/072 |
+| web page/document reader and JS browser | NL-BP-170 | none (covered) | covered |
+| domain allow/deny, redirect/SSRF/private-IP, rate/download caps, caching provenance | NL-BP-175 | NL-BP-206 | 175 trust boundary; 206 retrieval enforcement |
+| GitHub repository investigator | NL-BP-171 | none (covered) | covered |
+| Hugging Face model investigator | NL-BP-172 | none (covered) | covered |
+| Hugging Face acquisition/license/download/cache workflow | NL-BP-008, NL-BP-124, NL-BP-183 | NL-BP-208 | new acquisition workflow; reuses model/competence/cache requirements |
+| ecosystem/package documentation discovery | NL-BP-173 | none (covered) | covered |
+| version-aware official docs/changelogs/migration guides | NL-BP-173 | NL-BP-209 | new version-awareness/conflict handling |
+| research knowledge store/citations/embeddings | NL-BP-174 | none (covered) | covered |
+| prompt-injection/untrusted-source handling | NL-BP-175 | NL-BP-206 | 206 adds retrieval-side enforcement |
+| research-aware agent planning/update checks | NL-BP-176 | none (covered) | covered |
+| research connectors in tool registry/MCP with typed read-only permissions | NL-BP-042, NL-BP-073 | NL-BP-207 | new connector registration/permission separation |
+| Studio research workspace/search history/previews/saved findings | - | NL-BP-210 | new GUI; local attachment intake stays in NL-BP-026..030 |
+| pasted URLs/repo/model links/attachments research intake | NL-BP-026, NL-BP-027, NL-BP-028, NL-BP-029, NL-BP-030 | NL-BP-210 | new intake extension for research references |
+| research acceptance fixture-vs-real-network matrix | NL-BP-203 | NL-BP-211 | 203 scenario; 211 full failure/exception matrix |
+| real-network research verification | NL-BP-203 | NL-BP-211 | covered/enforced by 211 |
+
+Blocked / external items preserved by this directive:
+- no search-provider credentials/API keys configured; no-key/public/offline modes must work before paid providers
+- network access is denied by default (core/permissions.py) and must be explicitly granted
+- SSRF/domain/rate/download safety (NL-BP-206) must exist before any real web fetch is enabled
+- Hugging Face gated/licensed models need explicit owner approval before acquisition
+- real-network research acceptance is permissioned/manual (NL-BP-203/211) and cannot be claimed from fixtures
+- MCP is local stdio-only and no GitHub/HF/web MCP server is bundled; remote MCP transports are unsupported
+- stage 7 is pending; SH-07 Tier B (NL-BP-063) remains blocked
 
 ## Conflicts recorded during consolidation
 
@@ -351,11 +396,13 @@ Blocked / external items preserved by this import:
 - **C12 - Addendum autonomy profiles vs existing bounded autonomy design**: The addendum proposes Trusted Auto Review/Full Autonomy with broad auto-approval and no forced arbitrary max-mission limits, while the live system has bounded repair, budgets, staged-candidate gates and SH-07 Tier B blocked. **Resolution:** Added as new planned requirements NL-BP-166/167/168; existing gates, budgets and SH-07 Tier B are unchanged. Trusted/Full profiles cannot bypass independent review, staged promotion or fail-closed gates; Full Autonomy must disclose real OS-rights limits.
 - **C13 - Addendum scope vs frozen program stages and current Goal**: The addendum asks for broad new product scope and 'do not pause to acknowledge', while stages 1-6 are the current program and the addendum explicitly says it is future input that must not interrupt active work. **Resolution:** Imported as queue-only stage 7 (pending) with 39 planned requirements. Stages 1-6 statuses/goal were not changed; no implementation, mission, code or network run was started.
 - **C14 - Backlog documents lagged INDEX.json before this import**: Before v3.7, PRODUCT_BACKLOG.md and BLUEPRINT_INDEX.md still listed only 103 requirement entries and stale area/stage counts, while INDEX.json already held 117 requirements including NL-BP-152..165. **Resolution:** This import synchronises both human-readable documents to the full 156-requirement registry (117 existing + 39 new) for the covered scope; existing IDs and acceptance criteria are unchanged and existing detailed entries are not rewritten.
+- **C15 - Web-research directive vs addendum research requirements**: The new directive overlaps substantially with the addendum-imported research engine, which is still planned only; a naive import would duplicate NL-BP-169..176/203. **Resolution:** Read-only capability audit mapped every directive sub-capability to existing IDs or the seven genuine gaps NL-BP-205..211 (provider registry, retrieval safety, connector registration, HF acquisition, version-aware docs, research workspace, acceptance matrix). Existing requirements were not rewritten.
 
 ## Related documents
 
 - [PRODUCT_BACKLOG.md](PRODUCT_BACKLOG.md) - canonical backlog with acceptance gates, dependencies and dedup decisions.
-- [product-blueprint/INDEX.json](product-blueprint/INDEX.json) - machine-readable requirements, stages, source inventory, addendum import, dedup map and conflicts.
+- [WEB_RESEARCH_CAPABILITY_AUDIT.md](WEB_RESEARCH_CAPABILITY_AUDIT.md) - read-only web-research capability audit with file:line evidence.
+- [product-blueprint/INDEX.json](product-blueprint/INDEX.json) - machine-readable requirements, stages, source inventory, directive imports, dedup map and conflicts.
 - [product-blueprint/addenda/](product-blueprint/addenda/) - preserved user addendum bundle (unchanged; MANIFEST verified).
 - [product-blueprint/03_MASTER_CHECKLIST.md](product-blueprint/03_MASTER_CHECKLIST.md) - original Blueprint checklist (source, not the backlog).
 

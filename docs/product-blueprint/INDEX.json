@@ -5363,46 +5363,324 @@
       "program_stage_dependencies": [
         6
       ]
+    },
+    {
+      "id": "NL-BP-205",
+      "title": "Search Provider Registry: capability matrix, no-key/public modes and explicit routing policy",
+      "area": "autonomy",
+      "priority": "P0",
+      "bp_priority": "new (user directive 2026-10-28: universal web research & intelligence engine)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-169",
+        "NL-BP-168"
+      ],
+      "acceptance": [
+        "An explicit provider capability matrix records search type, coverage/languages/recency, authentication requirements, cost class, rate limits and known limitations for every configured search provider.",
+        "Availability and no-key/public-provider modes are supported: providers that need no paid account work, and unavailable providers fail with an actionable status instead of a silent fallback.",
+        "Users can select a provider explicitly and deterministic routing (reliability/cost/privacy/latency) explains each choice; no silent paid-service use and no hidden cost.",
+        "Cost, privacy and rate-limit policy is persisted per project/mission and honoured by the router."
+      ],
+      "evidence": [
+        "not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md; no code, mission or network run started",
+        "capability-gap evidence: docs/WEB_RESEARCH_CAPABILITY_AUDIT.md sections 3 and 5 (only local urllib Ollama/model probes, gated local-stdio MCP, unused web-research permissions, local-only attachments)"
+      ],
+      "source_refs": [
+        "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
+        "docs/WEB_RESEARCH_CAPABILITY_AUDIT.md",
+        "NL-BP-169",
+        "NL-BP-168"
+      ],
+      "primary_source": "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
+      "note": "Registry gap after the router requirement NL-BP-169; complements permission scopes NL-BP-168/072 without rewriting them.",
+      "backlog_anchor": "nl-bp-205",
+      "program_stage": 7,
+      "program_stage_name": "Universal autonomy, research intelligence and Mega Suite",
+      "program_stage_dependencies": [
+        6
+      ]
+    },
+    {
+      "id": "NL-BP-206",
+      "title": "Web retrieval safety policy: domain allow/deny, SSRF/private-IP, redirect and download limits, caching provenance",
+      "area": "autonomy",
+      "priority": "P0",
+      "bp_priority": "new (user directive 2026-10-28: universal web research & intelligence engine)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-170",
+        "NL-BP-175"
+      ],
+      "acceptance": [
+        "Domain allow/deny lists are enforced before every request including redirects; loopback/private/link-local targets are blocked unless an explicit grant authorizes them.",
+        "Per-mission rate limits, download size/time caps, maximum redirects and content-type limits are enforced and auditable.",
+        "Cached responses carry URL, redirect chain, retrieval timestamp and content hash as provenance; cache expiry/refresh is explicit.",
+        "Retrieved content is treated as untrusted; policy denials fail closed and are logged."
+      ],
+      "evidence": [
+        "not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md; no code, mission or network run started",
+        "capability-gap evidence: docs/WEB_RESEARCH_CAPABILITY_AUDIT.md sections 3 and 5 (only local urllib Ollama/model probes, gated local-stdio MCP, unused web-research permissions, local-only attachments)"
+      ],
+      "source_refs": [
+        "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
+        "docs/WEB_RESEARCH_CAPABILITY_AUDIT.md",
+        "NL-BP-170",
+        "NL-BP-175"
+      ],
+      "primary_source": "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
+      "note": "Safety gap distinct from NL-BP-175 (model/agent trust boundary); must exist before any real fetch is enabled.",
+      "backlog_anchor": "nl-bp-206",
+      "program_stage": 7,
+      "program_stage_name": "Universal autonomy, research intelligence and Mega Suite",
+      "program_stage_dependencies": [
+        6
+      ]
+    },
+    {
+      "id": "NL-BP-207",
+      "title": "Research connectors registered through the existing tool registry/MCP with typed read-only permissions",
+      "area": "autonomy",
+      "priority": "P1",
+      "bp_priority": "new (user directive 2026-10-28: universal web research & intelligence engine)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-171",
+        "NL-BP-172",
+        "NL-BP-073"
+      ],
+      "acceptance": [
+        "Web, GitHub and Hugging Face connectors are registered through the existing tool registry/MCP surface with typed capabilities, versions, health checks and provenance.",
+        "Research tools are read-only and separated from write/install/publish/delete operations; grants are per connector/scope and revocable.",
+        "Connector results carry source URL/SHA/timestamp and are auditable; a connector cannot escalate its permissions."
+      ],
+      "evidence": [
+        "not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md; no code, mission or network run started",
+        "capability-gap evidence: docs/WEB_RESEARCH_CAPABILITY_AUDIT.md sections 3 and 5 (only local urllib Ollama/model probes, gated local-stdio MCP, unused web-research permissions, local-only attachments)"
+      ],
+      "source_refs": [
+        "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
+        "docs/WEB_RESEARCH_CAPABILITY_AUDIT.md",
+        "NL-BP-171",
+        "NL-BP-172",
+        "NL-BP-073"
+      ],
+      "primary_source": "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
+      "note": "Uses the existing registry/MCP infrastructure (NL-BP-073/042) rather than a second tool system.",
+      "backlog_anchor": "nl-bp-207",
+      "program_stage": 7,
+      "program_stage_name": "Universal autonomy, research intelligence and Mega Suite",
+      "program_stage_dependencies": [
+        6
+      ]
+    },
+    {
+      "id": "NL-BP-208",
+      "title": "Hugging Face acquisition workflow with compatibility evidence and explicit license/gated approval",
+      "area": "core",
+      "priority": "P0",
+      "bp_priority": "new (user directive 2026-10-28: universal web research & intelligence engine)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-172",
+        "NL-BP-183",
+        "NL-BP-124",
+        "NL-BP-008"
+      ],
+      "acceptance": [
+        "Compatibility evidence (architecture, quantization, backend, RAM/VRAM/disk estimates with uncertainty) is written into the Model Registry/Competence Index/Scheduler before any acquisition decision.",
+        "License and gated-model access require explicit approval; no auto-accept and no automatic download of huge checkpoints.",
+        "Optional verified resumable downloads go only to approved locations with checksums; shared cache reuse avoids duplication.",
+        "Acquisition events are audited; failed/partial downloads are cleaned up safely."
+      ],
+      "evidence": [
+        "not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md; no code, mission or network run started",
+        "capability-gap evidence: docs/WEB_RESEARCH_CAPABILITY_AUDIT.md sections 3 and 5 (only local urllib Ollama/model probes, gated local-stdio MCP, unused web-research permissions, local-only attachments)"
+      ],
+      "source_refs": [
+        "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
+        "docs/WEB_RESEARCH_CAPABILITY_AUDIT.md",
+        "NL-BP-172",
+        "NL-BP-183",
+        "NL-BP-124",
+        "NL-BP-008"
+      ],
+      "primary_source": "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
+      "note": "Acquisition half of the HF research requirement (NL-BP-172); reuses model registry, competence index, scheduler and shared-cache requirements.",
+      "backlog_anchor": "nl-bp-208",
+      "program_stage": 7,
+      "program_stage_name": "Universal autonomy, research intelligence and Mega Suite",
+      "program_stage_dependencies": [
+        6
+      ]
+    },
+    {
+      "id": "NL-BP-209",
+      "title": "Version-aware official documentation research: SDK/API versions, changelogs and migration guides",
+      "area": "autonomy",
+      "priority": "P1",
+      "bp_priority": "new (user directive 2026-10-28: universal web research & intelligence engine)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-170",
+        "NL-BP-173",
+        "NL-BP-174"
+      ],
+      "acceptance": [
+        "Resolves the current authoritative version of a library/SDK/API and cites official docs, changelog and migration guide with primary-source preference.",
+        "Flags version mismatches and conflicting sources with uncertainty indicators; records retrieval time, version and SHA/revision.",
+        "Feeds task context and upgrade planning; never invents versions or breaking changes."
+      ],
+      "evidence": [
+        "not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md; no code, mission or network run started",
+        "capability-gap evidence: docs/WEB_RESEARCH_CAPABILITY_AUDIT.md sections 3 and 5 (only local urllib Ollama/model probes, gated local-stdio MCP, unused web-research permissions, local-only attachments)"
+      ],
+      "source_refs": [
+        "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
+        "docs/WEB_RESEARCH_CAPABILITY_AUDIT.md",
+        "NL-BP-170",
+        "NL-BP-173",
+        "NL-BP-174"
+      ],
+      "primary_source": "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
+      "note": "Extends ecosystem discovery (NL-BP-173) with version awareness and conflict/uncertainty handling.",
+      "backlog_anchor": "nl-bp-209",
+      "program_stage": 7,
+      "program_stage_name": "Universal autonomy, research intelligence and Mega Suite",
+      "program_stage_dependencies": [
+        6
+      ]
+    },
+    {
+      "id": "NL-BP-210",
+      "title": "Studio Research workspace: search history, source previews, permission status and saved findings",
+      "area": "studio",
+      "priority": "P1",
+      "bp_priority": "new (user directive 2026-10-28: universal web research & intelligence engine)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-169",
+        "NL-BP-170",
+        "NL-BP-171",
+        "NL-BP-172",
+        "NL-BP-173",
+        "NL-BP-174",
+        "NL-BP-175",
+        "NL-BP-176"
+      ],
+      "acceptance": [
+        "A research workspace shows search/query history, provider/permission status, citations and saved findings per project.",
+        "It previews web pages, GitHub repositories and Hugging Face models without executing retrieved content, and accepts pasted URLs/repo/model links plus existing local attachments as intake.",
+        "Findings can be attached to missions; retention/deletion policy preserves provenance and honours permissions."
+      ],
+      "evidence": [
+        "not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md; no code, mission or network run started",
+        "capability-gap evidence: docs/WEB_RESEARCH_CAPABILITY_AUDIT.md sections 3 and 5 (only local urllib Ollama/model probes, gated local-stdio MCP, unused web-research permissions, local-only attachments)"
+      ],
+      "source_refs": [
+        "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
+        "docs/WEB_RESEARCH_CAPABILITY_AUDIT.md",
+        "NL-BP-169",
+        "NL-BP-170",
+        "NL-BP-171",
+        "NL-BP-172",
+        "NL-BP-173",
+        "NL-BP-174",
+        "NL-BP-175",
+        "NL-BP-176"
+      ],
+      "primary_source": "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
+      "note": "New GUI surface; local attachments (NL-BP-026..030) become one intake path rather than the research capability itself.",
+      "backlog_anchor": "nl-bp-210",
+      "program_stage": 7,
+      "program_stage_name": "Universal autonomy, research intelligence and Mega Suite",
+      "program_stage_dependencies": [
+        6
+      ]
+    },
+    {
+      "id": "NL-BP-211",
+      "title": "Research acceptance extension: fixture-vs-real-network matrix and cross-project evidence reuse",
+      "area": "release",
+      "priority": "P1",
+      "bp_priority": "new (user directive 2026-10-28: universal web research & intelligence engine)",
+      "status": "planned",
+      "dependencies": [
+        "NL-BP-203",
+        "NL-BP-205",
+        "NL-BP-206",
+        "NL-BP-207",
+        "NL-BP-208",
+        "NL-BP-209",
+        "NL-BP-210"
+      ],
+      "acceptance": [
+        "A fixture-vs-real-network matrix covers provider failures/timeouts/rate limits, offline/denied network, domain restrictions, SSRF attempts, prompt injection, license-gated HF flows and reuse of stored evidence in arbitrary-project missions.",
+        "Each case is labelled fixture-verified vs real-network-verified vs manual-pending; fixtures never count as real-network verification.",
+        "Stored research evidence is reusable across projects with provenance and permission checks."
+      ],
+      "evidence": [
+        "not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md; no code, mission or network run started",
+        "capability-gap evidence: docs/WEB_RESEARCH_CAPABILITY_AUDIT.md sections 3 and 5 (only local urllib Ollama/model probes, gated local-stdio MCP, unused web-research permissions, local-only attachments)"
+      ],
+      "source_refs": [
+        "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
+        "docs/WEB_RESEARCH_CAPABILITY_AUDIT.md",
+        "NL-BP-203",
+        "NL-BP-205",
+        "NL-BP-206",
+        "NL-BP-207",
+        "NL-BP-208",
+        "NL-BP-209",
+        "NL-BP-210"
+      ],
+      "primary_source": "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
+      "note": "Extends the addendum's real-network acceptance requirement (NL-BP-203) with the full failure/exception matrix.",
+      "backlog_anchor": "nl-bp-211",
+      "program_stage": 7,
+      "program_stage_name": "Universal autonomy, research intelligence and Mega Suite",
+      "program_stage_dependencies": [
+        6
+      ]
     }
   ],
   "counts": {
-    "total": 156,
+    "total": 163,
     "by_status": {
       "verified": 33,
       "partial": 64,
-      "planned": 56,
+      "planned": 63,
       "blocked": 3
     },
     "by_priority": {
-      "P0": 80,
-      "P1": 54,
+      "P0": 83,
+      "P1": 58,
       "P2": 20,
       "P3": 2
     },
     "by_area": {
-      "core": 15,
-      "studio": 32,
-      "autonomy": 46,
+      "core": 16,
+      "studio": 33,
+      "autonomy": 50,
       "hygiene": 8,
       "distribution": 27,
-      "release": 28
+      "release": 29
     },
     "by_area_status": {
       "core": {
         "verified": 6,
         "partial": 7,
-        "planned": 2
+        "planned": 3
       },
       "studio": {
         "verified": 3,
         "partial": 23,
-        "planned": 6
+        "planned": 7
       },
       "autonomy": {
         "partial": 6,
         "verified": 16,
         "blocked": 1,
-        "planned": 23
+        "planned": 27
       },
       "hygiene": {
         "verified": 3,
@@ -5416,7 +5694,7 @@
       "release": {
         "verified": 3,
         "partial": 11,
-        "planned": 12,
+        "planned": 13,
         "blocked": 2
       }
     },
@@ -5425,12 +5703,12 @@
         "verified": 20,
         "partial": 26,
         "blocked": 3,
-        "planned": 31
+        "planned": 34
       },
       "P1": {
         "partial": 26,
         "verified": 13,
-        "planned": 15
+        "planned": 19
       },
       "P2": {
         "partial": 11,
@@ -5448,7 +5726,7 @@
       "4": 40,
       "5": 8,
       "6": 40,
-      "7": 39
+      "7": 46
     },
     "status_order": [
       "verified",
@@ -5470,9 +5748,9 @@
       "distribution",
       "release"
     ],
-    "sources": 82,
-    "dedup_groups": 118,
-    "conflicts": 14,
+    "sources": 83,
+    "dedup_groups": 137,
+    "conflicts": 15,
     "program_stage_status": {
       "1": "completed",
       "2": "completed",
@@ -5975,6 +6253,12 @@
       "role": "addendum",
       "used_for": "addendum import rules (merge, do not replace live index)",
       "exists": true
+    },
+    {
+      "path": "USER-DIRECTIVE 2026-10-28 universal web research & intelligence engine (task-60 brief)",
+      "role": "external-brief",
+      "used_for": "web-research capability audit + dedupe mapping + NL-BP-205..211",
+      "exists": null
     }
   ],
   "dedup_map": {
@@ -6593,6 +6877,63 @@
       "NL-BP-201",
       "NL-BP-203",
       "NL-BP-204"
+    ],
+    "user-directive/2026-10-28 Web Research#multi-provider search router": [
+      "NL-BP-205"
+    ],
+    "user-directive/2026-10-28 Web Research#provider capability matrix, availability/no-key/public modes": [
+      "NL-BP-205"
+    ],
+    "user-directive/2026-10-28 Web Research#explicit provider selection + intelligent routing": [
+      "NL-BP-205"
+    ],
+    "user-directive/2026-10-28 Web Research#cost/privacy/rate policy and no silent paid use": [
+      "NL-BP-205"
+    ],
+    "user-directive/2026-10-28 Web Research#web page/document reader and JS browser": [
+      "NL-BP-170"
+    ],
+    "user-directive/2026-10-28 Web Research#domain allow/deny, redirect/SSRF/private-IP, rate/download caps, caching provenance": [
+      "NL-BP-206"
+    ],
+    "user-directive/2026-10-28 Web Research#GitHub repository investigator": [
+      "NL-BP-171"
+    ],
+    "user-directive/2026-10-28 Web Research#Hugging Face model investigator": [
+      "NL-BP-172"
+    ],
+    "user-directive/2026-10-28 Web Research#Hugging Face acquisition/license/download/cache workflow": [
+      "NL-BP-208"
+    ],
+    "user-directive/2026-10-28 Web Research#ecosystem/package documentation discovery": [
+      "NL-BP-173"
+    ],
+    "user-directive/2026-10-28 Web Research#version-aware official docs/changelogs/migration guides": [
+      "NL-BP-209"
+    ],
+    "user-directive/2026-10-28 Web Research#research knowledge store/citations/embeddings": [
+      "NL-BP-174"
+    ],
+    "user-directive/2026-10-28 Web Research#prompt-injection/untrusted-source handling": [
+      "NL-BP-206"
+    ],
+    "user-directive/2026-10-28 Web Research#research-aware agent planning/update checks": [
+      "NL-BP-176"
+    ],
+    "user-directive/2026-10-28 Web Research#research connectors in tool registry/MCP with typed read-only permissions": [
+      "NL-BP-207"
+    ],
+    "user-directive/2026-10-28 Web Research#Studio research workspace/search history/previews/saved findings": [
+      "NL-BP-210"
+    ],
+    "user-directive/2026-10-28 Web Research#pasted URLs/repo/model links/attachments research intake": [
+      "NL-BP-210"
+    ],
+    "user-directive/2026-10-28 Web Research#research acceptance fixture-vs-real-network matrix": [
+      "NL-BP-211"
+    ],
+    "user-directive/2026-10-28 Web Research#real-network research verification": [
+      "NL-BP-211"
     ]
   },
   "conflicts": [
@@ -6811,6 +7152,27 @@
       "observation": "Before v3.7, PRODUCT_BACKLOG.md and BLUEPRINT_INDEX.md still listed only 103 requirement entries and stale area/stage counts, while INDEX.json already held 117 requirements including NL-BP-152..165.",
       "resolution": "This import synchronises both human-readable documents to the full 156-requirement registry (117 existing + 39 new) for the covered scope; existing IDs and acceptance criteria are unchanged and existing detailed entries are not rewritten.",
       "affected": []
+    },
+    {
+      "id": "C15",
+      "topic": "Web-research directive vs addendum research requirements",
+      "sources": [
+        "user directive 2026-10-28",
+        "NL-BP-169..176",
+        "NL-BP-203",
+        "docs/WEB_RESEARCH_CAPABILITY_AUDIT.md"
+      ],
+      "observation": "The new directive overlaps substantially with the addendum-imported research engine, which is still planned only; a naive import would duplicate NL-BP-169..176/203.",
+      "resolution": "Read-only capability audit mapped every directive sub-capability to existing IDs or the seven genuine gaps NL-BP-205..211 (provider registry, retrieval safety, connector registration, HF acquisition, version-aware docs, research workspace, acceptance matrix). Existing requirements were not rewritten.",
+      "affected": [
+        "NL-BP-205",
+        "NL-BP-206",
+        "NL-BP-207",
+        "NL-BP-208",
+        "NL-BP-209",
+        "NL-BP-210",
+        "NL-BP-211"
+      ]
     }
   ],
   "verification": [
@@ -6906,12 +7268,13 @@
     "v3.4_2026-10-28_stage6_launchers_ci": "Stage-6f/6g: POSIX sh/.command launchers shipped (payload mapping, executable mode, fail-closed runtime handling, shell-syntax validated) and CI package-smoke job added with local PASS evidence (source/beta package checksums, acceptance matrix MANUAL-PENDING, native-runtime dry-run plan, reports-only artifacts). Full suite 682 passed. External/manual acceptance items unchanged.",
     "v3.5_2026-10-28_stage6_rehearsal_reproducibility": "Stage-6h/6i: synthetic end-to-end release-pipeline rehearsal (explicit synthetic fixtures/NOT-A-RELEASE, canonical manifests unchanged, full wiring PASS) and cross-platform reproducible source-release check wired into CI (two byte-identical builds, 40/40 checks, forbidden-content scan). Full suite 693 passed. External/manual acceptance items unchanged.",
     "v3.6_2026-10-28_gui_safety_linux_evidence": "Stage-4 G1: Settings > Advanced self-build controls + always-reachable emergency pause/stop (NL-BP-023/024 partial, 064 evidence; offscreen tests). Stage-6j/6k: genuine WSL2 Linux execution evidence, POSIX Self-Build launcher bad-substitution fix, and byte-identical cross-platform release manifests/beta package. Full suite 722 passed. External/manual items unchanged; addendum input queued without implementing it.",
-    "v3.7_2026-10-28_addendum_import": "Queue-only import of the user-supplied 2026-10-28 Universal Autonomy/Research/Mega Suite addendum (preserved unchanged at docs/product-blueprint/addenda, MANIFEST verified). A read-only cross-check against the 117 live requirements produced a 20-group dedupe map; 39 genuinely new capabilities were added as planned requirements NL-BP-166..204 and mapped to a new pending program stage 7 'Universal autonomy, research intelligence and Mega Suite'. Covered capabilities stayed on existing IDs (dynamic teams 066/067, competence index 068/069, staged gates 054-060/063, multi-platform beta 152-165, Studio 020-046). No existing ID/acceptance/status was rewritten, stages 1-6 were untouched, and no code, mission or network run started. SH-07 Tier B remains blocked; owner authorization is still required for publication/deletion/cloud. Totals: 156 requirements; 33 verified / 64 partial / 56 planned / 3 blocked."
+    "v3.7_2026-10-28_addendum_import": "Queue-only import of the user-supplied 2026-10-28 Universal Autonomy/Research/Mega Suite addendum (preserved unchanged at docs/product-blueprint/addenda, MANIFEST verified). A read-only cross-check against the 117 live requirements produced a 20-group dedupe map; 39 genuinely new capabilities were added as planned requirements NL-BP-166..204 and mapped to a new pending program stage 7 'Universal autonomy, research intelligence and Mega Suite'. Covered capabilities stayed on existing IDs (dynamic teams 066/067, competence index 068/069, staged gates 054-060/063, multi-platform beta 152-165, Studio 020-046). No existing ID/acceptance/status was rewritten, stages 1-6 were untouched, and no code, mission or network run started. SH-07 Tier B remains blocked; owner authorization is still required for publication/deletion/cloud. Totals: 156 requirements; 33 verified / 64 partial / 56 planned / 3 blocked.",
+    "v3.8_2026-10-28_web_research_directive": "Queue-only registration of the user's Universal Web Research & Intelligence Engine directive. A read-only capability audit (docs/WEB_RESEARCH_CAPABILITY_AUDIT.md) confirmed the app has only stdlib urllib loopback probes for local Ollama/model providers and fixed tool health checks, a human-gated local-stdio MCP client with no bundled GitHub/HF/web servers, fail-closed NETWORK/CLOUD permission scopes not yet used by any research tool, and a local-only attachment pipeline; there is no web search/reader/GitHub/HF client, research store or GUI. Every directive sub-capability was deduplicated against NL-BP-169..176/203; seven genuine gaps were added as NL-BP-205..211 (provider registry, retrieval safety, connector registration, HF acquisition, version-aware docs, research workspace, acceptance matrix) under stage 7. No existing ID/acceptance/status or stage 1-6 status was rewritten; no code, model, mission or network run started; addendum bundle preserved unchanged. Totals: 163 requirements; 33 verified / 64 partial / 63 planned / 3 blocked."
   },
   "program_order": {
     "schema_version": 1,
     "authoritative_source": "user execution order (2026-10-28): relocation -> staging/safety/self-healing -> supervisor/handoff -> CrewAI/model/GUI/multimodal -> cleanup -> portable/release",
-    "updated_at": "2026-10-28T21:10:17+01:00",
+    "updated_at": "2026-10-28T21:19:19+01:00",
     "rule": "Execute stages in numeric order. A later stage may only start when the previous stage's gates pass or the Lead records an explicit, evidence-backed exception for independent low-risk work. Requirement status is evidence-based; stage status is program-level.",
     "stages": [
       {
@@ -7195,13 +7558,20 @@
           "NL-BP-201",
           "NL-BP-202",
           "NL-BP-203",
-          "NL-BP-204"
+          "NL-BP-204",
+          "NL-BP-205",
+          "NL-BP-206",
+          "NL-BP-207",
+          "NL-BP-208",
+          "NL-BP-209",
+          "NL-BP-210",
+          "NL-BP-211"
         ],
-        "note": "Queued by task-59. Execute after stage 6 gates pass or when the Lead records an explicit evidence-backed exception for independent low-risk work. Stages 1-6 statuses and existing requirements are untouched. The addendum grants no deletion/publication/cloud authorization and does not relax SH-07 Tier B or the staged-candidate gates."
+        "note": "Queued by task-59. Execute after stage 6 gates pass or when the Lead records an explicit evidence-backed exception for independent low-risk work. Stages 1-6 statuses and existing requirements are untouched. The addendum grants no deletion/publication/cloud authorization and does not relax SH-07 Tier B or the staged-candidate gates. v3.8 extension (task-60): registered the Universal Web Research & Intelligence Engine gaps as NL-BP-205..211; queue-only, no implementation started."
       }
     ]
   },
-  "updated_at": "2026-10-28T21:10:17+01:00",
+  "updated_at": "2026-10-28T21:19:19+01:00",
   "addendum_import": {
     "imported_at": "2026-10-28T21:08:26+01:00",
     "task": "shared task-59 (queue-only backlog import; no implementation)",
@@ -7659,6 +8029,227 @@
       "Existing requirement IDs, acceptance criteria and statuses were not rewritten.",
       "Program stages 1-6 statuses were not changed; stage 7 is new and pending.",
       "Covered capabilities were mapped to existing IDs instead of duplicating them (see groups G10, G12, G18)."
+    ]
+  },
+  "web_research_directive": {
+    "imported_at": "2026-10-28T21:19:19+01:00",
+    "task": "shared task-60 (queue-only audit + backlog registration; no implementation)",
+    "source": "user directive 2026-10-28: Universal Web Research & Intelligence Engine",
+    "audit_document": "docs/WEB_RESEARCH_CAPABILITY_AUDIT.md",
+    "mode": "queue-only: read-only capability audit, no code/model/network runs, no existing IDs/acceptance/stage statuses changed",
+    "stage": 7,
+    "existing_research_requirements": [
+      "NL-BP-169",
+      "NL-BP-170",
+      "NL-BP-171",
+      "NL-BP-172",
+      "NL-BP-173",
+      "NL-BP-174",
+      "NL-BP-175",
+      "NL-BP-176",
+      "NL-BP-203"
+    ],
+    "new_requirement_ids": [
+      "NL-BP-205",
+      "NL-BP-206",
+      "NL-BP-207",
+      "NL-BP-208",
+      "NL-BP-209",
+      "NL-BP-210",
+      "NL-BP-211"
+    ],
+    "groups": [
+      {
+        "sub_capability": "multi-provider search router",
+        "existing_ids": [
+          "NL-BP-169"
+        ],
+        "new_ids": [
+          "NL-BP-205"
+        ],
+        "decision": "169 owns the router; 205 adds provider registry/capability matrix/no-key modes/routing policy"
+      },
+      {
+        "sub_capability": "provider capability matrix, availability/no-key/public modes",
+        "existing_ids": [],
+        "new_ids": [
+          "NL-BP-205"
+        ],
+        "decision": "new"
+      },
+      {
+        "sub_capability": "explicit provider selection + intelligent routing",
+        "existing_ids": [
+          "NL-BP-169"
+        ],
+        "new_ids": [
+          "NL-BP-205"
+        ],
+        "decision": "169 owns query routing; 205 owns explicit policy/selection"
+      },
+      {
+        "sub_capability": "cost/privacy/rate policy and no silent paid use",
+        "existing_ids": [
+          "NL-BP-168",
+          "NL-BP-072"
+        ],
+        "new_ids": [
+          "NL-BP-205"
+        ],
+        "decision": "205 implements provider policy; permission scopes stay in 168/072"
+      },
+      {
+        "sub_capability": "web page/document reader and JS browser",
+        "existing_ids": [
+          "NL-BP-170"
+        ],
+        "new_ids": [],
+        "decision": "covered"
+      },
+      {
+        "sub_capability": "domain allow/deny, redirect/SSRF/private-IP, rate/download caps, caching provenance",
+        "existing_ids": [
+          "NL-BP-175"
+        ],
+        "new_ids": [
+          "NL-BP-206"
+        ],
+        "decision": "175 trust boundary; 206 retrieval enforcement"
+      },
+      {
+        "sub_capability": "GitHub repository investigator",
+        "existing_ids": [
+          "NL-BP-171"
+        ],
+        "new_ids": [],
+        "decision": "covered"
+      },
+      {
+        "sub_capability": "Hugging Face model investigator",
+        "existing_ids": [
+          "NL-BP-172"
+        ],
+        "new_ids": [],
+        "decision": "covered"
+      },
+      {
+        "sub_capability": "Hugging Face acquisition/license/download/cache workflow",
+        "existing_ids": [
+          "NL-BP-008",
+          "NL-BP-124",
+          "NL-BP-183"
+        ],
+        "new_ids": [
+          "NL-BP-208"
+        ],
+        "decision": "new acquisition workflow; reuses model/competence/cache requirements"
+      },
+      {
+        "sub_capability": "ecosystem/package documentation discovery",
+        "existing_ids": [
+          "NL-BP-173"
+        ],
+        "new_ids": [],
+        "decision": "covered"
+      },
+      {
+        "sub_capability": "version-aware official docs/changelogs/migration guides",
+        "existing_ids": [
+          "NL-BP-173"
+        ],
+        "new_ids": [
+          "NL-BP-209"
+        ],
+        "decision": "new version-awareness/conflict handling"
+      },
+      {
+        "sub_capability": "research knowledge store/citations/embeddings",
+        "existing_ids": [
+          "NL-BP-174"
+        ],
+        "new_ids": [],
+        "decision": "covered"
+      },
+      {
+        "sub_capability": "prompt-injection/untrusted-source handling",
+        "existing_ids": [
+          "NL-BP-175"
+        ],
+        "new_ids": [
+          "NL-BP-206"
+        ],
+        "decision": "206 adds retrieval-side enforcement"
+      },
+      {
+        "sub_capability": "research-aware agent planning/update checks",
+        "existing_ids": [
+          "NL-BP-176"
+        ],
+        "new_ids": [],
+        "decision": "covered"
+      },
+      {
+        "sub_capability": "research connectors in tool registry/MCP with typed read-only permissions",
+        "existing_ids": [
+          "NL-BP-042",
+          "NL-BP-073"
+        ],
+        "new_ids": [
+          "NL-BP-207"
+        ],
+        "decision": "new connector registration/permission separation"
+      },
+      {
+        "sub_capability": "Studio research workspace/search history/previews/saved findings",
+        "existing_ids": [],
+        "new_ids": [
+          "NL-BP-210"
+        ],
+        "decision": "new GUI; local attachment intake stays in NL-BP-026..030"
+      },
+      {
+        "sub_capability": "pasted URLs/repo/model links/attachments research intake",
+        "existing_ids": [
+          "NL-BP-026",
+          "NL-BP-027",
+          "NL-BP-028",
+          "NL-BP-029",
+          "NL-BP-030"
+        ],
+        "new_ids": [
+          "NL-BP-210"
+        ],
+        "decision": "new intake extension for research references"
+      },
+      {
+        "sub_capability": "research acceptance fixture-vs-real-network matrix",
+        "existing_ids": [
+          "NL-BP-203"
+        ],
+        "new_ids": [
+          "NL-BP-211"
+        ],
+        "decision": "203 scenario; 211 full failure/exception matrix"
+      },
+      {
+        "sub_capability": "real-network research verification",
+        "existing_ids": [
+          "NL-BP-203"
+        ],
+        "new_ids": [
+          "NL-BP-211"
+        ],
+        "decision": "covered/enforced by 211"
+      }
+    ],
+    "blockers": [
+      "no search-provider credentials/API keys configured; no-key/public/offline modes must work before paid providers",
+      "network access is denied by default (core/permissions.py) and must be explicitly granted",
+      "SSRF/domain/rate/download safety (NL-BP-206) must exist before any real web fetch is enabled",
+      "Hugging Face gated/licensed models need explicit owner approval before acquisition",
+      "real-network research acceptance is permissioned/manual (NL-BP-203/211) and cannot be claimed from fixtures",
+      "MCP is local stdio-only and no GitHub/HF/web MCP server is bundled; remote MCP transports are unsupported",
+      "stage 7 is pending; SH-07 Tier B (NL-BP-063) remains blocked"
     ]
   }
 }
