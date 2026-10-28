@@ -11,7 +11,8 @@ import yaml
 
 REPO = Path(__file__).resolve().parents[1]
 WORKFLOW = REPO / ".github" / "workflows" / "ci.yml"
-CI_SCRIPTS = ("headless_gui_smoke.py", "bootstrap_check.py", "checksums.py")
+CI_SCRIPTS = ("headless_gui_smoke.py", "bootstrap_check.py", "checksums.py",
+              "package_smoke.py")
 
 
 def _workflow() -> dict:
@@ -64,6 +65,7 @@ def test_workflow_runs_required_checks_and_headless_gui():
     assert "scripts/ci/headless_gui_smoke.py" in commands
     assert "scripts/ci/bootstrap_check.py" in commands
     assert "scripts/ci/checksums.py" in commands
+    assert "scripts/ci/package_smoke.py" in commands
     assert _workflow().get("env", {}).get("QT_QPA_PLATFORM") == "offscreen"
     steps = [step for job in _workflow()["jobs"].values()
              for step in job.get("steps", [])]
@@ -114,12 +116,12 @@ def test_ci_scripts_run_locally_and_write_only_report_files(tmp_path):
     run_env.update({"PYTHONDONTWRITEBYTECODE": "1",
                     "QT_QPA_PLATFORM": "offscreen",
                     "NL_DATA_DIR": str(tmp_path / "data")})
-    for script in ("headless_gui_smoke.py", "bootstrap_check.py"):
+    for script in ("headless_gui_smoke.py", "bootstrap_check.py", "package_smoke.py"):
         completed = subprocess.run(
             [sys.executable, str(REPO / "scripts" / "ci" / script),
              "--json", "--report-dir", str(reports)],
             cwd=str(REPO), env=run_env, capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=180)
+            encoding="utf-8", errors="replace", timeout=300)
         assert completed.returncode == 0, completed.stderr[-2000:]
         payload = json.loads(completed.stdout)
         assert payload["status"] == "PASS"
@@ -128,8 +130,70 @@ def test_ci_scripts_run_locally_and_write_only_report_files(tmp_path):
         cwd=str(REPO), capture_output=True, text=True, encoding="utf-8", timeout=60)
     assert completed.returncode == 0
     names = {path.name for path in reports.iterdir()}
-    assert names == {"headless_gui_smoke.json", "bootstrap_check.json", "SHA256SUMS"}
+    assert names == {"headless_gui_smoke.json", "bootstrap_check.json",
+                     "package_smoke.json", "SHA256SUMS"}
     assert "  " in (reports / "SHA256SUMS").read_text(encoding="utf-8")
+
+
+
+
+def test_package_smoke_job_is_ubuntu_isolated_and_reports_only():
+    data = _workflow()
+    job = data["jobs"]["package-smoke"]
+    assert job["runs-on"] == "ubuntu-latest"
+    assert int(job["timeout-minutes"]) <= 30
+    assert job.get("permissions", {}).get("contents") == "read"
+    steps = job["steps"]
+    commands = [str(step.get("run", "")) for step in steps]
+    assert any("scripts/ci/package_smoke.py --json --report-dir reports" in command
+               for command in commands)
+    assert any("scripts/ci/checksums.py reports" in command for command in commands)
+    setup = [step for step in steps
+             if str(step.get("uses", "")).startswith("actions/setup-python@")]
+    assert setup, "package-smoke must set up Python"
+    assert str(setup[0]["with"]["python-version"]).startswith("3.12")
+    uploads = [step for step in steps
+               if "actions/upload-artifact" in str(step.get("uses", ""))]
+    assert uploads
+    upload = uploads[0]
+    assert str(upload["with"]["path"]).strip().startswith("reports")
+    assert int(upload["with"]["retention-days"]) <= 7
+    text = json.dumps(job).lower()
+    for forbidden in ("contents: write", "secrets.", "git push", "gh release",
+                      "publish", "visibility", "collaborator", "docker push"):
+        assert forbidden not in text, forbidden
+
+
+def test_package_smoke_local_pass_writes_only_report(tmp_path):
+    import os
+    import subprocess
+
+    reports = tmp_path / "reports"
+    env = dict(os.environ)
+    env.update({"PYTHONDONTWRITEBYTECODE": "1", "QT_QPA_PLATFORM": "offscreen",
+                "NL_DATA_DIR": str(tmp_path / "data")})
+    completed = subprocess.run(
+        [sys.executable, str(REPO / "scripts" / "ci" / "package_smoke.py"),
+         "--json", "--report-dir", str(reports)],
+        cwd=str(REPO), env=env, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=300,
+    )
+    assert completed.returncode == 0, completed.stderr[-3000:]
+    payload = json.loads(completed.stdout)
+    assert payload["status"] == "PASS"
+    assert payload["workspace"] == {"managed": True, "cleaned": True}
+    assert payload["checks"] and all(item["status"] == "PASS"
+                                     for item in payload["checks"])
+    ids = [item["id"] for item in payload["checks"]]
+    assert "beta_package_checksums_and_manifests" in ids
+    assert "release_acceptance_matrix_all_manual_pending" in ids
+    assert "native_runtime_plan_dry_run" in ids
+    assert {path.name for path in reports.iterdir()} == {"package_smoke.json"}
+    report = json.loads((reports / "package_smoke.json").read_text(encoding="utf-8"))
+    assert report["status"] == "PASS"
+    assert report["facts"]["acceptance_matrix"]["manual_pending"] == 6
+    assert report["facts"]["beta_package"]["targets"] == 6
+    assert report["facts"]["native_runtime_plan"]["no_network"] is True
 
 
 def test_ci_docs_exist_and_mark_manual_pending():
@@ -140,3 +204,7 @@ def test_ci_docs_exist_and_mark_manual_pending():
         assert platform.lower() in docs.lower()
     assert "checksum" in docs.lower()
     assert "no publish" in docs.lower() or "no publishing" in docs.lower()
+    assert "package-smoke" in docs.lower() or "package smoke" in docs.lower()
+    assert "package_smoke.json" in docs
+    assert "retention" in docs.lower()
+    assert "MANUAL-PENDING" in docs

@@ -40,6 +40,33 @@ runner. The application/bootstrapper checks themselves perform no network downlo
 - Report provenance: JUnit reports, smoke JSON, bootstrap JSON and SHA256SUMS.
 - Safety guards: permissions contents read, no secrets, no push/publish/release/
   visibility/collaborator actions, artifacts limited to reports/.
+- The packaging/acceptance smoke: source candidate -> beta package -> acceptance matrix
+  -> native-runtime dry-run plan, with checksum/manifest and six-target honesty invariants.
+
+
+## Package smoke job (ubuntu-latest)
+
+A separate blocking `package-smoke` job runs `scripts/ci/package_smoke.py` on
+`ubuntu-latest` with Python 3.12. It uses a managed temporary workspace (removed at
+the end), performs **no network request, no model call and no upload/publish action**,
+and verifies the packaging/acceptance chain end to end:
+
+1. builds a source release candidate with the `scripts.build_release` functions
+   (temporary output; committed tree only);
+2. builds a deterministic private-beta package with `scripts.build_beta_packages`
+   from that candidate (temporary output; overwrite refusal preserved);
+3. runs the `scripts.release_acceptance` matrix against a temporary empty records
+   directory and enforces six targets, all `MANUAL-PENDING`, zero verified targets,
+   zero invalid records and `no_ci_hardware_claim`;
+4. runs `scripts.fetch_native_runtimes --dry-run` and enforces plan-only mode,
+   six targets, `no_network=true` and `no_writes=true`;
+5. validates the beta `SHA256SUMS`, beta manifest inventory, six-target unmeasured
+   runtime declarations, installer/runtime manifest templates, and the absence of
+   runtime/vendor/user data in the package.
+
+The job emits a JSON PASS/FAIL report (`package_smoke.json`), uploads reports only
+(3-day retention) and is blocking on the Linux runner. It is regression/evidence
+tooling for this private beta, not a platform-support or release-acceptance claim.
 
 ## MANUAL-PENDING (not verified by CI)
 
@@ -55,13 +82,17 @@ runner. The application/bootstrapper checks themselves perform no network downlo
 - **Interactive GUI/accessibility**: CI constructs offscreen and checks structure; real
   keyboard navigation, screen readers, DPI scaling and visual identity are manual.
 - **Publishing/visibility/collaborators**: no workflow performs these actions.
+- **Package smoke is not a real artifact acceptance**: it builds source/beta packages from the
+  committed tree with local tooling only; no native six-target runtimes are downloaded or
+  measured, and a PASS is CI regression evidence, not clean-machine/hardware acceptance.
 - **Full platform support**: a green matrix is regression evidence for this private beta,
   not an acceptance claim for every OS/architecture combination.
 
 ## Artifacts, provenance and retention
 
-Only reports/ is uploaded (7-day retention): pytest-unit.xml, pytest-integration.xml,
-headless_gui_smoke.json, bootstrap_check.json and SHA256SUMS. No databases, user data,
+Only reports/ is uploaded. The matrix jobs keep reports for 7 days (pytest-unit.xml,
+pytest-integration.xml, headless_gui_smoke.json, bootstrap_check.json, SHA256SUMS); the
+package-smoke job uploads package_smoke.json and SHA256SUMS with 3-day retention. No databases, user data,
 embedded runtimes, model files or checkpoints are uploaded. SHA256SUMS is generated over
 the report files only and is the provenance index for the run. CI does not publish, tag,
 release, change repository visibility or manage collaborators.

@@ -110,3 +110,36 @@ jobs:
           path: reports/
           if-no-files-found: warn
           retention-days: 7
+
+  package-smoke:
+    name: Package smoke (deterministic beta package, no network)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout (read-only, no persisted credentials)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: x64
+
+      - name: Packaging/acceptance smoke (managed temp workspace, no network)
+        run: python scripts/ci/package_smoke.py --json --report-dir reports
+
+      - name: Report checksums (reports only)
+        run: python scripts/ci/checksums.py reports
+
+      - name: Upload package-smoke reports only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-smoke-reports
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 3
