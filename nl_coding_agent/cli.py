@@ -744,7 +744,267 @@ def _dispatch_supervisor(args) -> int:
     return 2
 
 
-def main() -> int:
+
+# ---------------------------------------------------------------------------
+# Goal Mode G2 CLI (persist only; no mission/model execution)
+# ---------------------------------------------------------------------------
+GOAL_GROUP_EPILOG = (
+    "Goal commands persist local goals/milestones only. They never create, start "
+    "or run missions, agents or models, and there are no execution flags. Goal "
+    "data lives in the NL_DATA_DIR application database; there is no reset "
+    "command - use a temporary NL_DATA_DIR to isolate a run."
+)
+
+
+def _goal_app():
+    from nl_coding_agent.app.services import AppServices
+    return AppServices()
+
+
+def _goal_project_id(value):
+    if value in (None, ""):
+        return None, None
+    text = str(value).strip()
+    try:
+        return int(text), None
+    except ValueError:
+        pass
+    path = Path(text).expanduser()
+    if not path.is_dir():
+        return None, "project path/ID not found: " + text
+    try:
+        from nl_coding_agent.projects.registry import open_project
+        return int(open_project(path)["id"]), None
+    except Exception as exc:  # noqa: BLE001 - CLI boundary
+        return None, "cannot open project: " + str(exc)
+
+
+def _goal_error_payload(payload: dict) -> dict:
+    error = payload.get("error") if isinstance(payload, dict) else None
+    return error if isinstance(error, dict) else {
+        "code": "error", "type": "Error", "message": str(error or payload)}
+
+
+def _goal_emit(payload: dict, as_json: bool, text_lines) -> int:
+    ok = bool(payload.get("ok"))
+    if as_json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False, default=str))
+    elif ok:
+        lines = text_lines() if callable(text_lines) else list(text_lines or [])
+        for line in lines:
+            print(line)
+    if not ok:
+        error = _goal_error_payload(payload)
+        print("ERROR [" + str(error.get("code")) + "]: "
+              + str(error.get("message")), file=sys.stderr)
+        return 1
+    return 0
+
+
+def _read_goal_plan(plan_path: str):
+    if plan_path == "-":
+        raw = sys.stdin.read()
+    else:
+        path = Path(plan_path).expanduser()
+        if not path.is_file():
+            return None, "plan file not found: " + str(path)
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            return None, "cannot read plan file: " + str(exc)
+    try:
+        data = json.loads(raw)
+    except ValueError as exc:
+        return None, "plan is not valid JSON: " + str(exc)
+    if isinstance(data, dict) and isinstance(data.get("milestones"), list):
+        data = data["milestones"]
+    if not isinstance(data, list):
+        return None, "plan JSON must be a list of milestone objects (or {milestones:[...]})"
+    return data, None
+
+
+def _dispatch_goal(args) -> int:
+    services = _goal_app()
+    try:
+        return _dispatch_goal_with(args, services)
+    finally:
+        try:
+            services._db.close()
+        except Exception:
+            pass
+
+
+def _dispatch_goal_with(args, services) -> int:
+    command = str(getattr(args, "goal_command", "") or "").strip().lower()
+    as_json = bool(getattr(args, "json", False))
+    if command == "create":
+        payload = {}
+        if getattr(args, "from_file", None):
+            try:
+                payload = json.loads(Path(args.from_file).read_text(encoding="utf-8"))
+            except (OSError, ValueError) as exc:
+                print("ERROR: cannot read create file: " + str(exc), file=sys.stderr)
+                return 2
+            if not isinstance(payload, dict):
+                print("ERROR: create file must contain a JSON object", file=sys.stderr)
+                return 2
+        objective = getattr(args, "objective", None) or getattr(
+            args, "objective_opt", None) or payload.get("objective")
+        if not objective:
+            print("ERROR: goal create requires an objective", file=sys.stderr)
+            return 2
+        project_id, error = _goal_project_id(
+            getattr(args, "project", None) or payload.get("project_id")
+            or payload.get("project"))
+        if error:
+            print("ERROR: " + error, file=sys.stderr)
+            return 2
+        references = dict(payload.get("reference_metadata") or {})
+        for item in getattr(args, "reference", None) or []:
+            if "=" not in str(item):
+                print("ERROR: --reference must be KEY=VALUE", file=sys.stderr)
+                return 2
+            key, value = str(item).split("=", 1)
+            references[key.strip()] = value.strip()
+        if getattr(args, "reference_file", None):
+            try:
+                loaded = json.loads(Path(args.reference_file).read_text(encoding="utf-8"))
+            except (OSError, ValueError) as exc:
+                print("ERROR: cannot read reference file: " + str(exc), file=sys.stderr)
+                return 2
+            if not isinstance(loaded, dict):
+                print("ERROR: reference file must be a JSON object", file=sys.stderr)
+                return 2
+            references.update(loaded)
+        acceptance = list(payload.get("acceptance_criteria") or [])
+        acceptance.extend(getattr(args, "acceptance", None) or [])
+        dependencies = list(payload.get("dependencies") or [])
+        dependencies.extend(getattr(args, "dependency", None) or [])
+        attachments = list(payload.get("attachments") or [])
+        attachments.extend(getattr(args, "attachment", None) or [])
+        result = services.goal_create(
+            objective,
+            title=getattr(args, "title", None) or payload.get("title"),
+            project_id=project_id,
+            acceptance_criteria=acceptance,
+            priority=getattr(args, "priority", None) or payload.get("priority") or "P1",
+            dependencies=dependencies, attachments=attachments,
+            reference_metadata=references,
+            template_id=payload.get("template_id"),
+            template_version=payload.get("template_version"),
+            source=payload.get("source") or "", origin=payload.get("origin") or "user")
+        goal = result.get("goal") or {}
+        return _goal_emit(result, as_json, lambda: [
+            "Goal #" + str(goal.get("id")) + " created: " + str(goal.get("title"))
+            + " [" + str(goal.get("status")) + ", " + str(goal.get("priority")) + "]"])
+
+    if command == "list":
+        project_id, error = _goal_project_id(getattr(args, "project", None))
+        if error:
+            print("ERROR: " + error, file=sys.stderr)
+            return 2
+        result = services.goal_list(project_id=project_id,
+                                    status=getattr(args, "status", None),
+                                    priority=getattr(args, "priority", None),
+                                    limit=getattr(args, "limit", 200),
+                                    offset=getattr(args, "offset", 0))
+        goals = result.get("goals") or []
+        return _goal_emit(result, as_json, lambda: [
+            "#{:<3} {:<10} {:<3} {}".format(goal.get("id", ""), goal.get("status", ""),
+                                            goal.get("priority", ""),
+                                            goal.get("title", ""))
+            for goal in goals] or ["No goals."])
+
+    if command == "show":
+        result = services.goal_get(args.goal_id)
+        goal = result.get("goal") or {}
+        if not result.get("ok"):
+            return _goal_emit(result, as_json, [])
+        milestones = services.goal_milestones(args.goal_id).get("milestones") or []
+        return _goal_emit(result, as_json, lambda: [
+            "Goal #" + str(goal.get("id")) + ": " + str(goal.get("title")),
+            "Status: " + str(goal.get("status")) + "  Priority: "
+            + str(goal.get("priority")) + "  Project: " + str(goal.get("project_id")),
+            "Objective: " + str(goal.get("objective")),
+            "Acceptance criteria: " + json.dumps(goal.get("acceptance_criteria") or []),
+            "Dependencies: " + json.dumps(goal.get("dependencies") or []),
+            "Milestones (" + str(len(milestones)) + "):",
+        ] + ["  #" + str(item.get("id")) + " [" + str(item.get("status")) + "] "
+             + str(item.get("title")) for item in milestones])
+
+    if command in ("activate", "pause", "resume", "cancel", "unblock"):
+        result = getattr(services, "goal_" + command)(args.goal_id)
+        goal = result.get("goal") or {}
+        return _goal_emit(result, as_json, lambda: [
+            "Goal #" + str(args.goal_id) + ": " + str(goal.get("status"))])
+
+    if command == "block":
+        result = services.goal_block(args.goal_id, reason=getattr(args, "reason", ""))
+        goal = result.get("goal") or {}
+        return _goal_emit(result, as_json, lambda: [
+            "Goal #" + str(args.goal_id) + " blocked (" + str(goal.get("status")) + ")"])
+
+    if command == "decompose":
+        plan_path = getattr(args, "plan", None)
+        if not plan_path and sys.stdin.isatty():
+            print("ERROR: goal decompose requires --plan FILE or --plan - (stdin)",
+                  file=sys.stderr)
+            return 2
+        plan, error = _read_goal_plan(plan_path or "-")
+        if error:
+            print("ERROR: " + error, file=sys.stderr)
+            return 2
+        result = services.goal_decompose(args.goal_id, plan)
+        milestones = result.get("milestones") or []
+        return _goal_emit(result, as_json, lambda: [
+            "Goal #" + str(args.goal_id) + " decomposed: "
+            + str(len(milestones)) + " milestone(s)"] + [
+            "  #" + str(item.get("id")) + " " + str(item.get("title"))
+            + " deps=" + json.dumps(item.get("dependencies") or [])
+            for item in milestones])
+
+    if command == "next":
+        goal_id = getattr(args, "goal_id", None)
+        project_id, error = _goal_project_id(getattr(args, "project", None))
+        if error:
+            print("ERROR: " + error, file=sys.stderr)
+            return 2
+        result = services.goal_next_work(goal_id=goal_id, project_id=project_id,
+                                         limit=getattr(args, "limit", 20))
+        work = result.get("work") or []
+        return _goal_emit(result, as_json, lambda: [
+            "Next work (" + str(len(work)) + "):"] + [
+            "  goal #" + str(item.get("goal_id")) + " milestone #"
+            + str(item.get("milestone_id")) + " " + str(item.get("title"))
+            for item in work] if work else ["Next work: none eligible."])
+
+    if command == "progress":
+        if getattr(args, "goal_id", None):
+            result = services.goal_progress(args.goal_id)
+            progress = result.get("progress") or {}
+            return _goal_emit(result, as_json, lambda: [
+                "Goal #" + str(args.goal_id) + ": " + str(progress.get("status")),
+                "Milestones: " + str(progress.get("milestones_completed")) + "/"
+                + str(progress.get("milestones_total")) + " ("
+                + str(progress.get("progress_percent")) + "%)",
+                "Eligible next work: " + json.dumps(progress.get("eligible_next_work") or [])])
+        project_id, error = _goal_project_id(getattr(args, "project", None))
+        if error:
+            print("ERROR: " + error, file=sys.stderr)
+            return 2
+        result = services.goal_progress_summary(project_id=project_id)
+        summary = result.get("summary") or {}
+        return _goal_emit(result, as_json, lambda: [
+            "Goals: " + str(summary.get("goals_total")) + "  Milestones: "
+            + str(summary.get("milestones_completed")) + "/"
+            + str(summary.get("milestones_total")),
+            "By status: " + json.dumps(summary.get("goals_by_status") or {})])
+
+    print("ERROR: unknown goal command: " + command, file=sys.stderr)
+    return 2
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="NL Coding Agent CLI")
     parser.add_argument("--models", default=str(DEFAULT_MODELS))
     parser.add_argument("--project-config", default=str(DEFAULT_PROJECT))
@@ -856,10 +1116,87 @@ def main() -> int:
     advance_p.add_argument("--evidence", action="append", default=[])
     advance_p.add_argument("--confirm", action="store_true")
 
+    # Goal Mode G2 command group (persist only; no autonomous execution)
+    goal = sub.add_parser(
+        "goal", help="Goal Mode: durable goals/milestones (no autonomous execution)",
+        description="Create and manage durable goals and milestones. This command "
+                    "group never creates, starts or runs missions, agents or models.",
+        epilog=GOAL_GROUP_EPILOG)
+    gs = goal.add_subparsers(dest="goal_command", required=True)
+
+    create_p = gs.add_parser("create", help="Create a durable goal")
+    create_p.add_argument("objective", nargs="?", default=None)
+    create_p.add_argument("--objective", dest="objective_opt", default=None)
+    create_p.add_argument("--title", default=None)
+    create_p.add_argument("--project", default=None,
+                          help="Project path or numeric project id (optional)")
+    create_p.add_argument("--priority", choices=["P0", "P1", "P2", "P3"], default="P1")
+    create_p.add_argument("--acceptance", action="append", default=[],
+                          help="Acceptance criterion (repeatable)")
+    create_p.add_argument("--dependency", action="append", type=int, default=[],
+                          help="Existing goal id to depend on (repeatable)")
+    create_p.add_argument("--attachment", action="append", default=[],
+                          help="Attachment reference (repeatable; stored as text)")
+    create_p.add_argument("--reference", action="append", default=[],
+                          metavar="KEY=VALUE", help="Reference metadata (repeatable)")
+    create_p.add_argument("--reference-file", default=None,
+                          help="JSON object file added to reference metadata")
+    create_p.add_argument("--from-file", default=None,
+                          help="JSON object with objective/title/criteria/etc.")
+    create_p.add_argument("--json", action="store_true")
+
+    list_p = gs.add_parser("list", help="List goals (priority ordered)")
+    list_p.add_argument("--project", default=None)
+    list_p.add_argument("--status", choices=list(("planned", "active", "paused",
+                                                 "blocked", "completed", "cancelled")),
+                        default=None)
+    list_p.add_argument("--priority", choices=["P0", "P1", "P2", "P3"], default=None)
+    list_p.add_argument("--limit", type=int, default=200)
+    list_p.add_argument("--offset", type=int, default=0)
+    list_p.add_argument("--json", action="store_true")
+
+    show_p = gs.add_parser("show", help="Show one goal and its milestones")
+    show_p.add_argument("goal_id", type=int)
+    show_p.add_argument("--json", action="store_true")
+
+    for name, help_text in (("activate", "Activate a planned goal"),
+                            ("pause", "Pause an active goal"),
+                            ("resume", "Resume a paused goal"),
+                            ("unblock", "Unblock a blocked goal"),
+                            ("cancel", "Cancel a non-terminal goal")):
+        lifecycle = gs.add_parser(name, help=help_text)
+        lifecycle.add_argument("goal_id", type=int)
+        lifecycle.add_argument("--json", action="store_true")
+
+    block_p = gs.add_parser("block", help="Block a goal explicitly")
+    block_p.add_argument("goal_id", type=int)
+    block_p.add_argument("--reason", default="")
+    block_p.add_argument("--json", action="store_true")
+
+    decompose_p = gs.add_parser("decompose", help="Create milestones from a JSON plan")
+    decompose_p.add_argument("goal_id", type=int)
+    decompose_p.add_argument("--plan", default=None,
+                             help="JSON plan file, or - for stdin (required)")
+    decompose_p.add_argument("--json", action="store_true")
+
+    next_p = gs.add_parser("next", help="List eligible next milestones")
+    next_p.add_argument("--goal-id", type=int, default=None)
+    next_p.add_argument("--project", default=None)
+    next_p.add_argument("--limit", type=int, default=20)
+    next_p.add_argument("--json", action="store_true")
+
+    progress_p = gs.add_parser("progress", help="Goal progress or overall summary")
+    progress_p.add_argument("goal_id", nargs="?", type=int, default=None)
+    progress_p.add_argument("--project", default=None)
+    progress_p.add_argument("--json", action="store_true")
+
     # GUI subcommand
     sub.add_parser("gui")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+
+    if args.command == "goal":
+        return _dispatch_goal(args)
 
     if args.command == "supervisor":
         return _dispatch_supervisor(args)

@@ -84,6 +84,10 @@ class AppServices:
         self._research_config: dict = {}
         self._research_network_configured = False
         self.research = _ResearchFacade(self)
+        # Goal Mode G2 facade is lazy as well; no goal schema/DB work happens
+        # until a goal method is invoked.
+        self._goal_service_obj = None
+        self._goal_lock = threading.Lock()
 
     # --- Project ---
 
@@ -1482,6 +1486,181 @@ class AppServices:
                 "error": type(exc).__name__ + ": " + str(exc),
                 "offline": not self._research_network_configured,
                 "untrusted": True}
+
+
+    # ---------------------------------------------------------------- goals
+    def _goal_service(self):
+        with self._goal_lock:
+            if self._goal_service_obj is None:
+                from nl_coding_agent.core.goals import GoalService
+                self._goal_service_obj = GoalService()
+            return self._goal_service_obj
+
+    @staticmethod
+    def _goal_error(exc: Exception) -> dict:
+        from nl_coding_agent.core import goals as goal_core
+        mapping = {
+            "GoalNotFoundError": "not_found",
+            "GoalValidationError": "validation",
+            "GoalLifecycleError": "lifecycle",
+            "GoalDependencyError": "dependency",
+            "GoalDecompositionError": "decomposition",
+        }
+        code = mapping.get(type(exc).__name__)
+        if code is None and isinstance(exc, goal_core.GoalError):
+            code = "goal_error"
+        return {"ok": False,
+                "error": {"code": code or "error",
+                          "type": type(exc).__name__,
+                          "message": str(exc)}}
+
+    def goal_create(self, objective: str, *, title: str | None = None,
+                    project_id: int | None = None,
+                    acceptance_criteria=None, priority: str = "P1",
+                    dependencies=None, attachments=None,
+                    reference_metadata: dict | None = None,
+                    template_id: str | None = None,
+                    template_version: str | None = None,
+                    source: str = "", origin: str = "user") -> dict:
+        try:
+            goal = self._goal_service().create_goal(
+                objective, title=title, project_id=project_id,
+                acceptance_criteria=acceptance_criteria or [],
+                priority=priority, dependencies=dependencies or [],
+                attachments=attachments or [],
+                reference_metadata=reference_metadata,
+                template_id=template_id, template_version=template_version,
+                source=source, origin=origin)
+        except Exception as exc:  # structured boundary; no stack traces to callers
+            return self._goal_error(exc)
+        return {"ok": True, "goal": goal}
+
+    def goal_list(self, *, project_id: int | None = None,
+                  status: str | None = None, priority: str | None = None,
+                  limit: int = 200, offset: int = 0) -> dict:
+        try:
+            goals = self._goal_service().list_goals(
+                project_id=project_id, status=status, limit=500, offset=0)
+        except Exception as exc:
+            return self._goal_error(exc)
+        if priority is not None:
+            goals = [goal for goal in goals
+                     if str(goal.get("priority")) == str(priority).upper()]
+        offset = max(0, int(offset or 0))
+        limit = max(1, min(int(limit or 200), 500))
+        return {"ok": True, "goals": goals[offset:offset + limit],
+                "total": len(goals)}
+
+    def goal_get(self, goal_id: int) -> dict:
+        try:
+            return {"ok": True, "goal": self._goal_service().get_goal(goal_id)}
+        except Exception as exc:
+            return self._goal_error(exc)
+
+    def goal_update(self, goal_id: int, **fields) -> dict:
+        try:
+            return {"ok": True,
+                    "goal": self._goal_service().update_goal(goal_id, **fields)}
+        except Exception as exc:
+            return self._goal_error(exc)
+
+    def goal_activate(self, goal_id: int) -> dict:
+        return self._goal_lifecycle("activate", goal_id)
+
+    def goal_pause(self, goal_id: int) -> dict:
+        return self._goal_lifecycle("pause", goal_id)
+
+    def goal_resume(self, goal_id: int) -> dict:
+        return self._goal_lifecycle("resume", goal_id)
+
+    def goal_cancel(self, goal_id: int) -> dict:
+        return self._goal_lifecycle("cancel", goal_id)
+
+    def goal_block(self, goal_id: int, reason: str = "") -> dict:
+        try:
+            goal = self._goal_service().block_goal(goal_id, reason=reason)
+        except Exception as exc:
+            return self._goal_error(exc)
+        return {"ok": True, "goal": goal}
+
+    def goal_unblock(self, goal_id: int) -> dict:
+        try:
+            goal = self._goal_service().unblock_goal(goal_id)
+        except Exception as exc:
+            return self._goal_error(exc)
+        return {"ok": True, "goal": goal}
+
+    def goal_complete(self, goal_id: int, evidence: dict | None = None) -> dict:
+        try:
+            goal = self._goal_service().complete_goal(goal_id, evidence=evidence)
+        except Exception as exc:
+            return self._goal_error(exc)
+        return {"ok": True, "goal": goal}
+
+    def _goal_lifecycle(self, operation: str, goal_id: int) -> dict:
+        try:
+            service = self._goal_service()
+            goal = getattr(service, operation + "_goal")(goal_id)
+        except Exception as exc:
+            return self._goal_error(exc)
+        return {"ok": True, "goal": goal}
+
+    def goal_decompose(self, goal_id: int, plan) -> dict:
+        try:
+            milestones = self._goal_service().decompose_goal(goal_id, plan)
+        except Exception as exc:
+            return self._goal_error(exc)
+        return {"ok": True, "goal_id": goal_id, "milestones": milestones}
+
+    def goal_milestones(self, goal_id: int, *, status: str | None = None) -> dict:
+        try:
+            milestones = self._goal_service().list_milestones(goal_id, status=status)
+        except Exception as exc:
+            return self._goal_error(exc)
+        return {"ok": True, "milestones": milestones, "total": len(milestones)}
+
+    def goal_milestone_create(self, goal_id: int, title: str, **fields) -> dict:
+        try:
+            milestone = self._goal_service().create_milestone(goal_id, title, **fields)
+        except Exception as exc:
+            return self._goal_error(exc)
+        return {"ok": True, "milestone": milestone}
+
+    def goal_milestone_update(self, milestone_id: int, **fields) -> dict:
+        try:
+            milestone = self._goal_service().update_milestone(milestone_id, **fields)
+        except Exception as exc:
+            return self._goal_error(exc)
+        return {"ok": True, "milestone": milestone}
+
+    def goal_milestone_delete(self, milestone_id: int) -> dict:
+        try:
+            deleted = self._goal_service().delete_milestone(milestone_id)
+        except Exception as exc:
+            return self._goal_error(exc)
+        return {"ok": True, "deleted": bool(deleted)}
+
+    def goal_next_work(self, *, goal_id: int | None = None,
+                       project_id: int | None = None, limit: int = 20) -> dict:
+        try:
+            work = self._goal_service().next_work(
+                goal_id=goal_id, project_id=project_id, limit=limit)
+        except Exception as exc:
+            return self._goal_error(exc)
+        return {"ok": True, "work": work, "total": len(work)}
+
+    def goal_progress(self, goal_id: int) -> dict:
+        try:
+            return {"ok": True, "progress": self._goal_service().progress(goal_id)}
+        except Exception as exc:
+            return self._goal_error(exc)
+
+    def goal_progress_summary(self, *, project_id: int | None = None) -> dict:
+        try:
+            return {"ok": True, "summary": self._goal_service().progress_summary(
+                project_id=project_id)}
+        except Exception as exc:
+            return self._goal_error(exc)
 
 
     # --- Events ---
