@@ -4,6 +4,8 @@ from __future__ import annotations
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QButtonGroup, QSpacerItem, QSizePolicy
 from PySide6.QtCore import Signal, Qt
 
+from nl_coding_agent.gui.i18n import tr_for
+
 
 PAGES = [
     ("Projects",  "projects"),
@@ -24,8 +26,9 @@ class SidebarWidget(QWidget):
 
     page_changed = Signal(str)  # emits page key
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, translator=None):
         super().__init__(parent)
+        self._i18n = translator
         self.setObjectName("sidebar")
         self._group = QButtonGroup(self)
         self._group.setExclusive(True)
@@ -36,12 +39,13 @@ class SidebarWidget(QWidget):
 
         self._buttons: dict[str, QPushButton] = {}
         for label, key in PAGES:
-            btn = QPushButton(label)
+            btn = QPushButton(tr_for(self._i18n, "sidebar." + key, label))
             btn.setObjectName("sidebarButton")
             btn.setCheckable(True)
             btn.setFlat(True)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setProperty("page_key", key)
+            btn.setToolTip(tr_for(self._i18n, "sidebar." + key, label))
             btn.clicked.connect(lambda checked, k=key: self.page_changed.emit(k))
             self._group.addButton(btn)
             layout.addWidget(btn)
@@ -49,10 +53,17 @@ class SidebarWidget(QWidget):
 
         layout.addSpacerItem(QSpacerItem(0, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
 
-        # Select first page by default
         if self._buttons:
             first = list(self._buttons.values())[0]
             first.setChecked(True)
+
+    def retranslate(self) -> None:
+        for label, key in PAGES:
+            button = self._buttons.get(key)
+            if button is not None:
+                text = tr_for(self._i18n, "sidebar." + key, label)
+                button.setText(text)
+                button.setToolTip(text)
 
     def select_page(self, key: str):
         btn = self._buttons.get(key)

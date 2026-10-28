@@ -2189,6 +2189,57 @@ class AppServices:
         return {"ok": True, "state": state, **result}
 
 
+    # ------------------------------------------------------------ UI language
+    UI_LANGUAGE_KEY = "ui.language"
+    UI_LANGUAGES = ("it", "en", "system")
+
+    @staticmethod
+    def _normalize_ui_language(value) -> str:
+        text = str(value or "it").strip().lower()
+        if text == "auto":
+            text = "system"
+        return text
+
+    def ui_language_preference(self) -> str:
+        """Persisted UI language preference; fresh installs default to Italian."""
+        try:
+            from nl_coding_agent.persistence.database import get_setting
+            value = get_setting(self.UI_LANGUAGE_KEY, "it")
+        except Exception:
+            value = "it"
+        normalized = self._normalize_ui_language(value)
+        return normalized if normalized in self.UI_LANGUAGES else "it"
+
+    def get_ui_language(self) -> str:
+        return self.ui_language_preference()
+
+    def ui_language(self) -> str:
+        return self.ui_language_preference()
+
+    def set_ui_language(self, language: str) -> dict:
+        """Persist only the UI presentation language (it/en/system)."""
+        normalized = self._normalize_ui_language(language)
+        if normalized not in self.UI_LANGUAGES:
+            return {"ok": False,
+                    "error": "unsupported UI language: " + repr(language),
+                    "supported": list(self.UI_LANGUAGES)}
+        try:
+            from nl_coding_agent.persistence.database import set_setting
+            set_setting(self.UI_LANGUAGE_KEY, normalized)
+        except Exception as exc:
+            return {"ok": False, "error": type(exc).__name__ + ": " + str(exc)}
+        return {"ok": True, "preference": normalized,
+                "language": normalized, "default_language": "it"}
+
+    def set_ui_language_preference(self, language: str) -> dict:
+        return self.set_ui_language(language)
+
+    def ui_language_settings(self) -> dict:
+        return {"ok": True, "preference": self.ui_language_preference(),
+                "default_language": "it",
+                "supported": list(self.UI_LANGUAGES)}
+
+
     # --- Events ---
 
     def recent_events(self, limit: int = 200) -> list[dict]:

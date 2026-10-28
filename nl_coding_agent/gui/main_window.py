@@ -14,6 +14,7 @@ from PySide6.QtGui import QIcon, QKeySequence, QShortcut
 from PySide6.QtSvgWidgets import QSvgWidget
 
 from nl_coding_agent.app.services import AppServices, Event, get_event_bus
+from nl_coding_agent.gui.i18n import get_i18n, tr_for
 from nl_coding_agent.gui.widgets.sidebar import SidebarWidget
 from nl_coding_agent.gui.widgets.log_panel import LogPanel
 from nl_coding_agent.gui.widgets.projects_panel import ProjectsPanel
@@ -238,8 +239,15 @@ class MainWindow(QMainWindow):
         self._ollama_thread: OllamaCheckThread | None = None
         self._audit_thread: AuditThread | None = None
         self._closing = False
+        self._i18n = get_i18n(services)
+        try:
+            self._i18n.install()
+        except Exception:
+            pass
+        self._i18n.language_changed.connect(self._retranslate_ui)
 
-        self.setWindowTitle("NL Coding Agent")
+        self.setWindowTitle(tr_for(self._i18n, "app.window_title",
+                                   "NL Coding Agent"))
         self.setMinimumSize(1100, 700)
         self.resize(1280, 800)
 
@@ -284,20 +292,23 @@ class MainWindow(QMainWindow):
             logo_lbl.setStyleSheet("font-size: 18px; font-weight: 800; color: #7531FE;")
             header_layout.addWidget(logo_lbl)
 
-        app_title = QLabel("NL CODING AGENT")
-        app_title.setObjectName("appTitle")
-        header_layout.addWidget(app_title)
+        self._app_title = QLabel(tr_for(
+            self._i18n, "app.header_title", "NL CODING AGENT"))
+        self._app_title.setObjectName("appTitle")
+        header_layout.addWidget(self._app_title)
 
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.VLine)
         sep.setStyleSheet("color: #343947;")
         header_layout.addWidget(sep)
 
-        self._project_label = QLabel("No project open")
+        self._project_label = QLabel(tr_for(
+            self._i18n, "app.no_project", "No project open"))
         self._project_label.setObjectName("projectLabel")
         header_layout.addWidget(self._project_label)
 
-        self._autonomy_btn = QPushButton("Autonomy status")
+        self._autonomy_btn = QPushButton(tr_for(
+            self._i18n, "app.autonomy_status", "Autonomy status"))
         self._autonomy_btn.setObjectName("autonomyButton")
         self._autonomy_btn.setToolTip(
             "Read-only autonomy status; self-build controls live under Settings > Advanced"
@@ -310,7 +321,8 @@ class MainWindow(QMainWindow):
         self._ollama_label = QLabel("Ollama ●")
         self._ollama_label.setObjectName("ollamaStatus")
         self._ollama_label.setProperty("reachable", "false")
-        self._ollama_label.setToolTip("Ollama status")
+        self._ollama_label.setToolTip(tr_for(
+            self._i18n, "app.ollama_status", "Ollama status"))
         header_layout.addWidget(self._ollama_label)
 
         root_layout.addWidget(header)
@@ -320,7 +332,7 @@ class MainWindow(QMainWindow):
         main_splitter.setChildrenCollapsible(False)
 
         # Sidebar
-        self._sidebar = SidebarWidget()
+        self._sidebar = SidebarWidget(translator=self._i18n)
         self._sidebar.page_changed.connect(self._switch_page)
         main_splitter.addWidget(self._sidebar)
 
@@ -328,7 +340,8 @@ class MainWindow(QMainWindow):
         self._stack = QStackedWidget()
         self._stack.setObjectName("mainWorkspace")
 
-        self._projects_panel = ProjectsPanel(services=self._services)
+        self._projects_panel = ProjectsPanel(
+            services=self._services, translator=self._i18n)
         self._projects_panel.project_opened.connect(self._on_project_opened)
         self._projects_panel.audit_requested.connect(self._on_audit_requested)
         self._stack.addWidget(self._projects_panel)  # index 0 = projects
@@ -345,7 +358,8 @@ class MainWindow(QMainWindow):
         self._agents_panel = AgentsPanel(services=self._services)
         self._stack.addWidget(self._agents_panel)  # index 3 = agents
 
-        self._settings_panel = SettingsPanel(services=self._services)
+        self._settings_panel = SettingsPanel(
+            services=self._services, translator=self._i18n)
         self._stack.addWidget(self._settings_panel)  # index 4 = settings
 
         # Models page
@@ -386,7 +400,7 @@ class MainWindow(QMainWindow):
         main_splitter.addWidget(self._stack)
 
         # Inspector panel
-        self._inspector = InspectorPanel()
+        self._inspector = InspectorPanel(translator=self._i18n)
         main_splitter.addWidget(self._inspector)
 
         main_splitter.setSizes([180, 780, 260])
@@ -411,11 +425,11 @@ class MainWindow(QMainWindow):
         sb = QStatusBar()
         sb.setObjectName("statusBar")
         self.setStatusBar(sb)
-        self._vram_label = QLabel("VRAM: —")
+        self._vram_label = QLabel(tr_for(self._i18n, "status.vram", "VRAM: —"))
         self._vram_label.setObjectName("vramLabel")
-        self._ram_label = QLabel("RAM: —")
+        self._ram_label = QLabel(tr_for(self._i18n, "status.ram", "RAM: —"))
         self._ram_label.setObjectName("ramLabel")
-        self._tasks_label = QLabel("Tasks: 0")
+        self._tasks_label = QLabel(tr_for(self._i18n, "status.tasks", "Tasks: 0"))
         self._tasks_label.setObjectName("tasksLabel")
         self._emergency_controls = EmergencyControls(self._services)
         self._emergency_controls.message.connect(self._on_emergency_message)
@@ -472,6 +486,42 @@ class MainWindow(QMainWindow):
         # Command-palette stub: visible affordance for the F3b palette.
         QShortcut(QKeySequence("Ctrl+Shift+P"), self,
                   activated=self._show_command_palette)
+
+    def _retranslate_ui(self, _language: str | None = None) -> None:
+        self.setWindowTitle(tr_for(
+            self._i18n, "app.window_title", "NL Coding Agent"))
+        self._app_title.setText(tr_for(
+            self._i18n, "app.header_title", "NL CODING AGENT"))
+        if not self._current_project:
+            self._project_label.setText(tr_for(
+                self._i18n, "app.no_project", "No project open"))
+        self._autonomy_btn.setText(tr_for(
+            self._i18n, "app.autonomy_status", "Autonomy status"))
+        self._autonomy_btn.setToolTip(tr_for(
+            self._i18n, "app.autonomy_tooltip",
+            "Read-only autonomy status; self-build controls live under Settings > Advanced"))
+        self._ollama_label.setToolTip(tr_for(
+            self._i18n, "app.ollama_status", "Ollama status"))
+        self._sidebar.retranslate()
+        self._projects_panel.retranslate()
+        self._settings_panel.retranslate()
+        self._inspector.retranslate()
+        if hasattr(self, "_ide_tabs") and self._ide_tabs is not None:
+            for index, key, default in (
+                    (0, "ide.editor", "Editor"),
+                    (1, "ide.terminal", "Terminal"),
+                    (2, "ide.git", "Git"),
+                    (3, "ide.problems", "Problems")):
+                self._ide_tabs.setTabText(
+                    index, tr_for(self._i18n, key, default))
+        # Keep the empty-state status labels translated; runtime values remain.
+        if self._vram_label.text() in ("VRAM: —", "VRAM:"):
+            self._vram_label.setText(tr_for(self._i18n, "status.vram", "VRAM: —"))
+        if self._ram_label.text() in ("RAM: —", "RAM:"):
+            self._ram_label.setText(tr_for(self._i18n, "status.ram", "RAM: —"))
+        if self._tasks_label.text() in ("Tasks: 0", "Attività: 0"):
+            self._tasks_label.setText(tr_for(
+                self._i18n, "status.tasks", "Tasks: 0"))
 
     def _command_palette_actions(self):
         """Safe actions only: open/project navigation/refresh/settings/read-only doctor."""

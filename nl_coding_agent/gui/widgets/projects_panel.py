@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Signal, Qt
 
+from nl_coding_agent.gui.i18n import tr_for
+
 
 class ProjectsPanel(QWidget):
     """Center panel for the Projects page."""
@@ -17,9 +19,10 @@ class ProjectsPanel(QWidget):
     project_opened = Signal(dict)   # emits project record
     audit_requested = Signal(int)   # emits project_id
 
-    def __init__(self, services, parent=None):
+    def __init__(self, services, parent=None, *, translator=None):
         super().__init__(parent)
         self._services = services
+        self._i18n = translator
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
@@ -27,25 +30,31 @@ class ProjectsPanel(QWidget):
 
         # Header
         header = QHBoxLayout()
-        title = QLabel("Projects")
-        title.setStyleSheet("font-size: 16px; font-weight: 700;")
-        header.addWidget(title)
+        self._title = QLabel(tr_for(self._i18n, "projects.title", "Projects"))
+        self._title.setStyleSheet("font-size: 16px; font-weight: 700;")
+        header.addWidget(self._title)
         header.addStretch()
-        self_build_btn = QPushButton("Self-Build (This Agent)")
+        self._self_build_btn = QPushButton(tr_for(
+            self._i18n, "projects.self_build", "Self-Build (This Agent)"))
+        self_build_btn = self._self_build_btn
         self_build_btn.setStyleSheet("color: #46A3C0; border-color: #46A3C0;")
         self_build_btn.clicked.connect(self._on_self_build_open)
         header.addWidget(self_build_btn)
 
-        open_btn = QPushButton("Open Project…")
+        self._open_btn = QPushButton(tr_for(
+            self._i18n, "projects.open", "Open Project…"))
+        open_btn = self._open_btn
         open_btn.setObjectName("primaryButton")
         open_btn.clicked.connect(self._on_open_project)
         header.addWidget(open_btn)
         layout.addLayout(header)
 
         # Recent projects list
-        recent_label = QLabel("Recent Projects")
-        recent_label.setStyleSheet("font-size: 12px; color: #7E8798; font-weight: 600;")
-        layout.addWidget(recent_label)
+        self._recent_label = QLabel(tr_for(
+            self._i18n, "projects.recent", "Recent Projects"))
+        self._recent_label.setStyleSheet(
+            "font-size: 12px; color: #7E8798; font-weight: 600;")
+        layout.addWidget(self._recent_label)
 
         self._list = QListWidget()
         self._list.setAlternatingRowColors(True)
@@ -54,25 +63,43 @@ class ProjectsPanel(QWidget):
 
         # Action buttons
         btns = QHBoxLayout()
-        self._audit_btn = QPushButton("Run Audit")
+        self._audit_btn = QPushButton(tr_for(
+            self._i18n, "projects.audit", "Run Audit"))
         self._audit_btn.setEnabled(False)
         self._audit_btn.clicked.connect(self._on_audit)
         btns.addWidget(self._audit_btn)
 
-        self._mission_btn = QPushButton("New Mission…")
+        self._mission_btn = QPushButton(tr_for(
+            self._i18n, "projects.new_mission", "New Mission…"))
         self._mission_btn.setEnabled(False)
         self._mission_btn.setObjectName("primaryButton")
         self._mission_btn.clicked.connect(self._on_new_mission)
         btns.addWidget(self._mission_btn)
 
         btns.addStretch()
-        self._remove_btn = QPushButton("Remove from List")
+        self._remove_btn = QPushButton(tr_for(
+            self._i18n, "projects.remove", "Remove from List"))
         self._remove_btn.setEnabled(False)
         self._remove_btn.clicked.connect(self._on_remove)
         btns.addWidget(self._remove_btn)
         layout.addLayout(btns)
 
         self._list.currentItemChanged.connect(self._on_selection_changed)
+        self.refresh()
+
+    def retranslate(self) -> None:
+        self._title.setText(tr_for(self._i18n, "projects.title", "Projects"))
+        self._self_build_btn.setText(tr_for(
+            self._i18n, "projects.self_build", "Self-Build (This Agent)"))
+        self._open_btn.setText(tr_for(
+            self._i18n, "projects.open", "Open Project…"))
+        self._recent_label.setText(tr_for(
+            self._i18n, "projects.recent", "Recent Projects"))
+        self._audit_btn.setText(tr_for(self._i18n, "projects.audit", "Run Audit"))
+        self._mission_btn.setText(tr_for(
+            self._i18n, "projects.new_mission", "New Mission…"))
+        self._remove_btn.setText(tr_for(
+            self._i18n, "projects.remove", "Remove from List"))
         self.refresh()
 
     def refresh(self):
@@ -90,16 +117,21 @@ class ProjectsPanel(QWidget):
             item = QListWidgetItem(display)
             item.setData(Qt.ItemDataRole.UserRole, p)
             item.setToolTip(
-                f"Root: {p['root']}\n"
-                f"Language: {lang}\n"
-                f"Frameworks: {frameworks}\n"
-                f"Last used: {p['last_used']}"
+                tr_for(self._i18n, "projects.tooltip_root", "Root: {root}",
+                       root=p["root"]) + "\n"
+                + tr_for(self._i18n, "projects.tooltip_language",
+                          "Language: {language}", language=lang) + "\n"
+                + tr_for(self._i18n, "projects.tooltip_frameworks",
+                          "Frameworks: {frameworks}", frameworks=frameworks) + "\n"
+                + tr_for(self._i18n, "projects.tooltip_last_used",
+                          "Last used: {last_used}", last_used=p["last_used"])
             )
             self._list.addItem(item)
 
     def _on_open_project(self):
         from nl_coding_agent.gui.dialogs.open_project import OpenProjectDialog
-        dlg = OpenProjectDialog(self._services, self)
+        dlg = OpenProjectDialog(self._services, self,
+                                translator=self._i18n)
         if dlg.exec():
             self.refresh()
             # Select the newly opened project
@@ -130,8 +162,11 @@ class ProjectsPanel(QWidget):
             return
         project = item.data(Qt.ItemDataRole.UserRole)
         goal, ok = QInputDialog.getText(
-            self, f"New Mission for {project['name']}",
-            "Describe the goal for the autonomous multi-agent team:"
+            self,
+            tr_for(self._i18n, "projects.new_mission_title",
+                   "New Mission for {name}", name=project["name"]),
+            tr_for(self._i18n, "projects.new_mission_prompt",
+                   "Describe the goal for the autonomous multi-agent team:")
         )
         if ok and goal.strip():
             m_id = self._services.create_mission(
@@ -158,9 +193,11 @@ class ProjectsPanel(QWidget):
             return
         project = item.data(Qt.ItemDataRole.UserRole)
         reply = QMessageBox.question(
-            self, "Remove Project",
-            f"Remove '{project['name']}' from the list?\n"
-            f"This does NOT delete any files.",
+            self,
+            tr_for(self._i18n, "projects.remove_title", "Remove Project"),
+            tr_for(self._i18n, "projects.remove_confirm",
+                   "Remove '{name}' from the list?\nThis does NOT delete any files.",
+                   name=project["name"]),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:

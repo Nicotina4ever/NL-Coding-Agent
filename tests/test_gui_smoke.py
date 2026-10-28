@@ -104,7 +104,10 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
     assert isinstance(window._stack.widget(4), SettingsPanel)
     assert isinstance(window._stack.widget(6), AutonomyPanel)
     assert window._agents_panel._table.rowCount() == 5
-    assert window._settings_panel._project_value.text() == "No project open"
+    assert window._settings_panel._title.text() == "Impostazioni"
+    assert window._settings_panel._project_value.text() == "Nessun progetto aperto"
+    assert window._project_label.text() == "Nessun progetto aperto"
+    assert window._settings_panel._language_value.currentData() == "it"
     window._switch_page("autonomy")
     assert window._stack.currentIndex() == 6
 

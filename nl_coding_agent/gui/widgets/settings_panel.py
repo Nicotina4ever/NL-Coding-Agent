@@ -8,6 +8,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
+from nl_coding_agent.gui.i18n import tr_for
+
 _AUTONOMY_MODES = [("Off", "off"), ("Assisted", "assisted"), ("Automatic", "automatic")]
 _ACTIVE_STATUSES = {
     "running", "starting", "paused", "waiting_for_resources",
@@ -26,9 +28,11 @@ class SettingsPanel(QWidget):
 
     autonomy_requested = Signal()
 
-    def __init__(self, services, parent=None):
+    def __init__(self, services, parent=None, *, translator=None):
         super().__init__(parent)
         self._services = services
+        self._i18n = translator
+        self._form_labels: list[tuple[QLabel, str, str]] = []
         self._project_root: str | None = None
         self._project_id: int | None = None
         self._advanced_active = False
@@ -37,14 +41,15 @@ class SettingsPanel(QWidget):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
 
-        title = QLabel("Settings")
-        title.setStyleSheet("font-size: 16px; font-weight: 700;")
-        layout.addWidget(title)
+        self._title = QLabel(tr_for(self._i18n, "settings.title", "Settings"))
+        self._title.setStyleSheet("font-size: 16px; font-weight: 700;")
+        layout.addWidget(self._title)
 
-        subtitle = QLabel(
+        self._subtitle = QLabel(tr_for(
+            self._i18n, "settings.subtitle",
             "Runtime paths and configuration state. Read-only; no secrets are displayed. "
-            "Self-build/autonomy controls live only under Advanced below."
-        )
+            "Self-build/autonomy controls live only under Advanced below."))
+        subtitle = self._subtitle
         subtitle.setWordWrap(True)
         subtitle.setStyleSheet("color: #7E8798; font-size: 12px;")
         layout.addWidget(subtitle)
@@ -66,21 +71,43 @@ class SettingsPanel(QWidget):
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
 
-        form.addRow("Project root", self._project_value)
-        form.addRow("SQLite database", self._database_value)
-        form.addRow("Ollama base URL", self._ollama_value)
-        form.addRow("Model config", self._models_value)
-        form.addRow("Cloud escalation", self._cloud_value)
-        form.addRow("Permissions", self._permissions_value)
+        self._language_value = QComboBox()
+        self._language_value.setObjectName("uiLanguageCombo")
+        self._language_combo = self._language_value
+        self._language_value.setAccessibleName("UI language")
+        self._language_value.setToolTip(tr_for(
+            self._i18n, "settings.language_tooltip",
+            "Presentation language only. It does not change agent responses, "
+            "generated code or documentation."))
+        for key, default, code in (
+                ("settings.language_italian", "Italiano", "it"),
+                ("settings.language_english", "English", "en"),
+                ("settings.language_system", "System (auto)", "system")):
+            self._language_value.addItem(
+                tr_for(self._i18n, key, default), code)
+        self._language_value.currentIndexChanged.connect(
+            self._on_language_changed)
+        for label_key, default, widget in (
+                ("settings.project_root", "Project root", self._project_value),
+                ("settings.database", "SQLite database", self._database_value),
+                ("settings.ollama", "Ollama base URL", self._ollama_value),
+                ("settings.models", "Model config", self._models_value),
+                ("settings.cloud", "Cloud escalation", self._cloud_value),
+                ("settings.permissions", "Permissions", self._permissions_value),
+                ("settings.language", "UI language", self._language_value)):
+            label = QLabel(tr_for(self._i18n, label_key, default))
+            self._form_labels.append((label, label_key, default))
+            form.addRow(label, widget)
         layout.addLayout(form)
 
         self._advanced_group = self._build_advanced_group()
         layout.addWidget(self._advanced_group)
 
-        note = QLabel(
+        self._note = QLabel(tr_for(
+            self._i18n, "settings.cloud_note",
             "Cloud escalation remains disabled unless explicitly enabled for a project. "
-            "Saving Advanced settings never starts autonomy by itself."
-        )
+            "Saving Advanced settings never starts autonomy by itself."))
+        note = self._note
         note.setWordWrap(True)
         note.setStyleSheet(
             "color: #AB83C6; font-size: 12px; padding: 8px; "
@@ -88,18 +115,24 @@ class SettingsPanel(QWidget):
         )
         layout.addWidget(note)
 
-        refresh_btn = QPushButton("Refresh")
+        self._refresh_btn = QPushButton(tr_for(
+            self._i18n, "settings.refresh", "Refresh"))
+        refresh_btn = self._refresh_btn
         refresh_btn.setAccessibleName("Refresh settings and autonomy preview")
         refresh_btn.clicked.connect(self.refresh)
         layout.addWidget(refresh_btn, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addStretch()
 
         self.refresh()
+        self._sync_language_combo()
 
     # ------------------------------------------------------------------ advanced UI
 
     def _build_advanced_group(self) -> QGroupBox:
-        group = QGroupBox("Advanced - self-build and autonomy")
+        self._advanced_group_box = QGroupBox(tr_for(
+            self._i18n, "settings.advanced_group",
+            "Advanced - self-build and autonomy"))
+        group = self._advanced_group_box
         group.setObjectName("advancedAutonomyGroup")
         group.setAccessibleName("Advanced self-build and autonomy controls")
         outer = QVBoxLayout(group)
@@ -231,7 +264,9 @@ class SettingsPanel(QWidget):
         outer.addLayout(buttons)
 
         # Backwards-compatible navigation affordance (kept for existing callers/tests).
-        self._autonomy_btn = QPushButton("Open autonomy status page…")
+        self._autonomy_btn = QPushButton(tr_for(
+            self._i18n, "settings.open_autonomy",
+            "Open autonomy status page…"))
         self._autonomy_btn.setAccessibleName("Open the read-only autonomy status page")
         self._autonomy_btn.clicked.connect(self.autonomy_requested.emit)
         outer.addWidget(self._autonomy_btn, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -246,6 +281,63 @@ class SettingsPanel(QWidget):
         label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         return label
 
+    def _sync_language_combo(self) -> None:
+        if self._i18n is None:
+            preference = getattr(self._services, "ui_language_preference", lambda: "it")()
+        else:
+            preference = self._i18n.preference
+        index = self._language_value.findData(preference)
+        if index >= 0 and index != self._language_value.currentIndex():
+            self._language_value.blockSignals(True)
+            self._language_value.setCurrentIndex(index)
+            self._language_value.blockSignals(False)
+
+    def _on_language_changed(self, _index: int) -> None:
+        if self._i18n is None:
+            return
+        code = str(self._language_value.currentData() or "it")
+        try:
+            result = self._i18n.set_language(code)
+        except Exception as exc:  # noqa: BLE001 - GUI boundary
+            self._set_advanced_notice(str(exc), ok=False)
+            return
+        if not result.get("ok", True):
+            self._set_advanced_notice(
+                str(result.get("error") or "language change failed"), ok=False)
+
+    def retranslate(self) -> None:
+        self._title.setText(tr_for(self._i18n, "settings.title", "Settings"))
+        self._subtitle.setText(tr_for(
+            self._i18n, "settings.subtitle",
+            "Runtime paths and configuration state. Read-only; no secrets are displayed. "
+            "Self-build/autonomy controls live only under Advanced below."))
+        for label, key, default in self._form_labels:
+            label.setText(tr_for(self._i18n, key, default))
+        labels = (("settings.language_italian", "Italiano"),
+                  ("settings.language_english", "English"),
+                  ("settings.language_system", "System (auto)"))
+        for index, (key, default) in enumerate(labels):
+            if index < self._language_value.count():
+                self._language_value.setItemText(
+                    index, tr_for(self._i18n, key, default))
+        self._language_value.setToolTip(tr_for(
+            self._i18n, "settings.language_tooltip",
+            "Presentation language only. It does not change agent responses, "
+            "generated code or documentation."))
+        self._refresh_btn.setText(tr_for(self._i18n, "settings.refresh", "Refresh"))
+        self._advanced_group_box.setTitle(tr_for(
+            self._i18n, "settings.advanced_group",
+            "Advanced - self-build and autonomy"))
+        self._note.setText(tr_for(
+            self._i18n, "settings.cloud_note",
+            "Cloud escalation remains disabled unless explicitly enabled for a project. "
+            "Saving Advanced settings never starts autonomy by itself."))
+        self._autonomy_btn.setText(tr_for(
+            self._i18n, "settings.open_autonomy",
+            "Open autonomy status page…"))
+        self._sync_language_combo()
+        self.refresh()
+
     def set_project(self, project: dict | None):
         self._project_root = project.get("root") if project else None
         self._project_id = int(project["id"]) if project and project.get("id") is not None else None
@@ -256,15 +348,19 @@ class SettingsPanel(QWidget):
     def refresh(self):
         settings = self._services.get_runtime_settings(self._project_root)
         root = settings.get("project_root")
-        self._project_value.setText(root or "No project open")
+        self._project_value.setText(root or tr_for(
+            self._i18n, "settings.no_project", "No project open"))
         self._database_value.setText(str(settings.get("database_path") or ""))
         self._ollama_value.setText(str(settings.get("ollama_base_url") or ""))
         self._models_value.setText(str(settings.get("model_config_path") or ""))
         if settings.get("cloud_escalation_enabled"):
-            self._cloud_value.setText("Enabled")
+            self._cloud_value.setText(tr_for(
+                self._i18n, "settings.enabled", "Enabled"))
             self._cloud_value.setStyleSheet("color: #E26472;")
         else:
-            self._cloud_value.setText("Disabled - opt-in per project")
+            self._cloud_value.setText(tr_for(
+                self._i18n, "settings.disabled",
+                "Disabled - opt-in per project"))
             self._cloud_value.setStyleSheet("color: #55C58A;")
         self._refresh_permissions()
         self._load_advanced()
@@ -280,7 +376,8 @@ class SettingsPanel(QWidget):
             scopes = []
             policy = {}
         if not scopes:
-            self._permissions_value.setText("Unavailable")
+            self._permissions_value.setText(tr_for(
+                self._i18n, "settings.unavailable", "Unavailable"))
             return
         granted = [scope.upper() for scope in scopes if policy.get(scope)]
         denied = [scope.upper() for scope in scopes if not policy.get(scope)]
