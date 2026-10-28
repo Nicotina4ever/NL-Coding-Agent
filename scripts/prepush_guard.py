@@ -69,6 +69,54 @@ REVIEW = AUDIT.REVIEW
 BLOCKING = frozenset({ROTATE, EXCLUDE})
 _PERSONAL_NONBLOCKING_PREFIXES = ("docs/", "tests/")
 
+#: Narrow, documented allowlist for one known synthetic test fixture only.
+#: An entry requires the exact value digest, exact path, exact rule, exact scope
+#: and (optionally) the exact historical commits. It is never a blanket tests-tree
+#: or rule suppression: a different digest, path, rule, scope or commit still
+#: blocks normally, and staged/head findings are not exempted.
+KNOWN_SYNTHETIC_FIXTURES: tuple[dict, ...] = (
+    {
+        "sha256": "457643f44d19aed85fd756aa50cc0cd6b57376d4e8f5a72f9f85972a522002a3",
+        "path": "tests/test_prepush_guard.py",
+        "rule": "aws_access_key_id",
+        "scope": "history",
+        "commits": (
+            "d9341cd3ee869cbce5f0cb58b8946cfaa191f2d1",
+            "3cae00c508e200c7ef88474b69cd1dc1dfec5304",
+        ),
+        "reason": ("Runtime-assembled synthetic AWS-shaped fixture that proves "
+                   "detection in tests/test_prepush_guard.py; the hardcoded form "
+                   "was removed in stage-10 R3 and remains only in these exact "
+                   "bounded-history commits. Non-secret test value."),
+    },
+)
+
+
+def _known_synthetic_allowlist_match(rel: str, value: str, rule: str,
+                                     scope: str,
+                                     commit: str | None) -> dict | None:
+    """Return the matching known-synthetic allowlist entry, or None.
+
+    Digest, path, rule and scope must all match; when the entry lists commits,
+    the historical commit must be one of them too.
+    """
+    digest = _sha256(str(value or ""))
+    rel_norm = str(rel or "").replace(os.sep, "/")
+    for entry in KNOWN_SYNTHETIC_FIXTURES:
+        if digest != entry["sha256"]:
+            continue
+        if rel_norm != entry["path"]:
+            continue
+        if str(rule or "") != entry["rule"]:
+            continue
+        if str(scope or "") != entry["scope"]:
+            continue
+        commits = entry.get("commits") or ()
+        if commits and str(commit or "") not in commits:
+            continue
+        return entry
+    return None
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -175,7 +223,9 @@ class Scanner:
         if len(self.findings) >= MAX_FINDINGS:
             self.truncated = True
             return
-        allowlisted = self._allowlisted(path, value)
+        known_synthetic = _known_synthetic_allowlist_match(
+            path, value, rule, scope, commit)
+        allowlisted = bool(known_synthetic) or self._allowlisted(path, value)
         blocking = classification in BLOCKING and not allowlisted
         if kind in ("personal_absolute_path", "private_url"):
             rel_low = str(path).replace(os.sep, "/").lower()
@@ -205,6 +255,16 @@ class Scanner:
             "evidence": AUDIT.redact_value(value),
             "context": AUDIT.redact_line(context, spans),
         }
+        if known_synthetic is not None:
+            finding["allowlist"] = {
+                "kind": "known_synthetic_fixture",
+                "reason": known_synthetic["reason"],
+                "digest": known_synthetic["sha256"],
+                "path": known_synthetic["path"],
+                "rule": known_synthetic["rule"],
+                "scope": known_synthetic["scope"],
+                "commits": list(known_synthetic.get("commits") or ()),
+            }
         self.findings.append(finding)
 
     def scan_text(self, rel: str, text: str, *, scope: str,
@@ -349,6 +409,19 @@ class Scanner:
                        "max_total_bytes": MAX_TOTAL_BYTES,
                        "max_findings": MAX_FINDINGS,
                        "max_commits": MAX_COMMITS},
+            "allowlist": {
+                "known_synthetic_fixtures": [
+                    {
+                        "sha256": entry["sha256"],
+                        "path": entry["path"],
+                        "rule": entry["rule"],
+                        "scope": entry["scope"],
+                        "commits": list(entry.get("commits") or ()),
+                        "reason": entry["reason"],
+                    }
+                    for entry in KNOWN_SYNTHETIC_FIXTURES
+                ],
+            },
             "no_push": True, "no_commit": True, "no_network": True,
             "history_rewritten": False,
             "secrets_redacted": True,

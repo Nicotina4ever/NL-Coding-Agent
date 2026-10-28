@@ -1,6 +1,7 @@
 """Pre-push guard tests: temporary Git repos only, no network, no canonical hook."""
 from __future__ import annotations
 import hashlib
+import importlib.util
 import json
 import os
 import subprocess
@@ -14,6 +15,14 @@ SCRIPT = REPO / "scripts" / "prepush_guard.py"
 def _assemble(*parts: str) -> str:
     """Build synthetic fixture values at runtime so no full literal is in source."""
     return "".join(parts)
+
+
+def _load_guard_module():
+    spec = importlib.util.spec_from_file_location("prepush_guard_r4", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 SECRET = _assemble("AKIA", "ABCDEFGH", "IJKLMNOP")
@@ -339,6 +348,105 @@ def test_synthetic_fixtures_are_runtime_assembled_not_source_literals():
     # The assembled fixture values must not exist as literals in the source file.
     assert aws_expected not in source
     assert openai_expected not in source
+
+
+def test_known_synthetic_allowlist_is_exact_and_narrow():
+    guard = _load_guard_module()
+    entry = guard.KNOWN_SYNTHETIC_FIXTURES[0]
+    commit = entry["commits"][0]
+    match = guard._known_synthetic_allowlist_match(
+        entry["path"], SECRET, entry["rule"], entry["scope"], commit)
+    assert match is entry
+    # Same digest/rule/scope but wrong path, wrong rule, staged/head scope,
+    # wrong commit or different digest must all remain blocked.
+    assert guard._known_synthetic_allowlist_match(
+        "tests/other_test.py", SECRET, entry["rule"], entry["scope"], commit) is None
+    assert guard._known_synthetic_allowlist_match(
+        entry["path"], SECRET, "generic_secret", entry["scope"], commit) is None
+    assert guard._known_synthetic_allowlist_match(
+        entry["path"], SECRET, entry["rule"], "staged", commit) is None
+    assert guard._known_synthetic_allowlist_match(
+        entry["path"], SECRET, entry["rule"], "head", commit) is None
+    assert guard._known_synthetic_allowlist_match(
+        entry["path"], SECRET, entry["rule"], entry["scope"], "0" * 40) is None
+    assert guard._known_synthetic_allowlist_match(
+        entry["path"], SECRET + "X", entry["rule"], entry["scope"], commit) is None
+
+
+def test_known_synthetic_allowlist_finding_is_visible_redacted_and_not_blocking():
+    guard = _load_guard_module()
+    entry = guard.KNOWN_SYNTHETIC_FIXTURES[0]
+    scanner = guard.Scanner(REPO)
+    scanner.add(
+        scope=entry["scope"], path=entry["path"], line=12, rule=entry["rule"],
+        kind="aws_access_key_id", classification=guard.ROTATE,
+        action="rotate the credential", value=SECRET,
+        context='SECRET = "' + SECRET + '"', commit=entry["commits"][0],
+    )
+    assert len(scanner.findings) == 1
+    finding = scanner.findings[0]
+    assert finding["allowlisted"] is True and finding["blocking"] is False
+    allowlist = finding["allowlist"]
+    assert allowlist["kind"] == "known_synthetic_fixture"
+    assert allowlist["digest"] == entry["sha256"]
+    assert allowlist["scope"] == "history"
+    assert allowlist["reason"]
+    report = scanner.report("scan-history")
+    assert report["ok"] is True and report["counts"]["blocking"] == 0
+    assert report["counts"]["allowlisted"] == 1
+    assert report["allowlist"]["known_synthetic_fixtures"][0]["sha256"] == entry["sha256"]
+    blob = json.dumps(report)
+    assert SECRET not in blob
+
+
+def test_known_synthetic_allowlist_does_not_suppress_other_findings():
+    guard = _load_guard_module()
+    entry = guard.KNOWN_SYNTHETIC_FIXTURES[0]
+    scanner = guard.Scanner(REPO)
+    # Same value, but a different path -> a real finding and blocking.
+    scanner.add(
+        scope="history", path="config/production.py", line=3,
+        rule=entry["rule"], kind="aws_access_key_id",
+        classification=guard.ROTATE, action="rotate the credential",
+        value=SECRET, context='SECRET = "' + SECRET + '"',
+        commit=entry["commits"][0],
+    )
+    # Same value at the allowlisted path but staged scope -> not exempt.
+    scanner.add(
+        scope="staged", path=entry["path"], line=3, rule=entry["rule"],
+        kind="aws_access_key_id", classification=guard.ROTATE,
+        action="rotate the credential", value=SECRET,
+        context='SECRET = "' + SECRET + '"',
+    )
+    assert all(item["blocking"] for item in scanner.findings)
+    assert not any(item["allowlisted"] for item in scanner.findings)
+    report = scanner.report("scan-all")
+    assert report["ok"] is False and report["counts"]["blocking"] == 2
+    assert SECRET not in json.dumps(report)
+
+
+def test_known_synthetic_allowlist_never_exempts_temp_repo_history_or_staged(tmp_path):
+    # Temp-repo commits are not the exact historical commits, so even the same
+    # digest/path/rule/scope in a different repository remains blocked.
+    repo = _init(tmp_path)
+    target = repo / "tests" / "test_prepush_guard.py"
+    target.parent.mkdir(parents=True)
+    target.write_text('SECRET = "' + SECRET + '"\n', encoding="utf-8")
+    _git(repo, "add", "tests/test_prepush_guard.py")
+    completed = _json(repo, "scan-staged")[0]
+    assert completed.returncode == 1
+    _git(repo, "commit", "-q", "-m", "temp fixture")
+    completed = _json(repo, "scan-history")[0]
+    assert completed.returncode == 1
+
+    # A different AWS-shaped secret at the allowlisted path still blocks.
+    other = _assemble("AKIA", "ZZZZZZZZ", "ZZZZZZZZ")
+    (repo / "tests" / "test_prepush_guard.py").write_text(
+        'SECRET = "' + other + '"\n', encoding="utf-8")
+    _git(repo, "add", "tests/test_prepush_guard.py")
+    _git(repo, "commit", "-q", "-m", "different fixture")
+    completed = _json(repo, "scan-history")[0]
+    assert completed.returncode == 1
 
 
 def test_bad_repo_and_static_no_push_network_or_history_write():
