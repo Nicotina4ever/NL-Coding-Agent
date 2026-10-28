@@ -1,9 +1,11 @@
 """SQLite persistence layer for NL Coding Agent."""
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import threading
+from datetime import datetime
 from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[2]
@@ -135,6 +137,129 @@ CREATE TABLE IF NOT EXISTS verification_runs (
     passed      INTEGER NOT NULL,
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS supervisor_leases (
+    project_id  INTEGER PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+    owner_id    TEXT NOT NULL,
+    owner_pid   INTEGER NOT NULL,
+    owner_host  TEXT NOT NULL,
+    version     INTEGER NOT NULL DEFAULT 1,
+    acquired_at TEXT NOT NULL,
+    heartbeat_at TEXT NOT NULL,
+    expires_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS supervisor_runs (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id          INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    mode                TEXT NOT NULL,
+    status              TEXT NOT NULL,
+    owner_id            TEXT,
+    owner_pid           INTEGER,
+    config_json         TEXT NOT NULL DEFAULT '{}',
+    stop_requested      INTEGER NOT NULL DEFAULT 0,
+    pause_requested     INTEGER NOT NULL DEFAULT 0,
+    missions_completed  INTEGER NOT NULL DEFAULT 0,
+    missions_failed     INTEGER NOT NULL DEFAULT 0,
+    started_at          TEXT NOT NULL,
+    heartbeat_at        TEXT,
+    finished_at         TEXT,
+    stopped_reason      TEXT
+);
+
+CREATE TABLE IF NOT EXISTS mission_queue (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id        INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    requirement_id    TEXT,
+    mission_id        INTEGER REFERENCES missions(id) ON DELETE SET NULL,
+    state             TEXT NOT NULL,
+    priority          TEXT NOT NULL DEFAULT 'P1',
+    idempotency_key   TEXT NOT NULL,
+    claim_token       TEXT,
+    lease_owner       TEXT,
+    attempts          INTEGER NOT NULL DEFAULT 0,
+    max_attempts      INTEGER NOT NULL DEFAULT 2,
+    budget_json       TEXT NOT NULL DEFAULT '{}',
+    goal              TEXT NOT NULL,
+    payload_json      TEXT NOT NULL DEFAULT '{}',
+    failure_class     TEXT,
+    failure_signature TEXT,
+    scheduled_at      TEXT,
+    claimed_at        TEXT,
+    heartbeat_at      TEXT,
+    finished_at       TEXT,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    UNIQUE(project_id, idempotency_key)
+);
+
+CREATE TABLE IF NOT EXISTS backlog_items (
+    requirement_id       TEXT PRIMARY KEY,
+    title                TEXT NOT NULL,
+    area                 TEXT,
+    priority             TEXT,
+    program_stage        INTEGER,
+    program_stage_name   TEXT,
+    status               TEXT NOT NULL,
+    dependencies_json    TEXT NOT NULL DEFAULT '[]',
+    acceptance_json      TEXT NOT NULL DEFAULT '[]',
+    source_refs_json     TEXT NOT NULL DEFAULT '[]',
+    content_hash         TEXT NOT NULL,
+    source_fingerprint   TEXT,
+    last_synced_at       TEXT NOT NULL,
+    supervisor_status    TEXT,
+    last_mission_id      INTEGER,
+    attempts             INTEGER NOT NULL DEFAULT 0,
+    note                 TEXT
+);
+
+CREATE TABLE IF NOT EXISTS mission_evidence (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    mission_id   INTEGER NOT NULL REFERENCES missions(id) ON DELETE CASCADE,
+    queue_id     INTEGER,
+    kind         TEXT NOT NULL,
+    record_key   TEXT NOT NULL,
+    sha256       TEXT,
+    path         TEXT,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    created_at   TEXT NOT NULL,
+    UNIQUE(mission_id, kind, record_key)
+);
+
+CREATE TABLE IF NOT EXISTS approvals (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id   INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    mission_id   INTEGER,
+    action       TEXT NOT NULL,
+    scope_json   TEXT NOT NULL DEFAULT '{}',
+    reason       TEXT,
+    status       TEXT NOT NULL DEFAULT 'pending',
+    requested_at TEXT NOT NULL,
+    decided_at   TEXT,
+    decided_by   TEXT,
+    expires_at   TEXT
+);
+
+CREATE TABLE IF NOT EXISTS supervisor_commands (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id   INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    run_id       INTEGER,
+    command      TEXT NOT NULL,
+    requested_by TEXT NOT NULL,
+    created_at   TEXT NOT NULL,
+    consumed_at  TEXT
+);
+
+CREATE TABLE IF NOT EXISTS machine_leases (
+    resource    TEXT PRIMARY KEY,
+    owner_id    TEXT NOT NULL,
+    owner_pid   INTEGER NOT NULL,
+    owner_host  TEXT NOT NULL,
+    version     INTEGER NOT NULL DEFAULT 1,
+    acquired_at TEXT NOT NULL,
+    heartbeat_at TEXT NOT NULL,
+    expires_at  TEXT NOT NULL
+);
 """
 
 # Columns added after the first operational baseline.  Migrations are additive
@@ -156,6 +281,13 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("missions", "harness_version", "INTEGER"),
     ("missions", "staging_dir", "TEXT"),
     ("missions", "promotion_status", "TEXT"),
+    # Stage-3 supervisor identity/correlation (phase 3, additive only; C3a).
+    ("missions", "requirement_id", "TEXT"),
+    ("missions", "supervisor_run_id", "INTEGER"),
+    ("events", "project_id", "INTEGER"),
+    ("events", "mission_id", "INTEGER"),
+    ("events", "correlation_id", "TEXT"),
+    ("events", "event_kind", "TEXT"),
 ]
 
 _INDEXES = """
@@ -166,6 +298,14 @@ CREATE INDEX IF NOT EXISTS idx_handoffs_mission ON handoffs(mission_id, id);
 CREATE INDEX IF NOT EXISTS idx_verification_mission ON verification_runs(mission_id, id);
 CREATE INDEX IF NOT EXISTS idx_events_created ON events(id DESC);
 CREATE INDEX IF NOT EXISTS idx_missions_staging ON missions(staging_dir);
+CREATE INDEX IF NOT EXISTS idx_missions_requirement ON missions(requirement_id);
+CREATE INDEX IF NOT EXISTS idx_queue_project_state ON mission_queue(project_id, state, id);
+CREATE INDEX IF NOT EXISTS idx_queue_requirement ON mission_queue(project_id, requirement_id);
+CREATE INDEX IF NOT EXISTS idx_backlog_stage ON backlog_items(program_stage, priority);
+CREATE INDEX IF NOT EXISTS idx_evidence_mission ON mission_evidence(mission_id, id);
+CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(project_id, status, id);
+CREATE INDEX IF NOT EXISTS idx_runs_project ON supervisor_runs(project_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_events_correlation ON events(correlation_id);
 """
 
 
@@ -193,10 +333,71 @@ def init_db(path: Path | None = None) -> sqlite3.Connection:
     return conn
 
 
+def get_setting(key: str, default: str | None = None) -> str | None:
+    """Return a raw app_settings value, or the default when unset."""
+    conn = init_db()
+    try:
+        row = conn.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
+        return row["value"] if row else default
+    finally:
+        conn.close()
+
+
+def set_setting(key: str, value: str) -> None:
+    """Persist one raw app_settings value (upsert)."""
+    now = _now()
+    conn = init_db()
+    try:
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at
+                """,
+                (key, value, now),
+            )
+    finally:
+        conn.close()
+
+
+def get_json_setting(key: str, default: dict | None = None) -> dict:
+    """Return a JSON-object app_settings value; corrupt/absent values fail closed to the default."""
+    fallback = dict(default or {})
+    raw = get_setting(key)
+    if raw is None:
+        return fallback
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
+        return fallback
+    return parsed if isinstance(parsed, dict) else fallback
+
+
+def set_json_setting(key: str, value: dict) -> None:
+    """Persist one JSON-object app_settings value."""
+    if not isinstance(value, dict):
+        raise ValueError("JSON settings values must be objects")
+    set_setting(key, json.dumps(value, ensure_ascii=False, sort_keys=True))
+
+
+def _now() -> str:
+    return datetime.now().isoformat(timespec="seconds")
+
+
 def log_event(conn: sqlite3.Connection, message: str, source: str = "system",
-              level: str = "info", payload: str = "{}") -> None:
+              level: str = "info", payload: str = "{}", *,
+              project_id: int | None = None,
+              mission_id: int | None = None,
+              correlation_id: str | None = None,
+              event_kind: str | None = None) -> None:
+    """Append one audit event; stage-3 correlation fields are optional."""
     with conn:
         conn.execute(
-            "INSERT INTO events (source, level, message, payload) VALUES (?,?,?,?)",
-            (source, level, message, payload)
+            """
+            INSERT INTO events (source, level, message, payload,
+                                project_id, mission_id, correlation_id, event_kind)
+            VALUES (?,?,?,?,?,?,?,?)
+            """,
+            (source, level, message, payload, project_id, mission_id,
+             correlation_id, event_kind)
         )
