@@ -44,8 +44,8 @@ evidence only.
 | 1 | Repository relocation and path reconciliation | COMPLETE | 1 | NL-BP-143 | - |
 | 2 | Transactional staging, safety and self-healing | COMPLETE | 15 | NL-BP-3-5, 54-60, 65, 72-74, 76 | 1 |
 | 3 | Persistent autonomous supervisor and verified handoff | COMPLETE (Tier B blocked evidence) | 13 | NL-BP-12, 50-53, 61-64, 66, 67, 75, 77 | 2 |
-| 4 | Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities | IN PROGRESS | 40 | NL-BP-1, 2, 6-11, 13, 20-46, 68-71 | 3 |
-| 5 | Repository cleanup and optimization | PENDING | 8 | NL-BP-90-97 | 4 |
+| 4 | Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities | COMPLETE | 40 | NL-BP-1, 2, 6-11, 13, 20-46, 68-71 | 3 |
+| 5 | Repository cleanup and optimization | IN PROGRESS | 8 | NL-BP-90-97 | 4 |
 | 6 | Lightweight portable/bootstrapper and final release testing | PENDING | 26 | NL-BP-110-124, 140-142, 144-151 | 5 |
 
 Execution rule: a later stage starts only when the previous stage's gates pass, unless the
@@ -86,6 +86,8 @@ SH-07 Tier B (real local models) remains pending explicit authorization and bloc
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v1.6 (2026-10-28)** - Stage 4 complete (C4a-C4e): CrewRuntime seam/specs, app-owned Flow foundation, opt-in supervisor Flow executor, HITL/memory-policy/capability routing, SBOM/compat gate. Sequential pipeline remains default; Flow opt-in only because no real-model Flow acceptance evidence exists. NL-BP-006/007/009 partial (fake-model verified), 010/011 partial refreshed; counts 27 verified / 34 partial / 38 planned / 4 blocked. Stage 5 repository hygiene started (audit first, no destructive actions without authorization).
 
 **v1.5 (2026-10-28)** - Stage-4 engineering record (C4a-C4e): CrewRuntime seam/typed specs, app-owned Flow state+persistence, opt-in supervisor Flow executor and HITL approvals, capability records + model router, memory/delegation policy, SBOM/compat gate (docs/evidence/crewai_sbom.json). NL-BP-006/007/009 planned->partial (Flow opt-in + fake-model verified for 006/007; capability registry framework only for 009); NL-BP-010/011 evidence refreshed, both stay partial. Rollout decision: sequential remains default, Flow opt-in only, because no real-model Flow acceptance exists; no gate weakened. Stage 4 remains in progress (GUI/multimodal/voice/other area-4 requirements still open). Counts: 27 verified / 34 partial / 38 planned / 4 blocked.
 

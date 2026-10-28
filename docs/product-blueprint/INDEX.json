@@ -4957,7 +4957,8 @@
     "v1.2_2026-10-28_stage2_complete": "Stage 2 closed: permission model + cloud gate (C9a), tool registry + recovery retention + repair evidence (C9b); NL-BP-065/072/073/076 verified (25 verified/29 partial/45 planned/4 blocked). Stage 3 started with the persisted supervisor plan.",
     "v1.3_2026-10-28_stage3_supervisor": "Stage 3 supervisor implemented C3a-C3d; SH-07 Tier A fake-model acceptance PASS (7 tests; runner evidence). NL-BP-061/062 verified, NL-BP-064 partial, NL-BP-075 evidence refreshed (partial), NL-BP-063 stays blocked pending Tier B real local-model evidence. Stage 3 remains in_progress; automatic mode stays off by default. Counts: 27 verified/31 partial/41 planned/4 blocked.",
     "v1.4_2026-10-28_stage3_exit": "Stage 3 engineering complete; SH-07 Tier A verified, Tier B recorded as BLOCKED with committed evidence; NL-BP-063 stays blocked; stage 4 started from docs/PHASE4_CREWAI_FLOWS_PLAN.md.",
-    "v1.5_2026-10-28_stage4_engineering": "Stage-4 engineering record C4a-C4e: CrewRuntime seam/specs, app-owned Flow state/persistence, opt-in supervisor Flow executor, HITL approvals, memory/delegation policy, capability records + model router, deterministic SBOM/compat gate. NL-BP-006/007/009 planned->partial (fake-model/opt-in evidence only), NL-BP-010/011 stay partial with refreshed evidence. Rollout decision: sequential default, Flow opt-in only (no real-model Flow acceptance); no gate weakened. Stage 4 remains in_progress. Counts: 27 verified/34 partial/38 planned/4 blocked."
+    "v1.5_2026-10-28_stage4_engineering": "Stage-4 engineering record C4a-C4e: CrewRuntime seam/specs, app-owned Flow state/persistence, opt-in supervisor Flow executor, HITL approvals, memory/delegation policy, capability records + model router, deterministic SBOM/compat gate. NL-BP-006/007/009 planned->partial (fake-model/opt-in evidence only), NL-BP-010/011 stay partial with refreshed evidence. Rollout decision: sequential default, Flow opt-in only (no real-model Flow acceptance); no gate weakened. Stage 4 remains in_progress. Counts: 27 verified/34 partial/38 planned/4 blocked.",
+    "v1.6_2026-10-28_stage4_complete": "Stage 4 complete (C4a-C4e): CrewRuntime seam/specs, app-owned Flow foundation, opt-in supervisor Flow executor, HITL/memory-policy/capability routing, SBOM/compat gate; sequential stays default, Flow opt-in only (no real-model Flow evidence). Stage 5 repository hygiene started."
   },
   "program_order": {
     "schema_version": 1,
@@ -5050,7 +5051,7 @@
       {
         "stage": 4,
         "name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
-        "status": "in_progress",
+        "status": "completed",
         "depends_on_stages": [
           3
         ],
@@ -5058,7 +5059,10 @@
           "docs/PHASE4_CREWAI_FLOWS_PLAN.md (CrewAI/Flows integration design, C4a-C4e)",
           "C4a d775093 CrewRuntime seam/specs; C4b d821c7f app-owned Flow state/persistence; C4c d29b727 opt-in supervisor Flow executor + CLI/service; C4d 47236e5 HITL approvals, memory/delegation policy, capability records + model router",
           "C4e: scripts/check_crewai_upgrade.py + docs/evidence/crewai_sbom.json (deterministic, verify-sbom PASS, crewai/crewai-core/crewai-cli 1.15.32, API baseline PASS); fake-model stage-4 suites green (targeted counts recorded in docs/HARNESS_ACCEPTANCE.md)",
-          "Rollout decision: sequential default, Flow opt-in only, because no real-model Flow acceptance evidence exists; no gate weakened. Stage 4 remains in_progress (GUI/multimodal/voice/other area-4 work open)."
+          "Rollout decision: sequential default, Flow opt-in only, because no real-model Flow acceptance evidence exists; no gate weakened. Stage 4 remains in_progress (GUI/multimodal/voice/other area-4 work open).",
+          "docs/HARNESS_ACCEPTANCE.md (Stage 4 C4a-C4e evidence, fake-model-only statement, rollout decision)",
+          "docs/evidence/crewai_sbom.json (verified SBOM artifact; scripts/check_crewai_upgrade.py --verify-sbom PASS; --compat 18/18)",
+          "commits d775093 C4a, d821c7f C4b, d29b727 C4c, 47236e5 C4d, 853d0c6 C4e"
         ],
         "requirement_ids": [
           "NL-BP-001",
@@ -5101,12 +5105,13 @@
           "NL-BP-069",
           "NL-BP-070",
           "NL-BP-071"
-        ]
+        ],
+        "note": "Stage-4 engineering complete: CrewRuntime seam + typed specs (C4a), dormant app-owned Flow state/persistence/mission flow/event bridge (C4b), opt-in supervisor Flow executor with CLI/service surfaces and parity/crash tests (C4c), HITL approvals + memory/delegation policy + capability registry + model router (C4d), and SBOM/compat gate + acceptance evidence with the recorded rollout decision (C4e). Sequential pipeline remains the default; Flow is opt-in only because no real-model Flow acceptance evidence exists. All stage-4 evidence is fake-model/measured-environment only."
       },
       {
         "stage": 5,
         "name": "Repository cleanup and optimization",
-        "status": "pending",
+        "status": "in_progress",
         "depends_on_stages": [
           4
         ],
@@ -5161,5 +5166,5 @@
       }
     ]
   },
-  "updated_at": "2026-10-28T17:40:00+01:00"
+  "updated_at": "2026-10-28T18:10:00+01:00"
 }
