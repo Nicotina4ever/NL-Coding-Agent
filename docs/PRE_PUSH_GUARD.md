@@ -1,14 +1,14 @@
-# Mandatory blocking pre-push secrets/content guard (stage 10 R1/R2, NL-BP-235)
+# Mandatory blocking pre-push secrets/content guard (stage 10 R1/R2/R3, NL-BP-235)
 
 scripts/prepush_guard.py is a blocking, read-only release guard. It must be run
 before ANY upload, push, share or publication (including every earlier public
 GitHub upload). It never pushes, commits, tags, fetches, publishes, changes
 visibility/collaborators or rewrites history.
 
-This document also records the stage-10 R2 acceptance review, an end-to-end hook
-proof against temporary bare remotes, and a dated measured scan at the current
-HEAD. The Lead decides verified status; nothing here claims external acceptance,
-publication authorization or complete history coverage.
+This document records the stage-10 R2 acceptance review, an end-to-end hook proof
+against temporary bare remotes, the R3 synthetic-fixture remediation and dated
+working-tree measurements. The Lead decides verified status; nothing here claims
+external acceptance, publication authorization or complete history coverage.
 
 ## Modes
 
@@ -73,7 +73,7 @@ to .git/hooks/pre-push.bak.<timestamp>, then the blocking hook is written and ma
 executable. The hook is a local convenience and is not a substitute for the CI job
 or for running scan-all before upload.
 
-## Detection and reuse
+## Detection, reuse and synthetic-fixture remediation
 
 Secret patterns, redaction, classification and artifact rules are imported from
 scripts/audit_release_secrets.py; the guard does not duplicate regexes. It checks:
@@ -92,6 +92,15 @@ for explicit credential patterns; review-only personal-path/entropy heuristics a
 skipped there to avoid documentation examples blocking releases (documented review
 policy, not a silent skip).
 
+R3 fixture remediation: tests/test_prepush_guard.py previously held a hardcoded
+AWS-shaped synthetic constant, which the guard correctly flagged in the worktree and
+bounded history. It is now built at runtime by joining parts (the full literal is
+never present in source; a regression test asserts the assembled value is absent
+from the file text). The OpenAI-shaped synthetic allowlist fixture was remediated
+the same way. Detection/redaction tests still write the assembled value into
+temporary files and the scanner still flags it with the same AWS rule; scanner
+rules, allowlist logic and finding suppression were not weakened.
+
 ## Allowlist
 
 The only allowlist is for documented synthetic fixtures under tests/. JSON file:
@@ -101,6 +110,7 @@ The only allowlist is for documented synthetic fixtures under tests/. JSON file:
 Entries with other prefixes are rejected. An allowlisted match is still reported
 (allowlisted=true) but does not block; values remain redacted. Never allowlist real
 credentials. The audit's documented synthetic-fixture digest allowlist is reused.
+No blanket tests/ allowlist and no finding suppression is used by this task.
 
 ## Verified end-to-end hook behavior (integration tests, temporary repos only)
 
@@ -140,9 +150,10 @@ persist-credentials: false and full bounded history (fetch-depth: 0), running
 guard scan-all with JSON+Markdown reports, report checksums, and reports-only
 artifacts. The guard command has no continue-on-error and no bypass flag; a non-zero
 guard exit fails the job. CI covers the repository, not local uncommitted working
-copies; local hook plus CI are complementary. The measured HEAD below currently
-fails scan-all because of a synthetic fixture constant; the CI job would correctly
-fail until that is addressed.
+copies; local hook plus CI are complementary. At the R3 measurement the current
+head content is clean but the canonical bounded history still contains the removed
+fixture literal, so the CI scan-all would correctly fail until the history window /
+release-HEAD rerun or an owner-approved precise fixture decision resolves it.
 
 ## Pre-upload use and repeatability at the actual release HEAD
 
@@ -153,31 +164,58 @@ scan HEAD and report digest. The bounded history window and the documented scan
 bounds must be disclosed: a clean bounded scan is not proof of unbounded/complete
 history coverage or of external acceptance.
 
-## Measured evidence: scan-all at the current HEAD (2026-10-28, Europe/Rome)
+## Measured evidence: R3 working-tree scans (2026-10-28, Europe/Rome)
 
-- Measured at: 2026-10-28, working tree on git HEAD b5cea20c7037e0e990cf8cac2c5fb9071695d1a1
-  (task-81 uncommitted changes present; report reflects the current working tree).
-- Command: python scripts/prepush_guard.py scan-all --json-out
-  .workspace/build/prepush_guard/prepush_guard.json --markdown-out
-  .workspace/build/prepush_guard/prepush_guard.md
-- Result: BLOCKED (exit code 1), not truncated (bounded scan completed).
-- Counts: files_scanned=598, bytes_scanned=19,990,786, findings=225,
-  blocking=2, allowlisted=3; scopes head=167, history=58.
-- Blocking findings: rule aws_access_key_id, one in head scope and one in bounded
-  history scope, path tests/test_prepush_guard.py (the synthetic AWS-shaped test
-  constant used to prove detection). Values are redacted (SHA-256[0:12], prefix,
-  length only).
-- Non-blocking findings: 223 REVIEW findings (private/loopback URLs, personal
-  absolute paths, high-entropy heuristics) from configuration/docs/code; they do
-  not block but remain a review backlog.
-- Interpretation: the gate correctly blocks because the repository's own bounded
-  history/worktree contains an AWS-shaped synthetic fixture. This is not a false
-  negative and not a clean release scan. Before any upload, either rotate/replace
-  the fixture with a runtime-assembled value (future commits only; bounded history
-  still contains old commits) and/or use the documented tests-only allowlist for
-  the exact synthetic digest, then rerun at the final release HEAD. A final
-  release-HEAD rerun is still required; bounded-history results here are not
-  unbounded/complete history coverage and do not establish external acceptance.
+- Measured at: 2026-10-28, working tree on git HEAD
+  144bd3a5190cc1a4450253841c93bd981eb34032 (task-82 changes uncommitted; reports
+  reflect the current working tree).
+- Commands:
+  - python scripts/prepush_guard.py scan-staged --json-out
+    .workspace/build/prepush_guard_r3/scan-staged.json --markdown-out ...scan-staged.md
+  - python scripts/prepush_guard.py scan-head --json-out
+    .workspace/build/prepush_guard_r3/scan-head.json --markdown-out ...scan-head.md
+  - python scripts/prepush_guard.py scan-all --json-out
+    .workspace/build/prepush_guard_r3/scan-all.json --markdown-out ...scan-all.md
+- scan-staged: PASS exit 0, 0 files / 0 findings (nothing staged at measurement time).
+- scan-head: PASS exit 0, 434 files, 7,029,159 bytes, 166 findings, 0 blocking,
+  3 allowlisted, truncated=false; REVIEW classes only (private/loopback URLs,
+  personal absolute paths, high-entropy heuristics).
+- scan-all: BLOCKED exit 1, 584 files, 19,823,099 bytes, 229 findings, 2 blocking,
+  3 allowlisted, truncated=false. The 2 blocking findings are rule
+  aws_access_key_id in bounded HISTORY scope, path tests/test_prepush_guard.py, on
+  commits d9341cd3 and 3cae00c5 (old commits that still contain the now-removed
+  hardcoded literal). There is no blocking finding in the current head/working-tree
+  content.
+- Clean-history rehearsal (additional evidence, not a substitute): a temporary
+  repository containing only the current tracked working-tree content (436 tracked
+  files, one clean commit) passes scan-all exit 0 with the same rules: 434 files,
+  7,026,597 bytes, 166 findings, 0 blocking, 3 allowlisted, truncated=false. This
+  proves the current content is clean under all scan scopes; it deliberately does
+  not include the canonical bounded history.
+- Reports (gitignored generated evidence):
+  .workspace/build/prepush_guard_r3/scan-staged.json/.md,
+  .workspace/build/prepush_guard_r3/scan-head.json/.md,
+  .workspace/build/prepush_guard_r3/scan-all.json/.md.
+- Prior R2 evidence (HEAD b5cea20, blocked in head+history by the hardcoded
+  fixture) is superseded by this remediation and remains only as historical
+  evidence; it is not the current result.
+
+### Honest residual blocker for the canonical scan-all
+
+The actual bounded-history scan-all at this HEAD cannot exit 0 without one of the
+following, none of which this task is authorized to perform:
+
+1. waiting until the old commits leave the bounded 30-commit window / a final
+   release HEAD whose bounded history no longer contains them;
+2. an owner-authorized precise tests-only allowlist entry for the exact synthetic
+   digest present only in those old commits (documented allowlist mechanism; not
+   blanket tests/ allowlisting and not suppression of other findings);
+3. an owner-authorized history rewrite/squash before publication (not performed;
+   this task makes no commit/push/history modification).
+
+The scanner rules, allowlist policy and finding suppression were not weakened.
+Therefore the canonical bounded-history scan-all remains BLOCKED, a clean status is
+not claimed, and a final release-HEAD rerun is mandatory.
 
 ## Acceptance review (Lead decides verified)
 
@@ -195,9 +233,12 @@ history coverage or of external acceptance.
   rewrite/destructive calls) and read-only report evidence; the tool writes only
   requested JSON/Markdown report paths.
 - Bullet 4 (runnable before ANY earlier public upload; repeatably at actual release
-  HEAD): the CLI and CI are runnable before upload and repeatable by design; the
-  measured current-HEAD scan is BLOCKED and a final release-HEAD rerun is required.
-  A clean verification is not claimed.
+  HEAD): the CLI and CI are runnable before upload and repeatable by design. R3
+  measurements show scan-staged/scan-head PASS and the clean-history rehearsal PASS,
+  but the canonical bounded-history scan-all remains BLOCKED by old commits that
+  contain the removed synthetic fixture. A clean verification is not claimed; a
+  final release-HEAD rerun and an owner decision on the bounded-history residual are
+  required.
 
 ## Limits: not a substitute for external acceptance
 

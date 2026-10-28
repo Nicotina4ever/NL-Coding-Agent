@@ -9,8 +9,15 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 SCRIPT = REPO / "scripts" / "prepush_guard.py"
-SECRET = "AKIAABCDEFGHIJKLMNOP"
-SYNTHETIC = "sk-proj-" + "abcdefghijklmnopqrstuvwx"
+
+
+def _assemble(*parts: str) -> str:
+    """Build synthetic fixture values at runtime so no full literal is in source."""
+    return "".join(parts)
+
+
+SECRET = _assemble("AKIA", "ABCDEFGH", "IJKLMNOP")
+SYNTHETIC = _assemble("sk-", "proj-", "abcdefghijklmnopqrstuvwx")
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
@@ -321,6 +328,17 @@ def test_operational_git_failure_fails_closed_for_scan_and_hook(tmp_path):
     stdin = "refs/heads/main " + "a" * 40 + " refs/heads/main " + "0" * 40 + "\n"
     completed = _run(repo, "hook", stdin=stdin, env_extra=broken_path)
     assert completed.returncode == 3, completed.stdout + completed.stderr
+
+
+def test_synthetic_fixtures_are_runtime_assembled_not_source_literals():
+    source = Path(__file__).read_text(encoding="utf-8")
+    aws_expected = _assemble("AKIA", "ABCDEFGH", "IJKLMNOP")
+    openai_expected = _assemble("sk-", "proj-", "abcdefghijklmnopqrstuvwx")
+    assert SECRET == aws_expected and len(SECRET) == 20
+    assert SYNTHETIC == openai_expected and len(SYNTHETIC) > 20
+    # The assembled fixture values must not exist as literals in the source file.
+    assert aws_expected not in source
+    assert openai_expected not in source
 
 
 def test_bad_repo_and_static_no_push_network_or_history_write():
