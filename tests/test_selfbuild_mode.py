@@ -13,15 +13,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_gui_launcher_disables_bytecode_cache():
     launcher = ROOT / "NL Coding Agent.bat"
-    assert launcher.exists(), "NL Coding Agent.bat does not exist"
+    assert launcher.exists(), "NL Coding Agent.bat does not exist (single root launcher)"
     content = launcher.read_text(encoding="utf-8")
     assert "nl_agent.py" in content
     assert "PYTHONDONTWRITEBYTECODE=1" in content
+    assert "%ROOT%\\python\\python.exe" in content
+    assert "%~dp0" in content
 
 
 def test_selfbuild_mode_launcher():
-    launcher = ROOT / "Self-Build Mode.bat"
-    assert launcher.exists(), "Self-Build Mode.bat does not exist"
+    launcher = ROOT / "scripts" / "launchers" / "Self-Build Mode.bat"
+    assert launcher.exists(), "scripts/launchers/Self-Build Mode.bat does not exist"
 
     content = launcher.read_text(encoding="utf-8")
     assert "nl_agent.py" in content
@@ -29,6 +31,9 @@ def test_selfbuild_mode_launcher():
     assert "--autonomous" in content
     assert "--project" in content
     assert "PYTHONDONTWRITEBYTECODE=1" in content
+    # Root resolution chain shared by source-tree and portable-payload layouts.
+    assert "%~dp0..\\..\\" in content
+    assert "%ROOT%\\python\\python.exe" in content
 
     result = subprocess.run(
         [sys.executable, "nl_agent.py", "selfbuild", "--help"],

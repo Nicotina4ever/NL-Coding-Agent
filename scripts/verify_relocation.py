@@ -151,8 +151,13 @@ def operational_file_paths(repo_root: Path) -> list[Path]:
 
 
 def launcher_paths(repo_root: Path) -> list[Path]:
+    """Root launchers plus the consolidated launchers under scripts/launchers/."""
     paths = list(repo_root.glob("*.bat")) + list(repo_root.glob("*.ps1"))
     paths += list((repo_root / "scripts").glob("*.ps1"))
+    launchers_dir = repo_root / "scripts" / "launchers"
+    if launchers_dir.is_dir():
+        paths += list(launchers_dir.rglob("*.bat"))
+        paths += list(launchers_dir.rglob("*.ps1"))
     return sorted({p for p in paths if p.is_file()})
 
 

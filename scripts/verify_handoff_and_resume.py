@@ -55,8 +55,8 @@ def main() -> int:
     missions = list_missions(project_id)
 
     print("=== Self-Build Mode launcher ===")
-    launcher = ROOT / "Self-Build Mode.bat"
-    check(launcher.exists(), "Self-Build Mode.bat exists")
+    launcher = ROOT / "scripts" / "launchers" / "Self-Build Mode.bat"
+    check(launcher.exists(), "scripts/launchers/Self-Build Mode.bat exists")
     if launcher.exists():
         content = launcher.read_text(encoding="utf-8")
         for token in ("nl_agent.py", "selfbuild", "--autonomous", "--project"):

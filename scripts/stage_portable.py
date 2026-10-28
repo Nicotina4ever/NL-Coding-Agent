@@ -6,7 +6,9 @@ This is staging, not an installer and not a clean-directory acceptance test.
 
 Stage-6b allowlist (intentionally narrow):
   * README.md - user-facing overview/quick start;
-  * nl_agent.py and the supported launchers (main GUI/self-build + doctor/status);
+  * nl_agent.py and the supported launchers (main GUI at the root; the
+    doctor/status/self-build launchers live in scripts/launchers/ in the source
+    tree and are re-mapped to the payload root under their user-facing names);
   * nl_coding_agent/ - full current application source, including flows/;
   * python/ - exactly one embedded runtime copy (no Scripts/, caches, bytecode);
   * assets/, config/models.yaml, pyproject.toml.
@@ -39,10 +41,14 @@ INCLUDED_ROOTS = (
     "config/models.yaml",
     "pyproject.toml",
     "NL Coding Agent.bat",
-    "Self-Build Mode.bat",
-    "doctor.bat",
-    "status.bat",
 )
+# Launcher sources that must appear at the PAYLOAD ROOT under their user-facing
+# names even though their development sources live under scripts/launchers/.
+LAUNCHER_SOURCE_TO_PAYLOAD = {
+    "scripts/launchers/doctor.bat": "doctor.bat",
+    "scripts/launchers/status.bat": "status.bat",
+    "scripts/launchers/Self-Build Mode.bat": "Self-Build Mode.bat",
+}
 EXCLUDED_ROOTS = (
     ".agents",
     ".git",
@@ -51,6 +57,7 @@ EXCLUDED_ROOTS = (
     "build",
     "crewAI",
     "crewAI-tools",
+    "da_eliminare",
     "data",
     "dist",
     "docs",
@@ -112,6 +119,12 @@ def _normalise(text: str) -> str:
     return text.replace(chr(92), "/")
 
 
+def _payload_relative(source: Path, path: Path) -> str:
+    """Return the path a source file gets in the payload (launchers are re-mapped)."""
+    relative = path.relative_to(source).as_posix()
+    return LAUNCHER_SOURCE_TO_PAYLOAD.get(relative, relative)
+
+
 def _is_excluded_file(source: Path, path: Path) -> bool:
     return path.relative_to(source).as_posix() in EXCLUDED_FILES
 
@@ -142,14 +155,17 @@ def _iter_source_files(source: Path) -> list[Path]:
                 if _is_excluded_file(source, path):
                     continue
                 files.append(path)
+    for source_rel in LAUNCHER_SOURCE_TO_PAYLOAD:
+        path = source / source_rel
+        if path.is_file() and path not in files:
+            files.append(path)
     return files
 
 
 def _top_level_entries(source: Path, files: list[Path]) -> list[dict]:
     entries: dict[str, dict] = {}
     for path in files:
-        relative = path.relative_to(source)
-        key = relative.parts[0]
+        key = _payload_relative(source, path).split("/")[0]
         entry = entries.setdefault(key, {"path": key, "size": 0, "files": 0})
         entry["size"] += path.stat().st_size
         entry["files"] += 1
@@ -158,8 +174,8 @@ def _top_level_entries(source: Path, files: list[Path]) -> list[dict]:
 
 def _tree_sha256(source: Path, files: list[Path]) -> str:
     digest = hashlib.sha256()
-    for path in sorted(files, key=lambda item: item.relative_to(source).as_posix()):
-        relative = _normalise(path.relative_to(source).as_posix())
+    for path in sorted(files, key=lambda item: _payload_relative(source, item)):
+        relative = _normalise(_payload_relative(source, path))
         digest.update(relative.encode("utf-8"))
         digest.update(chr(0).encode("utf-8"))
         digest.update(_sha256_file(path).encode("utf-8"))
@@ -223,7 +239,7 @@ def _validate_payload(source: Path, files: list[Path]) -> dict:
             "payload contains absolute workspace paths: "
             + ", ".join(hit["path"] for hit in absolute_hits[:5])
         )
-    top_level = {path.relative_to(source).parts[0] for path in files}
+    top_level = {_payload_relative(source, path).split("/")[0] for path in files}
     excluded_present = sorted(top_level.intersection(EXCLUDED_ROOTS))
     if excluded_present:
         raise ValueError("payload contains excluded top-level paths: "
@@ -257,6 +273,7 @@ def _manifest(
         "total_size": total_size,
         "tree_sha256": tree_sha256,
         "included_roots": list(INCLUDED_ROOTS),
+        "launcher_source_to_payload": dict(LAUNCHER_SOURCE_TO_PAYLOAD),
         "excluded_roots": list(EXCLUDED_ROOTS),
         "excluded_directory_names": sorted(EXCLUDED_DIR_NAMES),
         "excluded_suffixes": sorted(EXCLUDED_SUFFIXES),
@@ -281,7 +298,7 @@ def _validate_output(source: Path, output: Path, dry_run: bool = False) -> None:
 def _stage(source: Path, output: Path, files: list[Path]) -> None:
     output.mkdir(parents=True, exist_ok=True)
     for path in files:
-        relative = path.relative_to(source)
+        relative = Path(_payload_relative(source, path))
         destination = output / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, destination)

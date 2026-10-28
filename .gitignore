@@ -45,6 +45,11 @@ nul
 .DS_Store
 Thumbs.db
 
+# Review-only staging for no-longer-needed material (task-44).
+# Nothing here is shipped, packaged or deleted without explicit user authorization.
+da_eliminare/*
+!da_eliminare/README.md
+
 # Local secrets / machine-local state
 .env
 *.sqlite3

@@ -46,6 +46,22 @@ Python validation already succeeded:
 - Keep exactly one authoritative root README (`README.md`). Archive dated root documents under
   `docs/history/legacy/` instead of adding alternative README variants.
 
+## Entry points and cleanup staging
+
+- Exactly one user-facing application launcher lives at the repository root:
+  `NL Coding Agent.bat` (desktop GUI).
+- CLI and external-project launchers live in `scripts\launchers\`: `doctor.bat`,
+  `status.bat`, `Self-Build Mode.bat` and `voicebridge\audit_voicebridge.bat` /
+  `voicebridge\work_voicebridge.bat`. The portable payload stages the three CLI launchers
+  back to the payload root under their user-facing names.
+- Dated one-off repair scripts are preserved verbatim under
+  `docs\history\legacy\temp-scripts\`; they are historical evidence and must never be
+  executed (they mutate source files or the live SQLite database).
+- `da_eliminare\` is the user-requested review-only staging area for material that appears
+  no longer needed. It is git-ignored except for its README, excluded from the portable
+  payload and the release builder, and **nothing inside it may be deleted, archived or
+  removed from Git without explicit user authorization**.
+
 ## Workspace containment and build outputs
 
 Canonical source repository: `K:\AI\NL Coding Agent`. Keep permanent project-owned files inside

@@ -42,7 +42,10 @@ smaller than the full workspace because the vendor checkout is not part of the r
 - `assets/`
 - `config/`
 - `pyproject.toml`
-- `Self-Build Mode.bat` and `NL Coding Agent.bat` when present
+- `NL Coding Agent.bat` (root launcher)
+- `doctor.bat`, `status.bat`, `Self-Build Mode.bat` when present — these sources live under
+  `scripts/launchers/` and are re-staged by `scripts/stage_portable.py` to the payload root
+  under their user-facing names
 
 ## Excluded Roots and Patterns
 

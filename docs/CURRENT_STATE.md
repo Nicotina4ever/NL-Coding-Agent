@@ -74,7 +74,8 @@ NL Coding Agent is a local-first, multi-agent software development workstation. 
   - `selfbuild --autonomous [--resume <id>] [--max-missions <1-5>]`
   - `gui`
 - Shared flags: `--stop-after`, `--dev-model`, `--reviewer-model`, `--debug-model`.
-- Dedicated launcher: `Self-Build Mode.bat` (embedded Python, default reviewer `ollama/qwen3.5:9b`).
+- Dedicated launcher: `scripts\launchers\Self-Build Mode.bat` (embedded Python, default reviewer
+  `ollama/qwen3.5:9b`; the portable payload re-stages it to the payload root as `Self-Build Mode.bat`).
 - Persistent supervisor (stage 3): `supervisor run|start|stop|pause|resume|status|index|recover|advance-stage`
   with `--project/--mode/--max-missions/--json/--confirm-assisted` and documented exit codes
   0/1/2/3/4; `selfbuild --autonomous` is a deprecated compatibility shim.

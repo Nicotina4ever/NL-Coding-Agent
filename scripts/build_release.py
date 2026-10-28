@@ -51,6 +51,7 @@ EXCLUDED_ROOTS = (
     "build",
     "crewAI",
     "crewAI-tools",
+    "da_eliminare",
     "data",
     "dist",
     "logs",

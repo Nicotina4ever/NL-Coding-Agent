@@ -51,13 +51,18 @@ class ScanTests(unittest.TestCase):
         self.assertIn("docs/CURRENT_STATE.md", names)
         self.assertNotIn("docs/COMPLETED_MISSIONS.md", names)
 
-    def test_launcher_paths_include_bat_files(self):
+    def test_launcher_paths_include_root_and_consolidated_bat_files(self):
         self.write("NL Coding Agent.bat", "cd /d \"%~dp0\"")
-        self.write("Self-Build Mode.bat", "K:\\AI\\Coding Agent")
-        paths = [path.name for path in verify.launcher_paths(self.repo)]
-        self.assertIn("Self-Build Mode.bat", paths)
+        self.write("scripts/launchers/Self-Build Mode.bat", "K:\\AI\\Coding Agent")
+        paths = [
+            path.relative_to(self.repo).as_posix()
+            for path in verify.launcher_paths(self.repo)
+        ]
+        self.assertIn("NL Coding Agent.bat", paths)
+        self.assertIn("scripts/launchers/Self-Build Mode.bat", paths)
         hits = verify.scan_paths_for_old_root(verify.launcher_paths(self.repo), self.repo)
-        self.assertEqual([hit["path"] for hit in hits], ["Self-Build Mode.bat"])
+        expected = str(Path("scripts") / "launchers" / "Self-Build Mode.bat")
+        self.assertEqual([hit["path"] for hit in hits], [expected])
 
 
 if __name__ == "__main__":

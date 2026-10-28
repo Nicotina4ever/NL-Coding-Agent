@@ -49,10 +49,10 @@ class TestPortableStaging(unittest.TestCase):
         _write(root / "config" / "extra.yaml", "should: be-excluded\n")
         _write(root / "config" / "voicebridge.yaml", "project:\n  root: 'C:/private'\n")
         _write(root / "pyproject.toml", "[project]\nname='x'\n")
-        _write(root / "Self-Build Mode.bat", "@echo off\n")
         _write(root / "NL Coding Agent.bat", "@echo off\n")
-        _write(root / "doctor.bat", "@echo off\n")
-        _write(root / "status.bat", "@echo off\n")
+        _write(root / "scripts" / "launchers" / "Self-Build Mode.bat", "@echo off\n")
+        _write(root / "scripts" / "launchers" / "doctor.bat", "@echo off\n")
+        _write(root / "scripts" / "launchers" / "status.bat", "@echo off\n")
         _write(root / "AGENTS.md", "dev rules")
         _write(root / "installer" / "bootstrap.py", "installer")
         _write(root / "PATCH" / "old.py", "patch evidence")
@@ -84,6 +84,9 @@ class TestPortableStaging(unittest.TestCase):
                 "status.bat",
             ):
                 self.assertTrue((output / included).is_file(), included)
+            # Sources under scripts/launchers/ are re-mapped to the payload root.
+            self.assertTrue((source / "scripts" / "launchers" / "doctor.bat").is_file())
+            self.assertFalse((output / "scripts").exists())
             for excluded in (
                 "crewAI", "data", "logs", "tests", ".git", "scripts", "docs",
                 "build", "installer", "PATCH", "AGENTS.md",
@@ -102,6 +105,11 @@ class TestPortableStaging(unittest.TestCase):
             self.assertEqual(manifest["output_location"], "external")
             self.assertEqual(len(manifest["tree_sha256"]), 64)
             self.assertIn("README.md", manifest["included_roots"])
+            self.assertIn("scripts/launchers/doctor.bat", manifest["launcher_source_to_payload"])
+            self.assertEqual(
+                manifest["launcher_source_to_payload"]["scripts/launchers/doctor.bat"],
+                "doctor.bat",
+            )
             self.assertIn("installer", manifest["excluded_roots"])
             self.assertIn("PATCH", manifest["excluded_roots"])
             self.assertIn("AGENTS.md", manifest["excluded_roots"])

@@ -1,6 +1,7 @@
 # Legacy documentation and patch evidence
 
-**Moved:** 2026-10-28 (repository hygiene follow-up, shared `task-34`).
+**Moved:** 2026-10-28 (repository hygiene follow-up, shared `task-34`; root reorganization
+Phase A, shared `task-44`, added the archived one-off repair scripts).
 **Rule:** these files are **preserved verbatim** as dated historical evidence. They are not
 authoritative operational instructions. Do not edit them to reflect newer state; add a new
 document under `docs/` instead. Do not execute any script or apply any patch kept here.
@@ -20,6 +21,18 @@ They were moved from the repository root with `git mv`, so file history is prese
 | `HANDOFF_DEEPSEEK_HARNESS.md` | `docs/history/legacy/HANDOFF_DEEPSEEK_HARNESS.md` | DeepSeek Harness handoff describing stub incidents #43/#45 and the original objective | Historical evidence |
 | `FOUNDATION_CHANGES.patch` | `docs/history/legacy/patch-evidence/FOUNDATION_CHANGES.patch` | Unified diff of the audited Safety Foundation Patch | Historical evidence; the live sources already contain the applied result |
 | `PATCH/**` | `docs/history/legacy/patch-evidence/PATCH/**` | Audited patch copies (byte-identical to the live sources at move time) plus `PATCH/WINDOWS_REAUDIT.md` | Historical evidence; `SHA256_MANIFEST.json` at the root still certifies the live files |
+
+### 2026-10-28 — root reorganization Phase A (`task-44`): one-off repair scripts
+
+| Old path (repository root) | New path | Type / purpose | Status |
+|---|---|---|---|
+| `temp_fix_planner.py` | `docs/history/legacy/temp-scripts/temp_fix_planner.py` | One-off repair script: inserted the completed-backlog duplicate guard in `nl_coding_agent/core/autonomous_roadmap_planner.py` (guard is integrated in the committed tree) | Historical evidence; never execute |
+| `temp_fix_title.py` | `docs/history/legacy/temp-scripts/temp_fix_title.py` | One-off SQLite repair: retitled mission #43 (title is correct in the committed database) | Historical evidence; never execute |
+| `temp_restore.py` | `docs/history/legacy/temp-scripts/temp_restore.py` | One-off restore of planner, docs, backlog and rollback test from `data/mission_baselines/42.json` | Historical evidence; never execute |
+| `temp_restore_planner.py` | `docs/history/legacy/temp-scripts/temp_restore_planner.py` | One-off planner restore plus duplicate guard from baseline 42 | Historical evidence; never execute |
+
+Their functions are superseded by the committed sources/database; no application, test, script or
+documentation imports or references them as live tooling.
 
 ## Why they are not at the repository root
 
@@ -57,3 +70,6 @@ what was true when they were written; rewriting them would falsify history:
 - `docs/REPOSITORY_HYGIENE_FOLLOWUP.md` — measured before/after state, changes and remaining
   authorization proposals.
 - `docs/REPOSITORY_HYGIENE.md` — the earlier read-only audit that identified these candidates.
+- `scripts/launchers/README.md` — current launcher layout (the CLI/self-build/VoiceBridge
+  launchers moved there in `task-44`; they are current tooling, not historical evidence).
+- `da_eliminare/README.md` — review-only staging policy for no-longer-needed material.

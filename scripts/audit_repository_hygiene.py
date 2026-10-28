@@ -907,26 +907,36 @@ def validate_launchers(root: Path) -> list[dict]:
         for chunk in re.findall(r"add_parser[(][^)]{0,120}", cli_text):
             for name in re.findall(r"[\"']([A-Za-z0-9_-]+)[\"']", chunk):
                 commands.add(name)
-    launchers = sorted(
+    root_launchers = sorted(
         [path for path in root.glob("*.bat") if path.is_file()]
         + [path for path in root.glob("*.ps1") if path.is_file()],
         key=lambda item: item.name.lower(),
     )
+    launchers: list[tuple[Path, str]] = [(path, path.name) for path in root_launchers]
+    launchers_dir = root / "scripts" / "launchers"
+    if launchers_dir.is_dir():
+        nested = sorted(
+            [item for item in launchers_dir.rglob("*.bat") if item.is_file()]
+            + [item for item in launchers_dir.rglob("*.ps1") if item.is_file()],
+            key=lambda item: item.as_posix().lower(),
+        )
+        launchers.extend((path, path.relative_to(root).as_posix()) for path in nested)
     if not launchers:
         checks.append({"check": "launchers.present", "status": "WARN",
-                       "detail": "no launcher .bat/.ps1 files found at repository root"})
+                       "detail": "no launcher .bat/.ps1 files found at repository root or scripts/launchers"})
         return checks
-    for launcher in launchers:
+    for launcher, label in launchers:
         try:
             text = launcher.read_text(encoding="utf-8", errors="replace")
         except OSError as exc:
-            checks.append({"check": "launcher." + launcher.name, "status": "FAIL",
+            checks.append({"check": "launcher." + label, "status": "FAIL",
                            "detail": "cannot read launcher: " + str(exc)})
             continue
         normalised = normalise(text)
         references: list[str] = []
         for candidate in re.findall(r"[^\"'\s]+[.](?:py|exe)", text, re.IGNORECASE):
-            cleaned = normalise(candidate).replace("%~dp0", "").replace("%CD%", "").lstrip("./")
+            cleaned = (normalise(candidate).replace("%~dp0", "").replace("%CD%", "")
+                       .replace("%ROOT%", "").lstrip("./"))
             if cleaned and cleaned not in references:
                 references.append(cleaned)
         missing: list[str] = []
@@ -944,7 +954,7 @@ def validate_launchers(root: Path) -> list[dict]:
             detail += " commands=" + repr(launcher_commands)
         if unknown:
             detail += " unknown_commands=" + repr(unknown)
-        checks.append({"check": "launcher." + launcher.name, "status": status, "detail": detail})
+        checks.append({"check": "launcher." + label, "status": status, "detail": detail})
     return checks
 
 
@@ -1556,7 +1566,7 @@ def render_markdown(report: dict) -> str:
     lines.append("1. `git status --porcelain` and `git rev-parse HEAD` are recorded; no mission/autonomous run is active.")
     lines.append("2. Back up the SQLite database and `data/selfbuild_state.json` if any DB-adjacent step is approved.")
     lines.append("3. After each approved cleanup: `python scripts/audit_repository_hygiene.py` shows the expected delta and no new operational findings.")
-    lines.append("4. Launchers: start `NL Coding Agent.bat`, `doctor.bat`, `status.bat` (or the equivalent `python nl_agent.py <command>` forms).")
+    lines.append("4. Launchers: start `NL Coding Agent.bat` (root GUI launcher) and `scripts/launchers/doctor.bat` / `scripts/launchers/status.bat` (or the equivalent `python nl_agent.py <command>` forms).")
     lines.append('5. Imports: `python -c "import nl_coding_agent.cli, nl_coding_agent.app.services, nl_coding_agent.agents.orchestrator"`.')
     lines.append("6. Doctor and relocation gates: `python nl_agent.py doctor`; `python scripts/verify_relocation.py --json`.")
     lines.append("7. Targeted tests for touched areas, then the full offscreen suite: `python -m pytest -q tests -p no:cacheprovider` with `PYTHONDONTWRITEBYTECODE=1` and `QT_QPA_PLATFORM=offscreen`.")

@@ -39,12 +39,17 @@ their own location, so they can be double-clicked or started from any working di
 
 | Entry point | Purpose |
 |---|---|
-| `doctor.bat` | Environment diagnostics (runtime, CrewAI, Ollama, project state). |
-| `NL Coding Agent.bat` | Desktop GUI (PySide6). |
-| `status.bat` | Persisted projects/missions/state summary. |
-| `Self-Build Mode.bat` | One guided self-build mission with persisted state and resume hint. |
-| `audit_voicebridge.bat` | Read-only audit of the external NL VoiceBridge Studio project. |
-| `work_voicebridge.bat` | Prepare a task for the external VoiceBridge project. |
+| `NL Coding Agent.bat` | Desktop GUI (PySide6) — the single obvious launcher at the repository root. |
+| `scripts\launchers\doctor.bat` | Environment diagnostics (runtime, CrewAI, Ollama, project state). |
+| `scripts\launchers\status.bat` | Persisted projects/missions/state summary. |
+| `scripts\launchers\Self-Build Mode.bat` | One guided self-build mission with persisted state and resume hint. |
+| `scripts\launchers\voicebridge\audit_voicebridge.bat` | Read-only audit of the external NL VoiceBridge Studio project. |
+| `scripts\launchers\voicebridge\work_voicebridge.bat` | Prepare a task for the external VoiceBridge project. |
+
+The diagnostics/status/self-build launchers are developed under `scripts/launchers/`; the portable
+payload stages them back to the payload root under the same user-facing names (`doctor.bat`,
+`status.bat`, `Self-Build Mode.bat`), so a portable install keeps the familiar launch files
+beside `NL Coding Agent.bat`. See `scripts/launchers/README.md`.
 
 Equivalent CLI form (use the embedded runtime explicitly):
 
@@ -65,6 +70,8 @@ CLI commands: `doctor`, `audit`, `work`, `status`, `roadmap`, `mission`,
 | `nl_agent.py` | CLI entry point. |
 | `tests/` | Automated test suite. |
 | `scripts/` | Development and verification tools (read-only audits, gates, portable staging). |
+| `scripts/launchers/` | Diagnostics/status/self-build/VoiceBridge launchers; the portable payload re-stages the portable ones to the payload root. |
+| `da_eliminare/` | Review-only staging for no-longer-needed material; git-ignored except its README, never shipped, nothing deleted without explicit user authorization. |
 | `config/` | Runtime configuration (models, external project paths). |
 | `assets/` | Real product logo and theme tokens. |
 | `.agents/` | Agent definitions, rules and skills used by agentic development sessions. |
@@ -98,7 +105,7 @@ in `docs/REPOSITORY_STRUCTURE.md`.
 | `docs/WORKSPACE_MIGRATION.md` | Completed workspace relocation record and rollback procedure. |
 | `docs/COMPLETED_MISSIONS.md` | Verified self-build mission history. |
 | `docs/CREWAI_RUNTIME.md`, `docs/PORTABLE_BUILD.md` | CrewAI runtime policy and portable staging evidence. |
-| `docs/history/legacy/INDEX.md` | Map of archived legacy documents and patch evidence. |
+| `docs/history/legacy/INDEX.md` | Map of archived legacy documents, patch evidence and the archived one-off repair scripts (`docs/history/legacy/temp-scripts/`). |
 
 ## Verification
 
@@ -123,6 +130,8 @@ python\python.exe -m pytest -q
 - Local models are the default; cloud models require explicit opt-in per project/task.
 - User data (`data/`), logs, the embedded runtime, the vendor checkout, release payloads and
   acceptance evidence are protected and are never deleted by repository hygiene.
+- `da_eliminare/` is review-only staging: nothing in it is shipped or deleted/archived without
+  explicit user authorization.
 - Destructive operations are gated; self-build runs are staged and verified with rollback rather
   than applied to a live process.
 - Keep permanent project files inside this repository; no sibling workspaces without explicit
