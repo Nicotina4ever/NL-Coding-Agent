@@ -537,3 +537,25 @@ root remains clean with no legacy output directories. Real six-target runtime ar
 actual GitHub Actions execution on real runners, clean-machine and hardware beta acceptance, real
 tester records, signing/notarization and owner distribution authorization remain MANUAL-PENDING.
 No platform or release support is claimed.
+
+GUI safety controls and genuine Linux execution evidence (2026-10-28, round 5)
+
+- Settings > Advanced is now the only autonomy control surface (mode Off/Assisted/Automatic,
+  limits, read-only plan/history, Save/Apply, Pause, confirmed Stop) with no autostart and no GUI
+  Start; the main window status bar has an always-reachable EmergencyControls Pause/Stop outside
+  settings for active supervisor runs, using the cooperative durable command path (safe boundaries,
+  never process kills). 20 new offscreen tests cover the controls and idle/active/error states.
+- Genuine Linux x86_64 execution evidence was captured through the existing WSL2 Ubuntu distro
+  (source-level, no PySide6/crewai/native runtimes/network): shell syntax and POSIX launcher
+  execution/fail-closed checks, reproducibility, package smoke, synthetic rehearsal, acceptance
+  matrix, fetch/beta plans. It found and fixed a real bad-substitution bug in
+  scripts/launchers/Self-Build Mode.sh; generated release/platform/runtime manifests and the beta
+  package are now byte-identical Windows vs Linux (source archive byte-identical).
+- The user-supplied universal-autonomy/research Mega Suite addendum is preserved under
+  docs/product-blueprint/addenda/ as queue-only input with a manifest; its requirements are to be
+  deduplicated into the indexed backlog without interrupting current work.
+
+Round-5 verification: full suite 722 passed; relocation gate 33/0/1 expected dirty-tree warning;
+supervisor gate ok; SBOM OK; Linux evidence runs all exit 0. WSL2 is not GitHub Actions; no
+GUI/native-runtime/clean-machine/hardware/platform support is claimed. External/manual acceptance
+items and owner authorizations remain pending.

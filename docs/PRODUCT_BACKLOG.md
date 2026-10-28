@@ -60,8 +60,8 @@ SH-07 Tier B (real local models) remains pending explicit authorization and bloc
 | Status | P0 | P1 | P2 | P3 | Total |
 |---|---|---|---|---|---|
 | verified | 20 | 13 | 0 | 0 | 33 |
-| partial | 25 | 25 | 11 | 1 | 62 |
-| planned | 8 | 5 | 5 | 1 | 19 |
+| partial | 26 | 26 | 11 | 1 | 64 |
+| planned | 7 | 4 | 5 | 1 | 17 |
 | blocked | 3 | 0 | 0 | 0 | 3 |
 | **Total** | 56 | 43 | 16 | 2 | 117 |
 
@@ -86,6 +86,8 @@ SH-07 Tier B (real local models) remains pending explicit authorization and bloc
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v3.6 (2026-10-28)** - Stage-4 G1 GUI safety controls: Settings > Advanced self-build controls (no autostart/no GUI start), read-only plan/history and an always-reachable emergency Pause/Stop using the cooperative supervisor path (NL-BP-023/024 partial, 064 evidence; 20 new offscreen tests). Stage-6j/6k: genuine WSL2 Ubuntu execution evidence (shell syntax, launcher execution, reproducibility/package/rehearsal/acceptance/fetch/beta plans), POSIX Self-Build launcher bad-substitution fix, and byte-identical cross-platform release manifests/beta package. Full suite 722 passed. The user-supplied universal-autonomy/research addendum is preserved as queue-only input; no features from it are implemented. External/manual acceptance items unchanged.
 
 **v3.5 (2026-10-28)** - Stage-6h/6i: synthetic end-to-end release-pipeline rehearsal (synthetic runtime fixtures -> measured draft -> native candidate with runtime archives -> beta package -> offline provision/verify -> acceptance matrix; explicit NOT-A-RELEASE, canonical manifests unchanged, temp-only evidence) and a cross-platform reproducible source-release check (two builds, archive/manifest equality, forbidden-content scan) wired into a ubuntu/windows/macOS CI job. Full suite 693 passed; relocation 34/0; supervisor/SBOM green; local rehearsal PASS 8/8, reproducibility PASS 40/40, package smoke PASS. Real archives, actual CI runs, clean-machine/hardware acceptance, signing and distribution authorization remain MANUAL-PENDING.
 

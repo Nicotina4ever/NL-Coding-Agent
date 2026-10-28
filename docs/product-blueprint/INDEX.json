@@ -631,7 +631,7 @@
       "area": "studio",
       "priority": "P1",
       "bp_priority": "P1 (03_MASTER_CHECKLIST P1-08, P1-16)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-064"
       ],
@@ -643,7 +643,8 @@
       "evidence": [
         "settings_panel.py contains no self-build/autonomy controls; GUI panes are read-only status displays",
         "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md explicit UX decision",
-        "no mode persistence in SQLite (tables measured)"
+        "no mode persistence in SQLite (tables measured)",
+        "Settings > Advanced now hosts the only self-build/autonomy controls (mode Off/Assisted/Automatic, missions/attempts/wall limits, read-only plan preview and history, Save/Apply, Pause, Stop with confirmation); no Start control and no autostart on app open; tests/test_gui_settings_autonomy.py (20 tests) plus updated GUI smoke. Starting/restarting remains the backend/CLI path shown read-only in the plan."
       ],
       "source_refs": [
         "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
@@ -652,7 +653,7 @@
         "03_MASTER_CHECKLIST.md#P1-16"
       ],
       "primary_source": "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
-      "note": "Explicit UX decision: no prominent self-build CTA on the home screen; controls belong in Advanced settings.",
+      "note": "Settings > Advanced now hosts the only self-build/autonomy controls (mode Off/Assisted/Automatic, missions/attempts/wall limits, read-only plan preview and history, Save/Apply, Pause, Stop with confirmation); no Start control and no autostart on app open; tests/test_gui_settings_autonomy.py (20 tests) plus updated GUI smoke. Starting/restarting remains the backend/CLI path shown read-only in the plan.",
       "backlog_anchor": "nl-bp-023",
       "program_stage": 4,
       "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
@@ -666,7 +667,7 @@
       "area": "studio",
       "priority": "P0",
       "bp_priority": "P0 (03_MASTER_CHECKLIST P0-15; SPEC-21 governance)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-064"
       ],
@@ -677,7 +678,8 @@
       ],
       "evidence": [
         "no stop/pause widget exists (grep over GUI); only external process kill used during recovery tests",
-        "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md; specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md"
+        "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md; specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md",
+        "Always-reachable EmergencyControls widget in the MainWindow status bar (outside Settings): hidden while idle, visible only for an active supervisor run, cooperative Pause and confirmed Stop through the existing durable supervisor command path (safe mission boundaries, never kills external processes), non-blocking refresh/feedback, Ctrl+Alt+P/Ctrl+Alt+S and accessibility; offscreen fake-service tests cover idle/active/confirmation/error states. Live-mission-and-restart acceptance remains MANUAL-PENDING (no model runs)."
       ],
       "source_refs": [
         "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md",
@@ -686,7 +688,7 @@
         "FINAL-REQ/area-2"
       ],
       "primary_source": "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md",
-      "note": "Safety requirement before unattended autonomy: the user must be able to interrupt a run without killing external processes.",
+      "note": "Always-reachable EmergencyControls widget in the MainWindow status bar (outside Settings): hidden while idle, visible only for an active supervisor run, cooperative Pause and confirmed Stop through the existing durable supervisor command path (safe mission boundaries, never kills external processes), non-blocking refresh/feedback, Ctrl+Alt+P/Ctrl+Alt+S and accessibility; offscreen fake-service tests cover idle/active/confirmation/error states. Live-mission-and-restart acceptance remains MANUAL-PENDING (no model runs).",
       "backlog_anchor": "nl-bp-024",
       "program_stage": 4,
       "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
@@ -1980,7 +1982,8 @@
       "evidence": [
         "C3c b9ec909: SupervisorConfig persisted via app_settings (supervisor.global / supervisor.project.<id>) with validated budgets; mode off default; durable stop/pause/resume commands honoured at safe mission boundaries; tests/test_supervisor_core.py 33 tests PASS",
         "C3d dbe3c3b: CLI supervisor group with --mode/--confirm-assisted, background SupervisorService, Autonomy GUI page and emergency STOP; tests/test_supervisor_cli.py 20 tests PASS + GUI smoke/panels PASS",
-        "approvals table + pending/decide helpers exist; cloud/network/delete remain denied by default via the permission gate (tests/test_permissions.py)"
+        "approvals table + pending/decide helpers exist; cloud/network/delete remain denied by default via the permission gate (tests/test_permissions.py)",
+        "Autonomy modes/budgets/stop-pause backend was already implemented; GUI now exposes them under Settings > Advanced with read-only plan/history and a separate always-reachable emergency Pause/Stop, without a GUI start/autostart path. Tests: tests/test_gui_settings_autonomy.py (20) and GUI smoke; live unattended-model acceptance remains MANUAL-PENDING."
       ],
       "source_refs": [
         "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md",
@@ -1988,7 +1991,7 @@
         "03_MASTER_CHECKLIST.md#P0-15"
       ],
       "primary_source": "specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md",
-      "note": "Modes, budgets and stop/pause are implemented and persisted; the assisted-approval request/decision workflow and full GUI are only partial, so status stays partial.",
+      "note": "Autonomy modes/budgets/stop-pause backend was already implemented; GUI now exposes them under Settings > Advanced with read-only plan/history and a separate always-reachable emergency Pause/Stop, without a GUI start/autostart path. Tests: tests/test_gui_settings_autonomy.py (20) and GUI smoke; live unattended-model acceptance remains MANUAL-PENDING.",
       "backlog_anchor": "nl-bp-064",
       "program_stage": 3,
       "program_stage_name": "Persistent autonomous supervisor and verified handoff",
@@ -4093,8 +4096,8 @@
     "total": 117,
     "by_status": {
       "verified": 33,
-      "partial": 62,
-      "planned": 19,
+      "partial": 64,
+      "planned": 17,
       "blocked": 3
     },
     "by_priority": {
@@ -4118,8 +4121,8 @@
       },
       "studio": {
         "verified": 3,
-        "partial": 21,
-        "planned": 3
+        "partial": 23,
+        "planned": 1
       },
       "autonomy": {
         "verified": 16,
@@ -4146,14 +4149,14 @@
     "by_priority_status": {
       "P0": {
         "verified": 20,
-        "partial": 25,
-        "planned": 8,
+        "partial": 26,
+        "planned": 7,
         "blocked": 3
       },
       "P1": {
         "verified": 13,
-        "partial": 25,
-        "planned": 5
+        "partial": 26,
+        "planned": 4
       },
       "P2": {
         "partial": 11,
@@ -5433,7 +5436,8 @@
     "v3.2_2026-10-28_root_reorganization": "Root reorganization Phases A-C complete: 32 -> 21 root items, launcher consolidation, archived repair scripts, crewAI staged in da_eliminare, .workspace build/dist/logs/temp/cache/state policy with python/ and data/ preserved, 628 full-suite tests passed, relocation/supervisor/SBOM/GUI/portable/release-builder checks green, secrets audit CLEAR-WITH-REVIEW blocking 0. NL-BP-095 verified, 094/097 partial. No deletion; staged/authorization items recorded.",
     "v3.3_2026-10-28_stage6_tooling": "Stage-6c/6d/6e tooling: beta package builder (SHA256SUMS, versioned manifests, six-target install docs, byte-identical rebuild), release-acceptance matrix runner + beta record tool (manual-pending enforcement, generated tracked matrix evidence, no CI hardware claim), native runtime acquisition/measurement tooling (six targets, plan/offline/download, measured manifest draft, no fabricated hashes). NL-BP-140 verified; 159/164/165 partial. Full suite 677 passed. Real archives/CI/clean-machine/hardware acceptance and owner authorization remain MANUAL-PENDING.",
     "v3.4_2026-10-28_stage6_launchers_ci": "Stage-6f/6g: POSIX sh/.command launchers shipped (payload mapping, executable mode, fail-closed runtime handling, shell-syntax validated) and CI package-smoke job added with local PASS evidence (source/beta package checksums, acceptance matrix MANUAL-PENDING, native-runtime dry-run plan, reports-only artifacts). Full suite 682 passed. External/manual acceptance items unchanged.",
-    "v3.5_2026-10-28_stage6_rehearsal_reproducibility": "Stage-6h/6i: synthetic end-to-end release-pipeline rehearsal (explicit synthetic fixtures/NOT-A-RELEASE, canonical manifests unchanged, full wiring PASS) and cross-platform reproducible source-release check wired into CI (two byte-identical builds, 40/40 checks, forbidden-content scan). Full suite 693 passed. External/manual acceptance items unchanged."
+    "v3.5_2026-10-28_stage6_rehearsal_reproducibility": "Stage-6h/6i: synthetic end-to-end release-pipeline rehearsal (explicit synthetic fixtures/NOT-A-RELEASE, canonical manifests unchanged, full wiring PASS) and cross-platform reproducible source-release check wired into CI (two byte-identical builds, 40/40 checks, forbidden-content scan). Full suite 693 passed. External/manual acceptance items unchanged.",
+    "v3.6_2026-10-28_gui_safety_linux_evidence": "Stage-4 G1: Settings > Advanced self-build controls + always-reachable emergency pause/stop (NL-BP-023/024 partial, 064 evidence; offscreen tests). Stage-6j/6k: genuine WSL2 Linux execution evidence, POSIX Self-Build launcher bad-substitution fix, and byte-identical cross-platform release manifests/beta package. Full suite 722 passed. External/manual items unchanged; addendum input queued without implementing it."
   },
   "program_order": {
     "schema_version": 1,
@@ -5584,7 +5588,7 @@
           "NL-BP-070",
           "NL-BP-071"
         ],
-        "note": "Stage-4 engineering complete: CrewAI runtime/Flows/model intelligence (C4a-C4e) plus Studio GUI, multimodal mission chat, voice dictation/TTS foundation and IDE surfaces (F1 chat attachments/clipboard/drag-drop; F2 local speech manager/dictation; F3a editor/terminal policy/read-only Git/problems; F3b LSP/MCP/debug-readiness/command palette). Many requirements remain partial where real hardware/desktop verification cannot be automated: microphone/ASR/TTS hardware, Windows clipboard screenshots, real DPI/focus, language-server/MCP/debugger sessions with locally installed engines, and PTY/OS-sandbox claims. Docs record these as manual-pending; no completion claim is made for unmeasured hardware behavior."
+        "note": "Stage-4 engineering complete: CrewAI runtime/Flows/model intelligence (C4a-C4e) plus Studio GUI, multimodal mission chat, voice dictation/TTS foundation and IDE surfaces (F1 chat attachments/clipboard/drag-drop; F2 local speech manager/dictation; F3a editor/terminal policy/read-only Git/problems; F3b LSP/MCP/debug-readiness/command palette). Many requirements remain partial where real hardware/desktop verification cannot be automated: microphone/ASR/TTS hardware, Windows clipboard screenshots, real DPI/focus, language-server/MCP/debugger sessions with locally installed engines, and PTY/OS-sandbox claims. Docs record these as manual-pending; no completion claim is made for unmeasured hardware behavior. Stage-4 G1 added the previously missing GUI safety surface for autonomy: Settings > Advanced self-build controls (no autostart, no GUI start), read-only plan/history, and an always-reachable status-bar emergency Pause/Stop that uses the cooperative supervisor command path. Offscreen tests cover the controls; live-mission acceptance and real GUI/hardware checks remain MANUAL-PENDING."
       },
       {
         "stage": 5,
@@ -5656,9 +5660,9 @@
           "NL-BP-150",
           "NL-BP-151"
         ],
-        "note": "Stage-6 Windows engineering closed and then extended by the cross-platform private beta directive. C1 platform audit/abstraction + matrix, C2 six-target native runtime manifests/provisioner and measured-only release builder, C3 GitHub Actions CI matrix + headless GUI/bootstrapper checks, C4 feedback workflow + opt-in redacted diagnostics + tester/owner runbooks, and C5 pre-upload secrets/history audit are implemented with automated evidence. Root reorganization Phase A (one root launcher, CLI launchers under scripts/launchers/, archived repair scripts, da_eliminare staging) is committed. No non-Windows support is claimed: real native runtime archives, GitHub Actions execution, clean-machine installs, clipboard/microphone/GPU hardware and real-hardware beta acceptance remain MANUAL-PENDING, and the secrets audit must be re-run before any upload; owner authorization is required for any external distribution. Root reorganization is now fully implemented and verified: one root GUI launcher, CLI/VoiceBridge launchers under scripts/launchers/, repair scripts archived to docs/history/legacy/temp-scripts/, unused crewAI checkout staged in da_eliminare, generated build/dist/logs/state consolidated under .workspace with a configurable policy (python/ and data/ deliberately preserved), and the pre-upload secrets/history audit re-run at final HEAD with gate CLEAR-WITH-REVIEW/blocking 0 after a documented synthetic-test-fixture allowlist. Stale release candidates and da_eliminare/crewAI remain for explicit owner authorization. Stage-6c/6d/6e tooling added: deterministic private-beta package builder (14-file source package with SHA256SUMS, versioned manifests, six-target install docs), release-acceptance matrix runner with manual-pending enforcement and generated tracked matrix evidence (all six targets MANUAL-PENDING, no CI hardware claim), and native runtime acquisition/measurement tooling (six-target source template, plan/offline/download modes, measured manifest draft, no fabricated hashes). Full suite 677 passed; relocation gate 34/0; supervisor/SBOM/GUI/portable/doctor/CLI smokes green. Stage 6 remains in_progress only because real native runtime archives, actual CI execution, clean-machine/hardware acceptance and owner authorization for distribution are external/manual actions. Stage-6f/6g added: POSIX .sh/.command launchers shipped and mapped into the payload root with fail-closed runtime handling and executable bits, and a CI package-smoke job (source candidate + beta package + acceptance matrix + native-runtime dry-run, reports-only artifacts) with static/local validation. Full suite 682 passed. Stage 6 still requires the external/manual items: real measured native runtime archives and native candidates, actual GitHub Actions runs on real runners, clean-machine/hardware beta acceptance records, signing/notarization and owner distribution authorization. Stage-6h/6i added: a synthetic end-to-end release-pipeline rehearsal (six synthetic runtime fixtures -> measured draft -> native candidate with runtime archives -> beta package -> offline provision/verify -> acceptance matrix, explicit NOT-A-RELEASE report, canonical manifests unchanged) and a cross-platform reproducible source-release check (two builds, archive/manifest equality, forbidden-content scan) wired into a ubuntu/windows/macOS CI job. Full suite 693 passed; relocation 34/0; supervisor/SBOM green; local rehearsal PASS, reproducibility PASS 40/40, package smoke PASS. Remaining stage-6 items are external/manual: real measured native runtime archives, native candidates, actual CI execution, clean-machine/hardware beta acceptance records, signing/notarization and owner distribution authorization."
+        "note": "Stage-6 Windows engineering closed and then extended by the cross-platform private beta directive. C1 platform audit/abstraction + matrix, C2 six-target native runtime manifests/provisioner and measured-only release builder, C3 GitHub Actions CI matrix + headless GUI/bootstrapper checks, C4 feedback workflow + opt-in redacted diagnostics + tester/owner runbooks, and C5 pre-upload secrets/history audit are implemented with automated evidence. Root reorganization Phase A (one root launcher, CLI launchers under scripts/launchers/, archived repair scripts, da_eliminare staging) is committed. No non-Windows support is claimed: real native runtime archives, GitHub Actions execution, clean-machine installs, clipboard/microphone/GPU hardware and real-hardware beta acceptance remain MANUAL-PENDING, and the secrets audit must be re-run before any upload; owner authorization is required for any external distribution. Root reorganization is now fully implemented and verified: one root GUI launcher, CLI/VoiceBridge launchers under scripts/launchers/, repair scripts archived to docs/history/legacy/temp-scripts/, unused crewAI checkout staged in da_eliminare, generated build/dist/logs/state consolidated under .workspace with a configurable policy (python/ and data/ deliberately preserved), and the pre-upload secrets/history audit re-run at final HEAD with gate CLEAR-WITH-REVIEW/blocking 0 after a documented synthetic-test-fixture allowlist. Stale release candidates and da_eliminare/crewAI remain for explicit owner authorization. Stage-6c/6d/6e tooling added: deterministic private-beta package builder (14-file source package with SHA256SUMS, versioned manifests, six-target install docs), release-acceptance matrix runner with manual-pending enforcement and generated tracked matrix evidence (all six targets MANUAL-PENDING, no CI hardware claim), and native runtime acquisition/measurement tooling (six-target source template, plan/offline/download modes, measured manifest draft, no fabricated hashes). Full suite 677 passed; relocation gate 34/0; supervisor/SBOM/GUI/portable/doctor/CLI smokes green. Stage 6 remains in_progress only because real native runtime archives, actual CI execution, clean-machine/hardware acceptance and owner authorization for distribution are external/manual actions. Stage-6f/6g added: POSIX .sh/.command launchers shipped and mapped into the payload root with fail-closed runtime handling and executable bits, and a CI package-smoke job (source candidate + beta package + acceptance matrix + native-runtime dry-run, reports-only artifacts) with static/local validation. Full suite 682 passed. Stage 6 still requires the external/manual items: real measured native runtime archives and native candidates, actual GitHub Actions runs on real runners, clean-machine/hardware beta acceptance records, signing/notarization and owner distribution authorization. Stage-6h/6i added: a synthetic end-to-end release-pipeline rehearsal (six synthetic runtime fixtures -> measured draft -> native candidate with runtime archives -> beta package -> offline provision/verify -> acceptance matrix, explicit NOT-A-RELEASE report, canonical manifests unchanged) and a cross-platform reproducible source-release check (two builds, archive/manifest equality, forbidden-content scan) wired into a ubuntu/windows/macOS CI job. Full suite 693 passed; relocation 34/0; supervisor/SBOM green; local rehearsal PASS, reproducibility PASS 40/40, package smoke PASS. Remaining stage-6 items are external/manual: real measured native runtime archives, native candidates, actual CI execution, clean-machine/hardware beta acceptance records, signing/notarization and owner distribution authorization. Stage-6j/6k added genuine Linux x86_64 execution evidence via the existing WSL2 Ubuntu (shell syntax, launcher execution, reproducibility, package smoke, synthetic rehearsal, acceptance matrix, fetch/beta plans; source-level only, no GUI/native runtimes/network) and fixed the resulting real POSIX Self-Build launcher bad-substitution bug plus cross-platform manifest determinism: generated release/platform/runtime manifests and the beta package are now byte-identical Windows vs Linux, source archive byte-identical. Remaining external/manual items unchanged."
       }
     ]
   },
-  "updated_at": "2026-10-28T20:40:00+01:00"
+  "updated_at": "2026-10-28T21:10:00+01:00"
 }
