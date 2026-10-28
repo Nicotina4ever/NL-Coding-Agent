@@ -195,3 +195,40 @@ jobs:
           path: reports/
           if-no-files-found: warn
           retention-days: 3
+
+  secrets-scan:
+    name: Blocking pre-push secrets/content scan (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout (read-only, full bounded history, no persisted credentials)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: x64
+
+      - name: Blocking pre-push guard scan (staged/head/bounded history; no network)
+        run: >
+          python scripts/prepush_guard.py scan-all
+          --json-out reports/prepush_guard.json
+          --markdown-out reports/prepush_guard.md
+
+      - name: Report checksums (reports only)
+        run: python scripts/ci/checksums.py reports
+
+      - name: Upload secrets-scan reports only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: secrets-scan-reports
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 7

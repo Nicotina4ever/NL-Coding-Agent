@@ -334,3 +334,33 @@ def test_reproducibility_missing_source_exits_one(tmp_path):
     assert payload["summary"]["failed"] >= 1
     assert (reports / "reproducibility_check.json").is_file()
     assert (reports / "reproducibility_check.md").is_file()
+
+
+def test_workflow_has_blocking_secrets_scan_job_reports_only():
+    data = _workflow()
+    assert "secrets-scan" in data["jobs"], "blocking secrets-scan job is missing"
+    job = data["jobs"]["secrets-scan"]
+    assert job["runs-on"] == "ubuntu-latest"
+    assert int(job["timeout-minutes"]) <= 30
+    assert job["permissions"]["contents"] == "read"
+    steps = job.get("steps", [])
+    checkout = [step for step in steps
+                if str(step.get("uses", "")).startswith("actions/checkout@")]
+    assert checkout
+    assert checkout[0]["with"].get("persist-credentials") is False
+    commands = " ".join(str(step.get("run", "")) for step in steps)
+    assert "scripts/prepush_guard.py scan-all" in commands
+    assert "--json-out reports/prepush_guard.json" in commands
+    assert "--markdown-out reports/prepush_guard.md" in commands
+    assert "scripts/ci/checksums.py reports" in commands
+    uploads = [step for step in steps
+               if "actions/upload-artifact" in str(step.get("uses", ""))]
+    assert uploads
+    assert str(uploads[0]["with"]["path"]).strip().startswith("reports")
+    text = json.dumps(job).lower()
+    for forbidden in ("contents: write", "secrets.", "git push", "gh release",
+                      "publish", "visibility", "collaborator", "docker push",
+                      "pull_request_target"):
+        assert forbidden not in text, forbidden
+    assert "continue-on-error" not in job or job["continue-on-error"] is False
+
