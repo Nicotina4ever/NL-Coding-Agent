@@ -817,3 +817,28 @@ Studio final UX implementation (2026-10-29)
   passed in 139.7 s measured wall time. Counts: 193 requirements, 34 verified / 87 partial /
   69 planned / 3 blocked. Human aesthetic/Italian QA sign-off, complete legacy-style migration,
   real self-build/live-mission content and screen-reader acceptance remain MANUAL-PENDING.
+
+Localization and pre-push guard verified (2026-10-29)
+
+- NL-BP-237 is verified: the Studio has Italian (fresh-install default) and English catalogs with
+  409 keys each and identical key/placeholder sets, extensible catalog discovery, English/source
+  fallback, safe placeholders, persisted preference > System/OS detection > Italian default,
+  QTranslator/retranslate hooks and existing-SQLite persistence. Live switching covers sidebar,
+  main window, Projects/Settings/Inspector/IDE/dialogs and secondary panels; static command-palette,
+  advanced-settings, emergency, status/notification and dialog strings are included. Dynamic
+  backend/agent/model payloads remain data and are intentionally not translated; the UI language
+  remains separate from agent/code/documentation language. Tests cover key/placeholder parity,
+  live switching, persistence and no-network/model guards; manual Italian stylistic review remains
+  a note, not a runtime blocker.
+- NL-BP-235 is verified: the blocking pre-push guard (CLI + installed hook + CI) has fail-closed,
+  redacted, read-only behavior and real temporary-remote push-blocking tests. The only remaining
+  historical blocker was resolved with a single precise tests-only allowlist entry requiring exact
+  digest+path+rule+history-scope+commits+reason, visible in reports and proven narrow (wrong
+  path/rule/scope/commit/digest, staged/head, different secrets and hook tests still block).
+  Measured at HEAD e801a4c: scan-staged PASS 0 findings; scan-head PASS 450 files/169 REVIEW
+  findings/0 blocking/3 allowlisted; scan-all PASS 630 files/202 findings/0 blocking/5 allowlisted,
+  same rules. Bounded 30-commit history, a mandatory final release-HEAD rerun, external acceptance
+  and owner publication authorization remain disclosed caveats.
+- Full integration suite 1110 passed in 142.8 s measured wall time. Counts: 193 requirements,
+  36 verified / 85 partial / 69 planned / 3 blocked. NL-BP-238/239/240/241 remain partial for full
+  style migration, real self-build/live-mission content and human visual/screen-reader acceptance.

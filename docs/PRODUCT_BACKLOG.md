@@ -75,8 +75,8 @@ Publication/push remains forbidden without explicit owner authorization.
 
 | Status | P0 | P1 | P2 | P3 | Total |
 |---|---|---|---|---|---|
-| verified | 21 | 13 | 0 | 0 | 34 |
-| partial | 47 | 28 | 11 | 1 | 87 |
+| verified | 23 | 13 | 0 | 0 | 36 |
+| partial | 45 | 28 | 11 | 1 | 85 |
 | planned | 40 | 19 | 9 | 1 | 69 |
 | blocked | 3 | 0 | 0 | 0 | 3 |
 | **Total** | 111 | 60 | 20 | 2 | 193 |
@@ -102,6 +102,8 @@ Publication/push remains forbidden without explicit owner authorization.
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v5.4 (2026-10-29)** - Static UI localization completed and NL-BP-237 verified (Italian default/English catalogs 409 keys each, identical key/placeholder sets, live switching across principal and secondary panels, persisted preference, separation from agent/code/documentation language). Pre-push guard historical blocker cleared with a precise tests-only synthetic-fixture allowlist (exact digest/path/rule/scope/commits/reason, visible in reports, narrowness tests); measured scan-staged/head/all PASS with 0 blocking and 5 allowlisted under unchanged detection rules, NL-BP-235 verified. Full integration suite 1110 passed in 142.8 s. Counts 36 verified / 85 partial / 69 planned / 3 blocked. NL-BP-238/239/240/241 remain partial; final release-HEAD rerun, real self-build/live content, human visual/screen-reader acceptance, external acceptance and owner publication authorization remain pending.
 
 **v5.3 (2026-10-29)** - Studio final-UX implementation: Italian-default/English i18n framework with persisted live switching across principal and secondary panels (319 catalog keys each), NL-token visual system and reusable components, responsive Inspector/Projects/header fixes based on real screenshots, self-build moved from Projects to Settings > Advanced with progress/emergency-stop preserved, structured Inspector diagnostics and explicit opened/selected + IDLE/RUNNING activity state, and real Windows Qt screenshot evidence at three sizes/DPI with functional interaction capture. Five new requirements 237-241 now partial; full suite 1102 passed in 139.7 s; counts 34 verified / 87 partial / 69 planned / 3 blocked. Human aesthetic/Italian QA sign-off, complete legacy-style migration, real self-build/live-mission content and screen-reader acceptance remain MANUAL-PENDING.
 
