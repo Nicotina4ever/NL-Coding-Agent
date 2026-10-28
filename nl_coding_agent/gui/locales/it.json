@@ -411,6 +411,11 @@
     "status.command_log": "Comando: {id}",
     "status.lsp_unavailable": "La diagnostica LSP richiede un server locale installato; nessuno è stato avviato silenziosamente.",
     "status.ollama_reachable": "Ollama ●",
-    "status.ollama_unreachable": "Ollama ○"
+    "status.ollama_unreachable": "Ollama ○",
+    "projects.ingest_docs": "Acquisisci documentazione…",
+    "projects.ingest_docs_tooltip": "Scoperta documentazione in sola lettura e con limiti. I documenti sono NON AFFIDABILI e non vengono mai eseguiti; nessun modello/rete viene avviato.",
+    "projects.ingest_choose": "Scegli cartella documentazione",
+    "projects.ingest_title": "Riepilogo acquisizione documenti",
+    "projects.ingest_unavailable": "Acquisizione documenti non disponibile"
   }
 }

@@ -411,6 +411,11 @@
     "status.command_log": "Command: {id}",
     "status.lsp_unavailable": "LSP diagnostics require an installed local server; none started silently.",
     "status.ollama_reachable": "Ollama ●",
-    "status.ollama_unreachable": "Ollama ○"
+    "status.ollama_unreachable": "Ollama ○",
+    "projects.ingest_docs": "Ingest documentation…",
+    "projects.ingest_docs_tooltip": "Read-only bounded documentation discovery. Documents are UNTRUSTED and are never executed; no model/network is started.",
+    "projects.ingest_choose": "Choose documentation folder",
+    "projects.ingest_title": "Document ingestion summary",
+    "projects.ingest_unavailable": "Document ingestion unavailable"
   }
 }

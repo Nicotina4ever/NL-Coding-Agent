@@ -1,7 +1,8 @@
 # Document corpus ingestion (stage 8 D1, NL-BP-218)
 
-Status: discovery/provenance foundation only. Reconciliation, document authority
-resolution, planning and execution are NOT implemented here and remain later work.
+Status: D1/D3 discovery + provenance + end-to-end AppServices/CLI/minimum GUI
+ingestion. Reconciliation, document authority resolution, planning and execution
+are NOT implemented here and remain later work.
 
 ## Scope and consent
 
@@ -71,13 +72,56 @@ tree. Files are sha256-hashed before/with ingestion.
 extractor is injectable for tests/fake optional document extractors; production
 falls back to the existing app.attachments optional extractor only.
 
+
+
+## End-to-end usage (D3)
+
+AppServices (consent is mandatory; URLs require a configured reader):
+
+    services = AppServices()
+    services.configure_document_ingest(url_reader=fake_reader)  # optional/tests
+    report = services.document_ingest(
+        project_root="K:/project", paths=["docs/spec.md"], archives=["docs.zip"],
+        git_ref=None, urls=[], consent=True, limits={"max_files": 200})
+    services.document_ingest_status()  # reader/extractor/limits availability
+
+The structured result contains counts, source_kinds, per-document bounded
+provenance (path/url/source_kind/sha256/size/content type/git_ref/git_commit/
+authority_candidates/untrusted/truncated; raw text/sections are omitted, only a
+240-character excerpt remains), authority candidates, duplicates, bounded/complete,
+limits, skipped items and limitations. It never executes content, starts a model or
+mission, and performs no database persistence beyond optional bounded report
+metadata decided by the caller. URLs without an explicitly configured research
+fetch transport return outcome=unavailable with "no implicit network"; reader
+denials are surfaced as skipped URL items.
+
+CLI (pre-model dispatch, no DB isolation surprises):
+
+    python nl_agent.py docs ingest --project K:/project --json
+    python nl_agent.py docs ingest --project . --path docs/spec.md --archive docs.zip
+    python nl_agent.py docs ingest --project . --git-ref HEAD
+    python nl_agent.py docs ingest --project . --url https://example.com/doc --json
+
+Exit code 0 = completed (including bounded results with limitations), 1 = validation/
+consent/unavailable/error, 2 = usage. Plain text prints counts/source kinds/authority/
+limits and the literal UNTRUSTED/not-executed note. Help states docs are untrusted
+and never executed. URL ingestion requires an explicitly configured research reader
+in the process (the CLI never creates an implicit network transport).
+
+GUI minimum: Projects has a non-prominent "Ingest documentation…" action (subtle
+link) that opens a folder chooser, calls the injected AppServices facade and shows a
+read-only structured summary dialog. No new page, no direct DB/network, no execution;
+cancel and unavailable/error paths are explicit. it/en strings are included in the
+catalogs.
+
 ## Remaining work (not claimed)
 
 - reconciliation and authority/conflict handling across documents;
 - document-driven planning, task generation and execution;
-- persistence/citation store integration and GUI/CLI surfaces;
+- persistence/citation store integration beyond the minimum CLI/GUI surface;
 - optional PDF/Office acceptance on real documents and environments;
 - large-corpus/performance and real-network URL acceptance.
 
-Tests use temp fixtures, fake extractors and fake URL readers only; no live network,
-model or GUI verification is claimed.
+Tests use temp fixtures, fake extractors, fake URL readers, fake AppServices and
+offscreen GUI interactions only; no live network, model or interactive GUI
+verification is claimed.

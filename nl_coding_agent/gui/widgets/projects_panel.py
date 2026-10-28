@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Mapping
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QListWidget, QListWidgetItem, QMessageBox, QInputDialog, QFrame,
+    QFileDialog, QDialog, QDialogButtonBox, QPlainTextEdit,
 )
 from PySide6.QtCore import Signal, Qt
 
@@ -58,7 +60,25 @@ class ProjectsPanel(QWidget):
             "Self-build is intentionally unobtrusive. Configure it in "
             "Settings > Advanced > Autonomous Development.")
         self._self_build_btn.clicked.connect(self._on_self_build_open)
-        layout.addWidget(self._self_build_btn, alignment=Qt.AlignmentFlag.AlignRight)
+        dev_row = QHBoxLayout()
+        dev_row.addStretch()
+        self._ingest_btn = QPushButton(tr_for(
+            self._i18n, "projects.ingest_docs", "Ingest documentation…"))
+        self._ingest_btn.setObjectName("subtleLinkButton")
+        self._ingest_btn.setFlat(True)
+        self._ingest_btn.setAccessibleName("Ingest project documentation (read-only)")
+        self._ingest_btn.setToolTip(tr_for(
+            self._i18n, "projects.ingest_docs_tooltip",
+            "Read-only bounded documentation discovery. Documents are UNTRUSTED "
+            "and are never executed; no model/network is started."))
+        self._ingest_btn.clicked.connect(self._on_ingest_documents)
+        self._ingest_btn.setEnabled(
+            callable(getattr(services, "document_ingest", None)))
+        if not self._ingest_btn.isEnabled():
+            self._ingest_btn.setToolTip("Document ingestion is not configured.")
+        dev_row.addWidget(self._ingest_btn)
+        dev_row.addWidget(self._self_build_btn)
+        layout.addLayout(dev_row)
 
         # Recent projects list
         self._recent_label = QLabel(tr_for(
@@ -200,6 +220,90 @@ class ProjectsPanel(QWidget):
         self._identity_label.setToolTip(
             "Opened = the project currently loaded in the Studio; "
             "Selected = highlighted list item.")
+
+
+    def _on_ingest_documents(self) -> None:
+        if not callable(getattr(self._services, "document_ingest", None)):
+            return
+        folder = QFileDialog.getExistingDirectory(
+            self, tr_for(self._i18n, "projects.ingest_choose",
+                         "Choose documentation folder"))
+        if not folder:
+            return
+        self._run_document_ingest(folder)
+
+    def _run_document_ingest(self, folder) -> dict:
+        try:
+            result = self._services.document_ingest(
+                project_root=folder, consent=True)
+        except Exception as exc:  # noqa: BLE001 - displayed, failed closed
+            result = {"ok": False, "outcome": "error",
+                      "error": {"message": str(exc)}, "documents": []}
+        if isinstance(result, Mapping) and not result.get("ok"):
+            error = result.get("error")
+            message = error.get("message") if isinstance(error, Mapping) else None
+            QMessageBox.warning(
+                self, tr_for(self._i18n, "projects.ingest_unavailable",
+                             "Document ingestion unavailable"),
+                str(message or "Document ingestion could not run."))
+        else:
+            self._show_ingest_summary(result)
+        return dict(result) if isinstance(result, Mapping) else {}
+
+    def _ingest_summary_text(self, result: dict) -> str:
+        counts = result.get("counts") or {}
+        lines = [
+            "Document ingestion: " + str(result.get("outcome") or "unknown"),
+            "Documents: " + str(counts.get("documents", len(result.get("documents") or []))),
+            "Skipped: " + str(counts.get("skipped", 0)),
+            "Duplicates: " + str(counts.get("duplicates", 0)),
+            "Source kinds: " + json.dumps(result.get("source_kinds") or {},
+                                          sort_keys=True),
+            "Bounded: " + str(bool(result.get("bounded")))
+            + "   Complete: " + str(bool(result.get("complete"))),
+            "",
+            "Authority candidates (flags, not truth claims):",
+        ]
+        for item in result.get("authority_candidates") or []:
+            lines.append("  " + str(item.get("path")) + " — "
+                         + ", ".join(item.get("authority_candidates") or []))
+        if not result.get("authority_candidates"):
+            lines.append("  none")
+        lines.extend(["", "Limitations:"])
+        for limitation in result.get("limitations") or []:
+            lines.append("  " + str(limitation))
+        if not result.get("limitations"):
+            lines.append("  none reported")
+        lines.extend([
+            "", "Documents (bounded provenance):",
+        ])
+        for document in (result.get("documents") or [])[:50]:
+            lines.append("  " + str(document.get("source_kind")) + "  "
+                         + str(document.get("path") or document.get("url"))
+                         + "  sha256=" + str(document.get("sha256"))[:12]
+                         + "  size=" + str(document.get("size")))
+        lines.extend(["", "UNTRUSTED data; imported content was not executed. "
+                          "No mission or model was started."])
+        return "\n".join(lines)
+
+    def _show_ingest_summary(self, result: dict) -> QDialog:
+        dialog = QDialog(self)
+        dialog.setWindowTitle(tr_for(self._i18n, "projects.ingest_title",
+                                     "Document ingestion summary"))
+        dialog.setAccessibleName("Read-only document ingestion summary")
+        dialog.resize(720, 560)
+        layout = QVBoxLayout(dialog)
+        summary = QPlainTextEdit()
+        summary.setReadOnly(True)
+        summary.setAccessibleName("Document ingestion counts and provenance")
+        summary.setPlainText(self._ingest_summary_text(result))
+        layout.addWidget(summary)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(dialog.reject)
+        buttons.accepted.connect(dialog.accept)
+        layout.addWidget(buttons)
+        dialog.show()
+        return dialog
 
     def _on_self_build_open(self):
         root = Path(__file__).resolve().parents[3]

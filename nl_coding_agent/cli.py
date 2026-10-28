@@ -1340,6 +1340,54 @@ def _dispatch_goal_with(args, services) -> int:
     return 2
 
 
+def _dispatch_docs(args) -> int:
+    """Read-only document ingestion; docs are untrusted data and never executed."""
+    command = getattr(args, "docs_command", None)
+    if command != "ingest":
+        print("ERROR: unknown docs command: " + str(command), file=sys.stderr)
+        return 2
+    from nl_coding_agent.app.services import AppServices
+    services = AppServices()
+    try:
+        result = services.document_ingest(
+            project_root=(getattr(args, "project_positional", None)
+                          or getattr(args, "project", None) or "."),
+            paths=list(getattr(args, "path", None) or []),
+            archives=list(getattr(args, "archive", None) or []),
+            git_ref=getattr(args, "git_ref", None),
+            urls=list(getattr(args, "url", None) or []),
+            consent=True, limits=getattr(args, "limits", None))
+    finally:
+        try:
+            services._db.close()
+        except Exception:
+            pass
+    if getattr(args, "json", False):
+        print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+    else:
+        counts = result.get("counts") or {}
+        print("Document ingestion: " + str(result.get("outcome") or "unknown"))
+        print("  documents: " + str(counts.get("documents", len(result.get("documents") or [])))
+              + "  skipped: " + str(counts.get("skipped", 0))
+              + "  duplicates: " + str(counts.get("duplicates", 0)))
+        print("  source kinds: " + json.dumps(result.get("source_kinds") or {}, sort_keys=True))
+        for item in result.get("authority_candidates") or []:
+            print("  authority candidate: " + str(item.get("path"))
+                  + " " + json.dumps(item.get("authority_candidates") or []))
+        print("  bounded: " + str(bool(result.get("bounded")))
+              + "  complete: " + str(bool(result.get("complete"))))
+        for limitation in result.get("limitations") or []:
+            print("  limitation: " + str(limitation))
+        print("  UNTRUSTED data; not executed; no mission started.")
+    if not result.get("ok"):
+        error = result.get("error")
+        if isinstance(error, dict):
+            print("ERROR: " + str(error.get("message") or error.get("code")),
+                  file=sys.stderr)
+        return 1
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="NL Coding Agent CLI")
     parser.add_argument("--models", default=str(DEFAULT_MODELS))
@@ -1629,6 +1677,30 @@ def main(argv: list[str] | None = None) -> int:
     workers_p.add_argument("goal_id", type=int)
     workers_p.add_argument("--json", action="store_true")
 
+    # Document ingestion command (read-only; no model/network by default)
+    docs_p = sub.add_parser(
+        "docs", help="Read-only document ingestion; docs are UNTRUSTED and never executed")
+    doc_sub = docs_p.add_subparsers(dest="docs_command", required=True)
+    ingest_p = doc_sub.add_parser(
+        "ingest",
+        description="Read-only document discovery. Docs are UNTRUSTED data and are "
+                    "never executed; nothing is persisted and no model/network starts.",
+        help="Discover/read docs from a project, files/folders, archives, Git or "
+             "explicitly configured URLs. Docs are UNTRUSTED and never executed.")
+    ingest_p.add_argument("project_positional", nargs="?", default=None,
+                          help="Project folder (alternative to --project)")
+    ingest_p.add_argument("--project", default=".",
+                          help="Project folder (default: current directory)")
+    ingest_p.add_argument("--path", action="append", default=[],
+                          help="Explicit documentation file or folder (repeatable)")
+    ingest_p.add_argument("--archive", action="append", default=[],
+                          help="Documentation archive .zip/.tar/.tar.gz (repeatable)")
+    ingest_p.add_argument("--url", action="append", default=[],
+                          help="Authorized documentation URL (requires explicitly "
+                               "configured research reader; never implicit network)")
+    ingest_p.add_argument("--git-ref", default=None,
+                          help="Read documentation at a pinned Git ref")
+    ingest_p.add_argument("--json", action="store_true", help="JSON summary output")
     # GUI subcommand
     sub.add_parser("gui")
 
@@ -1816,6 +1888,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Diff: {res['diff_stat']}")
         print(f"Review verdict: {res.get('verdict') or res.get('review', '')}")
         return 0 if res["status"] == "completed" else 1
+
+    if args.command == "docs":
+        return _dispatch_docs(args)
 
     if args.command == "gui":
         from nl_coding_agent.gui.main import run_gui
