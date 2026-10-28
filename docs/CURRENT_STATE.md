@@ -515,3 +515,25 @@ locally PASS (9 CI tests, 6/6 smoke checks) but no actual GitHub Actions run has
 Full suite: 682 passed; relocation gate clean at the previous check. Real measured native runtime
 archives, native candidates, real CI runs, clean-machine/hardware beta acceptance, signing and owner
 distribution authorization remain MANUAL-PENDING; no platform support is claimed.
+
+Stage-6 pipeline rehearsal and reproducibility (2026-10-28, round 4)
+
+Two further automatable stage-6 gaps are closed:
+- scripts/rehearse_release.py exercises the complete release chain with unmistakably synthetic runtime
+  fixtures (no real runtimes): offline fetch/measure -> six-target measured draft (release_ready at
+  6/6) -> build_release native candidate with per-target runtime archives -> manifest/hash validation
+  -> beta package -> offline provision install/verify for all six targets -> acceptance matrix with a
+  temp-only synthetic record. It reports synthetic_rehearsal=true, per-stage PASS/FAIL, an explicit
+  NOT-A-RELEASE/no-platform-support statement, leaves canonical installer manifests byte-identical
+  and always cleans its temp workspace.
+- scripts/ci/reproducibility_check.py builds the source release twice and verifies archive sha256/
+  size/member equality plus byte-identical release/platform/runtime manifests and forbidden-content
+  exclusions (40/40 checks locally); a new blocking CI job runs it on ubuntu-latest, windows-latest
+  and macos-14 with reports-only artifacts.
+
+Round-4 verification: full suite 693 passed; relocation gate 34/0; supervisor gate ok; SBOM OK;
+local synthetic rehearsal PASS (8/8 stages); reproducibility PASS 40/40; package smoke PASS;
+root remains clean with no legacy output directories. Real six-target runtime archives and hashes,
+actual GitHub Actions execution on real runners, clean-machine and hardware beta acceptance, real
+tester records, signing/notarization and owner distribution authorization remain MANUAL-PENDING.
+No platform or release support is claimed.
