@@ -1,4 +1,4 @@
-# Studio GUI screenshot evidence (U2)
+# Studio GUI screenshot evidence (U4 layout re-capture)
 
 Status: measured real-window evidence, not a human aesthetic approval.
 
@@ -27,20 +27,25 @@ because Qt scale factors multiply logical pixels; the 1.5 capture was physically
 clamped at 1421 px height by the available desktop, so it is not a strict
 2880x1620 capture.
 
-## Inspected screenshot
+## Inspected screenshot (U4)
 
-docs/evidence/gui/STUDIO_1280x800_DPI100.png was visually inspected: the Studio
-shell shows the token-based header/activity badge, Project identity line, compact
-Projects page with only the subtle Advanced self-build link, structured Inspector
-cards (Project/Mission/Agent/Verification/Activity), diagnostics tree and status
-bar. The screenshot confirms visual hierarchy and readable status; this is
-functional/visual evidence, not human aesthetic sign-off.
+docs/evidence/gui/STUDIO_1280x800_DPI100.png was visually inspected after the U4
+fixes. The Inspector cards now fit the panel and wrap their values/details (no
+horizontal clipping or horizontal scrollbar); the diagnostics tree is a visible
+lower pane with wrapped/elided detail and interactive first column. Projects shows
+a compact no-projects guidance card with an Open Project action instead of a large
+blank box, while Opened/Selected identity and the subtle Advanced self-build link
+remain visible. Header project/activity/autonomy labels stay readable at 1280.
+U4 measured result: Inspector scroll area horizontal scrollbar disabled; splitter
+inspector minimum width 268 and default width 300; diagnostics pane visible at
+1280x800. This is functional/visual evidence, not human aesthetic sign-off.
 
 ## Limitations / MANUAL-PENDING
 
 - Host desktop, font availability (Qt emitted a QFontDatabase "no fonts" warning on
   this embedded runtime) and OS DPI scaling vary; exact layout on other hardware is
-  untested.
+  untested. At 1280 the card area scrolls vertically for the lower cards; the
+  diagnostics detail column elides very long values (no horizontal scroll by design).
 - The interaction sequence is scripted and bounded; real project content, real
   missions, live services and accessibility with a screen reader remain
   MANUAL-PENDING.

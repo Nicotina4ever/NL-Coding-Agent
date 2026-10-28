@@ -39,6 +39,13 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
     assert window._projects_panel._self_build_btn.objectName() == "subtleLinkButton"
     assert "Advanced self-build" in window._projects_panel._self_build_btn.text()
     assert window._inspector._cards and window._inspector._diagnostics
+    assert window._projects_panel._empty_card.isHidden() is False
+    assert window._projects_panel._list.isHidden() is True
+    from PySide6.QtCore import Qt
+    assert (window._inspector._scroll.horizontalScrollBarPolicy()
+            == Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    assert window._project_label.maximumWidth() == 310
+    assert window._activity_label.maximumWidth() == 250
     assert "Self-Build (This Agent)" in window._settings_panel._self_build_heading.text()
     assert window._page_index == {
         "projects": 0,

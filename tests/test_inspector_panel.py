@@ -40,6 +40,18 @@ def test_project_summary_cards_and_expandable_diagnostics():
     assert "Demo" in panel._cards["project"].findChildren(
         __import__("PySide6.QtWidgets", fromlist=["QLabel"]).QLabel)[1].text()
     assert isinstance(panel._diagnostics, QTreeWidget)
+    from PySide6.QtCore import Qt
+    panel.resize(268, 640)
+    panel.show()
+    QApplication.processEvents()
+    assert panel._scroll.horizontalScrollBarPolicy() ==         Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+    assert panel._diagnostics.header().stretchLastSection() is True
+    for label in panel._cards["project"].findChildren(
+            __import__("PySide6.QtWidgets", fromlist=["QLabel"]).QLabel):
+        assert label.wordWrap() is True
+    panel.resize(1280, 800)
+    QApplication.processEvents()
+    assert panel._scroll.horizontalScrollBar().maximum() == 0
     assert panel._diagnostics.topLevelItemCount() >= 1
     project_item = panel._diagnostics.topLevelItem(0)
     assert project_item.childCount() >= 2

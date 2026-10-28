@@ -7,8 +7,8 @@ glow on text/code/logs, or business logic.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QVBoxLayout,
-                               QWidget)
+from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QSizePolicy,
+                               QVBoxLayout, QWidget)
 
 from .theme import design_tokens
 
@@ -49,15 +49,25 @@ def summary_card(title: str, value: str, detail: str = "", *,
     layout.setSpacing(2)
     title_label = QLabel(str(title).upper())
     title_label.setObjectName("nlCardTitle")
+    title_label.setWordWrap(True)
+    title_label.setMinimumWidth(0)
+    title_label.setSizePolicy(QSizePolicy.Policy.Ignored,
+                              QSizePolicy.Policy.Preferred)
     value_label = QLabel(str(value))
     value_label.setObjectName("nlCardValue")
     value_label.setWordWrap(True)
+    value_label.setMinimumWidth(0)
+    value_label.setSizePolicy(QSizePolicy.Policy.Ignored,
+                              QSizePolicy.Policy.Preferred)
     layout.addWidget(title_label)
     layout.addWidget(value_label)
     if detail:
         detail_label = QLabel(str(detail))
         detail_label.setObjectName("nlCardDetail")
         detail_label.setWordWrap(True)
+        detail_label.setMinimumWidth(0)
+        detail_label.setSizePolicy(QSizePolicy.Policy.Ignored,
+                                   QSizePolicy.Policy.Preferred)
         layout.addWidget(detail_label)
     return card
 

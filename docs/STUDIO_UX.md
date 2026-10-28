@@ -1,4 +1,4 @@
-# Studio UX U2 - visual polish and evidence (NL-BP-238/239/240/241)
+# Studio UX U2/U4 - visual polish, layout fixes and evidence (NL-BP-238/239/240/241)
 
 ## Design system
 
@@ -36,6 +36,13 @@ styles where practical.
   (Project, Mission, Agent, Verification, Activity), an activity badge, and an
   expandable diagnostics tree retaining raw facts/evidence/errors and file text.
   Copy/export was not present before and was not removed.
+- U4 layout fixes: inspector labels/cards wrap and expand, the inspector scrolls
+  vertically only (horizontal scrollbar disabled at 1280), cards sit in a vertically
+  scrollable upper pane and diagnostics in a visible lower split pane with a
+  stretch-last detail column; the splitter gives the inspector a 268 px minimum /
+  ~300 px default width while preserving user resizing. Projects uses a compact
+  empty-state card (Open Project + recent-project guidance) instead of a blank box.
+  Header opened/activity/autonomy labels have bounded widths at 1280/1600.
 
 ## Verification and evidence
 

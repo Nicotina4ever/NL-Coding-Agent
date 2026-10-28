@@ -62,6 +62,44 @@ def test_selected_vs_opened_project_identity_is_unambiguous():
     assert panel._identity_label.accessibleName()
 
 
+
+
+def test_projects_empty_state_replaces_blank_area():
+    from nl_coding_agent.gui.widgets.projects_panel import ProjectsPanel
+
+    _app()
+    panel = ProjectsPanel(SimpleNamespace(list_recent_projects=lambda: []))
+    panel.resize(900, 600)
+    panel.show()
+    _app().processEvents()
+    assert panel._empty_card.isVisible() is True
+    assert panel._list.isVisible() is False
+    labels = panel._empty_card.findChildren(
+        __import__("PySide6.QtWidgets", fromlist=["QLabel"]).QLabel)
+    assert any("No projects yet" in label.text() for label in labels)
+    assert panel._identity_label.isVisible() is True
+    assert panel._self_build_btn.isVisible() is True
+    assert panel._empty_card.width() > 300
+
+
+def test_identity_remains_visible_and_readable_at_wide_width():
+    from nl_coding_agent.gui.widgets.projects_panel import ProjectsPanel
+
+    _app()
+    projects = [{"id": 1, "name": "One", "root": "X:/one", "last_used": "now"},
+                {"id": 2, "name": "Two", "root": "X:/two", "last_used": "now"}]
+    panel = ProjectsPanel(SimpleNamespace(
+        list_recent_projects=lambda: [dict(p) for p in projects]))
+    panel.set_opened_project(projects[0])
+    panel._list.setCurrentRow(1)
+    panel.resize(1280, 800)
+    panel.show()
+    _app().processEvents()
+    assert "Opened: One" in panel._identity_label.text()
+    assert "Selected: Two" in panel._identity_label.text()
+    assert panel._identity_label.isVisible() is True
+    assert panel._identity_label.width() > 200
+
 def test_settings_advanced_contains_self_build_activation_and_design_tokens():
     from nl_coding_agent.gui.theme import component_qss, design_tokens, load_tokens
 
@@ -79,6 +117,8 @@ def test_settings_advanced_contains_self_build_activation_and_design_tokens():
     finally:
         settings.deleteLater()
         services._db.close()
+        from nl_coding_agent.gui.i18n import reset_i18n
+        reset_i18n()
         QApplication.processEvents()
     tokens = load_tokens()
     derived = design_tokens(tokens)

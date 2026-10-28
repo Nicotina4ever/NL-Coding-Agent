@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Signal, Qt
 
+from nl_coding_agent.gui.components import empty_state
 from nl_coding_agent.gui.i18n import tr_for
 
 
@@ -69,7 +70,24 @@ class ProjectsPanel(QWidget):
         self._list = QListWidget()
         self._list.setAlternatingRowColors(True)
         self._list.itemDoubleClicked.connect(self._on_item_double_clicked)
-        layout.addWidget(self._list)
+        layout.addWidget(self._list, 1)
+        self._empty_card = QFrame()
+        self._empty_card.setObjectName("nlSummaryCard")
+        self._empty_card.setMaximumHeight(220)
+        self._empty_card.setAccessibleName("No projects yet guidance")
+        empty_layout = QVBoxLayout(self._empty_card)
+        empty_layout.setContentsMargins(12, 12, 12, 12)
+        empty_layout.addWidget(empty_state(
+            "No projects yet. Open a project to start the Studio, or pick one "
+            "from Recent Projects once available."))
+        empty_open = QPushButton(tr_for(self._i18n, "projects.open",
+                                        "Open Project…"))
+        empty_open.setObjectName("primaryButton")
+        empty_open.setAccessibleName("Open project from empty state")
+        empty_open.clicked.connect(self._on_open_project)
+        empty_layout.addWidget(empty_open, alignment=Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(self._empty_card)
+        layout.addStretch(1)
 
         # Action buttons
         btns = QHBoxLayout()
@@ -135,6 +153,10 @@ class ProjectsPanel(QWidget):
                           "Last used: {last_used}", last_used=p["last_used"])
             )
             self._list.addItem(item)
+        has_projects = self._list.count() > 0
+        self._list.setVisible(has_projects)
+        self._empty_card.setVisible(not has_projects)
+        self._recent_label.setVisible(has_projects)
 
     def _on_open_project(self):
         from nl_coding_agent.gui.dialogs.open_project import OpenProjectDialog

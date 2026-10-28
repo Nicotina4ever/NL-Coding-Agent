@@ -9,7 +9,8 @@ from __future__ import annotations
 import json
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QScrollArea,
+from PySide6.QtWidgets import (QFrame, QHBoxLayout, QHeaderView, QLabel,
+                               QScrollArea, QSizePolicy, QSplitter,
                                QTreeWidget, QTreeWidgetItem, QVBoxLayout,
                                QWidget)
 
@@ -27,6 +28,9 @@ class InspectorPanel(QWidget):
         self._last_render = None
         self.setObjectName("inspectorPanel")
         self.setAccessibleName("Inspector: summaries and expandable diagnostics")
+        self.setMinimumWidth(268)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred,
+                           QSizePolicy.Policy.Expanding)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
@@ -36,16 +40,26 @@ class InspectorPanel(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setAccessibleName("Inspector summary and diagnostics scroll")
+        self._scroll = scroll
         body = QWidget()
+        body.setMinimumWidth(0)
+        body.setSizePolicy(QSizePolicy.Policy.Ignored,
+                           QSizePolicy.Policy.Preferred)
         body_layout = QVBoxLayout(body)
         body_layout.setContentsMargins(0, 0, 0, 0)
         body_layout.setSpacing(8)
+        body_layout.setSizeConstraint(
+            __import__("PySide6.QtWidgets", fromlist=["QLayout"]).QLayout
+            .SizeConstraint.SetNoConstraint)
         self._cards: dict[str, QFrame] = {}
         for key, title in (("project", "Project"), ("mission", "Mission"),
                            ("agent", "Agent"), ("verification", "Verification"),
                            ("activity", "Activity")):
             card = summary_card(title, "—", "No data yet", accessible_name=title)
+            card.setSizePolicy(QSizePolicy.Policy.Expanding,
+                               QSizePolicy.Policy.Minimum)
             self._cards[key] = card
             body_layout.addWidget(card)
         self._status_badge = status_badge("IDLE", "idle")
@@ -53,16 +67,39 @@ class InspectorPanel(QWidget):
         self._diagnostics_title = QLabel("DIAGNOSTICS (expand for raw/evidence/errors)")
         self._diagnostics_title.setObjectName("nlCardTitle")
         self._diagnostics_title.setAccessibleName("Expandable inspector diagnostics")
-        body_layout.addWidget(self._diagnostics_title)
         self._diagnostics = QTreeWidget()
         self._diagnostics.setHeaderLabels(["Section", "Detail"])
         self._diagnostics.setAccessibleName("Expandable raw diagnostics tree")
         self._diagnostics.setMinimumHeight(220)
+        self._diagnostics.setMinimumWidth(0)
+        self._diagnostics.setWordWrap(True)
+        self._diagnostics.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self._diagnostics.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._diagnostics.header().setStretchLastSection(True)
+        self._diagnostics.header().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.Interactive)
+        self._diagnostics.setColumnWidth(0, 92)
+        self._diagnostics.setSizePolicy(QSizePolicy.Policy.Expanding,
+                                        QSizePolicy.Policy.Expanding)
         self._diagnostics.setEditTriggers(
             QTreeWidget.EditTrigger.NoEditTriggers)
-        body_layout.addWidget(self._diagnostics, 1)
+        diagnostics_box = QWidget()
+        diagnostics_layout = QVBoxLayout(diagnostics_box)
+        diagnostics_layout.setContentsMargins(0, 0, 0, 0)
+        diagnostics_layout.setSpacing(4)
+        diagnostics_layout.addWidget(self._diagnostics_title)
+        diagnostics_layout.addWidget(self._diagnostics, 1)
+        split = QSplitter(Qt.Orientation.Vertical)
+        split.setChildrenCollapsible(False)
         scroll.setWidget(body)
-        layout.addWidget(scroll, 1)
+        split.addWidget(scroll)
+        split.addWidget(diagnostics_box)
+        split.setSizes([430, 260])
+        split.setStretchFactor(0, 1)
+        split.setStretchFactor(1, 1)
+        self._split = split
+        layout.addWidget(split, 1)
 
     # ---------------------------------------------------------------- helpers
     def _set_card(self, key: str, value: str, detail: str = "") -> None:
