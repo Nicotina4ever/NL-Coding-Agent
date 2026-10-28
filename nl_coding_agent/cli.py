@@ -750,9 +750,12 @@ def _dispatch_supervisor(args) -> int:
 # ---------------------------------------------------------------------------
 GOAL_GROUP_EPILOG = (
     "Goal commands persist local goals/milestones only. They never create, start "
-    "or run missions, agents or models, and there are no execution flags. Goal "
-    "data lives in the NL_DATA_DIR application database; there is no reset "
-    "command - use a temporary NL_DATA_DIR to isolate a run."
+    "or run missions, agents or models, and there are no execution flags. "
+    "Completion requires independent verification from source-backed evidence "
+    "(tests, commands, artifacts, reviewer/user confirmation); a checklist, plan, "
+    "progress percentage or agent claim can never complete a goal. Goal data lives "
+    "in the NL_DATA_DIR application database; there is no reset command - use a "
+    "temporary NL_DATA_DIR to isolate a run."
 )
 
 
@@ -783,6 +786,84 @@ def _goal_error_payload(payload: dict) -> dict:
     error = payload.get("error") if isinstance(payload, dict) else None
     return error if isinstance(error, dict) else {
         "code": "error", "type": "Error", "message": str(error or payload)}
+
+
+def _goal_json_input(file_value, inline_value, label: str):
+    """Load JSON from a file/stdin or an inline --*-json argument."""
+    if file_value and inline_value:
+        return None, "provide either " + label + " file or --" + label + "-json, not both"
+    if inline_value:
+        try:
+            return json.loads(inline_value), None
+        except ValueError as exc:
+            return None, label + " JSON is invalid: " + str(exc)
+    if not file_value:
+        return None, None
+    if file_value == "-":
+        raw = sys.stdin.read()
+    else:
+        path = Path(file_value).expanduser()
+        if not path.is_file():
+            return None, label + " file not found: " + str(path)
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            return None, "cannot read " + label + " file: " + str(exc)
+    try:
+        return json.loads(raw), None
+    except ValueError as exc:
+        return None, label + " JSON is invalid: " + str(exc)
+
+
+def _goal_verification_inputs(args):
+    evidence, error = _goal_json_input(
+        getattr(args, "evidence", None), getattr(args, "evidence_json", None),
+        "evidence")
+    if error:
+        return None, None, error
+    criteria, error = _goal_json_input(
+        getattr(args, "criteria", None), getattr(args, "criteria_json", None),
+        "criteria")
+    if error:
+        return None, None, error
+    return evidence, criteria, None
+
+
+def _goal_verification_text(payload: dict) -> list[str]:
+    verdict = str(payload.get("verdict") or "unknown")
+    goal_id = payload.get("goal_id")
+    lines = ["Goal #" + str(goal_id) + " verification: " + verdict]
+    for item in payload.get("criteria") or []:
+        lines.append("  [" + str(item.get("status")) + "] "
+                     + str(item.get("criterion_id")) + ": "
+                     + str(item.get("text")))
+    blockers = payload.get("blockers") or []
+    if blockers:
+        lines.append("Blockers:")
+        for blocker in blockers:
+            lines.append("  - " + str(blocker.get("code") or "blocker") + ": "
+                         + str(blocker.get("detail") or ""))
+    if payload.get("record_id"):
+        lines.append("Verification record: #" + str(payload.get("record_id")))
+    return lines
+
+
+def _goal_verification_emit(payload: dict, as_json: bool, *, verify_only: bool) -> int:
+    if as_json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False, default=str))
+    else:
+        for line in _goal_verification_text(payload):
+            print(line)
+    ok = bool(payload.get("ok"))
+    verdict = payload.get("verdict")
+    if not ok:
+        error = _goal_error_payload(payload)
+        print("ERROR [" + str(error.get("code")) + "]: "
+              + str(error.get("message")), file=sys.stderr)
+        return 1
+    if verify_only:
+        return 0 if verdict == "verified" else 1
+    return 0
 
 
 def _goal_emit(payload: dict, as_json: bool, text_lines) -> int:
@@ -977,6 +1058,46 @@ def _dispatch_goal_with(args, services) -> int:
             "  goal #" + str(item.get("goal_id")) + " milestone #"
             + str(item.get("milestone_id")) + " " + str(item.get("title"))
             for item in work] if work else ["Next work: none eligible."])
+
+    if command == "verify":
+        evidence, criteria, error = _goal_verification_inputs(args)
+        if error:
+            print("ERROR: " + error, file=sys.stderr)
+            return 2
+        result = services.goal_verify(
+            args.goal_id, evidence=evidence, criteria=criteria,
+            stale_after_s=getattr(args, "stale_after", None))
+        return _goal_verification_emit(result, as_json, verify_only=True)
+
+    if command == "complete":
+        evidence, criteria, error = _goal_verification_inputs(args)
+        if error:
+            print("ERROR: " + error, file=sys.stderr)
+            return 2
+        if evidence is None and not getattr(args, "dry_run", False):
+            print("ERROR: goal complete requires --evidence/--evidence-json "
+                  "(or use --dry-run)", file=sys.stderr)
+            return 2
+        result = services.goal_complete(
+            args.goal_id, evidence=evidence, criteria=criteria,
+            stale_after_s=getattr(args, "stale_after", None),
+            dry_run=bool(getattr(args, "dry_run", False)))
+        if as_json:
+            print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+        else:
+            for line in _goal_verification_text(result):
+                print(line)
+            if result.get("ok") and result.get("outcome") == "completed":
+                print("Goal #" + str(args.goal_id) + " completed after verified evidence.")
+            elif result.get("ok") and result.get("outcome") == "dry_run_verified":
+                print("Goal #" + str(args.goal_id) + " would complete after verified "
+                      "evidence (dry-run; status unchanged).")
+        if not result.get("ok"):
+            error = _goal_error_payload(result)
+            print("ERROR [" + str(error.get("code")) + "]: "
+                  + str(error.get("message")), file=sys.stderr)
+            return 1
+        return 0
 
     if command == "progress":
         if getattr(args, "goal_id", None):
@@ -1189,6 +1310,50 @@ def main(argv: list[str] | None = None) -> int:
     progress_p.add_argument("goal_id", nargs="?", type=int, default=None)
     progress_p.add_argument("--project", default=None)
     progress_p.add_argument("--json", action="store_true")
+
+    verify_p = gs.add_parser(
+        "verify", help="Independently verify goal completion (read-only)",
+        description="Verify a goal against source-backed evidence. This command is "
+                    "read-only: it never changes goal status and never executes "
+                    "anything. Success requires a verified verdict.",
+        epilog="Verification requires source-backed evidence (tests, commands, "
+               "artifacts, reviewer/user confirmation). A checklist, plan or "
+               "progress alone can never verify/complete a goal.")
+    verify_p.add_argument("goal_id", type=int)
+    verify_p.add_argument("--evidence", "--evidence-file", default=None,
+                          help="JSON evidence file, or - for stdin")
+    verify_p.add_argument("--evidence-json", default=None,
+                          help="Inline JSON evidence list/object")
+    verify_p.add_argument("--criteria", "--criteria-file", default=None,
+                          help="JSON acceptance criteria file, or - for stdin")
+    verify_p.add_argument("--criteria-json", default=None,
+                          help="Inline JSON acceptance criteria")
+    verify_p.add_argument("--stale-after", type=int, default=None,
+                          help="Maximum evidence age in seconds")
+    verify_p.add_argument("--json", action="store_true")
+
+    complete_p = gs.add_parser(
+        "complete", help="Verify evidence and complete a goal (explicit)",
+        description="Verification-gated completion. Requires source-backed evidence "
+                    "unless --dry-run; unverified/partial/contradicted evidence or "
+                    "missing acceptance criteria leaves the goal unchanged.",
+        epilog="Completion is never inferred from a checklist, plan, progress "
+               "percentage or agent claim. It requires an independent verified "
+               "verdict from source-backed evidence.")
+    complete_p.add_argument("goal_id", type=int)
+    complete_p.add_argument("--evidence", "--evidence-file", default=None,
+                            help="JSON evidence file, or - for stdin")
+    complete_p.add_argument("--evidence-json", default=None,
+                            help="Inline JSON evidence list/object")
+    complete_p.add_argument("--criteria", "--criteria-file", default=None,
+                            help="JSON acceptance criteria file, or - for stdin")
+    complete_p.add_argument("--criteria-json", default=None,
+                            help="Inline JSON acceptance criteria")
+    complete_p.add_argument("--stale-after", type=int, default=None,
+                            help="Maximum evidence age in seconds")
+    complete_p.add_argument("--dry-run", action="store_true",
+                            help="Verify without changing goal status")
+    complete_p.add_argument("--json", action="store_true")
 
     # GUI subcommand
     sub.add_parser("gui")

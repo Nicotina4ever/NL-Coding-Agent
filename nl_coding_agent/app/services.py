@@ -1505,6 +1505,7 @@ class AppServices:
             "GoalLifecycleError": "lifecycle",
             "GoalDependencyError": "dependency",
             "GoalDecompositionError": "decomposition",
+            "GoalVerificationError": "verification",
         }
         code = mapping.get(type(exc).__name__)
         if code is None and isinstance(exc, goal_core.GoalError):
@@ -1590,12 +1591,157 @@ class AppServices:
             return self._goal_error(exc)
         return {"ok": True, "goal": goal}
 
-    def goal_complete(self, goal_id: int, evidence: dict | None = None) -> dict:
+    # ---------------------------------------------- goal verification gate
+    @staticmethod
+    def _goal_verification_inputs(evidence, criteria):
+        """Accept a list, one item, or {evidence: [...], criteria: [...]}."""
+        if isinstance(evidence, dict) and (
+                "evidence" in evidence or "criteria" in evidence):
+            payload = dict(evidence)
+            if criteria is None:
+                criteria = payload.get("criteria")
+            evidence = payload.get("evidence")
+        if evidence is None:
+            evidence = []
+        elif isinstance(evidence, dict):
+            evidence = [evidence]
+        if not isinstance(evidence, (list, tuple)):
+            raise ValueError("evidence must be a list of evidence objects")
+        if criteria is not None and isinstance(criteria, (str, dict)):
+            criteria = [criteria]
+        return list(evidence), criteria
+
+    def _goal_verifier(self):
+        from nl_coding_agent.core import goal_verification as verifier
+        return verifier
+
+    def goal_verify(self, goal_id: int, evidence=None, criteria=None, *,
+                    stale_after_s: int | None = None) -> dict:
+        """Read-only independent verification report; never mutates goal status."""
         try:
-            goal = self._goal_service().complete_goal(goal_id, evidence=evidence)
+            evidence_items, criteria_value = self._goal_verification_inputs(
+                evidence, criteria)
+            verifier = self._goal_verifier()
+            report = verifier.verify_goal(
+                goal_id, evidence=evidence_items, criteria=criteria_value,
+                stale_after_s=stale_after_s, persist=False)
+            return {
+                "ok": True,
+                "goal_id": goal_id,
+                "verdict": report["verdict"],
+                "verified": report["verdict"] == verifier.VERIFIED,
+                "verification": report,
+                "criteria": report["criteria"],
+                "criteria_results": report["criteria"],
+                "blockers": report["blockers"],
+                "evidence_refs": report["evidence_refs"],
+                "record_id": report.get("record_id"),
+                "outstanding": verifier.summarize_outstanding(goal_id),
+                "status_mutated": False,
+            }
         except Exception as exc:
             return self._goal_error(exc)
-        return {"ok": True, "goal": goal}
+
+    def goal_verifications(self, goal_id: int, *, limit: int = 20) -> dict:
+        try:
+            self._goal_service().get_goal(goal_id)
+            records = self._goal_verifier().list_goal_verifications(
+                goal_id, limit=limit)
+            return {"ok": True, "verifications": records, "total": len(records)}
+        except Exception as exc:
+            return self._goal_error(exc)
+
+    def goal_verification_outstanding(self, goal_id: int) -> dict:
+        try:
+            return {"ok": True,
+                    "outstanding": self._goal_verifier().summarize_outstanding(
+                        goal_id)}
+        except Exception as exc:
+            return self._goal_error(exc)
+
+    def goal_false_completions(self, goal_id: int | None = None, *,
+                               project_id: int | None = None,
+                               limit: int = 500) -> dict:
+        try:
+            result = self._goal_verifier().detect_false_completion(
+                goal_id=goal_id, project_id=project_id, limit=limit)
+        except Exception as exc:
+            return self._goal_error(exc)
+        return {**result, "ok": True, "clean": bool(result.get("ok")),
+                "detection_ok": bool(result.get("ok"))}
+
+    def goal_false_completion(self, goal_id: int | None = None, *,
+                              project_id: int | None = None,
+                              limit: int = 500) -> dict:
+        return self.goal_false_completions(goal_id, project_id=project_id,
+                                           limit=limit)
+
+    def goal_complete(self, goal_id: int, evidence=None, criteria=None, *,
+                      stale_after_s: int | None = None,
+                      dry_run: bool = False) -> dict:
+        """Verification-gated completion; no status changes on refusal/dry-run.
+
+        The independent verifier is always consulted first. A verified report is
+        persisted, then GoalService.complete_goal() is called explicitly; any
+        refusal/precondition failure leaves goal status untouched.
+        """
+        try:
+            service = self._goal_service()
+            goal = service.get_goal(goal_id)
+            evidence_items, criteria_value = self._goal_verification_inputs(
+                evidence, criteria)
+            verifier = self._goal_verifier()
+            report = verifier.verify_goal(
+                goal_id, evidence=evidence_items, criteria=criteria_value,
+                stale_after_s=stale_after_s, persist=True)
+        except Exception as exc:
+            return self._goal_error(exc)
+        effective_criteria = (criteria_value if criteria_value is not None
+                              else goal.get("acceptance_criteria") or [])
+        no_criteria = not bool(effective_criteria)
+        base = {
+            "goal_id": goal_id,
+            "goal": goal,
+            "goal_status": goal.get("status"),
+            "verdict": report["verdict"],
+            "verification": report,
+            "criteria": report["criteria"],
+            "criteria_results": report["criteria"],
+            "blockers": report["blockers"],
+            "outstanding": verifier.summarize_outstanding(goal_id),
+            "record_id": report.get("record_id"),
+            "status_mutated": False,
+        }
+        if report["verdict"] != verifier.VERIFIED:
+            return {**base, "ok": False, "outcome": "refused",
+                    "error": {
+                        "code": "missing_criteria" if no_criteria
+                                else "verification_failed",
+                        "type": "GoalVerificationRefused",
+                        "message": (
+                            "Goal has no acceptance criteria; completion cannot be "
+                            "verified from a checklist/progress alone."
+                            if no_criteria else
+                            "Independent verification did not return verified (" +
+                            str(report["verdict"]) + "); goal was not completed."),
+                    }}
+        if dry_run:
+            return {**base, "ok": True, "outcome": "dry_run_verified",
+                    "verified": True}
+        try:
+            completed = service.complete_goal(
+                goal_id, evidence={"verification_id": report.get("record_id"),
+                                   "verdict": report["verdict"],
+                                   "verifier_version": report["verifier_version"]})
+        except Exception as exc:
+            return {**base, "ok": False, "outcome": "completion_rejected",
+                    "verified": True,
+                    "goal": service.get_goal(goal_id),
+                    "goal_status": service.get_goal(goal_id).get("status"),
+                    "error": self._goal_error(exc)["error"]}
+        return {**base, "ok": True, "outcome": "completed", "verified": True,
+                "goal": completed, "goal_status": completed.get("status"),
+                "status_mutated": True}
 
     def _goal_lifecycle(self, operation: str, goal_id: int) -> dict:
         try:

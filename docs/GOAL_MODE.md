@@ -1,15 +1,19 @@
 # Goal Mode (Stage 8) - Goals, Milestones and Decomposition
 
-**Status:** G1/G2 foundation implemented. Durable goals and milestones, lifecycle,
-dependency validation, structured decomposition, AppServices facade and a non-executing
-`goal` CLI are available. This is **not** autonomous goal execution: no mission is
-created/started, no agent/model runs, and no verification/completion engine is claimed yet.
+**Status:** G1/G2/G3/G5 foundation implemented. Durable goals and milestones, lifecycle,
+dependency validation, structured decomposition, independent completion verification and a
+non-executing `goal` CLI are available. Completion is **verification-gated**: source-backed
+evidence is verified first and a goal can never complete from a checklist, plan, progress or
+agent claim. This is still **not** autonomous goal execution: no mission is created/started
+and no agent/model runs.
 
 **Implementation:** `nl_coding_agent/persistence/goal_store.py` (SQL persistence),
-`nl_coding_agent/core/goals.py` (GoalService), `nl_coding_agent/app/services.py`
-(lazy goal facade) and `nl_coding_agent/cli.py` (`goal` command group).
-**Tests:** `tests/test_goals_core.py`, `tests/test_app_services_goals.py`,
-`tests/test_goals_cli.py` (targeted tests; temp `NL_DATA_DIR`).
+`nl_coding_agent/core/goals.py` (GoalService), `nl_coding_agent/core/goal_verification.py`
+(independent verifier), `nl_coding_agent/app/services.py` (lazy goal facade + completion
+gate), `nl_coding_agent/cli.py` (`goal` command group).
+**Tests:** `tests/test_goals_core.py`, `tests/test_goal_verification.py`,
+`tests/test_app_services_goals.py`, `tests/test_goals_cli.py`,
+`tests/test_goal_completion_gate.py` (targeted tests; temp `NL_DATA_DIR`).
 
 ---
 
@@ -38,7 +42,7 @@ planned --activate--> active --pause--> paused --resume--> active
    |                     +--block--> blocked --unblock--> active
    |                     |                |
    +---------------------+----------------+--> cancelled
-active --complete (explicit, all milestones completed, >=1 milestone)--> completed
+active --complete (explicit; verified evidence; all milestones completed; >=1 milestone)--> completed
 planned/completed/cancelled terminal rules apply
 ```
 
@@ -46,8 +50,10 @@ Rules:
 
 - invalid transitions return a structured `lifecycle` error and never change status;
 - terminal goals (`completed`/`cancelled`) are immutable through goal/milestone updates;
-- `completed` is only reachable through explicit `complete_goal()` (CLI does not expose
-  execution; the facade does expose it) and requires all milestones completed;
+- `completed` is only reachable through explicit completion after the independent verifier
+  returns `verified` (see section 4b); GoalService still requires active status, at least one
+  milestone and all milestones completed. A checklist/plan/progress/claim alone never completes;
+- completion refusals and dry-runs leave goal status unchanged;
 - progress/next-work queries never mutate status; no automatic completion exists.
 
 ## 3. CLI usage (no execution)
@@ -126,6 +132,42 @@ priorities/criteria and terminal goals are rejected. Milestones are created in p
 deterministic ordering; existing milestones are preserved. This is a deterministic structured
 plan only - no LLM/network is involved.
 
+## 4b. Verification-gated completion (G3/G5)
+
+Completion is no longer just a lifecycle call: `AppServices.goal_complete` and the CLI run the
+independent verifier (`core/goal_verification.py`) first. Verified completion requires every
+acceptance criterion to be satisfied by fresh, trusted, source-backed evidence
+(test/command/artifact/reviewer/user/file_check); untrusted/model/self claims, stale evidence,
+contradictions and missing criteria are refused.
+
+```powershell
+# read-only report; exit 0 only when verified
+python\nl_agent.py goal verify 1 --evidence evidence.json --criteria criteria.json --json
+
+# explicit completion: evidence required unless --dry-run
+python\nl_agent.py goal complete 1 --evidence evidence.json --criteria criteria.json --json
+python\nl_agent.py goal complete 1 --evidence-json '[{"type":"test","source":"pytest:tests","exit_code":0,"trust":"trusted"}]' --dry-run --json
+```
+
+Evidence JSON may be a list, a single object, or `{"evidence": [...], "criteria": [...]}`.
+Minimal item: `{"type": "test", "source": "pytest:tests", "result": "pass", "trust": "trusted", "exit_code": 0}`.
+Criterion schema: `{"id": "C1", "text": "tests pass", "required_evidence_types": ["test"], "stale_after_s": 3600}`
+(see `docs/GOAL_VERIFICATION.md` for the full evidence contract).
+
+Gate behavior:
+
+- refusal (unverified/partial/contradicted/stale/untrusted or no effective criteria) returns
+  verdict, criterion results, blockers and outstanding criteria with status unchanged;
+- a verified report is persisted, then GoalService.complete_goal() is called explicitly; if
+  lifecycle/milestone rules reject completion, the goal still stays unchanged;
+- `--dry-run` verifies/report but never changes status;
+- `goal verify` is read-only and `goal_verifications` exposes append-only records;
+  `goal_false_completions` reports completed goals without a verified latest record.
+
+Exit codes: `goal verify` 0 verified, 1 unverified/partial/contradicted/missing criteria,
+2 usage/malformed JSON; `goal complete` 0 verified+completed (or dry-run verified), 1 refusal/
+completion rejected, 2 usage/missing evidence.
+
 ## 5. AppServices facade
 
 `services.goal_*` is a thin lazy wrapper over GoalService (no duplicated logic):
@@ -140,9 +182,14 @@ plan only - no LLM/network is involved.
 | `goal_milestones` | list milestones |
 | `goal_next_work` | eligible pending milestones respecting dependencies/priority |
 | `goal_progress` / `goal_progress_summary` | read-only progress |
+| `goal_verify` | read-only independent verification report |
+| `goal_verifications` / `goal_verification_outstanding` | append-only records/outstanding |
+| `goal_false_completions` | read-only false-completion detection |
+| `goal_complete` | verification-gated explicit completion (dry-run supported) |
 
 All methods return `{"ok": bool, ...}` envelopes; failures return
-`{"ok": false, "error": {"code": "validation|not_found|lifecycle|dependency|decomposition|error", "type": ..., "message": ...}}`.
+`{"ok": false, "error": {"code": "validation|not_found|lifecycle|dependency|decomposition|verification|error", "type": ..., "message": ...}}`.
+`goal_complete` refusal carries `verdict`, `criteria`, `blockers`, `outstanding`, `status_mutated: false`.
 GoalService is constructed lazily on first use; constructing AppServices does not scan or
 mutate goal tables. No mission creation, execution, model or network call is performed.
 
@@ -157,11 +204,13 @@ config file and never touch the live mission execution path; tests use a temp
 ## 7. Limits and remaining work (not claimed)
 
 - No mission creation/execution, no agent/model/LLM decomposition and no GUI Goal Mode page.
-- No goal verification/completion engine, dependency-aware scheduling or execution FSM
-  (a later increment may add independent verification; the `blocked`/`completed`
-  states exist but only explicit service calls change them).
+- No dependency-aware scheduling, execution FSM or autonomous goal runner. Verification
+  judges only supplied/recorded evidence; it does not execute tests/commands, create
+  artifacts or prove absolute product correctness (human/external evidence is still required).
 - No goal templates/import UI, no reset/delete command, no multi-user concurrency controls
   beyond SQLite, no cross-project scheduler.
-- No CLI completion command; completion is available through the service/facade only.
+- Completion is available through CLI/facade only with verified evidence; the verifier does
+  not execute anything and GUI completion remains unwired.
 - No GUI editing in this increment; the GUI Goal Mode remains a future increment.
-- Real autonomous goal execution and verification remain **MANUAL-PENDING** and outside G1/G2.
+- Real autonomous goal execution, GUI Goal Mode, scheduling and external-evidence collection
+  remain **MANUAL-PENDING** and outside G1/G2/G3/G5.

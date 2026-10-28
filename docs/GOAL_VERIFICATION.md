@@ -1,8 +1,10 @@
-# Goal Completion Verification (stage-8 G3, NL-BP-215)
+# Goal Completion Verification (stage-8 G3/G5, NL-BP-215)
 
 Independent verification layer that decides whether a goal's original objective and
 acceptance criteria are satisfied by source-backed evidence. It is deliberately not
-model-judged, not consensus-based and never marks a goal complete.
+model-judged, not consensus-based and never marks a goal complete by itself. G5 wires
+this verifier into the AppServices/CLI completion path as a mandatory gate; only an
+explicit GoalService completion after a verified report changes goal status.
 
 Module: nl_coding_agent/core/goal_verification.py
 Table: goal_verifications (additive, idempotent; created by database.init_db)
@@ -117,16 +119,66 @@ self_declared_complete=None, include_stored_evidence=True, persist=True) returns
 structured report (criteria, evidence refs, blockers, verdict, record_id) and
 persists it by default.
 
+## G5 completion gate (AppServices + CLI)
+
+Completion is verification-gated. `AppServices.goal_complete(goal_id, evidence=None, criteria=None)`:
+
+1. loads the goal (missing goal is a structured `not_found` error);
+2. runs the independent verifier with caller evidence/criteria and persists the report;
+3. if the verdict is not `verified` (or the goal has no effective acceptance criteria),
+   returns `ok=false`, `outcome="refused"`, the verdict, criterion results, blockers,
+   outstanding criteria and `status_mutated=false` - **goal status is untouched**;
+4. only on `verified` calls `GoalService.complete_goal()` explicitly, passing the
+   verification record id/version as audit evidence; completion can still be rejected by
+   the existing lifecycle/milestone rules (`outcome="completion_rejected"`, no status change);
+5. `dry_run=true` verifies and reports `dry_run_verified` without calling completion.
+
+Refusal error codes: `missing_criteria` (goal has no effective acceptance criteria) and
+`verification_failed` (unverified/partial/contradicted/stale/untrusted evidence).
+`goal_verify` is read-only (no verification record, no status mutation);
+`goal_verifications` lists persisted append-only records;
+`goal_false_completions` reports completed goals lacking a verified latest record
+(read-only; operation `ok` true, `clean` indicates no findings).
+
+### Evidence JSON input
+
+`goal verify` and `goal complete` accept `--evidence FILE|-` or
+`--evidence-json JSON`, and optionally `--criteria FILE|-` / `--criteria-json JSON`.
+The JSON may be a list, one evidence object, or `{"evidence": [...], "criteria": [...]}`.
+Minimal evidence item: `{"type": "test", "source": "pytest:tests", "result": "pass", "trust": "trusted", "exit_code": 0}`.
+Command/test exit codes are authoritative; untrusted/model/self claims never verify.
+
+### CLI
+
+```powershell
+# read-only verification report (exit 0 only when verified)
+python\nl_agent.py goal verify 1 --evidence evidence.json --criteria criteria.json --json
+
+# explicit gated completion: evidence required unless --dry-run
+python\nl_agent.py goal complete 1 --evidence evidence.json --criteria criteria.json --json
+python\nl_agent.py goal complete 1 --evidence-json '[{"type":"test","source":"pytest:tests","exit_code":0,"trust":"trusted"}]' --dry-run --json
+
+# inspect records / false completions
+python\nl_agent.py goal show 1 --json
+```
+
+Exit codes: `goal verify` 0 verified, 1 unverified/partial/contradicted/missing criteria,
+2 usage/malformed JSON; `goal complete` 0 verified+completed (or dry-run verified),
+1 refusal/completion rejected, 2 usage/missing evidence. Help text states that source-backed
+evidence is required and completion never happens from a checklist, plan, progress or agent
+claim alone.
+
+
 ## Limits and remaining integration
 
 - Human/real external evidence is still required. The verifier only judges records;
   it does not execute tests, run commands or create artifacts. A verified verdict
   says the supplied/recorded evidence satisfies the criteria, not that the product
   is correct in the absolute.
-- It is not wired into GoalService, app services, CLI or GUI yet (no goal-status
-  mutation and no auto-completion). Integration must call verify_goal before any
-  completion transition and surface blockers; false-completion detection must be
-  exposed read-only.
+- G5 wires this verifier into AppServices/CLI completion; GoalService itself remains
+  explicitly completion-only and is not weakened. GUI completion, automatic execution
+  and scheduling are still not wired (GUI editing is explicitly out of G5). False-
+  completion detection is exposed read-only through the facade.
 - Existing staged-candidate/oracle/reviewer/promotion gates remain authoritative for
   mission-level evidence; the goal verifier reuses their recorded outputs and does
   not duplicate or weaken them.
