@@ -44,7 +44,7 @@ evidence only.
 | 1 | Repository relocation and path reconciliation | COMPLETE | 1 | NL-BP-143 | - |
 | 2 | Transactional staging, safety and self-healing | COMPLETE | 15 | NL-BP-3-5, 54-60, 65, 72-74, 76 | 1 |
 | 3 | Persistent autonomous supervisor and verified handoff | COMPLETE (Tier B blocked evidence) | 13 | NL-BP-12, 50-53, 61-64, 66, 67, 75, 77 | 2 |
-| 4 | Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities | COMPLETE | 40 | NL-BP-1, 2, 6-11, 13, 20-46, 68-71 | 3 |
+| 4 | Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities | IN PROGRESS | 40 | NL-BP-1, 2, 6-11, 13, 20-46, 68-71 | 3 |
 | 5 | Repository cleanup and optimization | COMPLETE | 8 | NL-BP-90-97 | 4 |
 | 6 | Lightweight portable/bootstrapper and final release testing | IN PROGRESS | 26 | NL-BP-110-124, 140-142, 144-151 | 5 |
 
@@ -86,6 +86,8 @@ SH-07 Tier B (real local models) remains pending explicit authorization and bloc
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v1.8 (2026-10-28)** - Program-status correction: stage 4 remains IN PROGRESS because C4a-C4e delivered only the CrewAI/Flows/model-intelligence portion; Studio GUI, multimodal chat/attachments, voice/ASR/TTS and IDE surfaces are still outstanding. Stage 5 (hygiene) completed; stage 6 (distribution) started early with final release acceptance gated on stage-4 completion and explicit distribution authorization. No requirement IDs changed.
 
 **v1.7 (2026-10-28)** - Stage 5 complete: read-only repository hygiene audit plus Lead-authorized safe cleanups (3,100,666 bytes freed; 15 to 12 duplicate groups; 2 to 1 worktrees); validation 16 PASS/5 WARN/0 FAIL, full suite 417 passed. Remaining cleanup items need explicit authorization; user data, runtimes and stale dist release preserved. Stage 6 distribution/acceptance started.
 

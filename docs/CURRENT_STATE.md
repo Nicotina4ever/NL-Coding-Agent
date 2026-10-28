@@ -336,3 +336,13 @@ honestly: the local developer model weakened tests/test_selfbuild_mode.py, both 
 were rejected by validation, the supervisor fail-fast stopped the run, zero promotions and a
 clean worktree. NL-BP-063 remains blocked; supervisor default mode remains off and automatic
 mode is opt-in. Evidence: docs/SH07_TIERB_EVIDENCE.md and docs/evidence/sh07/.
+
+Program-status correction (2026-10-28)
+
+Stage 4 remains in progress: the C4a-C4e work delivered the CrewAI runtime/Flows/model-intelligence
+portion, while the Studio GUI, multimodal chat/attachments, voice/ASR/TTS and IDE surfaces mapped to
+program stage 4 are still outstanding. Stage 5 (repository hygiene) is complete and stage 6
+(distribution foundation) started early; final release acceptance stays gated on completing the
+outstanding stage-4 GUI/multimodal work and on explicit authorization for replacing the stale
+dist/portable-release payload. No safety gate was weakened and the sequential pipeline remains the
+default (Flow opt-in).

@@ -4959,7 +4959,8 @@
     "v1.4_2026-10-28_stage3_exit": "Stage 3 engineering complete; SH-07 Tier A verified, Tier B recorded as BLOCKED with committed evidence; NL-BP-063 stays blocked; stage 4 started from docs/PHASE4_CREWAI_FLOWS_PLAN.md.",
     "v1.5_2026-10-28_stage4_engineering": "Stage-4 engineering record C4a-C4e: CrewRuntime seam/specs, app-owned Flow state/persistence, opt-in supervisor Flow executor, HITL approvals, memory/delegation policy, capability records + model router, deterministic SBOM/compat gate. NL-BP-006/007/009 planned->partial (fake-model/opt-in evidence only), NL-BP-010/011 stay partial with refreshed evidence. Rollout decision: sequential default, Flow opt-in only (no real-model Flow acceptance); no gate weakened. Stage 4 remains in_progress. Counts: 27 verified/34 partial/38 planned/4 blocked.",
     "v1.6_2026-10-28_stage4_complete": "Stage 4 complete (C4a-C4e): CrewRuntime seam/specs, app-owned Flow foundation, opt-in supervisor Flow executor, HITL/memory-policy/capability routing, SBOM/compat gate; sequential stays default, Flow opt-in only (no real-model Flow evidence). Stage 5 repository hygiene started.",
-    "v1.7_2026-10-28_stage5_complete": "Stage 5 hygiene: read-only audit plus Lead-authorized safe cleanups (~2.96 MiB freed, worktrees pruned); validation 16 PASS/5 WARN/0 FAIL, full suite 417 passed; protected data/runtimes/dist preserved. Stage 6 distribution started."
+    "v1.7_2026-10-28_stage5_complete": "Stage 5 hygiene: read-only audit plus Lead-authorized safe cleanups (~2.96 MiB freed, worktrees pruned); validation 16 PASS/5 WARN/0 FAIL, full suite 417 passed; protected data/runtimes/dist preserved. Stage 6 distribution started.",
+    "v1.8_2026-10-28_stage4_status_correction": "Corrected program stage 4 status to in_progress: C4a-C4e delivered the CrewAI/Flows/model-intelligence part only; Studio GUI/multimodal/voice/IDE surfaces remain outstanding. Stage 5 completed; stage 6 distribution foundation started early with final acceptance gated on stage-4 completion and distribution authorization."
   },
   "program_order": {
     "schema_version": 1,
@@ -5052,7 +5053,7 @@
       {
         "stage": 4,
         "name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
-        "status": "completed",
+        "status": "in_progress",
         "depends_on_stages": [
           3
         ],
@@ -5107,7 +5108,7 @@
           "NL-BP-070",
           "NL-BP-071"
         ],
-        "note": "Stage-4 engineering complete: CrewRuntime seam + typed specs (C4a), dormant app-owned Flow state/persistence/mission flow/event bridge (C4b), opt-in supervisor Flow executor with CLI/service surfaces and parity/crash tests (C4c), HITL approvals + memory/delegation policy + capability registry + model router (C4d), and SBOM/compat gate + acceptance evidence with the recorded rollout decision (C4e). Sequential pipeline remains the default; Flow is opt-in only because no real-model Flow acceptance evidence exists. All stage-4 evidence is fake-model/measured-environment only."
+        "note": "CrewAI/Flows/model-intelligence portion complete (C4a-C4e: CrewRuntime seam + typed specs, app-owned Flow state/persistence, opt-in supervisor Flow executor, HITL approvals + memory/delegation policy + capability router, SBOM/compat gate). The Studio GUI, multimodal chat/attachments, voice/ASR/TTS and IDE surfaces mapped to program stage 4 (NL-BP-020..046 etc.) are still planned/pending; stage 4 therefore remains in progress. Sequential pipeline stays the default; Flow is opt-in only."
       },
       {
         "stage": 5,
@@ -5168,9 +5169,10 @@
           "NL-BP-149",
           "NL-BP-150",
           "NL-BP-151"
-        ]
+        ],
+        "note": "Lightweight bootstrapper/reproducible-build foundation started early (task-32) because the repository needed distribution consolidation before release; final release acceptance remains gated on completion of the outstanding Studio GUI/multimodal/voice stage-4 work and on explicit authorization for replacing/deprecating the stale dist/portable-release payload."
       }
     ]
   },
-  "updated_at": "2026-10-28T18:30:00+01:00"
+  "updated_at": "2026-10-28T18:35:00+01:00"
 }
