@@ -578,3 +578,24 @@ tested and committed, without claiming the broader capabilities complete:
   extraction, cache/store or GUI yet; real-network acceptance remains MANUAL-PENDING (NL-BP-203/211).
 
 Verification: full suite 814 passed; relocation/supervisor gates green; no network/model/GUI runs.
+
+Stage-7 second implementation increments (2026-10-28)
+
+- Autonomy A2 (NL-BP-166/167 partial): independent auto-review policy engine with Manual/Assisted/
+  Trusted Auto Review/Full Autonomy profile descriptors, seven independent controls, structured
+  auto-approve/needs-approval/deny decisions backed by the durable capability boundary, mandatory
+  independent review for code/staged changes in every profile, exact-scope high-impact gating and
+  audit rows without secret/context leakage (22 tests). No GUI/execution wiring yet.
+- Research R2/R3 (NL-BP-169/171/172/174/205/207 partial): declarative provider capability registry
+  with explicit selection, deterministic explainable routing and multi-source verification; additive
+  SQLite research source/finding/citation/conflict store with dedupe, provenance, staleness and
+  bounded search; read-only GitHub and Hugging Face Hub investigators over typed injected transports
+  with commit/ref provenance, bounded pagination/responses, optional unlogged tokens, HF metadata and
+  non-measured resource estimates, and no checkpoint download/license acceptance/code execution.
+  41 new tests; full targeted research suite 110 passed.
+
+Everything above is fixture/foundation-only: no real provider adapters/API calls/authentication,
+no network transports, no GUI/tool-registry/execution wiring, no embeddings/retrieval, no real
+research or autonomy end-to-end use. Full suite 877 passed; relocation/supervisor gates green;
+real-network acceptance (NL-BP-203/211) and end-to-end Trusted Auto Review/Full Autonomy remain
+MANUAL-PENDING.

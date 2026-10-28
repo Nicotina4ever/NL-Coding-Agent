@@ -4097,7 +4097,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-064",
         "NL-BP-072",
@@ -4111,13 +4111,14 @@
       ],
       "evidence": [
         "not started - queued only by task-59 from the user addendum; no code, mission or network run was started",
-        "source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.1"
+        "source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.1",
+        "Independent auto-review policy engine foundation implemented: four profiles (Manual fail-closed default, Assisted, Trusted Auto Review, Full Autonomy) with truthful descriptors/OS-rights disclosure, seven independent controls, structured auto_approved/needs_human_approval/denied decisions with reasons/risk/matched policy/approval id, mandatory independent review for code/staged changes in every profile, exact owner-scope high-impact gating and audit rows without secret/context leakage (22 tests). Not wired into GUI/execution boundaries; persistence of selected profile/control matrix and full Trusted Auto Review behavior remain planned."
       ],
       "source_refs": [
         "docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.1"
       ],
       "primary_source": "docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md",
-      "note": "Extends the existing Off/Assisted/Automatic modes (NL-BP-064) with the user-requested Trusted profile; does not weaken NL-BP-054/055-060/063 gates.",
+      "note": "Independent auto-review policy engine foundation implemented: four profiles (Manual fail-closed default, Assisted, Trusted Auto Review, Full Autonomy) with truthful descriptors/OS-rights disclosure, seven independent controls, structured auto_approved/needs_human_approval/denied decisions with reasons/risk/matched policy/approval id, mandatory independent review for code/staged changes in every profile, exact owner-scope high-impact gating and audit rows without secret/context leakage (22 tests). Not wired into GUI/execution boundaries; persistence of selected profile/control matrix and full Trusted Auto Review behavior remain planned.",
       "backlog_anchor": "nl-bp-166",
       "program_stage": 7,
       "program_stage_name": "Universal autonomy, research intelligence and Mega Suite",
@@ -4131,7 +4132,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-166",
         "NL-BP-168",
@@ -4145,13 +4146,14 @@
       ],
       "evidence": [
         "not started - queued only by task-59 from the user addendum; no code, mission or network run was started",
-        "source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.1"
+        "source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.1",
+        "Full Autonomy profile foundation implemented with explicit opt-in descriptor, truthful current-user OS-rights/application-filter disclosure, separate high-impact controls and independent review that can still reject; no GUI profile configuration or execution wiring yet, so Full Autonomy is not yet usable end-to-end."
       ],
       "source_refs": [
         "docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.1"
       ],
       "primary_source": "docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md",
-      "note": "No forced arbitrary max-mission cap is imposed by the addendum; existing bounded repair/gates and human stop controls stay authoritative.",
+      "note": "Full Autonomy profile foundation implemented with explicit opt-in descriptor, truthful current-user OS-rights/application-filter disclosure, separate high-impact controls and independent review that can still reject; no GUI profile configuration or execution wiring yet, so Full Autonomy is not yet usable end-to-end.",
       "backlog_anchor": "nl-bp-167",
       "program_stage": 7,
       "program_stage_name": "Universal autonomy, research intelligence and Mega Suite",
@@ -4198,7 +4200,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-168",
         "NL-BP-073"
@@ -4210,13 +4212,14 @@
       ],
       "evidence": [
         "not started - queued only by task-59 from the user addendum; no code, mission or network run was started",
-        "source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1"
+        "source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1",
+        "Search routing foundation implemented: provider capability matrices, registry, explicit selection, deterministic explainable routing over policy filters/priorities and multi-source verification with fake providers (15 tests). No real provider adapters/keys/network transports or real rate limiting; real-network acceptance remains MANUAL-PENDING."
       ],
       "source_refs": [
         "docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1"
       ],
       "primary_source": "docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md",
-      "note": "No tracked search capability exists today; adjacent infrastructure is NL-BP-042 (MCP) and NL-BP-043 (project context retrieval).",
+      "note": "Search routing foundation implemented: provider capability matrices, registry, explicit selection, deterministic explainable routing over policy filters/priorities and multi-source verification with fake providers (15 tests). No real provider adapters/keys/network transports or real rate limiting; real-network acceptance remains MANUAL-PENDING.",
       "backlog_anchor": "nl-bp-169",
       "program_stage": 7,
       "program_stage_name": "Universal autonomy, research intelligence and Mega Suite",
@@ -4263,7 +4266,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-168",
         "NL-BP-073"
@@ -4275,13 +4278,14 @@
       ],
       "evidence": [
         "not started - queued only by task-59 from the user addendum; no code, mission or network run was started",
-        "source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1"
+        "source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1",
+        "Read-only GitHub REST investigator implemented over an injected transport (repo metadata/README/license, branches/tags, commits, issues/comments, PRs/reviews, releases, workflows, file contents at pinned ref, search) with canonical URL/repo/ref provenance, optional unlogged token, bounded responses and typed errors (8 fixture tests). No live GitHub request/authentication/rate-limit verification yet."
       ],
       "source_refs": [
         "docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1"
       ],
       "primary_source": "docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md",
-      "note": "New capability; no git-hosting investigator exists in the live backlog.",
+      "note": "Read-only GitHub REST investigator implemented over an injected transport (repo metadata/README/license, branches/tags, commits, issues/comments, PRs/reviews, releases, workflows, file contents at pinned ref, search) with canonical URL/repo/ref provenance, optional unlogged token, bounded responses and typed errors (8 fixture tests). No live GitHub request/authentication/rate-limit verification yet.",
       "backlog_anchor": "nl-bp-171",
       "program_stage": 7,
       "program_stage_name": "Universal autonomy, research intelligence and Mega Suite",
@@ -4295,7 +4299,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-168",
         "NL-BP-008"
@@ -4307,13 +4311,14 @@
       ],
       "evidence": [
         "not started - queued only by task-59 from the user addendum; no code, mission or network run was started",
-        "source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1"
+        "source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1",
+        "Read-only Hugging Face Hub investigator implemented over an injected transport (model/dataset/Space search/metadata, model cards, revisions, files/sizes/formats/quantizations, license/gated/private flags) with coarse non-measured RAM/VRAM/disk estimates and no checkpoint download/license acceptance/code execution (7 fixture tests). No live Hub request or real acquisition workflow yet (NL-BP-208)."
       ],
       "source_refs": [
         "docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1"
       ],
       "primary_source": "docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md",
-      "note": "Adjacent existing requirement: NL-BP-124 (shared model cache reuse) and NL-BP-008 (provider discovery); neither investigates Hub metadata.",
+      "note": "Read-only Hugging Face Hub investigator implemented over an injected transport (model/dataset/Space search/metadata, model cards, revisions, files/sizes/formats/quantizations, license/gated/private flags) with coarse non-measured RAM/VRAM/disk estimates and no checkpoint download/license acceptance/code execution (7 fixture tests). No live Hub request or real acquisition workflow yet (NL-BP-208).",
       "backlog_anchor": "nl-bp-172",
       "program_stage": 7,
       "program_stage_name": "Universal autonomy, research intelligence and Mega Suite",
@@ -4358,7 +4363,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-169",
         "NL-BP-170",
@@ -4373,13 +4378,14 @@
       ],
       "evidence": [
         "not started - queued only by task-59 from the user addendum; no code, mission or network run was started",
-        "source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1"
+        "source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1",
+        "Local research knowledge store implemented additively in app SQLite: sources/findings/citations/conflicts with canonical URL+hash deduplication, refresh, provenance, project/mission/task links, staleness/expiry, bounded search, secret/oversize rejection and no deletion API (11 tests). Embeddings/retrieval integration and real provenance acceptance remain pending."
       ],
       "source_refs": [
         "docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1"
       ],
       "primary_source": "docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md",
-      "note": "Extends project context retrieval (NL-BP-043) to external research evidence; no web knowledge store exists today.",
+      "note": "Local research knowledge store implemented additively in app SQLite: sources/findings/citations/conflicts with canonical URL+hash deduplication, refresh, provenance, project/mission/task links, staleness/expiry, bounded search, secret/oversize rejection and no deletion API (11 tests). Embeddings/retrieval integration and real provenance acceptance remain pending.",
       "backlog_anchor": "nl-bp-174",
       "program_stage": 7,
       "program_stage_name": "Universal autonomy, research intelligence and Mega Suite",
@@ -5373,7 +5379,7 @@
       "area": "autonomy",
       "priority": "P0",
       "bp_priority": "new (user directive 2026-10-28: universal web research & intelligence engine)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-169",
         "NL-BP-168"
@@ -5386,7 +5392,8 @@
       ],
       "evidence": [
         "not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md; no code, mission or network run started",
-        "capability-gap evidence: docs/WEB_RESEARCH_CAPABILITY_AUDIT.md sections 3 and 5 (only local urllib Ollama/model probes, gated local-stdio MCP, unused web-research permissions, local-only attachments)"
+        "capability-gap evidence: docs/WEB_RESEARCH_CAPABILITY_AUDIT.md sections 3 and 5 (only local urllib Ollama/model probes, gated local-stdio MCP, unused web-research permissions, local-only attachments)",
+        "Search Provider Registry delivered: validated capability matrix, registry statuses (disabled/adapter-missing), offline known-URL provider, honestly-unavailable no-key adapter, explicit selection without fallback, explainable weighted routing and multi-source verification (with NL-BP-169 tests). Real providers/transports/keys/cost controls and persisted per-project policy remain pending."
       ],
       "source_refs": [
         "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
@@ -5395,7 +5402,7 @@
         "NL-BP-168"
       ],
       "primary_source": "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
-      "note": "Registry gap after the router requirement NL-BP-169; complements permission scopes NL-BP-168/072 without rewriting them.",
+      "note": "Search Provider Registry delivered: validated capability matrix, registry statuses (disabled/adapter-missing), offline known-URL provider, honestly-unavailable no-key adapter, explicit selection without fallback, explainable weighted routing and multi-source verification (with NL-BP-169 tests). Real providers/transports/keys/cost controls and persisted per-project policy remain pending.",
       "backlog_anchor": "nl-bp-205",
       "program_stage": 7,
       "program_stage_name": "Universal autonomy, research intelligence and Mega Suite",
@@ -5446,7 +5453,7 @@
       "area": "autonomy",
       "priority": "P1",
       "bp_priority": "new (user directive 2026-10-28: universal web research & intelligence engine)",
-      "status": "planned",
+      "status": "partial",
       "dependencies": [
         "NL-BP-171",
         "NL-BP-172",
@@ -5459,7 +5466,8 @@
       ],
       "evidence": [
         "not started - queued only by task-60 from the user directive; read-only capability audit in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md; no code, mission or network run started",
-        "capability-gap evidence: docs/WEB_RESEARCH_CAPABILITY_AUDIT.md sections 3 and 5 (only local urllib Ollama/model probes, gated local-stdio MCP, unused web-research permissions, local-only attachments)"
+        "capability-gap evidence: docs/WEB_RESEARCH_CAPABILITY_AUDIT.md sections 3 and 5 (only local urllib Ollama/model probes, gated local-stdio MCP, unused web-research permissions, local-only attachments)",
+        "Read-only research connectors now use a typed injected HTTP transport with provenance and typed errors (GitHub/HF clients plus provider interfaces); they are not yet registered in the existing tool registry/MCP or gated by the permission broker at the execution boundary. Integration tests and live providers remain pending."
       ],
       "source_refs": [
         "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
@@ -5469,7 +5477,7 @@
         "NL-BP-073"
       ],
       "primary_source": "user directive 2026-10-28: Universal Web Research & Intelligence Engine (task-60; audited in docs/WEB_RESEARCH_CAPABILITY_AUDIT.md)",
-      "note": "Uses the existing registry/MCP infrastructure (NL-BP-073/042) rather than a second tool system.",
+      "note": "Read-only research connectors now use a typed injected HTTP transport with provenance and typed errors (GitHub/HF clients plus provider interfaces); they are not yet registered in the existing tool registry/MCP or gated by the permission broker at the execution boundary. Integration tests and live providers remain pending.",
       "backlog_anchor": "nl-bp-207",
       "program_stage": 7,
       "program_stage_name": "Universal autonomy, research intelligence and Mega Suite",
@@ -5651,8 +5659,8 @@
     "total": 163,
     "by_status": {
       "verified": 33,
-      "partial": 68,
-      "planned": 59,
+      "partial": 76,
+      "planned": 51,
       "blocked": 3
     },
     "by_priority": {
@@ -5682,8 +5690,8 @@
       },
       "autonomy": {
         "verified": 16,
-        "partial": 10,
-        "planned": 23,
+        "partial": 18,
+        "planned": 15,
         "blocked": 1
       },
       "hygiene": {
@@ -5705,14 +5713,14 @@
     "by_priority_status": {
       "P0": {
         "verified": 20,
-        "partial": 30,
-        "planned": 30,
+        "partial": 37,
+        "planned": 23,
         "blocked": 3
       },
       "P1": {
         "verified": 13,
-        "partial": 26,
-        "planned": 19
+        "partial": 27,
+        "planned": 18
       },
       "P2": {
         "partial": 11,
@@ -7274,7 +7282,8 @@
     "v3.6_2026-10-28_gui_safety_linux_evidence": "Stage-4 G1: Settings > Advanced self-build controls + always-reachable emergency pause/stop (NL-BP-023/024 partial, 064 evidence; offscreen tests). Stage-6j/6k: genuine WSL2 Linux execution evidence, POSIX Self-Build launcher bad-substitution fix, and byte-identical cross-platform release manifests/beta package. Full suite 722 passed. External/manual items unchanged; addendum input queued without implementing it.",
     "v3.7_2026-10-28_addendum_import": "Queue-only import of the user-supplied 2026-10-28 Universal Autonomy/Research/Mega Suite addendum (preserved unchanged at docs/product-blueprint/addenda, MANIFEST verified). A read-only cross-check against the 117 live requirements produced a 20-group dedupe map; 39 genuinely new capabilities were added as planned requirements NL-BP-166..204 and mapped to a new pending program stage 7 'Universal autonomy, research intelligence and Mega Suite'. Covered capabilities stayed on existing IDs (dynamic teams 066/067, competence index 068/069, staged gates 054-060/063, multi-platform beta 152-165, Studio 020-046). No existing ID/acceptance/status was rewritten, stages 1-6 were untouched, and no code, mission or network run started. SH-07 Tier B remains blocked; owner authorization is still required for publication/deletion/cloud. Totals: 156 requirements; 33 verified / 64 partial / 56 planned / 3 blocked.",
     "v3.8_2026-10-28_web_research_directive": "Queue-only registration of the user's Universal Web Research & Intelligence Engine directive. A read-only capability audit (docs/WEB_RESEARCH_CAPABILITY_AUDIT.md) confirmed the app has only stdlib urllib loopback probes for local Ollama/model providers and fixed tool health checks, a human-gated local-stdio MCP client with no bundled GitHub/HF/web servers, fail-closed NETWORK/CLOUD permission scopes not yet used by any research tool, and a local-only attachment pipeline; there is no web search/reader/GitHub/HF client, research store or GUI. Every directive sub-capability was deduplicated against NL-BP-169..176/203; seven genuine gaps were added as NL-BP-205..211 (provider registry, retrieval safety, connector registration, HF acquisition, version-aware docs, research workspace, acceptance matrix) under stage 7. No existing ID/acceptance/status or stage 1-6 status was rewritten; no code, model, mission or network run started; addendum bundle preserved unchanged. Totals: 163 requirements; 33 verified / 64 partial / 63 planned / 3 blocked.",
-    "v3.9_2026-10-28_stage7_first_increments": "Stage-7 first implementation increments: autonomy capability taxonomy + durable scoped approvals (168 partial) and research policy/fetcher/reader foundation (170/175/206 partial). 92 new tests; full suite 814 passed. No network/model runs; real-network acceptance, search providers, browser, research store and GUI remain pending/MANUAL-PENDING."
+    "v3.9_2026-10-28_stage7_first_increments": "Stage-7 first implementation increments: autonomy capability taxonomy + durable scoped approvals (168 partial) and research policy/fetcher/reader foundation (170/175/206 partial). 92 new tests; full suite 814 passed. No network/model runs; real-network acceptance, search providers, browser, research store and GUI remain pending/MANUAL-PENDING.",
+    "v4.0_2026-10-28_stage7_autonomy_research_second_increments": "Stage-7 second increments: independent auto-review engine/autonomy profiles (166/167 partial) and research provider registry/router + local store + read-only GitHub/HF investigators (169/171/172/174/205/207 partial). 63 new tests this batch (22 auto-review + 41 research); full suite 877 passed. Fixture/foundation-only: no network/live providers/GUI/execution wiring/real-network acceptance; those remain MANUAL-PENDING."
   },
   "program_order": {
     "schema_version": 1,
@@ -7572,11 +7581,11 @@
           "NL-BP-210",
           "NL-BP-211"
         ],
-        "note": "Queued by task-59. Execute after stage 6 gates pass or when the Lead records an explicit evidence-backed exception for independent low-risk work. Stages 1-6 statuses and existing requirements are untouched. The addendum grants no deletion/publication/cloud authorization and does not relax SH-07 Tier B or the staged-candidate gates. v3.8 extension (task-60): registered the Universal Web Research & Intelligence Engine gaps as NL-BP-205..211; queue-only, no implementation started. First implementation increments landed: autonomy A1 (NL-BP-168 capability taxonomy + durable scoped approvals, fail-closed, 23 tests) and research R1 (NL-BP-170/175/206 foundation: stdlib retrieval policy/SSRF/rate/size enforcement, injectable-transport fetcher with redirects/provenance/untrusted tagging, HTML reader, 69 tests). Both are foundations only: no GUI/tool wiring, search providers, browser, real transport, research store or real-network acceptance yet; real-network research and Trusted Auto Review/Full Autonomy remain MANUAL-PENDING/planned."
+        "note": "Queued by task-59. Execute after stage 6 gates pass or when the Lead records an explicit evidence-backed exception for independent low-risk work. Stages 1-6 statuses and existing requirements are untouched. The addendum grants no deletion/publication/cloud authorization and does not relax SH-07 Tier B or the staged-candidate gates. v3.8 extension (task-60): registered the Universal Web Research & Intelligence Engine gaps as NL-BP-205..211; queue-only, no implementation started. First implementation increments landed: autonomy A1 (NL-BP-168 capability taxonomy + durable scoped approvals, fail-closed, 23 tests) and research R1 (NL-BP-170/175/206 foundation: stdlib retrieval policy/SSRF/rate/size enforcement, injectable-transport fetcher with redirects/provenance/untrusted tagging, HTML reader, 69 tests). Both are foundations only: no GUI/tool wiring, search providers, browser, real transport, research store or real-network acceptance yet; real-network research and Trusted Auto Review/Full Autonomy remain MANUAL-PENDING/planned. Second increments landed: autonomy A2 (independent auto-review policy engine/profiles/control matrix/audit, 22 tests) and research R2/R3 (provider capability registry + explainable routing + multi-source checks, local SQLite research store, read-only GitHub and Hugging Face investigators over injected transports; 41 tests; full targeted research suite 110). These are fixture/foundation implementations only: no real provider/network transports, GUI/tool-registry/execution-boundary wiring, embeddings/retrieval, live GitHub/HF requests, research GUI or real-network acceptance; real-network research and end-to-end Trusted Auto Review/Full Autonomy remain pending/MANUAL-PENDING."
       }
     ]
   },
-  "updated_at": "2026-10-28T21:40:00+01:00",
+  "updated_at": "2026-10-28T21:55:00+01:00",
   "addendum_import": {
     "imported_at": "2026-10-28T21:08:26+01:00",
     "task": "shared task-59 (queue-only backlog import; no implementation)",

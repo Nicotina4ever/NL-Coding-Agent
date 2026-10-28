@@ -67,8 +67,8 @@ relaxed by either input.
 | Status | P0 | P1 | P2 | P3 | Total |
 |---|---|---|---|---|---|
 | verified | 20 | 13 | 0 | 0 | 33 |
-| partial | 30 | 26 | 11 | 1 | 68 |
-| planned | 30 | 19 | 9 | 1 | 59 |
+| partial | 37 | 27 | 11 | 1 | 76 |
+| planned | 23 | 18 | 9 | 1 | 51 |
 | blocked | 3 | 0 | 0 | 0 | 3 |
 | **Total** | 83 | 58 | 20 | 2 | 163 |
 
@@ -93,6 +93,8 @@ relaxed by either input.
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v4.0 (2026-10-28)** - Stage-7 second implementation increments: independent auto-review policy engine + autonomy profiles foundation (166/167 partial) and research provider registry/router, local SQLite research store and read-only GitHub/Hugging Face investigators over injected transports (169/171/172/174/205/207 partial). 63 new tests this batch; full suite 877 passed. All of it is fixture/foundation-only: no live provider/network calls, GUI/tool-registry/execution wiring, embeddings/retrieval, live API authentication or real-network acceptance; these remain MANUAL-PENDING.
 
 **v3.9 (2026-10-28)** - Stage-7 first implementation increments: NL-BP-168 capability taxonomy and durable scoped approvals (20 capabilities/12 scopes/6 decisions, fail-closed defaults, additive SQLite, audit, 23 tests; part of Trusted Auto Review/Full Autonomy track) and NL-BP-170/175/206 research foundation (stdlib retrieval policy with domain/SSRF/rate/size enforcement, injectable-transport fetcher with redirects/provenance/untrusted tagging, HTML reader; 69 tests). Both are partial/foundation-only: no GUI/tool wiring, search providers, browser, real transport, research store or real-network acceptance; full suite 814 passed. Real-network research and TRUSTED AUTO REVIEW/FULL AUTONOMY remain pending/MANUAL-PENDING.
 
