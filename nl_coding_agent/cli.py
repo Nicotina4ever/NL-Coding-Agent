@@ -449,8 +449,30 @@ def main() -> int:
             if args.goal:
                 raise SystemExit("Error: --autonomous selects work from durable state/roadmap; do not pass --goal")
             from nl_coding_agent.core.mission_lock import MissionLockError, mission_lock
+            from nl_coding_agent.core.relocation import (
+                RelocationError,
+                check_selfbuild_readiness,
+            )
             from nl_coding_agent.core.selfbuild_runner import run_autonomous
             from nl_coding_agent.persistence.database import db_path
+
+            try:
+                readiness = check_selfbuild_readiness(
+                    db_path(), db_path().parent / "selfbuild_state.json", root
+                )
+            except RelocationError as exc:
+                print(f"ERROR: cannot verify project relocation state: {exc}")
+                return 2
+            if not readiness["ok"]:
+                print(
+                    "ERROR: project relocation is not reconciled for " + str(root)
+                    + "; refusing to start Self-Build Mode."
+                )
+                for message in readiness["errors"]:
+                    print(f"  - {message}")
+                return 2
+            for message in readiness["warnings"]:
+                print(f"WARNING: {message}")
 
             lock_path = db_path().parent / "selfbuild.lock"
             try:

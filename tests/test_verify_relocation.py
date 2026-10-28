@@ -1,0 +1,64 @@
+"""Tests for the read-only relocation verification helpers."""
+from __future__ import annotations
+
+import importlib.util
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "verify_relocation.py"
+spec = importlib.util.spec_from_file_location("verify_relocation", SCRIPT)
+verify = importlib.util.module_from_spec(spec)
+assert spec.loader is not None
+spec.loader.exec_module(verify)
+
+
+class ScanTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.repo = Path(self._tmp.name)
+
+    def write(self, rel: str, text: str) -> Path:
+        path = self.repo / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def test_detects_backslash_forward_slash_and_escaped_forms(self):
+        self.write("a.md", "root is K:\\AI\\Coding Agent now")
+        self.write("b.md", "root is K:/AI/Coding Agent now")
+        self.write("c.json", json.dumps({"root": "K:\\AI\\Coding Agent"}))
+        hits = verify.scan_paths_for_old_root(
+            [self.repo / "a.md", self.repo / "b.md", self.repo / "c.json"], self.repo
+        )
+        self.assertEqual({hit["path"] for hit in hits}, {"a.md", "b.md", "c.json"})
+        self.assertTrue(all(hit["line"] == 1 for hit in hits))
+
+    def test_does_not_match_new_canonical_root(self):
+        self.write("a.md", "root is K:\\AI\\NL Coding Agent now")
+        hits = verify.scan_paths_for_old_root([self.repo / "a.md"], self.repo)
+        self.assertEqual(hits, [])
+
+    def test_operational_paths_ignore_historical_docs(self):
+        self.write("AGENTS.md", "K:\\AI\\Coding Agent")
+        self.write("docs/COMPLETED_MISSIONS.md", "K:\\AI\\Coding Agent")
+        self.write("docs/CURRENT_STATE.md", "K:\\AI\\NL Coding Agent")
+        paths = verify.operational_file_paths(self.repo)
+        names = [path.relative_to(self.repo).as_posix() for path in paths]
+        self.assertIn("AGENTS.md", names)
+        self.assertIn("docs/CURRENT_STATE.md", names)
+        self.assertNotIn("docs/COMPLETED_MISSIONS.md", names)
+
+    def test_launcher_paths_include_bat_files(self):
+        self.write("NL Coding Agent.bat", "cd /d \"%~dp0\"")
+        self.write("Self-Build Mode.bat", "K:\\AI\\Coding Agent")
+        paths = [path.name for path in verify.launcher_paths(self.repo)]
+        self.assertIn("Self-Build Mode.bat", paths)
+        hits = verify.scan_paths_for_old_root(verify.launcher_paths(self.repo), self.repo)
+        self.assertEqual([hit["path"] for hit in hits], ["Self-Build Mode.bat"])
+
+
+if __name__ == "__main__":
+    unittest.main()
