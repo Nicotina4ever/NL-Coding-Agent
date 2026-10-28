@@ -12,8 +12,8 @@ Single index of every consolidated product requirement. Each row has a stable ID
 
 - **Stage 1 - Repository relocation and path reconciliation**: completed (1 requirements; IDs in INDEX.json program_order)
 - **Stage 2 - Transactional staging, safety and self-healing**: in_progress (15 requirements; IDs in INDEX.json program_order)
-- **Stage 3 - Persistent autonomous supervisor and verified handoff**: in_progress (13 requirements; IDs in INDEX.json program_order; C3a-C3d implemented, SH-07 Tier A verified, Tier B pending)
-- **Stage 4 - Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities**: pending (40 requirements; IDs in INDEX.json program_order)
+- **Stage 3 - Persistent autonomous supervisor and verified handoff**: completed (engineering; Tier B blocked evidence - docs/SH07_TIERB_EVIDENCE.md) (13 requirements; IDs in INDEX.json program_order; C3a-C3d implemented, SH-07 Tier A verified, Tier B pending)
+- **Stage 4 - Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities**: in_progress (40 requirements; IDs in INDEX.json program_order)
 - **Stage 5 - Repository cleanup and optimization**: pending (8 requirements; IDs in INDEX.json program_order)
 - **Stage 6 - Lightweight portable/bootstrapper and final release testing**: pending (26 requirements; IDs in INDEX.json program_order)
 

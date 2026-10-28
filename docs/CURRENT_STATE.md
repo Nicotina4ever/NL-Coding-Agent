@@ -304,3 +304,13 @@ Stage-2 closure (C9a/C9b):
 
 Full suite: **215 passed**. Relocation gate: **30/30 PASS**. Stage 2 is complete except
 NL-BP-003 (real local-model end-to-end), which is the stage-3 SH-07 acceptance gate.
+
+### SH-07 Tier B evidence (2026-10-28)
+
+Two real local-model SH-07 attempts were executed in isolated git worktrees with temp
+NL_DATA_DIR (no cloud/network, no commits, no live-repo writes). Attempt 1 revealed and led
+to fixing a documentation-only candidate hole (commit 2a44460); attempt 2 then BLOCKED
+honestly: the local developer model weakened tests/test_selfbuild_mode.py, both attempts
+were rejected by validation, the supervisor fail-fast stopped the run, zero promotions and a
+clean worktree. NL-BP-063 remains blocked; supervisor default mode remains off and automatic
+mode is opt-in. Evidence: docs/SH07_TIERB_EVIDENCE.md and docs/evidence/sh07/.

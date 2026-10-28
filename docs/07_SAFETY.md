@@ -165,3 +165,11 @@ it is not a claim of a complete OS sandbox.
 - **Tier B (real local-model two-mission) evidence is not yet recorded**; automatic mode
   remains opt-in and SH-07 Tier A (fake model) is the only supervisor acceptance evidence so
   far (NL-BP-063 stays blocked).
+
+## SH-07 real-model acceptance evidence (2026-10-28)
+
+Tier B was executed twice on isolated worktrees with local models. Attempt 1 exposed a
+documentation-only candidate hole (fixed in 2a44460); attempt 2 was BLOCKED by the candidate
+validation gate when the local developer weakened a test file - no promotion, no live write,
+clean worktree. This is recorded as honest evidence, not hidden: NL-BP-063 stays blocked and
+the supervisor default mode stays off. See docs/SH07_TIERB_EVIDENCE.md.

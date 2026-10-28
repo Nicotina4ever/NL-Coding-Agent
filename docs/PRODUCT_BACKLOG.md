@@ -43,8 +43,8 @@ evidence only.
 |---|---|---|---|---|---|
 | 1 | Repository relocation and path reconciliation | COMPLETE | 1 | NL-BP-143 | - |
 | 2 | Transactional staging, safety and self-healing | COMPLETE | 15 | NL-BP-3-5, 54-60, 65, 72-74, 76 | 1 |
-| 3 | Persistent autonomous supervisor and verified handoff | IN PROGRESS | 13 | NL-BP-12, 50-53, 61-64, 66, 67, 75, 77 | 2 |
-| 4 | Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities | PENDING | 40 | NL-BP-1, 2, 6-11, 13, 20-46, 68-71 | 3 |
+| 3 | Persistent autonomous supervisor and verified handoff | COMPLETE (Tier B blocked evidence) | 13 | NL-BP-12, 50-53, 61-64, 66, 67, 75, 77 | 2 |
+| 4 | Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities | IN PROGRESS | 40 | NL-BP-1, 2, 6-11, 13, 20-46, 68-71 | 3 |
 | 5 | Repository cleanup and optimization | PENDING | 8 | NL-BP-90-97 | 4 |
 | 6 | Lightweight portable/bootstrapper and final release testing | PENDING | 26 | NL-BP-110-124, 140-142, 144-151 | 5 |
 
@@ -86,6 +86,8 @@ SH-07 Tier B (real local models) remains pending explicit authorization and bloc
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v1.4 (2026-10-28)** - Stage 3 engineering complete (supervisor, preflight, queue/lease, backend selection, SH-07 Tier A verified); SH-07 Tier B recorded as BLOCKED with honest evidence (docs/SH07_TIERB_EVIDENCE.md); NL-BP-063 stays blocked, supervisor default mode off. Stage 4 started from docs/PHASE4_CREWAI_FLOWS_PLAN.md. No new requirement IDs.
 
 **v1.3 (2026-10-28)** - Stage 3 supervisor implemented through C3d + SH-07 Tier A. C3a d81a168 additive supervisor schema/store, C3b c91e0c9 indexed-backlog loader/planner, C3c b9ec909 supervisor core (lease/heartbeat, preflight, reconcile, queue loop, run control, resource gate), C3d dbe3c3b CLI/service/GUI + selfbuild shim, C3e (this change) SH-07 Tier A end-to-end acceptance + runner/verifier scripts + docs. NL-BP-061/062 moved to verified (fake-model/end-to-end evidence + read-only gate); NL-BP-064 moved to partial (modes/budgets/stop/pause implemented, approvals flow partial); NL-BP-075 evidence refreshed but stays partial (no dashboard/429 matrix); NL-BP-063 stays blocked pending Tier B real local-model evidence. Stage 3 stays in progress; automatic mode remains off by default. Counts: 27 verified / 31 partial / 41 planned / 4 blocked.
 
@@ -985,6 +987,9 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - no manual code repair between them; survives a supervisor restart
   - evidence recorded in SQLite/logs and reproducible from a clean start
 - **Evidence:**
+  - Tier A (2026-10-28): tests/test_supervisor_sh07.py - two consecutive fake-model missions complete without manual repair
+  - Tier B attempt 1 (e81a916): 2 docs-only missions -> quality-gate hole fixed in 2a44460 (docs/SH07_TIERB_EVIDENCE.md)
+  - Tier B attempt 2 (2a44460): real local models -> validation rejected weakened tests, supervisor BLOCKED with 0 promotions and clean worktree; docs/evidence/sh07/attempt2/
   - SQLite: mission #44 blocked REJECT (supervisor continuous execution); mission #45 blocked after stub overwrite (result summary)
   - data/selfbuild_state.json audit_note_42/43: stub restore and manual repair recorded
   - HANDOFF_DEEPSEEK_HARNESS.md: previous cycle #43/#45 produced stubs; protections not integrated
@@ -992,7 +997,7 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
   - Tier A (fake model) now PASS: tests/test_supervisor_sh07.py 7 tests - two consecutive staged-candidate missions with candidate+oracle verification, one promotion per mission, restart/pause/stop idempotency and fail-closed negatives; evidence via scripts/run_supervisor_sh07.py --mode fake
   - Tier B (real local models) NOT executed: scripts/run_supervisor_sh07.py --mode live --confirm-live --worktree <isolated worktree> requires explicit authorization and records evidence under build/phase3/evidence/
 - **Sources:** specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md; specifiche/28_SELF_HEALING_AGENT_HARNESS.md#7; 03_MASTER_CHECKLIST.md#P0-18
-- **Note:** Remains BLOCKED: Tier A is deterministic fake-model evidence only and cannot prove local-model reliability; NL-BP-063 becomes verified only after Tier B real local-model two-mission evidence is recorded and reviewed.
+- **Note:** BLOCKED on real local-model endurance: Tier A passes deterministically, but Tier B attempt 2 was blocked by the validation gate (local developer weakened a test). Automatic mode stays opt-in and default off; the gate must not be weakened to claim SH-07. See docs/SH07_TIERB_EVIDENCE.md.
 
 <a id="nl-bp-064"></a>
 ### NL-BP-064 - Autonomy modes Off/Assisted/Automatic with budgets, approvals and stop/pause

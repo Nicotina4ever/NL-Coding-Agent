@@ -36,7 +36,7 @@ Canonical plans: `docs/PHASE2_HARNESS_INTEGRATION_PLAN.md` and
 | SH-04 | green but weakened tests caught by oracle | tests/test_candidate_verification.py::test_oracle_catches_green_but_weakened_candidate | VERIFIED |
 | SH-05 | out-of-scope/shell writes rejected | tests/test_promotion_stage.py scope/protected tests; 4-tool surface test; seam static guard | VERIFIED (tool broker; no OS sandbox claimed) |
 | SH-06 | economic/integrity recovery points | tests/test_retention.py (11: read-only audit, verified zip archive, guarded all-or-nothing cleanup); tests/test_rollback_stub.py; tests/test_promotion_stage.py recovery/CAS; staging excludes python/crewAI/dist/data | VERIFIED (archive + retention implemented; no blob dedup by design) |
-| SH-07 | two consecutive missions without manual repair | Tier A (fake model): `tests/test_supervisor_sh07.py` 7 tests PASS - two consecutive staged-candidate missions, promotion only per mission, restart/pause/resume idempotency, fail-closed invalid candidate and oracle-red negatives; `scripts/run_supervisor_sh07.py --mode fake` evidence under `build/phase3/evidence/`. Tier B (real local models) pending explicit Lead authorization. | TIER A VERIFIED / TIER B PENDING (NL-BP-063 stays blocked) |
+| SH-07 | two consecutive missions without manual repair | Tier A: tests/test_supervisor_sh07.py (7 tests); Tier B: docs/SH07_TIERB_EVIDENCE.md (attempt 1 docs-only hole fixed in 2a44460; attempt 2 real local models blocked by candidate validation, 0 promotions, clean worktree) | TIER A VERIFIED / TIER B BLOCKED (honest evidence; NL-BP-063 blocked) |
 
 ## Stage-3 SH-07 acceptance (2026-10-28)
 
@@ -108,3 +108,19 @@ python\python.exe scripts\verify_relocation.py                          # 30/30 
   first); automatic mode is off by default and cloud/network/delete still require grants.
 - No autonomous self-build mission has been run on the new supervisor yet; Tier A SH-07 is
   verified with a fake model, Tier B (real local models) is the gate before unattended autonomy.
+
+## SH-07 Tier B (real local models) - evidence
+
+Executed twice on isolated git worktrees with local Ollama models (no cloud/network), temp
+NL_DATA_DIR, no commits and no live-repo writes. Full evidence and console logs:
+docs/evidence/sh07/ and docs/SH07_TIERB_EVIDENCE.md.
+
+- Attempt 1 at e81a916 exposed a quality-gate hole: docs-only candidates were accepted for
+  implementation requirements because specification paths leaked into the mission goal and
+  write scope. Fixed in 2a44460 (goal contract, documentation-only candidate rejection,
+  stricter Tier B pass criteria, regression tests).
+- Attempt 2 at 2a44460: BLOCKED - the local 7B developer weakened a test file; validation
+  rejected both attempts, the supervisor fail-fast blocked the run, zero promotions, clean
+  worktree.
+- Outcome: Tier A verified; Tier B not passed. NL-BP-063 stays blocked; supervisor default
+  mode stays off, automatic mode remains opt-in. No gate was weakened to claim success.
