@@ -11,8 +11,6 @@ from typing import Callable
 
 from nl_coding_agent.core import promotion
 from nl_coding_agent.core.roadmap import next_mission
-from nl_coding_agent.core.recovery_store import save_snapshot, rollback_from_snapshot
-from nl_coding_agent.core.code_integrity_gate import detect_stub, detect_weak_test
 from nl_coding_agent.persistence.database import db_path
 from nl_coding_agent.persistence.missions import (
     create_mission,
@@ -168,6 +166,14 @@ def _first_journal_mission_id(root: Path) -> int | None:
         if match:
             return int(match.group(1))
     return None
+
+
+def _stage_dirs(root: Path) -> list[Path]:
+    """Return candidate staging directories present under the project tree."""
+    basedir = root / "data" / "staging"
+    if not basedir.is_dir():
+        return []
+    return sorted(path for path in basedir.iterdir() if path.is_dir())
 
 
 def _resume_command_for_results(
@@ -365,41 +371,6 @@ def run_autonomous(
             "diff_stat": result.get("diff_stat"),
             "error": result.get("error"),
         })
-
-        # SPEC-28 harness gate: detect destructive stub / false-test before promoting
-        if result.get("status") == "completed":
-            try:
-                import json
-                from nl_coding_agent.persistence.database import db_path
-                baseline_path = db_path().parent / "mission_baselines" / f"{mission['id']}.json"
-                if baseline_path.exists():
-                    baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
-                    for rel_path, baseline_content in baseline.items():
-                        if not isinstance(baseline_content, str):
-                            continue
-                        p = root / rel_path
-                        if not p.exists() or not p.is_file():
-                            continue
-                        current = p.read_text(encoding="utf-8", errors="replace")
-                        if detect_stub(current, baseline_content):
-                            # Rollback compare-and-swap: restore to baseline because current is stub
-                            p.write_text(baseline_content, encoding="utf-8")
-                            result["status"] = "blocked"
-                            result["verdict"] = "REJECT"
-                            result["error"] = f"Stub detected in {rel_path} by CodeIntegrityGate (SH-01); rolled back to baseline {mission['id']}"
-                            results[-1]["status"] = "blocked"
-                            results[-1]["verdict"] = "REJECT"
-                            results[-1]["error"] = result["error"]
-                            stopped_reason = result["error"]
-                            _log(stopped_reason, on_event)
-                            _save_state(state)
-                            break  # exit file-check loop; outer loop breaks below
-                        # If no stub, continue checking other files; save only at end if all ok
-                    else:
-                        # All files checked; no stub found — safe to save state
-                        _save_state(state)
-            except Exception as exc:
-                _log(f"Harness gate error (ignored): {exc}", on_event)
 
         if result.get("status") != "completed":
             stopped_reason = (

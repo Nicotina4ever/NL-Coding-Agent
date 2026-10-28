@@ -397,8 +397,12 @@ def main() -> int:
 
         if args.list:
             for mission in list_missions():
+                harness = mission.get("harness_version")
+                harness_label = f"v{harness}" if harness is not None else "legacy"
+                stage_label = "stage" if mission.get("staging_dir") else "-"
                 print(
                     f"#{mission['id']:>3}  {mission['status']:<11}  "
+                    f"{harness_label:<6}  {stage_label:<5}  "
                     f"{mission.get('title', '')[:70]}"
                 )
             return 0
@@ -415,6 +419,12 @@ def main() -> int:
             mission = get_mission(m_id)
             if not mission:
                 raise SystemExit(f"Mission #{m_id} not found")
+            if mission.get("harness_version") != 2:
+                raise SystemExit(
+                    f"Mission #{m_id} predates the staged-candidate harness; "
+                    "create a new mission instead "
+                    "(legacy missions cannot be resumed safely)."
+                )
             if mission.get("project_id") is None:
                 set_mission_project(m_id, project["id"])
         else:

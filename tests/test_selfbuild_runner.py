@@ -1,18 +1,28 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from nl_coding_agent.core.code_integrity_gate import detect_stub
 from nl_coding_agent.core.selfbuild_runner import (
     MAX_AUTONOMOUS_MISSIONS,
     _resume_command,
     _resume_command_for_results,
+    _stage_dirs,
     completed_roadmap_mission,
     pending_roadmap_mission,
     reconcile_completed_mission,
     roadmap_fingerprint,
     run_autonomous,
     select_resumable_mission,
+)
+
+RUNNER_SOURCE = (
+    Path(__file__).resolve().parents[1]
+    / "nl_coding_agent"
+    / "core"
+    / "selfbuild_runner.py"
 )
 
 
@@ -254,9 +264,11 @@ class HarnessSelectionTests(unittest.TestCase):
                     root, max_missions=1, resume_mission_id=44,
                     orchestrator_factory=lambda _: ran.append(True),
                 )
+                stage_dirs = _stage_dirs(root)
         self.assertEqual(result["status"], "blocked")
         self.assertIn("predates the staged-candidate harness", result["stopped_reason"])
         self.assertEqual(ran, [])
+        self.assertEqual(stage_dirs, [])
 
     def test_unreconciled_promotion_journal_blocks_new_work(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -274,6 +286,169 @@ class HarnessSelectionTests(unittest.TestCase):
                 result = run_autonomous(root, max_missions=1)
         self.assertEqual(result["status"], "blocked")
         self.assertIn("Unresolved candidate promotion state", result["stopped_reason"])
+
+
+class PostHocGateRemovalTests(unittest.TestCase):
+    def test_runner_source_contains_no_post_hoc_gate(self):
+        source = RUNNER_SOURCE.read_text(encoding="utf-8")
+        self.assertNotIn("p.write_text(baseline_content", source)
+        self.assertNotIn("detect_stub(", source)
+        self.assertNotIn("rollback_from_snapshot(", source)
+        self.assertNotIn("save_snapshot", source)
+        self.assertNotIn("mission_baselines", source)
+        self.assertNotIn("Harness gate error", source)
+
+    def test_runner_keeps_harness_selection_preflight_and_legacy_refusal(self):
+        source = RUNNER_SOURCE.read_text(encoding="utf-8")
+        self.assertIn("harness_version=promotion.HARNESS_VERSION", source)
+        self.assertIn("promotion.preflight(", source)
+        self.assertIn("predates the staged-candidate harness", source)
+
+    def test_completed_mission_does_not_rewrite_stub_from_mission_baselines(self):
+        good = "def add(a, b):\n    return a + b\n"
+        stub = "def add(a, b):\n    pass\n"
+        # Precondition: the removed post-hoc gate would have restored this file.
+        self.assertTrue(detect_stub(stub, good))
+
+        roadmap = {"title": "Recovery", "goal": "Fix controls", "source": ""}
+        mission = {
+            "id": 41,
+            "status": "pending",
+            "title": "Recovery",
+            "goal": "Fix controls",
+            "project_id": 1,
+            "harness_version": 2,
+        }
+
+        class FakeOrchestrator:
+            def run_mission(self, **kwargs):
+                return {
+                    "status": "completed",
+                    "verdict": "APPROVE",
+                    "diff_stat": "1 file changed",
+                }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            db_file = root / "data" / "nl_agent.db"
+            live_file = root / "planner.py"
+            live_file.write_text(stub, encoding="utf-8")
+            baselines = db_file.parent / "mission_baselines"
+            baselines.mkdir(parents=True)
+            (baselines / "41.json").write_text(
+                json.dumps({"planner.py": good}), encoding="utf-8"
+            )
+            tree_before = sorted(str(p.relative_to(root)) for p in root.rglob("*"))
+            with patch("nl_coding_agent.core.selfbuild_runner._log"), \
+                    patch(
+                        "nl_coding_agent.core.selfbuild_runner._load_state",
+                        return_value={"projects": {}},
+                    ), \
+                    patch("nl_coding_agent.core.selfbuild_runner._save_state"), \
+                    patch(
+                        "nl_coding_agent.core.selfbuild_runner.db_path",
+                        return_value=db_file,
+                    ), \
+                    patch(
+                        "nl_coding_agent.core.selfbuild_runner.open_project",
+                        return_value={"id": 1},
+                    ), \
+                    patch(
+                        "nl_coding_agent.core.selfbuild_runner.list_missions",
+                        return_value=[],
+                    ), \
+                    patch(
+                        "nl_coding_agent.core.selfbuild_runner.next_mission",
+                        return_value=roadmap,
+                    ), \
+                    patch(
+                        "nl_coding_agent.core.selfbuild_runner.create_mission",
+                        return_value=41,
+                    ), \
+                    patch(
+                        "nl_coding_agent.core.selfbuild_runner.get_mission",
+                        return_value=mission,
+                    ):
+                result = run_autonomous(
+                    root,
+                    max_missions=1,
+                    orchestrator_factory=lambda _: FakeOrchestrator(),
+                )
+                live_content = live_file.read_text(encoding="utf-8")
+                tree_after = sorted(str(p.relative_to(root)) for p in root.rglob("*"))
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(live_content, stub)
+        self.assertEqual(tree_after, tree_before)
+
+
+class LegacyResumableRunTests(unittest.TestCase):
+    def test_legacy_resumable_is_skipped_and_new_harness_work_runs(self):
+        legacy = {
+            "id": 44,
+            "status": "pending",
+            "title": "Old",
+            "goal": "Old work",
+            "project_id": 1,
+            "harness_version": None,
+        }
+        roadmap = {"title": "Recovery", "goal": "Fix controls", "source": ""}
+        mission = {
+            "id": 41,
+            "status": "pending",
+            "title": "Recovery",
+            "goal": "Fix controls",
+            "project_id": 1,
+            "harness_version": 2,
+        }
+        ran = []
+        logs = []
+
+        def fake_log(message, on_event=None):
+            logs.append(message)
+
+        class FakeOrchestrator:
+            def run_mission(self, **kwargs):
+                ran.append(kwargs.get("mission_id"))
+                return {"status": "completed", "verdict": "APPROVE", "diff_stat": ""}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            with patch(
+                "nl_coding_agent.core.selfbuild_runner._log", side_effect=fake_log
+            ), \
+                    patch(
+                        "nl_coding_agent.core.selfbuild_runner._load_state",
+                        return_value={"projects": {}},
+                    ), \
+                    patch("nl_coding_agent.core.selfbuild_runner._save_state"), \
+                    patch(
+                        "nl_coding_agent.core.selfbuild_runner.open_project",
+                        return_value={"id": 1},
+                    ), \
+                    patch(
+                        "nl_coding_agent.core.selfbuild_runner.list_missions",
+                        return_value=[legacy],
+                    ), \
+                    patch(
+                        "nl_coding_agent.core.selfbuild_runner.next_mission",
+                        return_value=roadmap,
+                    ), \
+                    patch(
+                        "nl_coding_agent.core.selfbuild_runner.create_mission",
+                        return_value=41,
+                    ), \
+                    patch(
+                        "nl_coding_agent.core.selfbuild_runner.get_mission",
+                        return_value=mission,
+                    ):
+                result = run_autonomous(
+                    root,
+                    max_missions=1,
+                    orchestrator_factory=lambda _: FakeOrchestrator(),
+                )
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(ran, [41])
+        self.assertTrue(any("Ignoring legacy mission(s)" in m for m in logs))
 
 
 if __name__ == "__main__":

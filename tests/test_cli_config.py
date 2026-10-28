@@ -1,8 +1,48 @@
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from nl_coding_agent import cli
 from nl_coding_agent.cli import ensure_project, load_yaml
+
+
+class TestLegacyMissionResume(unittest.TestCase):
+    def test_legacy_mission_resume_raises_clear_error_without_starting(self):
+        argv = ["nl_agent.py", "mission", "--project", ".", "--resume", "44"]
+        mission = {
+            "id": 44,
+            "status": "blocked",
+            "harness_version": None,
+            "project_id": 1,
+        }
+
+        class ForbiddenOrchestrator:
+            def __init__(self, *args, **kwargs):
+                raise AssertionError("orchestrator must not start for a legacy resume")
+
+        with patch.object(sys, "argv", argv), \
+                patch(
+                    "nl_coding_agent.projects.registry.open_project",
+                    return_value={"id": 1},
+                ), \
+                patch(
+                    "nl_coding_agent.persistence.missions.get_mission",
+                    return_value=mission,
+                ), \
+                patch(
+                    "nl_coding_agent.agents.orchestrator.MultiAgentOrchestrator",
+                    ForbiddenOrchestrator,
+                ):
+            with self.assertRaises(SystemExit) as caught:
+                cli.main()
+        self.assertEqual(
+            str(caught.exception),
+            "Mission #44 predates the staged-candidate harness; "
+            "create a new mission instead "
+            "(legacy missions cannot be resumed safely).",
+        )
 
 
 class TestCliConfig(unittest.TestCase):
