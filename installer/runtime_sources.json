@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "status": "template",
+  "generated_by": "installer/runtime_sources.json (template)",
+  "note": "Declarative acquisition sources for the six native beta runtimes. URLs are documented placeholders for the release runner: replace them with the real immutable release-artifact URLs. expected_sha256/expected_size MUST stay empty until a real archive has been measured by scripts/fetch_native_runtimes.py; never fabricate hashes. The repository Windows x64 python/ runtime is never a source here.",
+  "product": {
+    "id": "nl-coding-agent",
+    "name": "NL Coding Agent",
+    "version": "0.2.0",
+    "channel": "beta"
+  },
+  "base_url": "https://downloads.example.invalid/nl-coding-agent/0.2.0-beta",
+  "timeout_s": 120,
+  "max_archive_bytes": 2147483648,
+  "targets": {
+    "windows-x86_64": {
+      "provider": "python-build-standalone",
+      "provider_url": "https://github.com/astral-sh/python-build-standalone/releases",
+      "version": "3.12.10",
+      "archive_kind": "zip",
+      "url": "https://downloads.example.invalid/nl-coding-agent/0.2.0-beta/runtimes/python-3.12.10-windows-x86_64.zip",
+      "filename": "python-3.12.10-windows-x86_64.zip",
+      "expected_sha256": "",
+      "expected_size": 0
+    },
+    "windows-arm64": {
+      "provider": "python-build-standalone",
+      "provider_url": "https://github.com/astral-sh/python-build-standalone/releases",
+      "version": "3.12.10",
+      "archive_kind": "zip",
+      "url": "https://downloads.example.invalid/nl-coding-agent/0.2.0-beta/runtimes/python-3.12.10-windows-arm64.zip",
+      "filename": "python-3.12.10-windows-arm64.zip",
+      "expected_sha256": "",
+      "expected_size": 0
+    },
+    "linux-x86_64": {
+      "provider": "python-build-standalone",
+      "provider_url": "https://github.com/astral-sh/python-build-standalone/releases",
+      "version": "3.12.10",
+      "archive_kind": "tar.gz",
+      "url": "https://downloads.example.invalid/nl-coding-agent/0.2.0-beta/runtimes/python-3.12.10-linux-x86_64.tar.gz",
+      "filename": "python-3.12.10-linux-x86_64.tar.gz",
+      "expected_sha256": "",
+      "expected_size": 0
+    },
+    "linux-aarch64": {
+      "provider": "python-build-standalone",
+      "provider_url": "https://github.com/astral-sh/python-build-standalone/releases",
+      "version": "3.12.10",
+      "archive_kind": "tar.gz",
+      "url": "https://downloads.example.invalid/nl-coding-agent/0.2.0-beta/runtimes/python-3.12.10-linux-aarch64.tar.gz",
+      "filename": "python-3.12.10-linux-aarch64.tar.gz",
+      "expected_sha256": "",
+      "expected_size": 0
+    },
+    "macos-x86_64": {
+      "provider": "python-build-standalone",
+      "provider_url": "https://github.com/astral-sh/python-build-standalone/releases",
+      "version": "3.12.10",
+      "archive_kind": "tar.gz",
+      "url": "https://downloads.example.invalid/nl-coding-agent/0.2.0-beta/runtimes/python-3.12.10-macos-x86_64.tar.gz",
+      "filename": "python-3.12.10-macos-x86_64.tar.gz",
+      "expected_sha256": "",
+      "expected_size": 0
+    },
+    "macos-arm64": {
+      "provider": "python-build-standalone",
+      "provider_url": "https://github.com/astral-sh/python-build-standalone/releases",
+      "version": "3.12.10",
+      "archive_kind": "tar.gz",
+      "url": "https://downloads.example.invalid/nl-coding-agent/0.2.0-beta/runtimes/python-3.12.10-macos-arm64.tar.gz",
+      "filename": "python-3.12.10-macos-arm64.tar.gz",
+      "expected_sha256": "",
+      "expected_size": 0
+    }
+  }
+}

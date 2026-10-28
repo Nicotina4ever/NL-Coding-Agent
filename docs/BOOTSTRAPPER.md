@@ -230,6 +230,61 @@ native dependency. No such measured artifacts exist for this beta, so no univers
 separate `macos-x86_64` and `macos-arm64` runtimes are declared and provisioned. A future universal
 artifact is only allowed by the schema if it is measured and shared by both macOS targets.
 
+### Release-runner: acquire and measure the six native runtimes (stage 6e)
+
+The six-target runtime manifest starts as a template with **no measured artifacts**. The acquisition
+tool closes that gap without inventing hashes:
+
+- `installer/runtime_sources.json` is the declarative source schema: exactly six targets
+  (`windows-x86_64`, `windows-arm64`, `linux-x86_64`, `linux-aarch64`, `macos-x86_64`,
+  `macos-arm64`), each with `provider`, `provider_url`, `version`, `archive_kind`,
+  `url` (or `url_template` with `{version}`/`{target}`), `filename`, and
+  `expected_sha256`/`expected_size` that **must stay empty until a real archive has been
+  measured**. The shipped file is a template: URLs are documented placeholders and all expected
+  hashes are empty.
+- `scripts/fetch_native_runtimes.py` is the measurement tool. The default is a **plan**
+  (`--dry-run` semantics): it validates the sources and prints the plan without any network
+  request, file write or directory creation.
+  - `--offline-dir DIR` measures archives already downloaded by a release runner/human (no network);
+  - `--download` streams from the source URLs with a hard byte bound and timeout via an injectable
+    opener (tests use fakes and a loopback HTTP server only);
+  - every archive is format-checked against the target's pinned archive kind, its members are
+    content-checked, and a **Windows runtime artifact is rejected for non-Windows targets**
+    (and vice versa) - the Windows embedded runtime is never reused off Windows;
+  - optional expected sha256/size values are verified when present; a mismatch is a hard refusal;
+  - `--write` emits a **NEW** measured runtime-manifest draft plus an evidence report under
+    `.workspace/build/native-runtimes/`. `installer/runtime_manifest.json` is never overwritten
+    unless `--force` is passed explicitly; existing outputs are also refused without `--force`;
+  - the draft is `release_ready: true` **only when all six targets are measured**; a partial
+    measurement stays `release_ready: false` with explicit empty `sha256`/`size` placeholders
+    and `measured: false` for the missing targets (the schema validator is run before writing);
+  - the tool never uploads/pushes/publishes, never runs models, never executes the downloaded
+    archives and never deletes user files.
+
+~~~powershell
+# 1. Plan from the declarative sources (default: no network, no writes).
+python scripts/fetch_native_runtimes.py
+python scripts/fetch_native_runtimes.py --json
+
+# 2. Release runner: download + measure all six (bounded, explicit network step).
+python scripts/fetch_native_runtimes.py --download --json
+
+# 2b. Alternative: measure archives already downloaded/verified by a human.
+python scripts/fetch_native_runtimes.py --offline-dir C:/build/native-runtimes --write
+
+# 3. The new draft is a normal runtime manifest: validate it with the provisioner (plan only).
+python installer/bootstrap.py provision plan --runtime-manifest ".workspace/build/native-runtimes/runtime-manifest.measured.json"
+
+# 4. Feed measured archives to the release builder (repeatable per target).
+python scripts/build_release.py --runtime-archive windows-x86_64=C:/build/python-3.12.10-windows-x86_64.zip
+~~~
+
+**CI vs MANUAL-PENDING:** acquisition/measurement is a release-runner or human step. CI never
+downloads real runtimes and a green CI matrix is not platform support. Measured hashes are
+reproducibility evidence only; clean-machine installation, GUI interaction, real hardware
+(microphone/ASR/TTS, GPU, clipboard) and every non-Windows target stay **MANUAL-PENDING** until a
+tester records them (see `docs/PLATFORM_COMPATIBILITY_MATRIX.md`, `docs/BETA_TESTING.md`).
+
 ### Commands
 
 ```powershell
@@ -253,10 +308,13 @@ python scripts/build_release.py --runtime-archive windows-x86_64=C:/build/python
 
 ```powershell
 $env:PYTHONDONTWRITEBYTECODE='1'; $env:QT_QPA_PLATFORM='offscreen'
-python -m pytest -q tests/test_bootstrap_installer.py tests/test_build_release.py -p no:cacheprovider
+python -m pytest -q tests/test_bootstrap_installer.py tests/test_build_release.py tests/test_fetch_native_runtimes.py -p no:cacheprovider
 ```
 
-Result: **56 passed** (40 bootstrapper/provisioner + 16 release-builder tests). Coverage:
+Result: **90 passed** in this environment (32 acquisition/measurement tooling tests from
+`tests/test_fetch_native_runtimes.py`; the bootstrapper/provisioner and release-builder files
+contribute the remaining 58). The acquisition tests use fake local archives, an injected opener and
+one loopback HTTP server only: no external network, no model runs. Coverage:
 
 - manifest validation (template, schema errors, unsafe destinations, missing hashes, unknown platforms);
 - plan writes nothing; install into empty target; shared cache + isolated second install; template/non-empty/root target refusals; hash and size mismatch leave no partial install; corrupt cache re-fetch;
@@ -266,6 +324,7 @@ Result: **56 passed** (40 bootstrapper/provisioner + 16 release-builder tests). 
 - CLI flow (install/plan/verify) and exit codes; no writes outside cache/target; static checks for stdlib-only/no global tooling;
 - release reproducibility (byte-identical two builds), manifest completeness/hashes/exclusions, platform-manifest validation + offline install integration, source-only zip excludes `python/`/`crewAI/`, version parsing, optional runtime archive bundling, CLI plan/build/refusal, no destructive operations.
 - cross-platform: six-target runtime manifest validation, selection per OS/arch, unsupported-host/target refusals with guidance, Windows-artifact rejection on Linux/macOS, measured-only hashes/release_ready gating, offline installs for all six targets with fake archives, cache isolation, hash-mismatch atomic failure, repair/update, macOS separate per-arch runtimes, optional component degradation.
+- acquisition/measurement (stage 6e): sources-schema validation (six targets, archive-kind/URL/format and measured-only expected-hash rules, credential refusal), default dry-run opens no network and writes nothing, offline archive hashing (zip/tar.gz), expected-hash/size refusal, archive-format and OS-content refusals (Windows runtime never accepted off Windows), measured draft generation with ` + '`release_ready`' + ` gating for partial measurements, template-overwrite refusal, existing-output/` + '`--force`' + ` handling, download bounds/timeouts via injected opener, evidence report URL redaction, target aliases/refusals, and static no-publish/no-network-default guards.
 
 ---
 
@@ -274,14 +333,14 @@ Result: **56 passed** (40 bootstrapper/provisioner + 16 release-builder tests). 
 1. **Clean Windows acceptance is manual-pending**: this environment has the development workspace and embedded runtime; a fresh Windows install without Python, with real downloads and GUI/agent execution, must be validated by a human on a clean VM/machine.
 2. **No real published artifacts**: the template base URLs are examples; a release pipeline must produce, sign and host the component archives from a trusted channel.
 3. **No code signing / SmartScreen reputation**; no MSI/uninstaller, no Start-menu/OS integration, no automatic update check - this is a foundation, not the final installer.
-4. **No production runtime bundle**: `python/` and `crewAI/` are deliberately never copied by the builder; runtime archives must come from the separate clean-runtime build pipeline (stage 6b) and be supplied with `--with-runtime-archive`.
+4. **No production runtime bundle**: `python/` and `crewAI/` are deliberately never copied by the builder; runtime archives must come from the separate clean-runtime build pipeline (stage 6b) and be supplied with `--runtime-archive TARGET=PATH` (repeatable; legacy `--with-runtime-archive` still accepted).
 5. **User data migration**: the bootstrapper installs program files only; it does not move existing `data/`, does not set `NL_DATA_DIR` in launchers and does not migrate a development database (tracked from PORTABLE_BUILD next steps).
 6. **Licensing/notices**: third-party notices and license texts are not yet generated into the payload (stage 6b).
 7. **Trust root**: manifests are not signed; sha256 verification protects against corrupt/mismatched downloads, not a malicious manifest.
 8. **GUI/agent acceptance from the installed payload** (GUI startup, project open, model detection, mission execution) was not executed in this task; the local smoke covers plan/install/verify integrity only.
 9. Linux/macOS behaviour is schema-level only; no cross-platform acceptance.
 10. Update/repair keep backup directories by design (no automatic cleanup); cache has no automatic size cap.
-11. **Cross-platform beta runtimes are not measured yet**: both `installer/runtime_manifest.json` and generated runtime manifests contain empty sha256/size placeholders for all six targets until the beta pipeline produces and measures real standalone Python archives. No real native runtime has been downloaded or executed on Linux/macOS/Windows ARM64 here; the provisioner tests use local fake zip/tar.gz artifacts only.
+11. **Cross-platform beta runtimes are not measured yet**: `installer/runtime_manifest.json` and `installer/runtime_sources.json` are templates with empty sha256/size placeholders for all six targets, and no real standalone Python archive has been downloaded/measured on this machine. The stage-6e tooling (`scripts/fetch_native_runtimes.py`) now provides the release-runner path: it validates sources, performs bounded download or offline measurement, rejects format/OS mismatches and writes a new draft manifest with `release_ready` true only at 6/6 measured. Running it for real remains a release-runner/human step with external URLs; the provisioner/CI tests use local fake zip/tar.gz artifacts only.
 12. **No clean/hardware acceptance for the six targets**: Windows ARM64, Linux x86_64/ARM64 and macOS Intel/Apple Silicon hosts, GPU backends (CUDA/ROCm/Metal/MLX), ASR/TTS hardware and real latency remain manual-pending; only CPU fallback/degradation declarations are implemented.
 13. **macOS Universal 2 is deliberately not claimed** (separate per-arch runtimes); no code signing/notarization, Linux distro/glibc matrix, Windows ARM64 toolchain or CI cross-build was validated.
 14. Runtime dependency pins (crewai==1.15.32, PySide6==6.12.0, psutil==7.2.2, Python 3.12.10) are the development-runtime pins; per-target native build/verification of those pins is a beta-pipeline task, not measured here.
@@ -297,4 +356,4 @@ Result: **56 passed** (40 bootstrapper/provisioner + 16 release-builder tests). 
 5. Add license/third-party notices to the payload.
 6. Run clean-Windows acceptance: install from the network, GUI startup, project open, Ollama discovery, agent execution, persistence, restart recovery, update/repair/rollback.
 7. Linux/macOS runtime and acceptance.
-8. Produce and measure all six native runtime archives; fill the runtime manifests with verified sha256/size and mark them release_ready, then run clean-host acceptance and GPU/ASR/TTS degradation checks.
+8. Produce and measure all six native runtime archives on a release runner: populate the real URLs in `installer/runtime_sources.json`, run `python scripts/fetch_native_runtimes.py --download --write`, review the new `.workspace/build/native-runtimes/` draft + evidence report, then feed the measured archives to `scripts/build_release.py` (or copy the measured manifest into a release candidate). Then run clean-host acceptance and GPU/ASR/TTS degradation checks; measurement alone is not platform support.
