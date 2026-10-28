@@ -42,6 +42,10 @@ runner. The application/bootstrapper checks themselves perform no network downlo
   visibility/collaborator actions, artifacts limited to reports/.
 - The packaging/acceptance smoke: source candidate -> beta package -> acceptance matrix
   -> native-runtime dry-run plan, with checksum/manifest and six-target honesty invariants.
+- The reproducible source-release check on ubuntu-latest, windows-latest and macos-14:
+  two builds of the committed tree compared byte-for-byte (archive sha256/size/file list
+  and release/platform/runtime manifests), internal consistency, schema validity, forbidden
+  content (no workspace/git/data/runtime/vendor/dev artifacts) and a PASS/FAIL report.
 
 
 ## Package smoke job (ubuntu-latest)
@@ -68,6 +72,36 @@ The job emits a JSON PASS/FAIL report (`package_smoke.json`), uploads reports on
 (3-day retention) and is blocking on the Linux runner. It is regression/evidence
 tooling for this private beta, not a platform-support or release-acceptance claim.
 
+## Reproducibility job (ubuntu-latest, windows-latest, macos-14)
+
+A separate blocking `reproducibility` job runs `scripts/ci/reproducibility_check.py` on
+ubuntu-latest (x86_64), windows-latest (x64) and macos-14 (Apple Silicon) with Python 3.12.
+It builds the reproducible source release **twice** from the committed tree with the existing
+`scripts.build_release` contract in a **managed temporary workspace** (removed at the end;
+no writes to the repository) and compares:
+
+1. source archive sha256, size, member count/list;
+2. `release-manifest.json`, `platform-manifest.json` and `runtime-manifest.json`
+   byte-for-byte;
+3. internal consistency: manifest archive/component digests match the real zip, zip members
+   match the release file list, and the runtime manifest validates with six targets and
+   explicit unmeasured placeholders;
+4. forbidden content: no `.workspace/`, `.git/`, `data/`, `python/`, vendor checkouts,
+   `da_eliminare/`, caches, databases, bytecode, dev scripts/patches or other development
+   artifacts in the candidate or in the source archive.
+
+The job emits `reports/reproducibility_check.json` + `.md` (reports only), uploads them with
+**3-day retention**, and is blocking on all three runners. It performs no network request,
+no model call and no publishing/upload action, and it exits 1 on any mismatch.
+
+**What this proves vs MANUAL-PENDING:** once the workflow runs externally, a PASS is evidence
+that deterministic source-only builds hold on that runner and are byte-identical across the
+three operating systems for the same committed tree. It does **not** prove platform support,
+native runtime availability/measurement, installer/clean-machine acceptance, GUI interaction
+or hardware behaviour: those stay MANUAL-PENDING (see the compatibility matrix and beta
+testing guide). Until the job has actually run on GitHub, even its cross-OS evidence is
+external/manual; the local run proves determinism on the current host only.
+
 ## MANUAL-PENDING (not verified by CI)
 
 - **Real release artifacts / downloads / installers**: CI uses fake local artifacts only;
@@ -87,12 +121,16 @@ tooling for this private beta, not a platform-support or release-acceptance clai
   measured, and a PASS is CI regression evidence, not clean-machine/hardware acceptance.
 - **Full platform support**: a green matrix is regression evidence for this private beta,
   not an acceptance claim for every OS/architecture combination.
+- **Cross-OS reproducibility evidence**: the `reproducibility` job's cross-platform evidence
+  exists only after it runs on GitHub; a local PASS proves determinism on the current host.
+  Byte-identical source builds do not prove that native runtimes/installers work anywhere.
 
 ## Artifacts, provenance and retention
 
 Only reports/ is uploaded. The matrix jobs keep reports for 7 days (pytest-unit.xml,
 pytest-integration.xml, headless_gui_smoke.json, bootstrap_check.json, SHA256SUMS); the
-package-smoke job uploads package_smoke.json and SHA256SUMS with 3-day retention. No databases, user data,
+package-smoke job uploads package_smoke.json and SHA256SUMS, and each reproducibility runner
+uploads reproducibility_check.json/.md and SHA256SUMS, all with 3-day retention. No databases, user data,
 embedded runtimes, model files or checkpoints are uploaded. SHA256SUMS is generated over
 the report files only and is the provenance index for the run. CI does not publish, tag,
 release, change repository visibility or manage collaborators.

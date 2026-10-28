@@ -12,7 +12,7 @@ import yaml
 REPO = Path(__file__).resolve().parents[1]
 WORKFLOW = REPO / ".github" / "workflows" / "ci.yml"
 CI_SCRIPTS = ("headless_gui_smoke.py", "bootstrap_check.py", "checksums.py",
-              "package_smoke.py")
+              "package_smoke.py", "reproducibility_check.py")
 
 
 def _workflow() -> dict:
@@ -208,3 +208,129 @@ def test_ci_docs_exist_and_mark_manual_pending():
     assert "package_smoke.json" in docs
     assert "retention" in docs.lower()
     assert "MANUAL-PENDING" in docs
+
+def test_workflow_has_reproducibility_job_reports_only():
+    job = _workflow()["jobs"]["reproducibility"]
+    assert job["permissions"]["contents"] == "read"
+    assert int(job["timeout-minutes"]) <= 20
+    entries = job["strategy"]["matrix"]["include"]
+    assert {"ubuntu-latest", "windows-latest", "macos-14"} <= {entry["os"] for entry in entries}
+    for entry in entries:
+        assert entry["experimental"] is False
+        assert entry["arch"] and entry["python_arch"]
+    commands = [str(step.get("run", "")) for step in job["steps"]]
+    assert any("scripts/ci/reproducibility_check.py --json --report-dir reports" in command
+               for command in commands)
+    assert any("scripts/ci/checksums.py reports" in command for command in commands)
+    setup = [step for step in job["steps"]
+             if str(step.get("uses", "")).startswith("actions/setup-python@")]
+    assert setup, "reproducibility must set up Python"
+    assert str(setup[0]["with"]["python-version"]).startswith("3.12")
+    uploads = [step for step in job["steps"]
+               if "actions/upload-artifact" in str(step.get("uses", ""))]
+    assert uploads
+    assert str(uploads[0]["with"]["path"]).strip().startswith("reports")
+    assert int(uploads[0]["with"]["retention-days"]) <= 7
+    text = json.dumps(job).lower()
+    for forbidden in ("contents: write", "secrets.", "git push", "gh release",
+                      "publish", "visibility", "collaborator", "docker push",
+                      "pull_request_target"):
+        assert forbidden not in text, forbidden
+
+
+def _dist_entries() -> list[str]:
+    dist = REPO / ".workspace" / "dist"
+    if not dist.is_dir():
+        return []
+    return sorted(path.name for path in dist.iterdir())
+
+
+def test_reproducibility_local_pass_writes_only_report(tmp_path):
+    reports = tmp_path / "reports"
+    env = dict(os.environ)
+    env.update({"PYTHONDONTWRITEBYTECODE": "1", "QT_QPA_PLATFORM": "offscreen",
+                "NL_DATA_DIR": str(tmp_path / "data")})
+    before = _dist_entries()
+    completed = subprocess.run(
+        [sys.executable, str(REPO / "scripts" / "ci" / "reproducibility_check.py"),
+         "--json", "--report-dir", str(reports)],
+        cwd=str(REPO), env=env, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=300)
+    assert completed.returncode == 0, completed.stderr[-3000:]
+    payload = json.loads(completed.stdout)
+    assert payload["status"] == "PASS"
+    assert payload["summary"]["failed"] == 0
+    assert payload["summary"]["checks"] >= 30
+    assert payload["forbidden"]["ok"] is True
+    assert payload["workspace"] == {"managed": True, "cleaned": True}
+    assert len(payload["runs"]) == 2
+    assert all(value is True for value in payload["comparisons"].values())
+    names = {path.name for path in reports.iterdir()}
+    assert names == {"reproducibility_check.json", "reproducibility_check.md"}
+    report = json.loads((reports / "reproducibility_check.json").read_text(encoding="utf-8"))
+    assert report["status"] == "PASS"
+    assert "MANUAL-PENDING" in report["ci_vs_manual_pending"]
+    assert "byte-identical" in report["ci_vs_manual_pending"]
+    assert _dist_entries() == before, "reproducibility check must not write release candidates"
+
+
+def test_reproducibility_detects_tamper_and_forbidden(tmp_path):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "nl_reproducibility_check",
+        REPO / "scripts" / "ci" / "reproducibility_check.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    def make_candidate(root: Path, label: str, manifest_text: str,
+                       archive: bytes) -> dict:
+        root.mkdir(parents=True)
+        (root / "x-source.zip").write_bytes(archive)
+        for name in module.MANIFEST_NAMES:
+            (root / name).write_text(manifest_text, encoding="utf-8")
+        return module.collect_candidate(root, label)
+
+    run1 = make_candidate(tmp_path / "c1", "run1", '{"a": 1}', b"zip-one")
+    run2 = make_candidate(tmp_path / "c2", "run2", '{"a": 2}', b"zip-two")
+    checks, comparisons = module.compare_runs(run1, run2)
+    failed = {check["id"] for check in checks if check["status"] == "FAIL"}
+    assert "archive_sha256_equal" in failed
+    assert "release_manifest_byte_identical" in failed
+    assert comparisons["archive_sha256_equal"] is False
+
+    found = module.scan_forbidden_paths([
+        "python/python.exe", "data/app.sqlite3", ".workspace/x", "temp_fix.py",
+        "crewAI/vendor.py", "docs/readme.md", "nl_coding_agent/cli.py",
+    ])
+    paths = {item["path"] for item in found}
+    assert {"python/python.exe", "data/app.sqlite3", ".workspace/x", "temp_fix.py",
+            "crewAI/vendor.py"} <= paths
+    assert "docs/readme.md" not in paths
+    assert "nl_coding_agent/cli.py" not in paths
+
+
+def test_ci_docs_document_reproducibility_job():
+    docs = (REPO / "docs" / "CI.md").read_text(encoding="utf-8")
+    lowered = docs.lower()
+    assert "reproducib" in lowered
+    assert "reproducibility_check.json" in docs
+    assert "byte" in lowered and "identical" in lowered
+    assert "3-day retention" in docs
+    assert "MANUAL-PENDING" in docs
+    assert "no publishing" in lowered or "no publish" in lowered
+
+def test_reproducibility_missing_source_exits_one(tmp_path):
+    reports = tmp_path / "reports"
+    completed = subprocess.run(
+        [sys.executable, str(REPO / "scripts" / "ci" / "reproducibility_check.py"),
+         "--json", "--report-dir", str(reports),
+         "--source", str(tmp_path / "does-not-exist")],
+        cwd=str(REPO), capture_output=True, text=True, encoding="utf-8",
+        errors="replace", timeout=120)
+    assert completed.returncode == 1
+    payload = json.loads(completed.stdout)
+    assert payload["status"] == "FAIL"
+    assert payload["summary"]["failed"] >= 1
+    assert (reports / "reproducibility_check.json").is_file()
+    assert (reports / "reproducibility_check.md").is_file()
