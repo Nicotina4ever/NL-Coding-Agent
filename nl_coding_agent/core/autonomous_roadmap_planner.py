@@ -1,4 +1,9 @@
-"""Smallest reliable autonomous roadmap planner.
+"""Smallest reliable autonomous roadmap planner (DEPRECATED - stage 3 C3b).
+
+Deprecated: the persistent supervisor selects missions through
+nl_coding_agent.core.backlog and docs/product-blueprint/INDEX.json. This module is
+kept as a reference only; nothing in the supervisor path imports it.
+
 Reads Blueprint checklist, selects first incomplete feasible task,
 reconciles against SQLite mission evidence to avoid duplicates.
 """
