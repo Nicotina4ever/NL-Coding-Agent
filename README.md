@@ -81,7 +81,7 @@ CLI commands: `doctor`, `audit`, `work`, `status`, `roadmap`, `mission`,
 | `build/` | Transient build/audit evidence and scratch output (git-ignored). |
 | `dist/` | Release payloads; at most one verified candidate (git-ignored). |
 | `installer/` | Lightweight bootstrapper/installer tooling (stage-6 work in progress). |
-| `crewAI/` | Reference-only vendor checkout of CrewAI. **Protected; not imported** — the application uses the installed `crewai==1.15.32` package. |
+| `da_eliminare/crewAI/` | Reference-only CrewAI vendor checkout (own nested `.git`), staged for review by ROOT REORG Phase C (task-46). **Not imported** — the application uses the installed `crewai==1.15.32` package; nothing here is shipped or deleted without owner authorization. |
 | `docs/evidence/` | Acceptance and SBOM evidence kept for audit traceability. |
 
 Directory ownership, retention/cleanup policy and the portable-build exclusion list are documented

@@ -1,9 +1,10 @@
 # Repository Structure and Ownership
 
 **Status:** authoritative for the repository layout after the 2026-10-28 hygiene follow-up
-(shared `task-34`) and the root reorganization Phase A (shared `task-44`). Measured
-before/after inventory and validation are in `docs/REPOSITORY_HYGIENE_FOLLOWUP.md` and
-`build/root_reorg/REPORT.md`.
+(shared `task-34`), the root reorganization Phase A (shared `task-44`) and Phase C
+(shared `task-46`; crewAI checkout staged under `da_eliminare/`). Measured before/after
+inventory and validation are in `docs/REPOSITORY_HYGIENE_FOLLOWUP.md`,
+`build/root_reorg/REPORT.md` and `docs/CREWAI_CHECKOUT_REMOVAL_PROPOSAL.md`.
 **Rule:** all paths are repository-relative. Do not introduce absolute workspace paths into
 documentation, launchers or runtime code — the repository must stay relocatable.
 
@@ -35,7 +36,7 @@ documentation, launchers or runtime code — the repository must stay relocatabl
 | `build/` | transient evidence | **ignored** | task owners | Phase evidence, audit reports, scratch scripts, relocation evidence | Safe to regenerate; keep through the relevant acceptance decision; not shipped | Never |
 | `dist/` | release artifacts | **ignored** | release owner | At most one verified portable candidate | Existing `dist/portable-release` is stale (missing current packages): rebuild only at stage 6 with explicit authorization | Never packaged into itself |
 | `docs/history/legacy/temp-scripts/` | archived one-off repair scripts | tracked | — | Historical DB/source repair scripts (superseded; their functionality is integrated in the committed tree) | **Never deleted or executed**; verbatim historical evidence | Never |
-| `crewAI/` | vendor checkout | **ignored** | vendor owner | Reference-only CrewAI source checkout (own `.git`, docs). **Not imported**: the app uses installed `crewai==1.15.32` | Protected; no cleanup; replacement/archival needs explicit user authorization | Never |
+| `da_eliminare/crewAI/` | review-only staging (vendor checkout) | **ignored** (inside `da_eliminare/`) | user/Lead | Reference-only upstream CrewAI checkout (own `.git`, docs), moved intact by ROOT REORG Phase C (task-46). **Not imported**: the app uses installed `crewai==1.15.32`. The SBOM/legal gate reads its `LICENSE` | Review-only; nothing deleted, archived or removed from Git without explicit user authorization; restore by moving back to `crewAI/` | Never |
 | `crewAI-tools/` | vendor checkout | **ignored** | — | Legacy vendor checkout; absent at this audit | Same policy if restored | Never |
 | `.git/` | git metadata | ignored | git | Repository history and worktree registrations | Never shipped; never cleaned | Never |
 | `state/`, `cache/`, `temp/` | runtime/scratch | **ignored** | runtime | Reserved application-state/cache/temp roots when used (currently the app keeps state under `data/`); `temp/`/`cache/` are ephemeral and may be emptied | Safe to clear when the app is stopped; never back up merged content | Never |
@@ -44,7 +45,7 @@ documentation, launchers or runtime code — the repository must stay relocatabl
 
 | Category | Location | Rule |
 |---|---|---|
-| Python bytecode / tool caches | `__pycache__/`, `.pytest_cache/`, `.ruff_cache/`, `.mypy_cache/` | Regenerated on demand; git-ignored; never shipped; safe to delete with the app and tests stopped. Never touch caches inside `python/` or `crewAI/` (protected). |
+| Python bytecode / tool caches | `__pycache__/`, `.pytest_cache/`, `.ruff_cache/`, `.mypy_cache/` | Regenerated on demand; git-ignored; never shipped; safe to delete with the app and tests stopped. Never touch caches inside `python/` or the staged vendor checkout (protected). |
 | Coverage output | `.coverage*`, `htmlcov/` | Regenerated; git-ignored; never shipped. |
 | OS/app scratch | `temp/`, `tmp/`, `*.tmp`, `*.bak`, `nul` | Ephemeral; git-ignored; may be emptied when no process holds files. |
 | Accidental variable-expansion tree | `%SystemDrive%/` | Must never exist (a literal unexpanded variable created one in the past; it was removed). Defensively git-ignored. |
@@ -76,8 +77,10 @@ is development-only and must stay outside the payload:
 - **User data and diagnostics:** `data/`, `logs/`, `state/`, `temp/`, `*.sqlite3`, `*.db`.
 - **Machine-local configuration:** `config/voicebridge.yaml`, `config/voicebridge.local.yaml`
   (external project paths and user data; explicitly excluded by the staging tool).
-- **Vendor reference trees:** `crewAI/`, `crewAI-tools/` (not imported at runtime; the installed
-  CrewAI package is bundled via `python/`).
+- **Vendor reference trees:** `da_eliminare/crewAI/` (reference-only upstream checkout with its
+  own `.git`, staged by Phase C task-46; not imported at runtime — the installed CrewAI package is
+  bundled via `python/`) and `crewAI-tools/` if ever restored. Nothing in `da_eliminare/` is
+  shipped; permanent deletion requires owner authorization plus preserved license/SBOM evidence.
 - **Historical/legal evidence:** `SHA256_MANIFEST.json`, the archived one-off repair scripts in
   `docs/history/legacy/temp-scripts/`, and the archived patch evidence in
   `docs/history/legacy/patch-evidence/`.

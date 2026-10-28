@@ -1,4 +1,6 @@
-# Embedded runtime and vendor checkouts (protected; never committed or shipped as source)
+# Embedded runtime and vendor checkouts (protected; never committed or shipped as source).
+# crewAI/ is staged for review at da_eliminare/crewAI (ROOT REORG Phase C, task-46);
+# the root pattern is retained defensively for a restore or an accidental re-checkout.
 python/
 crewAI/
 crewAI-tools/

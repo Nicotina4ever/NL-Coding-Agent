@@ -25,6 +25,14 @@ release builder.
 ## Current contents
 
 - `README.md` — this policy note (the only tracked file).
-- No repository material has been staged here yet: Phase A left no proven-unnecessary
-  tracked root leftovers after moving the one-off repair scripts to
+- `crewAI/` — reference-only upstream CrewAI checkout (38,926 files / 807,816,022 B, including
+  its nested `.git`), staged on 2026-10-28 by ROOT REORG Phase C (shared task-46). It is not
+  imported by the application (the installed `crewai==1.15.32` package is the runtime), was moved
+  here intact (never deleted, copied or rewritten), and its contents remain git-ignored and
+  excluded from the portable payload and source release builder. Evidence, reversible restore and
+  the open authorization item: [`../docs/CREWAI_CHECKOUT_REMOVAL_PROPOSAL.md`](../docs/CREWAI_CHECKOUT_REMOVAL_PROPOSAL.md).
+  The SBOM/legal gate reads `crewAI/LICENSE` from this staged location; permanent deletion needs
+  the owner to preserve that license evidence and authorize removal. Restore by moving the folder
+  back to `crewAI/`.
+- No other repository material is staged here: Phase A moved the one-off repair scripts to
   `docs/history/legacy/temp-scripts/` and the extra launchers to `scripts/launchers/`.

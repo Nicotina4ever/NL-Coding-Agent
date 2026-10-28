@@ -3,8 +3,11 @@
 ## Status
 
 Native runtime integration is the second step in the distribution goal. The application uses the
-`crewai` package installed in the embedded Python runtime; the repository's `crewAI/` directory
-remains vendor/reference source only. No vendor files are deleted, moved, or rewritten.
+`crewai` package installed in the embedded Python runtime; the vendor/reference checkout is
+reference-only and, since ROOT REORG Phase C (task-46, 2026-10-28), is staged at
+`da_eliminare/crewAI/` after read-only evidence proved the application never imports it. It was
+moved (never deleted, copied or rewritten); the move is reversible and the checkout keeps its
+nested `.git`, docs and license. See `docs/CREWAI_CHECKOUT_REMOVAL_PROPOSAL.md`.
 
 ## Pinned Version
 
@@ -42,21 +45,22 @@ historical evidence. The runtime currently lives under the canonical repository 
 `K:\AI\NL Coding Agent\python\Lib\site-packages`.
 
 `tests/test_crewai_runtime.py` asserts that the imported package lives under the runtime's
-`site-packages` directory, is not inside the repository's `crewAI/` checkout, and reports the
-pinned version.
+`site-packages` directory, is not inside the vendor checkout (now staged at
+`da_eliminare/crewAI/`), and reports the pinned version.
 
 ## Vendor Checkout Policy
 
-- `crewAI/` is protected vendor/reference source. It is not imported by the application.
-- Excluding `crewAI/` from a portable payload is the intended size reduction; deleting or
-  rewriting the checkout requires explicit user approval.
+- `da_eliminare/crewAI/` is the reference-only upstream CrewAI checkout (own `.git`). It was
+  moved there intact by ROOT REORG Phase C (task-46) and is not imported by the application.
+- Excluding it from portable payloads and source releases remains in place; deleting the staged
+  checkout requires explicit repository-owner authorization (see the proposal document).
 - `crewAI-tools/` is absent from this workspace at audit time. If it is restored later, the same
-  protected-vendor policy applies.
+  protected-vendor/staging policy applies.
 
 ## License Follow-Up
 
 Before distribution, include the upstream CrewAI license and copyright notice in the payload.
-The vendored `crewAI/LICENSE` contains the CrewAI copyright notice and an MIT-style permission
+The staged vendor `da_eliminare/crewAI/LICENSE` contains the CrewAI copyright notice and an MIT-style permission
 grant. This is not a complete third-party license audit: transitive Python dependencies,
 PySide6/Qt, and any bundled tools must be audited separately, and model weights are licensed
 separately from the application.
@@ -82,7 +86,7 @@ files sha256, import-path evidence, API compatibility baseline and license evide
 
 Measured license gap: installed ```crewai```, ```crewai-core``` and ```crewai-cli``` metadata report
 ```License=None``` (no License-Expression). Upstream/reference MIT text and copyright line are
-recorded from ```crewAI/LICENSE``` (sha256 in the SBOM); manual/legal review of transitive
+recorded from ```da_eliminare/crewAI/LICENSE``` (sha256 in the SBOM; path updated by the Phase C staging); manual/legal review of transitive
 dependencies remains required before distribution.
 
 Telemetry/storage: ```crew_runtime_env()``` sets PYTHONUTF8, PYTHONIOENCODING=utf-8, NO_COLOR,

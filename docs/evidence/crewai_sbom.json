@@ -334,7 +334,7 @@
     ],
     "vendor_license": {
       "copyright_line": "Copyright (c) 2025 crewAI, Inc.",
-      "path": "crewAI/LICENSE",
+      "path": "da_eliminare/crewAI/LICENSE",
       "present": true,
       "sha256": "28868731966f4aa37f02879839aabc797137e27ddde4e274ef9cf965f9a71774"
     }

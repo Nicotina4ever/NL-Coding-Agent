@@ -160,20 +160,33 @@ def _pyproject_pins() -> dict:
 
 
 def _vendor_license_evidence() -> dict:
-    path = REPO_ROOT / "crewAI" / "LICENSE"
-    if not path.is_file():
-        return {"path": "crewAI/LICENSE", "present": False, "sha256": None,
-                "copyright_line": None}
-    text = path.read_text(encoding="utf-8", errors="replace")
-    copyright_line = next(
-        (line.strip() for line in text.splitlines() if "copyright" in line.lower()),
-        None,
+    """Locate the upstream vendor MIT license without requiring a specific root.
+
+    The vendor checkout is reference-only; ROOT REORG Phase C (task-46) staged it
+    under da_eliminare/crewAI. Check both locations so the evidence gate stays
+    honest before and after a reversible move, and fail closed if neither exists
+    (a future authorized deletion must preserve tracked license evidence first).
+    """
+    candidates = (
+        REPO_ROOT / "crewAI" / "LICENSE",
+        REPO_ROOT / "da_eliminare" / "crewAI" / "LICENSE",
     )
-    return {
-        "path": "crewAI/LICENSE", "present": True,
-        "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
-        "copyright_line": copyright_line,
-    }
+    for path in candidates:
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        copyright_line = next(
+            (line.strip() for line in text.splitlines() if "copyright" in line.lower()),
+            None,
+        )
+        return {
+            "path": path.relative_to(REPO_ROOT).as_posix(),
+            "present": True,
+            "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+            "copyright_line": copyright_line,
+        }
+    return {"path": "crewAI/LICENSE", "present": False, "sha256": None,
+            "copyright_line": None}
 
 
 def _api_compat() -> list[dict]:
