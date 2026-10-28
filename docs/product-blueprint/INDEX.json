@@ -92,7 +92,12 @@
       ],
       "primary_source": "specifiche/01_ARCHITETTURA_E_RUNTIME.md; docs/CREWAI_RUNTIME.md",
       "note": "Vendor checkout is not the import source; the embedded runtime site-packages is.",
-      "backlog_anchor": "nl-bp-001"
+      "backlog_anchor": "nl-bp-001",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-002",
@@ -123,7 +128,12 @@
       ],
       "primary_source": "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
       "note": "The 467 MiB crewAI/ checkout is reference-only and excluded from staging.",
-      "backlog_anchor": "nl-bp-002"
+      "backlog_anchor": "nl-bp-002",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-003",
@@ -156,7 +166,12 @@
       ],
       "primary_source": "specifiche/02_SELF_BUILD_E_RECOVERY.md",
       "note": "Pipeline code exists and historical missions were executed with local models, but the current run was not re-verified end-to-end and Phase 2 is rewiring its internals.",
-      "backlog_anchor": "nl-bp-003"
+      "backlog_anchor": "nl-bp-003",
+      "program_stage": 2,
+      "program_stage_name": "Transactional staging, safety and self-healing",
+      "program_stage_dependencies": [
+        1
+      ]
     },
     {
       "id": "NL-BP-004",
@@ -186,7 +201,12 @@
       ],
       "primary_source": "specifiche/07_QUALITY_GATES_E_BENCHMARK.md",
       "note": "Tester failure raises before review and the reviewer parser defaults to REJECT, but the SH-04 adversarial case (red oracle with weakened tests) is only planned, and the post-hoc runner gate is fail-open on exceptions.",
-      "backlog_anchor": "nl-bp-004"
+      "backlog_anchor": "nl-bp-004",
+      "program_stage": 2,
+      "program_stage_name": "Transactional staging, safety and self-healing",
+      "program_stage_dependencies": [
+        1
+      ]
     },
     {
       "id": "NL-BP-005",
@@ -216,7 +236,12 @@
       ],
       "primary_source": "docs/05_ORCHESTRATION.md",
       "note": "The reviewer is an additional LLM gate with persisted verdict; the deterministic independent oracle that outranks it is not wired.",
-      "backlog_anchor": "nl-bp-005"
+      "backlog_anchor": "nl-bp-005",
+      "program_stage": 2,
+      "program_stage_name": "Transactional staging, safety and self-healing",
+      "program_stage_dependencies": [
+        1
+      ]
     },
     {
       "id": "NL-BP-006",
@@ -244,7 +269,12 @@
       ],
       "primary_source": "FINAL-REQ/area-1 (direct final-product requirement)",
       "note": "Only an import smoke test exists (from crewai.flow.flow import Flow). No production Flow is used.",
-      "backlog_anchor": "nl-bp-006"
+      "backlog_anchor": "nl-bp-006",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-007",
@@ -273,7 +303,12 @@
       ],
       "primary_source": "FINAL-REQ/area-1 (direct final-product requirement)",
       "note": "Requires the Flow foundation plus durable mission state from area 3.",
-      "backlog_anchor": "nl-bp-007"
+      "backlog_anchor": "nl-bp-007",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-008",
@@ -304,7 +339,12 @@
       ],
       "primary_source": "specifiche/05_MODEL_HUB_PROVIDERS.md",
       "note": "Ollama and OpenAI-compatible adapters are implemented and unit-tested; LM Studio/llama.cpp are reachable through the generic OpenAI-compatible adapter but have no presets.",
-      "backlog_anchor": "nl-bp-008"
+      "backlog_anchor": "nl-bp-008",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-009",
@@ -333,7 +373,12 @@
       ],
       "primary_source": "specifiche/05_MODEL_HUB_PROVIDERS.md",
       "note": "OpenAI compatibility is not treated as proof of tool calling or multimodal support; capability probing is entirely absent.",
-      "backlog_anchor": "nl-bp-009"
+      "backlog_anchor": "nl-bp-009",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-010",
@@ -364,7 +409,12 @@
       ],
       "primary_source": "specifiche/05_MODEL_HUB_PROVIDERS.md",
       "note": "CLI per-mission overrides and a global config file exist; GUI mapping is read-only and project-level mapping is not persisted.",
-      "backlog_anchor": "nl-bp-010"
+      "backlog_anchor": "nl-bp-010",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-011",
@@ -393,7 +443,12 @@
       ],
       "primary_source": "specifiche/18_SQLITE_SCHEMA_E_STATI.md",
       "note": "Stage handoffs record the model name; sampling parameters, provider version and a mission-level config snapshot are not persisted as first-class rows.",
-      "backlog_anchor": "nl-bp-011"
+      "backlog_anchor": "nl-bp-011",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-012",
@@ -423,7 +478,12 @@
       ],
       "primary_source": "docs/05_ORCHESTRATION.md",
       "note": "Handoff rows are the durable communication contract between stages.",
-      "backlog_anchor": "nl-bp-012"
+      "backlog_anchor": "nl-bp-012",
+      "program_stage": 3,
+      "program_stage_name": "Persistent autonomous supervisor and verified handoff",
+      "program_stage_dependencies": [
+        2
+      ]
     },
     {
       "id": "NL-BP-013",
@@ -449,7 +509,12 @@
       ],
       "primary_source": "specifiche/01_ARCHITETTURA_E_RUNTIME.md",
       "note": "Vendor code is not patched; decoding is handled at the tool/log boundary.",
-      "backlog_anchor": "nl-bp-013"
+      "backlog_anchor": "nl-bp-013",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-020",
@@ -478,7 +543,12 @@
       ],
       "primary_source": "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
       "note": "Brand assets are the real ones (LogoMio.svg + theme.tokens.json); no glow on text is implemented in stylesheet but final visual review remains human.",
-      "backlog_anchor": "nl-bp-020"
+      "backlog_anchor": "nl-bp-020",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-021",
@@ -507,7 +577,12 @@
       ],
       "primary_source": "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
       "note": "Six pages and resizable splitters exist; per-project layout persistence is missing.",
-      "backlog_anchor": "nl-bp-021"
+      "backlog_anchor": "nl-bp-021",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-022",
@@ -536,7 +611,12 @@
       ],
       "primary_source": "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
       "note": "Read-only display only; user-editable settings and self-build controls are absent.",
-      "backlog_anchor": "nl-bp-022"
+      "backlog_anchor": "nl-bp-022",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-023",
@@ -566,7 +646,12 @@
       ],
       "primary_source": "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
       "note": "Explicit UX decision: no prominent self-build CTA on the home screen; controls belong in Advanced settings.",
-      "backlog_anchor": "nl-bp-023"
+      "backlog_anchor": "nl-bp-023",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-024",
@@ -595,7 +680,12 @@
       ],
       "primary_source": "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md",
       "note": "Safety requirement before unattended autonomy: the user must be able to interrupt a run without killing external processes.",
-      "backlog_anchor": "nl-bp-024"
+      "backlog_anchor": "nl-bp-024",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-025",
@@ -624,7 +714,12 @@
       ],
       "primary_source": "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
       "note": "Project panel can create a mission from a single-line goal dialog and the task board can run/resume; no GUI test covers a mission run.",
-      "backlog_anchor": "nl-bp-025"
+      "backlog_anchor": "nl-bp-025",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-026",
@@ -653,7 +748,12 @@
       ],
       "primary_source": "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
       "note": "There is no chat surface at all today: only a single-line goal dialog.",
-      "backlog_anchor": "nl-bp-026"
+      "backlog_anchor": "nl-bp-026",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-027",
@@ -681,7 +781,12 @@
       ],
       "primary_source": "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
       "note": "Release acceptance criterion 4 explicitly requires Windows screenshot paste.",
-      "backlog_anchor": "nl-bp-027"
+      "backlog_anchor": "nl-bp-027",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-028",
@@ -708,7 +813,12 @@
       ],
       "primary_source": "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
       "note": "Atomic UX requirement from final area 2; nothing implemented.",
-      "backlog_anchor": "nl-bp-028"
+      "backlog_anchor": "nl-bp-028",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-029",
@@ -737,7 +847,12 @@
       ],
       "primary_source": "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
       "note": "Requires a media_attachments table and content-addressed storage in app data, not project source.",
-      "backlog_anchor": "nl-bp-029"
+      "backlog_anchor": "nl-bp-029",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-030",
@@ -764,7 +879,12 @@
       ],
       "primary_source": "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
       "note": "Separate adapters per media family; archive extraction must be traversal/zip-bomb safe.",
-      "backlog_anchor": "nl-bp-030"
+      "backlog_anchor": "nl-bp-030",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-031",
@@ -794,7 +914,12 @@
       ],
       "primary_source": "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
       "note": "Vision support must come from the capability registry, never from 'OpenAI-compatible' assumptions.",
-      "backlog_anchor": "nl-bp-031"
+      "backlog_anchor": "nl-bp-031",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-032",
@@ -822,7 +947,12 @@
       ],
       "primary_source": "specifiche/09_MULTIMODAL_CHAT_E_ALLEGATI.md",
       "note": "FFmpeg/audio tooling is not integrated; no media modules exist.",
-      "backlog_anchor": "nl-bp-032"
+      "backlog_anchor": "nl-bp-032",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-033",
@@ -850,7 +980,12 @@
       ],
       "primary_source": "specifiche/10_SPEECH_ASR_MODELS.md",
       "note": "Release acceptance criterion 5: mic + local transcription must work.",
-      "backlog_anchor": "nl-bp-033"
+      "backlog_anchor": "nl-bp-033",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-034",
@@ -877,7 +1012,12 @@
       ],
       "primary_source": "FINAL-REQ/area-2 (direct final-product requirement)",
       "note": "Optional capability; must never block text/mic operation when absent.",
-      "backlog_anchor": "nl-bp-034"
+      "backlog_anchor": "nl-bp-034",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-035",
@@ -905,7 +1045,12 @@
       ],
       "primary_source": "specifiche/10_SPEECH_ASR_MODELS.md",
       "note": "Only a static placeholder tab exists; at minimum one local engine must back mic transcription for release.",
-      "backlog_anchor": "nl-bp-035"
+      "backlog_anchor": "nl-bp-035",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-036",
@@ -934,7 +1079,12 @@
       ],
       "primary_source": "specifiche/14_STORAGE_E_MODEL_LIFECYCLE.md",
       "note": "Backend unload exists; the GUI model surfaces are read-only status tables with no lifecycle actions.",
-      "backlog_anchor": "nl-bp-036"
+      "backlog_anchor": "nl-bp-036",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-037",
@@ -962,7 +1112,12 @@
       ],
       "primary_source": "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
       "note": "Current Files panel is a read-only viewer; editor component choice (Monaco/WebEngine vs CodeMirror 6) must be evaluated on size, performance, licensing.",
-      "backlog_anchor": "nl-bp-037"
+      "backlog_anchor": "nl-bp-037",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-038",
@@ -989,7 +1144,12 @@
       ],
       "primary_source": "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
       "note": "Backend shell helper exists but is not a sandbox; terminal UI must be policy-gated.",
-      "backlog_anchor": "nl-bp-038"
+      "backlog_anchor": "nl-bp-038",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-039",
@@ -1016,7 +1176,12 @@
       ],
       "primary_source": "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
       "note": "git_tools backend exists for status/diff; no GUI.",
-      "backlog_anchor": "nl-bp-039"
+      "backlog_anchor": "nl-bp-039",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-040",
@@ -1044,7 +1209,12 @@
       ],
       "primary_source": "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
       "note": "No test explorer/problems/debugger surface exists; mission evidence is visible in the task board.",
-      "backlog_anchor": "nl-bp-040"
+      "backlog_anchor": "nl-bp-040",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-041",
@@ -1071,7 +1241,12 @@
       ],
       "primary_source": "specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md",
       "note": "No LSP client or language-server management exists.",
-      "backlog_anchor": "nl-bp-041"
+      "backlog_anchor": "nl-bp-041",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-042",
@@ -1098,7 +1273,12 @@
       ],
       "primary_source": "FINAL-REQ/area-2 (direct final-product requirement)",
       "note": "MCP appears in the final area 2 list; no client/registry exists.",
-      "backlog_anchor": "nl-bp-042"
+      "backlog_anchor": "nl-bp-042",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-043",
@@ -1126,7 +1306,12 @@
       ],
       "primary_source": "specifiche/12_PROJECT_DISCOVERY.md",
       "note": "A filtered read-only file browser exists; search/index/semantic retrieval do not.",
-      "backlog_anchor": "nl-bp-043"
+      "backlog_anchor": "nl-bp-043",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-044",
@@ -1153,7 +1338,12 @@
       ],
       "primary_source": "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
       "note": "Theme defines focus states, but no accessibility verification or command palette exists.",
-      "backlog_anchor": "nl-bp-044"
+      "backlog_anchor": "nl-bp-044",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-045",
@@ -1182,7 +1372,12 @@
       ],
       "primary_source": "specifiche/08_GUI_STUDIO_E_ADVANCED_SETTINGS.md",
       "note": "Model discovery runs in a worker and has error/empty labels; there is no systematic state design or latency test.",
-      "backlog_anchor": "nl-bp-045"
+      "backlog_anchor": "nl-bp-045",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-046",
@@ -1212,7 +1407,12 @@
       ],
       "primary_source": "docs/03_GUI_SPEC.md",
       "note": "Projects, task board, agents and inspector panels exist; project dashboard with Git state and unresolved manual checks is missing.",
-      "backlog_anchor": "nl-bp-046"
+      "backlog_anchor": "nl-bp-046",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-050",
@@ -1242,7 +1442,12 @@
       ],
       "primary_source": "specifiche/03_GOALS_MILESTONES_TASKS.md",
       "note": "Missions/tasks/task_attempts already exist and are persistent; the Goals and Milestones layers and their CRUD/UI do not exist.",
-      "backlog_anchor": "nl-bp-050"
+      "backlog_anchor": "nl-bp-050",
+      "program_stage": 3,
+      "program_stage_name": "Persistent autonomous supervisor and verified handoff",
+      "program_stage_dependencies": [
+        2
+      ]
     },
     {
       "id": "NL-BP-051",
@@ -1275,7 +1480,12 @@
       ],
       "primary_source": "specifiche/02_SELF_BUILD_E_RECOVERY.md",
       "note": "Resume, baseline persistence and reconciliation are implemented and exercised live (#40/#41), but double-write prevention is not proven by an automated crash test.",
-      "backlog_anchor": "nl-bp-051"
+      "backlog_anchor": "nl-bp-051",
+      "program_stage": 3,
+      "program_stage_name": "Persistent autonomous supervisor and verified handoff",
+      "program_stage_dependencies": [
+        2
+      ]
     },
     {
       "id": "NL-BP-052",
@@ -1302,7 +1512,12 @@
       ],
       "primary_source": "nl_coding_agent/core/mission_lock.py (implementation)",
       "note": "Implementation exists and stale-pid recovery is coded; no contention test proves it.",
-      "backlog_anchor": "nl-bp-052"
+      "backlog_anchor": "nl-bp-052",
+      "program_stage": 3,
+      "program_stage_name": "Persistent autonomous supervisor and verified handoff",
+      "program_stage_dependencies": [
+        2
+      ]
     },
     {
       "id": "NL-BP-053",
@@ -1331,7 +1546,12 @@
       ],
       "primary_source": "specifiche/03_GOALS_MILESTONES_TASKS.md",
       "note": "Unit-verified at the graph layer; not yet enforced by the live orchestrator for parallel workstreams.",
-      "backlog_anchor": "nl-bp-053"
+      "backlog_anchor": "nl-bp-053",
+      "program_stage": 3,
+      "program_stage_name": "Persistent autonomous supervisor and verified handoff",
+      "program_stage_dependencies": [
+        2
+      ]
     },
     {
       "id": "NL-BP-054",
@@ -1361,7 +1581,12 @@
       ],
       "primary_source": "specifiche/07_QUALITY_GATES_E_BENCHMARK.md",
       "note": "The orchestrator finalizes completed only after tester success and reviewer APPROVE; the independent deterministic oracle from NL-BP-058 is required for full compliance.",
-      "backlog_anchor": "nl-bp-054"
+      "backlog_anchor": "nl-bp-054",
+      "program_stage": 2,
+      "program_stage_name": "Transactional staging, safety and self-healing",
+      "program_stage_dependencies": [
+        1
+      ]
     },
     {
       "id": "NL-BP-055",
@@ -1393,7 +1618,12 @@
       ],
       "primary_source": "specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
       "note": "BLOCKED on integration: staging_broker v2, promotion.py (C3) and candidate_verification.py (C4) are implemented and tested standalone; the orchestrator still does not import them (grep 0), so model writes reach the live root. This is the core Phase 2 (task-6) gap.",
-      "backlog_anchor": "nl-bp-055"
+      "backlog_anchor": "nl-bp-055",
+      "program_stage": 2,
+      "program_stage_name": "Transactional staging, safety and self-healing",
+      "program_stage_dependencies": [
+        1
+      ]
     },
     {
       "id": "NL-BP-056",
@@ -1424,7 +1654,12 @@
       ],
       "primary_source": "specifiche/02A_RECOVERY_POINTS_ROLLBACK_CACHE.md",
       "note": "BLOCKED: recovery_store v2 is implemented and unit-tested but has no call site in the orchestrator; the only call is the post-hoc gate in selfbuild_runner.py.",
-      "backlog_anchor": "nl-bp-056"
+      "backlog_anchor": "nl-bp-056",
+      "program_stage": 2,
+      "program_stage_name": "Transactional staging, safety and self-healing",
+      "program_stage_dependencies": [
+        1
+      ]
     },
     {
       "id": "NL-BP-057",
@@ -1456,7 +1691,12 @@
       ],
       "primary_source": "specifiche/27_SELF_CHANGE_GATES_AND_DEPLOY.md",
       "note": "BLOCKED: AST detection exists and works at broker level, but the promotion path is not wired; the runner gate runs after the mission already wrote the live tree and is fail-open on unexpected exceptions.",
-      "backlog_anchor": "nl-bp-057"
+      "backlog_anchor": "nl-bp-057",
+      "program_stage": 2,
+      "program_stage_name": "Transactional staging, safety and self-healing",
+      "program_stage_dependencies": [
+        1
+      ]
     },
     {
       "id": "NL-BP-058",
@@ -1486,7 +1726,12 @@
       ],
       "primary_source": "specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
       "note": "Module and tests landed (C4) but the orchestrator does not call them yet (C6b pending); the oracle gate therefore still does not protect live missions.",
-      "backlog_anchor": "nl-bp-058"
+      "backlog_anchor": "nl-bp-058",
+      "program_stage": 2,
+      "program_stage_name": "Transactional staging, safety and self-healing",
+      "program_stage_dependencies": [
+        1
+      ]
     },
     {
       "id": "NL-BP-059",
@@ -1517,7 +1762,12 @@
       ],
       "primary_source": "specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
       "note": "Promotion module, journal/CAS tests and DB columns landed (C3/C5); the orchestrator promotion call and finalize split (C6c) are still pending, so the live path does not use them.",
-      "backlog_anchor": "nl-bp-059"
+      "backlog_anchor": "nl-bp-059",
+      "program_stage": 2,
+      "program_stage_name": "Transactional staging, safety and self-healing",
+      "program_stage_dependencies": [
+        1
+      ]
     },
     {
       "id": "NL-BP-060",
@@ -1548,7 +1798,12 @@
       ],
       "primary_source": "specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
       "note": "Mostly enforced at orchestrator level and in DB history; the runner still post-processes results and the fail-open exception path remains.",
-      "backlog_anchor": "nl-bp-060"
+      "backlog_anchor": "nl-bp-060",
+      "program_stage": 2,
+      "program_stage_name": "Transactional staging, safety and self-healing",
+      "program_stage_dependencies": [
+        1
+      ]
     },
     {
       "id": "NL-BP-061",
@@ -1580,7 +1835,12 @@
       ],
       "primary_source": "specifiche/21_SUPERVISORE_PERSISTENTE_AUTONOMIA.md",
       "note": "A bounded autonomous runner exists (plain loop, state JSON, lock); it is not an always-on supervisor and lacks lease/heartbeat/preflight.",
-      "backlog_anchor": "nl-bp-061"
+      "backlog_anchor": "nl-bp-061",
+      "program_stage": 3,
+      "program_stage_name": "Persistent autonomous supervisor and verified handoff",
+      "program_stage_dependencies": [
+        2
+      ]
     },
     {
       "id": "NL-BP-062",
@@ -1610,7 +1870,12 @@
       ],
       "primary_source": "specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md",
       "note": "A small planner exists (parses the checklist, writes a roadmap mission) but it is dead code: nothing imports it, and the runner still consumes the fixed Markdown roadmap.",
-      "backlog_anchor": "nl-bp-062"
+      "backlog_anchor": "nl-bp-062",
+      "program_stage": 3,
+      "program_stage_name": "Persistent autonomous supervisor and verified handoff",
+      "program_stage_dependencies": [
+        2
+      ]
     },
     {
       "id": "NL-BP-063",
@@ -1646,7 +1911,12 @@
       ],
       "primary_source": "specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
       "note": "BLOCKED by the harness integration and by recorded real incidents: #42/#43 needed manual restoration of stub-overwritten files; #44 blocked; #45 blocked after live overwrite.",
-      "backlog_anchor": "nl-bp-063"
+      "backlog_anchor": "nl-bp-063",
+      "program_stage": 3,
+      "program_stage_name": "Persistent autonomous supervisor and verified handoff",
+      "program_stage_dependencies": [
+        2
+      ]
     },
     {
       "id": "NL-BP-064",
@@ -1674,7 +1944,12 @@
       ],
       "primary_source": "specifiche/26_AUTONOMOUS_BACKLOG_EXECUTION.md",
       "note": "Only CLI flags exist; modes, budgets and approval policies are not implemented or persisted.",
-      "backlog_anchor": "nl-bp-064"
+      "backlog_anchor": "nl-bp-064",
+      "program_stage": 3,
+      "program_stage_name": "Persistent autonomous supervisor and verified handoff",
+      "program_stage_dependencies": [
+        2
+      ]
     },
     {
       "id": "NL-BP-065",
@@ -1702,7 +1977,12 @@
       ],
       "primary_source": "specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
       "note": "A tester->debugger retry loop with max_retries=2 exists; structured failure signatures, dead-letter and strategy changes are missing.",
-      "backlog_anchor": "nl-bp-065"
+      "backlog_anchor": "nl-bp-065",
+      "program_stage": 2,
+      "program_stage_name": "Transactional staging, safety and self-healing",
+      "program_stage_dependencies": [
+        1
+      ]
     },
     {
       "id": "NL-BP-066",
@@ -1730,7 +2010,12 @@
       ],
       "primary_source": "specifiche/04_AGENT_FACTORY_E_TEAM_DINAMICI.md",
       "note": "Orchestrator currently has fixed Developer/Tester/Debugger/Reviewer roles; no team composition analysis.",
-      "backlog_anchor": "nl-bp-066"
+      "backlog_anchor": "nl-bp-066",
+      "program_stage": 3,
+      "program_stage_name": "Persistent autonomous supervisor and verified handoff",
+      "program_stage_dependencies": [
+        2
+      ]
     },
     {
       "id": "NL-BP-067",
@@ -1760,7 +2045,12 @@
       ],
       "primary_source": "specifiche/06_MODEL_ADVISOR_E_PARAMETRI.md",
       "note": "Tied to the Model Advisor and Competence Index; no decorative button shipped.",
-      "backlog_anchor": "nl-bp-067"
+      "backlog_anchor": "nl-bp-067",
+      "program_stage": 3,
+      "program_stage_name": "Persistent autonomous supervisor and verified handoff",
+      "program_stage_dependencies": [
+        2
+      ]
     },
     {
       "id": "NL-BP-068",
@@ -1791,7 +2081,12 @@
       ],
       "primary_source": "specifiche/06_MODEL_ADVISOR_E_PARAMETRI.md",
       "note": "Final release criterion 8 (evidence-based selection) depends on this component.",
-      "backlog_anchor": "nl-bp-068"
+      "backlog_anchor": "nl-bp-068",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-069",
@@ -1820,7 +2115,12 @@
       ],
       "primary_source": "specifiche/22_MODEL_AGENT_COMPETENCE_INDEX.md",
       "note": "Needed for evidence-based model selection; no benchmark tables or runs exist.",
-      "backlog_anchor": "nl-bp-069"
+      "backlog_anchor": "nl-bp-069",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-070",
@@ -1848,7 +2148,12 @@
       ],
       "primary_source": "specifiche/13_RESOURCE_SCHEDULER.md",
       "note": "A sequential worker scheduler and Ollama list/ps/stop helpers exist; scheduling decisions do not consume measured VRAM pressure or unload idle owned models automatically.",
-      "backlog_anchor": "nl-bp-070"
+      "backlog_anchor": "nl-bp-070",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-071",
@@ -1877,7 +2182,12 @@
       ],
       "primary_source": "specifiche/13A_GPU_CONTENTION_CLOUD_FALLBACK.md",
       "note": "No contention detection, adaptive timeouts or cloud policy engine exists.",
-      "backlog_anchor": "nl-bp-071"
+      "backlog_anchor": "nl-bp-071",
+      "program_stage": 4,
+      "program_stage_name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+      "program_stage_dependencies": [
+        3
+      ]
     },
     {
       "id": "NL-BP-072",
@@ -1906,7 +2216,12 @@
       ],
       "primary_source": "specifiche/25_PERMISSIONS_AND_EXTERNAL_TOOLS.md",
       "note": "Only filesystem scope checks exist today; arbitrary shell is bounded by cwd only and is not an OS sandbox.",
-      "backlog_anchor": "nl-bp-072"
+      "backlog_anchor": "nl-bp-072",
+      "program_stage": 2,
+      "program_stage_name": "Transactional staging, safety and self-healing",
+      "program_stage_dependencies": [
+        1
+      ]
     },
     {
       "id": "NL-BP-073",
@@ -1933,7 +2248,12 @@
       ],
       "primary_source": "specifiche/25_PERMISSIONS_AND_EXTERNAL_TOOLS.md",
       "note": "Universal tool registry does not exist; only internal Python tool wrappers.",
-      "backlog_anchor": "nl-bp-073"
+      "backlog_anchor": "nl-bp-073",
+      "program_stage": 2,
+      "program_stage_name": "Transactional staging, safety and self-healing",
+      "program_stage_dependencies": [
+        1
+      ]
     },
     {
       "id": "NL-BP-074",
@@ -1962,7 +2282,12 @@
       ],
       "primary_source": "specifiche/28_SELF_HEALING_AGENT_HARNESS.md",
       "note": "C2 reduced the model tool set to read_file/write_file/patch_file/list_dir; disclosure of the staged-harness/no-OS-sandbox boundary in product docs is still pending (Phase 2 C8).",
-      "backlog_anchor": "nl-bp-074"
+      "backlog_anchor": "nl-bp-074",
+      "program_stage": 2,
+      "program_stage_name": "Transactional staging, safety and self-healing",
+      "program_stage_dependencies": [
+        1
+      ]
     },
     {
       "id": "NL-BP-075",
@@ -1990,7 +2315,12 @@
       ],
       "primary_source": "specifiche/24_OPERATIONS_SUPERVISION_HEALTH_AND_DIAGNOSTICS.md",
       "note": "Structured events table and log files exist; there is no diagnostics dashboard, retry/backoff policy or dead-letter queue.",
-      "backlog_anchor": "nl-bp-075"
+      "backlog_anchor": "nl-bp-075",
+      "program_stage": 3,
+      "program_stage_name": "Persistent autonomous supervisor and verified handoff",
+      "program_stage_dependencies": [
+        2
+      ]
     },
     {
       "id": "NL-BP-076",
@@ -2019,7 +2349,12 @@
       ],
       "primary_source": "specifiche/15_SICUREZZA_E_PRIVACY.md",
       "note": "A cloud escalation flag is displayed read-only; no enforcement, consent flow or source-upload guard exists.",
-      "backlog_anchor": "nl-bp-076"
+      "backlog_anchor": "nl-bp-076",
+      "program_stage": 2,
+      "program_stage_name": "Transactional staging, safety and self-healing",
+      "program_stage_dependencies": [
+        1
+      ]
     },
     {
       "id": "NL-BP-077",
@@ -2048,7 +2383,12 @@
       ],
       "primary_source": "specifiche/12_PROJECT_DISCOVERY.md",
       "note": "One-click project opening exists with zero per-project YAML; scanner covers common stacks and project facts are persisted.",
-      "backlog_anchor": "nl-bp-077"
+      "backlog_anchor": "nl-bp-077",
+      "program_stage": 3,
+      "program_stage_name": "Persistent autonomous supervisor and verified handoff",
+      "program_stage_dependencies": [
+        2
+      ]
     },
     {
       "id": "NL-BP-090",
@@ -2075,7 +2415,12 @@
       ],
       "primary_source": "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
       "note": "Audit is read-only; it produces evidence but is not authorization to clean anything.",
-      "backlog_anchor": "nl-bp-090"
+      "backlog_anchor": "nl-bp-090",
+      "program_stage": 5,
+      "program_stage_name": "Repository cleanup and optimization",
+      "program_stage_dependencies": [
+        4
+      ]
     },
     {
       "id": "NL-BP-091",
@@ -2105,7 +2450,12 @@
       ],
       "primary_source": "AGENTS.md",
       "note": "Current K:/AI inspection shows no nl-coding-agent-portable* siblings; only the internal dist/portable-release candidate exists.",
-      "backlog_anchor": "nl-bp-091"
+      "backlog_anchor": "nl-bp-091",
+      "program_stage": 5,
+      "program_stage_name": "Repository cleanup and optimization",
+      "program_stage_dependencies": [
+        4
+      ]
     },
     {
       "id": "NL-BP-092",
@@ -2134,7 +2484,12 @@
       ],
       "primary_source": "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
       "note": "The existing dist payload is stale: its manifest records the pre-relocation source root and was built before C1/C2; it has not been re-validated against current HEAD.",
-      "backlog_anchor": "nl-bp-092"
+      "backlog_anchor": "nl-bp-092",
+      "program_stage": 5,
+      "program_stage_name": "Repository cleanup and optimization",
+      "program_stage_dependencies": [
+        4
+      ]
     },
     {
       "id": "NL-BP-093",
@@ -2164,7 +2519,12 @@
       ],
       "primary_source": "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
       "note": "Blueprint claimed three sibling portables (~1.46 GB each) plus a smoke fixture; measured current state has none. Removal provenance is not recorded in the repository, so the audit/authorization record is incomplete.",
-      "backlog_anchor": "nl-bp-093"
+      "backlog_anchor": "nl-bp-093",
+      "program_stage": 5,
+      "program_stage_name": "Repository cleanup and optimization",
+      "program_stage_dependencies": [
+        4
+      ]
     },
     {
       "id": "NL-BP-094",
@@ -2194,7 +2554,12 @@
       ],
       "primary_source": "specifiche/02A_RECOVERY_POINTS_ROLLBACK_CACHE.md",
       "note": "Policy is specified; no storage manager, trash/quarantine or archive/restore implementation exists.",
-      "backlog_anchor": "nl-bp-094"
+      "backlog_anchor": "nl-bp-094",
+      "program_stage": 5,
+      "program_stage_name": "Repository cleanup and optimization",
+      "program_stage_dependencies": [
+        4
+      ]
     },
     {
       "id": "NL-BP-095",
@@ -2223,7 +2588,12 @@
       ],
       "primary_source": "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
       "note": "Four stale temp scripts remain tracked at the repository root; caches are ignored and the working tree was clean at snapshot.",
-      "backlog_anchor": "nl-bp-095"
+      "backlog_anchor": "nl-bp-095",
+      "program_stage": 5,
+      "program_stage_name": "Repository cleanup and optimization",
+      "program_stage_dependencies": [
+        4
+      ]
     },
     {
       "id": "NL-BP-096",
@@ -2252,7 +2622,12 @@
       ],
       "primary_source": "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
       "note": "Measured duplication: 1.72 GB development runtime + 1.51 GB runtime inside the stale dist payload + 490 MB vendor crewAI checkout.",
-      "backlog_anchor": "nl-bp-096"
+      "backlog_anchor": "nl-bp-096",
+      "program_stage": 5,
+      "program_stage_name": "Repository cleanup and optimization",
+      "program_stage_dependencies": [
+        4
+      ]
     },
     {
       "id": "NL-BP-097",
@@ -2278,7 +2653,12 @@
       ],
       "primary_source": "specifiche/23_REPOSITORY_HYGIENE_BUILD_AUDIT.md",
       "note": "Only workspace rules exist; no product-side retention/naming policy is implemented or exposed.",
-      "backlog_anchor": "nl-bp-097"
+      "backlog_anchor": "nl-bp-097",
+      "program_stage": 5,
+      "program_stage_name": "Repository cleanup and optimization",
+      "program_stage_dependencies": [
+        4
+      ]
     },
     {
       "id": "NL-BP-110",
@@ -2309,7 +2689,12 @@
       ],
       "primary_source": "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
       "note": "This is staging, not an installer; it copies the development runtime rather than building a clean one.",
-      "backlog_anchor": "nl-bp-110"
+      "backlog_anchor": "nl-bp-110",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-111",
@@ -2339,7 +2724,12 @@
       ],
       "primary_source": "docs/09_DISTRIBUTION.md",
       "note": "Historical validation exists (doctor + offscreen GUI + project persistence from a temp copy), but it predates the relocation and current HEAD; the in-tree dist payload is stale.",
-      "backlog_anchor": "nl-bp-111"
+      "backlog_anchor": "nl-bp-111",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-112",
@@ -2365,7 +2755,12 @@
       ],
       "primary_source": "specifiche/14_STORAGE_E_MODEL_LIFECYCLE.md",
       "note": "Database and self-build state follow NL_DATA_DIR; launchers do not set it yet.",
-      "backlog_anchor": "nl-bp-112"
+      "backlog_anchor": "nl-bp-112",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-113",
@@ -2394,7 +2789,12 @@
       ],
       "primary_source": "docs/PORTABLE_BUILD.md",
       "note": "Requires the installer/bootstrapper; launchers currently inherit the in-tree data directory.",
-      "backlog_anchor": "nl-bp-113"
+      "backlog_anchor": "nl-bp-113",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-114",
@@ -2425,7 +2825,12 @@
       ],
       "primary_source": "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
       "note": "Nonexistent: no installer, bootstrapper or update channel code in the repository.",
-      "backlog_anchor": "nl-bp-114"
+      "backlog_anchor": "nl-bp-114",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-115",
@@ -2453,7 +2858,12 @@
       ],
       "primary_source": "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
       "note": "Design property is already true for the payload (bundled runtime, no uv dependency), but installation path selection and a clean-machine proof do not exist.",
-      "backlog_anchor": "nl-bp-115"
+      "backlog_anchor": "nl-bp-115",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-116",
@@ -2481,7 +2891,12 @@
       ],
       "primary_source": "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
       "note": "Requires installer + speech/model lifecycle; nothing implemented.",
-      "backlog_anchor": "nl-bp-116"
+      "backlog_anchor": "nl-bp-116",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-117",
@@ -2508,7 +2923,12 @@
       ],
       "primary_source": "specifiche/20_RELEASE_UPDATE_DIAGNOSTICA.md",
       "note": "Only the read-only doctor CLI exists; no repair/update/verify-installation flow.",
-      "backlog_anchor": "nl-bp-117"
+      "backlog_anchor": "nl-bp-117",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-118",
@@ -2536,7 +2956,12 @@
       ],
       "primary_source": "docs/DISTRIBUTION_AUDIT.md",
       "note": "The staged payload is 1.51 GB, almost entirely the copied development python/ tree.",
-      "backlog_anchor": "nl-bp-118"
+      "backlog_anchor": "nl-bp-118",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-119",
@@ -2565,7 +2990,12 @@
       ],
       "primary_source": "specifiche/17_WINDOWS_LINUX_MACOS.md",
       "note": "Only the Windows development runtime exists; no Linux/macOS artifacts or CI. Qt multiplatform alone is not evidence.",
-      "backlog_anchor": "nl-bp-119"
+      "backlog_anchor": "nl-bp-119",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-120",
@@ -2592,7 +3022,12 @@
       ],
       "primary_source": "specifiche/17_WINDOWS_LINUX_MACOS.md",
       "note": "Some OS-aware handling exists in tools (encoding, protected paths), but there is no adapter boundary and Windows assumptions remain.",
-      "backlog_anchor": "nl-bp-120"
+      "backlog_anchor": "nl-bp-120",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-121",
@@ -2621,7 +3056,12 @@
       ],
       "primary_source": "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
       "note": "CrewAI license follow-up is documented and the payload excludes user data/config; no NOTICE/SBOM generation or complete audit exists.",
-      "backlog_anchor": "nl-bp-121"
+      "backlog_anchor": "nl-bp-121",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-122",
@@ -2650,7 +3090,12 @@
       ],
       "primary_source": "specifiche/20_RELEASE_UPDATE_DIAGNOSTICA.md",
       "note": "crewai is pinned and a payload manifest exists, but there is no lockfile, hash manifest or scripted reproducible build.",
-      "backlog_anchor": "nl-bp-122"
+      "backlog_anchor": "nl-bp-122",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-123",
@@ -2677,7 +3122,12 @@
       ],
       "primary_source": "specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md",
       "note": "Optional channel; online lightweight bootstrapper is the primary distribution.",
-      "backlog_anchor": "nl-bp-123"
+      "backlog_anchor": "nl-bp-123",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-124",
@@ -2704,7 +3154,12 @@
       ],
       "primary_source": "specifiche/10_SPEECH_ASR_MODELS.md",
       "note": "Requires installer + speech/model management; shared Hugging Face/Ollama caches must never be deleted or duplicated blindly.",
-      "backlog_anchor": "nl-bp-124"
+      "backlog_anchor": "nl-bp-124",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-140",
@@ -2733,7 +3188,12 @@
       ],
       "primary_source": "specifiche/19_TEST_MATRIX_E_GATE.md",
       "note": "Two read-only gates exist (relocation, handoff/resume); there is no single acceptance runner covering the release criteria.",
-      "backlog_anchor": "nl-bp-140"
+      "backlog_anchor": "nl-bp-140",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-141",
@@ -2761,7 +3221,12 @@
       ],
       "primary_source": "FINAL-REQ/area-6 (release acceptance criterion 1)",
       "note": "No installer exists, so this release criterion cannot be evaluated.",
-      "backlog_anchor": "nl-bp-141"
+      "backlog_anchor": "nl-bp-141",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-142",
@@ -2790,7 +3255,12 @@
       ],
       "primary_source": "FINAL-REQ/area-6 (release acceptance criterion 2)",
       "note": "Historical payload validation was not a clean-machine acceptance and the payload is stale.",
-      "backlog_anchor": "nl-bp-142"
+      "backlog_anchor": "nl-bp-142",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-143",
@@ -2819,7 +3289,10 @@
       ],
       "primary_source": "docs/WORKSPACE_MIGRATION.md",
       "note": "Repository relocation is verified by a read-only 30-check gate; installed-app data relocation/migration is not implemented.",
-      "backlog_anchor": "nl-bp-143"
+      "backlog_anchor": "nl-bp-143",
+      "program_stage": 1,
+      "program_stage_name": "Repository relocation and path reconciliation",
+      "program_stage_dependencies": []
     },
     {
       "id": "NL-BP-144",
@@ -2848,7 +3321,12 @@
       ],
       "primary_source": "FINAL-REQ/area-6 (release acceptance criterion 4)",
       "note": "Depends on Studio multimodal chat; nothing implemented.",
-      "backlog_anchor": "nl-bp-144"
+      "backlog_anchor": "nl-bp-144",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-145",
@@ -2876,7 +3354,12 @@
       ],
       "primary_source": "FINAL-REQ/area-6 (release acceptance criterion 5)",
       "note": "Depends on the optional speech manager; at least one local engine is required for acceptance.",
-      "backlog_anchor": "nl-bp-145"
+      "backlog_anchor": "nl-bp-145",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-146",
@@ -2913,7 +3396,12 @@
       ],
       "primary_source": "FINAL-REQ/area-6 (release acceptance criterion 6)",
       "note": "BLOCKED: historical cycles ran, but the safety foundation is not wired into the runtime and the latest supervisor missions #44/#45 are blocked.",
-      "backlog_anchor": "nl-bp-146"
+      "backlog_anchor": "nl-bp-146",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-147",
@@ -2946,7 +3434,12 @@
       ],
       "primary_source": "FINAL-REQ/area-6 (release acceptance criterion 7)",
       "note": "BLOCKED: broker-level SH-01/SH-04 tests pass, but the live pipeline still writes directly to the working tree before the post-hoc gate; mission #45 is a real live overwrite incident.",
-      "backlog_anchor": "nl-bp-147"
+      "backlog_anchor": "nl-bp-147",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-148",
@@ -2978,7 +3471,12 @@
       ],
       "primary_source": "FINAL-REQ/area-6 (release acceptance criterion 8)",
       "note": "Discovery is verified; capability probes, advisor and competence evidence are missing, so selection is still static defaults.",
-      "backlog_anchor": "nl-bp-148"
+      "backlog_anchor": "nl-bp-148",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-149",
@@ -3010,7 +3508,12 @@
       ],
       "primary_source": "FINAL-REQ/area-6 (release acceptance criterion 9)",
       "note": "BLOCKED: no installer/lockfile/CI; the only candidate payload is stale and was built before the relocation and harness commits.",
-      "backlog_anchor": "nl-bp-149"
+      "backlog_anchor": "nl-bp-149",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-150",
@@ -3039,7 +3542,12 @@
       ],
       "primary_source": "specifiche/19_TEST_MATRIX_E_GATE.md",
       "note": "Measured at snapshot: 106 tests collected, 84 targeted tests passed; the full suite was deliberately not run by this consolidation (restricted safe-test scope).",
-      "backlog_anchor": "nl-bp-150"
+      "backlog_anchor": "nl-bp-150",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     },
     {
       "id": "NL-BP-151",
@@ -3070,7 +3578,12 @@
       ],
       "primary_source": "02_STATO_REALE_DA_VERIFICARE.md",
       "note": "This consolidation supplies the indexed backlog; CURRENT_STATE.md and NEXT_SELF_BUILD_MISSION.md remain stale/inconsistent and must be realigned after Phase 2.",
-      "backlog_anchor": "nl-bp-151"
+      "backlog_anchor": "nl-bp-151",
+      "program_stage": 6,
+      "program_stage_name": "Lightweight portable/bootstrapper and final release testing",
+      "program_stage_dependencies": [
+        5
+      ]
     }
   ],
   "counts": {
@@ -3181,7 +3694,23 @@
     ],
     "sources": 79,
     "dedup_groups": 98,
-    "conflicts": 11
+    "conflicts": 11,
+    "by_program_stage": {
+      "1": 1,
+      "2": 15,
+      "3": 13,
+      "4": 40,
+      "5": 8,
+      "6": 26
+    },
+    "program_stage_status": {
+      "1": "completed",
+      "2": "in_progress",
+      "3": "pending",
+      "4": "pending",
+      "5": "pending",
+      "6": "pending"
+    }
   },
   "source_inventory": [
     {
@@ -4394,6 +4923,190 @@
       "docs/PRODUCT_BACKLOG.md",
       "docs/product-blueprint/INDEX.json",
       "build/backlog/ (working notes and generator)"
+    ],
+    "2026-10-28_program_order": "2026-10-28: added authoritative 6-stage program execution order and program_stage/program_stage_dependencies on every requirement (user directive; no new requirement IDs, no duplicates)."
+  },
+  "program_order": {
+    "schema_version": 1,
+    "authoritative_source": "user execution order (2026-10-28): relocation -> staging/safety/self-healing -> supervisor/handoff -> CrewAI/model/GUI/multimodal -> cleanup -> portable/release",
+    "updated_at": "2026-10-28T16:20:00+01:00",
+    "rule": "Execute stages in numeric order. A later stage may only start when the previous stage's gates pass or the Lead records an explicit, evidence-backed exception for independent low-risk work. Requirement status is evidence-based; stage status is program-level.",
+    "stages": [
+      {
+        "stage": 1,
+        "name": "Repository relocation and path reconciliation",
+        "status": "completed",
+        "depends_on_stages": [],
+        "evidence": [
+          "docs/WORKSPACE_MIGRATION.md",
+          "scripts/verify_relocation.py (30/30 PASS, read-only)",
+          "commits d471e79, c10e769, 6cfacfa, 338def0"
+        ],
+        "requirement_ids": [
+          "NL-BP-143"
+        ]
+      },
+      {
+        "stage": 2,
+        "name": "Transactional staging, safety and self-healing",
+        "status": "in_progress",
+        "depends_on_stages": [
+          1
+        ],
+        "evidence": [
+          "commits cb5184e C1a, 451211c C1b, 8871145 C2, 7372128 C3, 10aa437 C4, 7e778da C5",
+          "docs/PHASE2_HARNESS_INTEGRATION_PLAN.md (C1a-C8)",
+          "tests/test_promotion_stage.py, tests/test_candidate_verification.py, tests/test_harness_schema.py"
+        ],
+        "requirement_ids": [
+          "NL-BP-003",
+          "NL-BP-004",
+          "NL-BP-005",
+          "NL-BP-054",
+          "NL-BP-055",
+          "NL-BP-056",
+          "NL-BP-057",
+          "NL-BP-058",
+          "NL-BP-059",
+          "NL-BP-060",
+          "NL-BP-065",
+          "NL-BP-072",
+          "NL-BP-073",
+          "NL-BP-074",
+          "NL-BP-076"
+        ]
+      },
+      {
+        "stage": 3,
+        "name": "Persistent autonomous supervisor and verified handoff",
+        "status": "pending",
+        "depends_on_stages": [
+          2
+        ],
+        "evidence": [],
+        "requirement_ids": [
+          "NL-BP-012",
+          "NL-BP-050",
+          "NL-BP-051",
+          "NL-BP-052",
+          "NL-BP-053",
+          "NL-BP-061",
+          "NL-BP-062",
+          "NL-BP-063",
+          "NL-BP-064",
+          "NL-BP-066",
+          "NL-BP-067",
+          "NL-BP-075",
+          "NL-BP-077"
+        ]
+      },
+      {
+        "stage": 4,
+        "name": "Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities",
+        "status": "pending",
+        "depends_on_stages": [
+          3
+        ],
+        "evidence": [],
+        "requirement_ids": [
+          "NL-BP-001",
+          "NL-BP-002",
+          "NL-BP-006",
+          "NL-BP-007",
+          "NL-BP-008",
+          "NL-BP-009",
+          "NL-BP-010",
+          "NL-BP-011",
+          "NL-BP-013",
+          "NL-BP-020",
+          "NL-BP-021",
+          "NL-BP-022",
+          "NL-BP-023",
+          "NL-BP-024",
+          "NL-BP-025",
+          "NL-BP-026",
+          "NL-BP-027",
+          "NL-BP-028",
+          "NL-BP-029",
+          "NL-BP-030",
+          "NL-BP-031",
+          "NL-BP-032",
+          "NL-BP-033",
+          "NL-BP-034",
+          "NL-BP-035",
+          "NL-BP-036",
+          "NL-BP-037",
+          "NL-BP-038",
+          "NL-BP-039",
+          "NL-BP-040",
+          "NL-BP-041",
+          "NL-BP-042",
+          "NL-BP-043",
+          "NL-BP-044",
+          "NL-BP-045",
+          "NL-BP-046",
+          "NL-BP-068",
+          "NL-BP-069",
+          "NL-BP-070",
+          "NL-BP-071"
+        ]
+      },
+      {
+        "stage": 5,
+        "name": "Repository cleanup and optimization",
+        "status": "pending",
+        "depends_on_stages": [
+          4
+        ],
+        "evidence": [],
+        "requirement_ids": [
+          "NL-BP-090",
+          "NL-BP-091",
+          "NL-BP-092",
+          "NL-BP-093",
+          "NL-BP-094",
+          "NL-BP-095",
+          "NL-BP-096",
+          "NL-BP-097"
+        ]
+      },
+      {
+        "stage": 6,
+        "name": "Lightweight portable/bootstrapper and final release testing",
+        "status": "pending",
+        "depends_on_stages": [
+          5
+        ],
+        "evidence": [],
+        "requirement_ids": [
+          "NL-BP-110",
+          "NL-BP-111",
+          "NL-BP-112",
+          "NL-BP-113",
+          "NL-BP-114",
+          "NL-BP-115",
+          "NL-BP-116",
+          "NL-BP-117",
+          "NL-BP-118",
+          "NL-BP-119",
+          "NL-BP-120",
+          "NL-BP-121",
+          "NL-BP-122",
+          "NL-BP-123",
+          "NL-BP-124",
+          "NL-BP-140",
+          "NL-BP-141",
+          "NL-BP-142",
+          "NL-BP-144",
+          "NL-BP-145",
+          "NL-BP-146",
+          "NL-BP-147",
+          "NL-BP-148",
+          "NL-BP-149",
+          "NL-BP-150",
+          "NL-BP-151"
+        ]
+      }
     ]
   }
 }

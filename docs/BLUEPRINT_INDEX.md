@@ -6,6 +6,17 @@ Single index of every consolidated product requirement. Each row has a stable ID
 
 **Snapshot:** 2026-10-28 16:12 Europe/Rome - git HEAD 7e778da (clean at snapshot; only the backlog deliverables untracked/modified) - Python 3.12.10 (python/python.exe) - pytest --collect-only = **134 tests collected** (full suite not run by this consolidation; Phase 2 in progress).
 
+## Program execution order (authoritative)
+
+- **Stage 1 - Repository relocation and path reconciliation**: completed (1 requirements; IDs in INDEX.json program_order)
+- **Stage 2 - Transactional staging, safety and self-healing**: in_progress (15 requirements; IDs in INDEX.json program_order)
+- **Stage 3 - Persistent autonomous supervisor and verified handoff**: pending (13 requirements; IDs in INDEX.json program_order)
+- **Stage 4 - Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities**: pending (40 requirements; IDs in INDEX.json program_order)
+- **Stage 5 - Repository cleanup and optimization**: pending (8 requirements; IDs in INDEX.json program_order)
+- **Stage 6 - Lightweight portable/bootstrapper and final release testing**: pending (26 requirements; IDs in INDEX.json program_order)
+
+Every row below carries the same requirement ID and evidence; the stage mapping is
+authoritative in docs/product-blueprint/INDEX.json (program_stage).
 ## Status legend
 
 - verified - implemented AND proven in this repository by a named test, a measured command, or both recorded in Evidence.

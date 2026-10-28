@@ -31,6 +31,28 @@
 - P2 - advanced evolution planned by the Master Blueprint; after the core release.
 - P3 - polish / optional distribution extras and long-term maintenance.
 
+## Program execution order (authoritative)
+
+This order is authoritative for sequencing the whole program. It does not create new
+requirement IDs: every NL-BP requirement below is mapped to exactly one stage
+(machine-readable in docs/product-blueprint/INDEX.json as program_order and
+program_stage), and dependencies between requirements are refined from repository
+evidence only.
+
+| Stage | Name | Status | Requirements | IDs | Depends on |
+|---|---|---|---|---|---|
+| 1 | Repository relocation and path reconciliation | COMPLETE | 1 | NL-BP-143 | - |
+| 2 | Transactional staging, safety and self-healing | IN PROGRESS | 15 | NL-BP-3-5, 54-60, 65, 72-74, 76 | 1 |
+| 3 | Persistent autonomous supervisor and verified handoff | PENDING | 13 | NL-BP-12, 50-53, 61-64, 66, 67, 75, 77 | 2 |
+| 4 | Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities | PENDING | 40 | NL-BP-1, 2, 6-11, 13, 20-46, 68-71 | 3 |
+| 5 | Repository cleanup and optimization | PENDING | 8 | NL-BP-90-97 | 4 |
+| 6 | Lightweight portable/bootstrapper and final release testing | PENDING | 26 | NL-BP-110-124, 140-142, 144-151 | 5 |
+
+Execution rule: a later stage starts only when the previous stage's gates pass, unless the
+Lead records an explicit evidence-backed exception for independent low-risk work. Stage 1 is
+complete (verified relocation: see docs/WORKSPACE_MIGRATION.md); Stage 2 is in progress
+with the audited safety-foundation harness (C1-C5 done, C6-C8 next).
+
 ## Summary
 
 | Status | P0 | P1 | P2 | P3 | Total |
