@@ -1,4 +1,4 @@
-﻿"""Project registry — open, list, remove projects via SQLite."""
+"""Project registry — open, list, remove projects via SQLite."""
 from __future__ import annotations
 
 import json
@@ -26,11 +26,27 @@ def open_project(root: str | Path) -> dict:
 
     conn = _ensure_conn()
     now = datetime.now().isoformat(timespec="seconds")
-    metadata = json.dumps({
+    # Merge with existing metadata instead of replacing it: an OPEN must not drop
+    # durable bookkeeping keys such as relocation provenance.
+    existing_metadata: dict = {}
+    existing_row = conn.execute(
+        "SELECT metadata FROM projects WHERE root=?", (str(root),)
+    ).fetchone()
+    if existing_row and existing_row["metadata"]:
+        try:
+            parsed = json.loads(existing_row["metadata"])
+        except (TypeError, ValueError):
+            parsed = None
+        if isinstance(parsed, dict):
+            existing_metadata = parsed
+    scanned_metadata = {
         "primary_language": facts["primary_language"],
         "frameworks": facts["frameworks"],
         "file_count": facts["file_count"],
-    })
+    }
+    metadata = json.dumps(
+        {**existing_metadata, **scanned_metadata}, ensure_ascii=False
+    )
 
     try:
         with conn:

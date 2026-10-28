@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from nl_coding_agent.core import relocation as rel
 
@@ -363,6 +365,93 @@ class CliTests(RelocationTestBase):
         self.assertIn("APPLIED", buffer.getvalue())
         self.assertEqual(self.project_rows()[0]["root"], rel.canonical(self.new))
         self.assertEqual(list(self.state_data()["projects"]), [rel.canonical(self.new)])
+
+
+class ProvenanceTests(RelocationTestBase):
+    def test_restore_provenance_from_migration_event(self):
+        self.make_db([{"id": 1, "name": "NL Coding Agent", "root": str(self.new), "metadata": {}}])
+        conn = sqlite3.connect(self.db)
+        try:
+            conn.execute(
+                "INSERT INTO events (source, level, message, payload) VALUES (?,?,?,?)",
+                (
+                    "migration",
+                    "info",
+                    "Project registry relocated",
+                    json.dumps({
+                        "old_root": str(self.old),
+                        "previous_name": "Coding Agent",
+                        "timestamp": "2026-10-28T15:23:01",
+                    }),
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        result = rel.restore_provenance(self.db, project_id=1)
+        self.assertTrue(result["changed"])
+        self.assertEqual(result["metadata"]["relocated_from"], str(self.old))
+        self.assertEqual(result["metadata"]["previous_name"], "Coding Agent")
+        self.assertEqual(result["metadata"]["relocated_at"], "2026-10-28T15:23:01")
+        second = rel.restore_provenance(self.db, project_id=1)
+        self.assertFalse(second["changed"])
+
+    def test_restore_provenance_requires_a_source(self):
+        self.make_db([{"id": 1, "root": str(self.new), "metadata": {}}])
+        with self.assertRaises(rel.RelocationError):
+            rel.restore_provenance(self.db)
+
+
+class RegistryMetadataTests(unittest.TestCase):
+    def test_open_project_preserves_existing_metadata(self):
+        from nl_coding_agent.persistence import database
+        from nl_coding_agent.projects.registry import open_project
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            data_dir = tmp_path / "data"
+            project_dir = tmp_path / "project"
+            project_dir.mkdir()
+            (project_dir / "README.md").write_text("# demo project" + chr(10), encoding="utf-8")
+            (project_dir / "app.py").write_text("VALUE = 1" + chr(10), encoding="utf-8")
+            previous = os.environ.get("NL_DATA_DIR")
+            os.environ["NL_DATA_DIR"] = str(data_dir)
+            try:
+                database.init_db().close()
+                conn = database.get_connection()
+                try:
+                    with conn:
+                        conn.execute(
+                            "INSERT INTO projects (id, name, root, opened_at, last_used, metadata) "
+                            "VALUES (?,?,?,?,?,?)",
+                            (
+                                1,
+                                "Old name",
+                                str(project_dir.resolve()),
+                                "2026-10-28T00:00:00",
+                                "2026-10-28T00:00:00",
+                                json.dumps({
+                                    "relocated_from": "K:\\AI\\previous",
+                                    "relocated_at": "2026-10-28T15:23:01",
+                                    "custom_provenance_key": 7,
+                                }),
+                            ),
+                        )
+                finally:
+                    conn.close()
+                record = open_project(project_dir)
+                self.assertEqual(record["id"], 1)
+                metadata = json.loads(record["metadata"])
+                self.assertEqual(metadata["relocated_from"], "K:\\AI\\previous")
+                self.assertEqual(metadata["relocated_at"], "2026-10-28T15:23:01")
+                self.assertEqual(metadata["custom_provenance_key"], 7)
+                self.assertIn("primary_language", metadata)
+                self.assertIn("file_count", metadata)
+            finally:
+                if previous is None:
+                    os.environ.pop("NL_DATA_DIR", None)
+                else:
+                    os.environ["NL_DATA_DIR"] = previous
 
 
 class ReadinessTests(RelocationTestBase):

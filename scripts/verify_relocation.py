@@ -248,6 +248,28 @@ def check_database(repo_root: Path) -> None:
     record("sqlite.canonical_root", bool(project.get("root")) and norm(project["root"]) == norm(repo_root),
            "project_id=" + str(project.get("id")) + " root=" + repr(project.get("root")))
 
+    try:
+        meta_rows = read_only_query(
+            db, "SELECT metadata FROM projects WHERE id=?", (project.get("id"),)
+        )
+        project_metadata = json.loads(meta_rows[0][0] or "{}") if meta_rows else {}
+        if not isinstance(project_metadata, dict):
+            project_metadata = {}
+    except Exception:  # noqa: BLE001
+        project_metadata = {}
+    try:
+        migration_events = int(
+            read_only_query(db, "SELECT COUNT(*) FROM events WHERE source='migration'")[0][0]
+        )
+    except Exception:  # noqa: BLE001
+        migration_events = 0
+    record(
+        "sqlite.relocation_provenance",
+        bool(project_metadata.get("relocated_from")) or migration_events > 0,
+        "projects.metadata.relocated_from=" + repr(project_metadata.get("relocated_from"))
+        + " migration_events=" + str(migration_events),
+    )
+
     projects = read_only_query(db, "SELECT id, name, root FROM projects ORDER BY id")
     record("sqlite.single_project_identity", len(projects) == 1,
            "projects=" + repr(projects))

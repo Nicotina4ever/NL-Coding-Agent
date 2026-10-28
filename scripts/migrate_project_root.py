@@ -33,6 +33,7 @@ from nl_coding_agent.core.relocation import (  # noqa: E402
     canonical,
     detect_old_root,
     format_plan,
+    restore_provenance,
     verify_identity,
 )
 
@@ -48,6 +49,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--state", help="Explicit selfbuild_state.json path (default: <data-dir>/selfbuild_state.json)")
     parser.add_argument("--name", help="Registered project name (default: new folder name)")
     parser.add_argument("--apply", action="store_true", help="Apply the migration (default is a read-only dry run)")
+    parser.add_argument(
+        "--repair-provenance",
+        action="store_true",
+        help="Re-merge relocation provenance into projects.metadata if a normal project open dropped it",
+    )
     parser.add_argument("--json", action="store_true", help="Print the full report as JSON")
     parser.add_argument("--force", action="store_true", help="Proceed even if a selfbuild.lock file exists")
     return parser
@@ -59,6 +65,24 @@ def main(argv: list[str] | None = None) -> int:
     data_dir = Path(args.data_dir).expanduser().resolve() if args.data_dir else (REPO_ROOT / "data")
     db_path = Path(args.db).expanduser().resolve() if args.db else data_dir / "nl_coding_agent.sqlite3"
     state_path = Path(args.state).expanduser().resolve() if args.state else data_dir / "selfbuild_state.json"
+
+    if args.repair_provenance:
+        try:
+            repaired = restore_provenance(db_path)
+        except RelocationError as exc:
+            print("ERROR: " + str(exc), file=sys.stderr)
+            return 2
+        if args.json:
+            print(json.dumps({"provenance_repair": repaired}, indent=2, ensure_ascii=False))
+        else:
+            print("Provenance repair: " + ("changed" if repaired["changed"] else "already present"))
+            print("  Project id: " + str(repaired["project_id"]) + " root: " + str(repaired["project_root"]))
+            print("  metadata: " + json.dumps(
+                {k: repaired["metadata"].get(k) for k in
+                 ("relocated_from", "relocated_at", "previous_name")},
+                ensure_ascii=False,
+            ))
+        return 0
 
     lock_path = data_dir / "selfbuild.lock"
     if lock_path.exists() and args.apply and not args.force:

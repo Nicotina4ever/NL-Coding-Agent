@@ -5,11 +5,15 @@
 - **Relocation state:** completed, verified and recorded.
 - **Canonical repository root:** `K:\AI\NL Coding Agent`.
 - **Folder name before the relocation:** `Coding Agent` (repository under `K:\AI`).
-- **Relocation performed:** 2026-10-28, local time `15:23:01` (SQLite event timestamp
-  `2026-10-28 14:23:01` UTC).
+- **Timeline:** the folder rename happened in place between the pre-relocation checkpoint commit
+  `84907e9` (2026-10-28 15:18:48) and the first post-rename read-only audit (15:22:21). The
+  SQLite/state identity migration was applied at local time `15:23:01` (SQLite event timestamp
+  `2026-10-28 14:23:01` UTC); documentation update and independent verification followed.
 - **Mode:** in-place folder rename plus SQLite/state identity migration. No copy of the workspace
-  was created, no source code, test, vendor runtime or external sibling project was modified, and
-  no self-build mission ran during the relocation.
+  was created; the folder rename and data-identity steps modified no source code, test, vendor
+  runtime or external sibling project, and no self-build mission ran during the relocation. The
+  relocation reconciliation that followed (commits `d471e79` / `c10e769`) did add the
+  relocation module, migration/gate scripts and their tests; see "Relocation tooling" below.
 
 This document was previously a *future migration readiness checklist*. It is now the completed
 relocation record: decision and authorization, pre-migration audit, actions performed, preserved
@@ -47,7 +51,8 @@ historical evidence, rollback procedure and verification evidence.
 ## Pre-migration audit summary
 
 Read-only inventory: `build/relocation/audit_paths.json` (generated
-`2026-10-28T15:22:21+01:00`, before the rename).
+`2026-10-28T15:22:21+01:00`, after the folder rename and before the SQLite/state data-identity
+migration).
 
 | Metric | Value |
 |---|---|
@@ -92,9 +97,11 @@ workspace-containment rules in `AGENTS.md`.
   `dc9d7903...`, and `audit_note_42` / `audit_note_43`; `relocated_from` / `relocated_at`
   metadata added.
 - **Backups:**
-  - `data/backups/relocation-20261028T152301/` — database (+`-wal`/`-shm`) and
-    `selfbuild_state.json` snapshot taken by the migration tool, plus `migration_plan.json` and
-    `migration_result.json`;
+  - `data/backups/relocation-20261028T152301/` — database snapshot taken with the SQLite
+    backup API (one consolidated `.sqlite3` file; no `-wal`/`-shm` existed at snapshot time),
+    plus `selfbuild_state.json`, `migration_plan.json` and `migration_result.json`. Any
+    `-wal`/`-shm` files visible in that folder today were materialised by later read-only
+    opens, not by the snapshot;
   - `data/backups/pre-relocation-20261028T151847/` — independent earlier snapshot of the database
     and state file.
 
@@ -131,9 +138,14 @@ describe a command:
 - `docs/COMPLETED_MISSIONS.md` — one relocation note added at the top; the mission records were
   not rewritten.
 
-Untouched by design: `nl_coding_agent/**`, `tests/**`, `scripts/**` (except this record's
-read-only evidence references), `PATCH/**`, `config/voicebridge.yaml`, `data/**` (except the
-already-completed data-identity migration), `logs/**`, `.git/**`, `assets/**`.
+Relocation tooling: the folder rename and the data-identity migration did not edit source
+code, tests, vendor runtimes, `PATCH/**`, `config/voicebridge.yaml`, `logs/**`, `.git/**` or
+`assets/**`. The reconciliation that followed (commit `d471e79`, plus the CLI fix in
+`c10e769`) added or modified the relocation tooling itself:
+`nl_coding_agent/core/relocation.py`, `nl_coding_agent/cli.py` (fail-closed self-build guard),
+`scripts/migrate_project_root.py`, `scripts/verify_relocation.py`,
+`tests/test_project_root_migration.py` and `tests/test_verify_relocation.py`; `data/`
+received only the completed data-identity migration and a provenance-metadata repair.
 
 ## Historical evidence preserved verbatim
 
@@ -176,8 +188,10 @@ Preconditions: stop NL Coding Agent and any Self-Build run; no `mission.lock` or
 `selfbuild.lock` in `data/`; do not run while a mission is active.
 
 1. **Restore the data identity** from the migration backup:
-   - copy `data/backups/relocation-20261028T152301/nl_coding_agent.sqlite3` (and the matching
-     `-wal`/`-shm` files when present) over `data/nl_coding_agent.sqlite3`;
+   - stop the application, delete any stale `data/nl_coding_agent.sqlite3-wal` and
+     `data/nl_coding_agent.sqlite3-shm`, then copy
+     `data/backups/relocation-20261028T152301/nl_coding_agent.sqlite3` over
+     `data/nl_coding_agent.sqlite3`; do not copy `-wal`/`-shm` from the backup folder;
    - copy `data/backups/relocation-20261028T152301/selfbuild_state.json` over
      `data/selfbuild_state.json`.
    If the migration backup is unavailable, use the independent snapshot in
@@ -213,7 +227,7 @@ python\python.exe scripts\verify_relocation.py --report build\relocation\verify_
 
 | Stage | Report | Result |
 |---|---|---|
-| Before relocation (pre-relocation root still live) | `build/relocation/verify_relocation_pre_migration.json` | 19 passed, **9 failed**, 1 warning |
+| Before the data-identity migration (after the folder rename) | `build/relocation/verify_relocation_pre_migration.json` | 19 passed, **9 failed**, 1 warning |
 | After data-identity migration, before the docs update | `build/relocation/verify_relocation_post_migration.json` | 27 passed, **1 failed** — only `paths.operational_docs_clean` — 1 warning |
 | After the documentation update (final) | `build/relocation/verify_relocation_final_docs.json` | 28 passed, **0 failed**, 1 warning; `RESULT: PASSED` — the warning is `git.working_tree` (uncommitted documentation changes, cleared by the checkpoint commit) |
 
@@ -232,12 +246,15 @@ Observed on the migrated workspace: `Status   : ALREADY MIGRATED (no changes req
 `Post-migration verification: OK` with project id 1 at `K:\AI\NL Coding Agent`, 15 missions
 owned and the state key equal to the canonical root.
 
-The plain form without `--old-root` exits 1 with `ERROR: No un-migrated project root found in the
-database; nothing to relocate.` on a fully migrated database, because the previous root is no
-longer inferable from the project registry. Pass `--old-root` explicitly; the previous root value
-is recorded in the SQLite migration event and in the `relocated_from` metadata. `--apply` is only
-needed to re-run the migration from a restored backup; it backs up the database and state first
-and refuses to run while `data/selfbuild.lock` exists (unless `--force` is passed).
+On a fully migrated database the plain form exits 0 and reports
+`Status   : ALREADY MIGRATED (no changes required)` with `Post-migration verification: OK`;
+`--old-root` is only needed to name a specific historical identity explicitly. The previous root
+remains recoverable from the SQLite migration event (id 75 payload), from
+`data/selfbuild_state.json` (`relocated_from`) and from the project-row metadata
+(`relocated_from`, preserved by the registry metadata-merge fix and restorable with
+`scripts/migrate_project_root.py --repair-provenance`). `--apply` is only needed to re-run the
+migration from a restored backup; it backs up the database and state first and refuses to run
+while `data/selfbuild.lock` exists (unless `--force` is passed).
 
 Full plan/apply evidence: `build/relocation/migration_plan.json` and
 `build/relocation/migration_result.json` (`applied: true`, `applied_at: 2026-10-28T15:23:01`,
@@ -246,10 +263,37 @@ backup directory, `db_result`, `state_result` and the post-apply verification bl
 ## Post-relocation verification checklist (completed)
 
 - [x] Relocation gate reports `RESULT: PASSED` with 0 failed checks.
-- [x] Migration dry run reports `ALREADY MIGRATED` (with the explicit `--old-root`, see above).
+- [x] Migration dry run reports `ALREADY MIGRATED` (plain form, and with the explicit
+  `--old-root`, see above).
 - [x] SQLite single project identity preserved with 15 owned missions and 0 orphans.
 - [x] `selfbuild_state.json` canonical key with preserved mission id, fingerprint and audit notes.
 - [x] Operational documentation, instructions and blueprint examples updated.
 - [x] Historical evidence preserved verbatim.
-- [x] No changes to source code, tests, `data/` content (outside the completed data migration),
-  `logs/`, vendor runtimes or external sibling projects.
+- [x] The folder rename and data-identity migration changed no source code, tests, `data/`
+  content (outside the completed data migration), `logs/`, vendor runtimes or external sibling
+  projects; the relocation tooling added by `d471e79`/`c10e769` is listed above.
+## Independent verification and follow-up fixes (2026-10-28)
+
+Read-only independent verification from the new root: `build/relocation/verification_report.md`
+and `build/relocation/verification_report.json`.
+
+- **Verdict:** relocation data identity **VERIFIED** — one project identity (id=1), 45 missions
+  (15 owned, 0 orphans), state key/fingerprint/mission-43/audit notes preserved, gate green on two
+  consecutive runs, fail-closed refusal of a stale pre-relocation dataset (exit 2, before any model
+  call), safe pytest baseline 90 passed, offscreen GUI smoke passed, blueprint MANIFEST 47/47
+  SHA-256 entries verified, no historical rows rewritten, no duplicate project identity.
+- **Findings and resolution:**
+  - **F1 (fixed):** `registry.open_project()` replaced the whole `projects.metadata` column, so the
+    next normal project open dropped the migration provenance keys. The registry now merges the
+    scan cache into the existing metadata; `scripts/migrate_project_root.py --repair-provenance`
+    restores missing provenance from the SQLite migration event (idempotent); the gate now checks
+    `sqlite.relocation_provenance`.
+  - **F2–F6 (fixed):** this record now distinguishes the folder rename from the 15:23:01 data-identity
+    migration, states the real backup provenance (one consolidated SQLite backup file; later
+    read-only opens materialised the `-wal`/`-shm` files), gives a safe rollback restore
+    procedure (copy the database only, remove stale `-wal`/`-shm`), scopes the "untouched by
+    design" claim to the rename/data steps and lists the relocation tooling added afterwards, and
+    points at the migration event/state file for the previous root.
+- **Remaining historical references:** unchanged and intentional (see "Known remaining historical
+  references"); the gate's operational-document scan is clean.
+

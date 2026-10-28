@@ -637,6 +637,71 @@ def verify_identity(db_path: str | Path, state_path: str | Path, new_root: str |
     return result
 
 
+def restore_provenance(
+    db_path: str | Path, project_id: int | None = None
+) -> dict:
+    """Re-merge relocation provenance into projects.metadata when it is missing.
+
+    A normal project OPEN used to replace the metadata column, which could drop the
+    relocated_from bookkeeping written by the migration. The migration event
+    payload is the durable source of truth; this repair is idempotent and never
+    changes the project root or name.
+    """
+    db = Path(db_path)
+    if not db.is_file():
+        raise RelocationError("SQLite database not found: " + str(db))
+    conn = sqlite3.connect(str(db), timeout=30)
+    conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA busy_timeout=5000")
+        rows = _project_rows(conn)
+        if project_id is not None:
+            rows = [r for r in rows if int(r["id"]) == int(project_id)]
+        if len(rows) != 1:
+            raise RelocationError(
+                "Expected exactly one project row to repair, found " + str(len(rows))
+            )
+        row = rows[0]
+        metadata = _mapping(row["metadata"])
+        payload: dict = {}
+        if _table_exists(conn, "events"):
+            event = conn.execute(
+                "SELECT payload FROM events WHERE source='migration' ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+            if event:
+                payload = _mapping(event["payload"])
+        old_root = metadata.get("relocated_from") or payload.get("old_root")
+        if not old_root:
+            raise RelocationError(
+                "No relocation provenance found: projects.metadata has no relocated_from "
+                "and no migration event exists."
+            )
+        changed = False
+        wanted = {
+            "relocated_from": old_root,
+            "relocated_at": metadata.get("relocated_at") or payload.get("timestamp"),
+            "previous_name": metadata.get("previous_name") or payload.get("previous_name"),
+        }
+        for key, value in wanted.items():
+            if value and not metadata.get(key):
+                metadata[key] = value
+                changed = True
+        if changed:
+            with conn:
+                conn.execute(
+                    "UPDATE projects SET metadata=? WHERE id=?",
+                    (json.dumps(metadata, ensure_ascii=False), row["id"]),
+                )
+        return {
+            "changed": changed,
+            "project_id": row["id"],
+            "project_root": row["root"],
+            "metadata": metadata,
+        }
+    finally:
+        conn.close()
+
+
 def check_selfbuild_readiness(
     db_path: str | Path,
     state_path: str | Path,
