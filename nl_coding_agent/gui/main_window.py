@@ -23,6 +23,7 @@ from nl_coding_agent.gui.widgets.file_viewer import FileViewerWidget
 from nl_coding_agent.gui.widgets.task_board import TaskBoardWidget
 from nl_coding_agent.gui.widgets.agents_panel import AgentsPanel
 from nl_coding_agent.gui.widgets.settings_panel import SettingsPanel
+from nl_coding_agent.gui.widgets.autonomy_panel import AutonomyPanel
 
 
 _LOGO_PATH = Path(__file__).resolve().parents[2] / "assets" / "LogoMio.svg"
@@ -122,6 +123,12 @@ class MainWindow(QMainWindow):
         self._project_label.setObjectName("projectLabel")
         header_layout.addWidget(self._project_label)
 
+        self._autonomy_btn = QPushButton("Autonomy")
+        self._autonomy_btn.setObjectName("autonomyButton")
+        self._autonomy_btn.setToolTip("Persistent autonomous supervisor controls")
+        self._autonomy_btn.clicked.connect(lambda: self._switch_page("autonomy"))
+        header_layout.addWidget(self._autonomy_btn)
+
         header_layout.addStretch()
 
         self._ollama_label = QLabel("Ollama ●")
@@ -165,9 +172,13 @@ class MainWindow(QMainWindow):
         self._settings_panel = SettingsPanel(services=self._services)
         self._stack.addWidget(self._settings_panel)  # index 4 = settings
 
-        # Models page (last)
+        # Models page
         self._models_panel = ModelsPanel(services=self._services)
         self._stack.addWidget(self._models_panel)
+
+        # Autonomous development page
+        self._autonomy_panel = AutonomyPanel(services=self._services)
+        self._stack.addWidget(self._autonomy_panel)
 
         main_splitter.addWidget(self._stack)
 
@@ -203,9 +214,23 @@ class MainWindow(QMainWindow):
         self._ram_label.setObjectName("ramLabel")
         self._tasks_label = QLabel("Tasks: 0")
         self._tasks_label.setObjectName("tasksLabel")
+        self._supervisor_label = QLabel("Supervisor: idle")
+        self._supervisor_label.setObjectName("supervisorLabel")
+        self._stop_supervisor_btn = QPushButton("STOP")
+        self._stop_supervisor_btn.setObjectName("dangerButton")
+        self._stop_supervisor_btn.setToolTip("Emergency stop: current mission reaches a safe state first")
+        self._stop_supervisor_btn.setEnabled(False)
+        self._stop_supervisor_btn.clicked.connect(self._emergency_stop_supervisor)
         sb.addPermanentWidget(self._vram_label)
         sb.addPermanentWidget(self._ram_label)
         sb.addPermanentWidget(self._tasks_label)
+        sb.addPermanentWidget(self._supervisor_label)
+        sb.addPermanentWidget(self._stop_supervisor_btn)
+
+        self._supervisor_timer = QTimer(self)
+        self._supervisor_timer.timeout.connect(self._update_supervisor_status)
+        self._supervisor_timer.start(10_000)
+        QTimer.singleShot(1500, self._update_supervisor_status)
 
         # Resource timer
         self._res_timer = QTimer(self)
@@ -213,7 +238,8 @@ class MainWindow(QMainWindow):
         self._res_timer.start(5000)
         QTimer.singleShot(1000, self._update_resources)
 
-        # Page key → stack index map
+        # Page key → stack index map (autonomy page is reachable from the header and
+        # from Settings > Autonomous Development; the sidebar keeps its six pages).
         self._page_index = {
             "projects": 0,
             "files":    1,
@@ -221,7 +247,11 @@ class MainWindow(QMainWindow):
             "agents":   3,
             "settings": 4,
             "models":   5,
+            "autonomy": 6,
         }
+        self._settings_panel.autonomy_requested.connect(
+            lambda: self._switch_page("autonomy")
+        )
 
     def _connect_event_bus(self):
         bus = get_event_bus()
@@ -244,6 +274,8 @@ class MainWindow(QMainWindow):
             self._agents_panel.refresh()
         elif key == "settings":
             self._settings_panel.refresh()
+        elif key == "autonomy":
+            self._autonomy_panel.refresh()
 
     @Slot(dict)
     def _on_project_opened(self, project: dict):
@@ -254,6 +286,8 @@ class MainWindow(QMainWindow):
         self._files_panel.set_project(project)
         self._tasks_panel.set_project(project)
         self._settings_panel.set_project(project)
+        self._autonomy_panel.set_project(project)
+        self._update_supervisor_status()
         self._log_panel.append_log("projects", "info", f"Project opened: {project['name']}")
 
     @Slot(str)
@@ -352,11 +386,53 @@ class MainWindow(QMainWindow):
         pending = sum(1 for t in scheduler.list_tasks() if t.status == "pending")
         self._tasks_label.setText(f"Tasks: {running} running, {pending} pending")
 
+    def _update_supervisor_status(self):
+        if self._closing:
+            return
+        project = self._current_project
+        if not project:
+            self._supervisor_label.setText("Supervisor: idle")
+            self._stop_supervisor_btn.setEnabled(False)
+            return
+        try:
+            status = self._services.supervisor_status(int(project["id"])) or {}
+        except Exception:
+            status = {}
+        run = status.get("run") or {}
+        service = status.get("service") or {}
+        label = str(run.get("status") or status.get("status") or "idle")
+        self._supervisor_label.setText("Supervisor: " + label)
+        active = bool(service.get("thread_running")) or label.lower() in {
+            "running", "starting", "paused", "waiting_for_resources",
+            "waiting_for_approval", "stopping", "recovering",
+        }
+        self._stop_supervisor_btn.setEnabled(active)
+        self._supervisor_label.setToolTip(str(status.get("resume_command") or ""))
+
+    @Slot()
+    def _emergency_stop_supervisor(self):
+        project = self._current_project
+        if not project:
+            return
+        try:
+            result = self._services.supervisor_stop(
+                int(project["id"]), reason="emergency stop from main window",
+            )
+        except Exception as exc:
+            result = {"ok": False, "error": str(exc)}
+        self._log_panel.append_log(
+            "supervisor", "warning",
+            "Emergency stop requested."
+            if result.get("ok", True) else "Emergency stop failed: " + str(result.get("error")),
+        )
+        self._update_supervisor_status()
+
     def _stop_threads(self):
         self._closing = True
         self._initial_ollama_timer.stop()
         self._ollama_timer.stop()
         self._res_timer.stop()
+        self._supervisor_timer.stop()
         for panel in (self._models_panel, self._agents_panel):
             shutdown = getattr(panel, "shutdown", None)
             if shutdown:
@@ -367,6 +443,15 @@ class MainWindow(QMainWindow):
                 thread.requestInterruption()
                 thread.wait(10000)
             setattr(self, attr, None)
+        shutdown = getattr(self._services, "shutdown_supervisors", None)
+        if shutdown:
+            try:
+                shutdown()
+            except Exception:
+                pass
+        autonomy_shutdown = getattr(self._autonomy_panel, "shutdown", None)
+        if autonomy_shutdown:
+            autonomy_shutdown()
 
     def closeEvent(self, event):
         from PySide6.QtCore import QCoreApplication

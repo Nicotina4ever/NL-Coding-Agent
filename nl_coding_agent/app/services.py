@@ -74,6 +74,8 @@ class AppServices:
     def __init__(self):
         self._db = init_db()
         self._bus = _bus
+        self._supervisor_services: dict[int, object] = {}
+        self._supervisor_lock = threading.Lock()
 
     # --- Project ---
 
@@ -287,6 +289,123 @@ class AppServices:
         scheduler = get_scheduler()
         scheduler.submit(task_id, _do_mission, label=f"Mission #{mission_id}: {goal[:30]}")
         return task_id
+
+    # --- Persistent supervisor (stage 3) ---
+
+    def _supervisor_service(self, project_id: int):
+        from nl_coding_agent.app.supervisor_service import SupervisorService
+
+        key = int(project_id)
+        with self._supervisor_lock:
+            service = self._supervisor_services.get(key)
+            if service is not None:
+                return service
+            project = self.get_project(key)
+            if not project:
+                raise ValueError(f"Project {project_id} not found")
+            service = SupervisorService(Path(project["root"]), key)
+            self._supervisor_services[key] = service
+            return service
+
+    def supervisor_start(self, project_id: int, *, mode: str | None = None,
+                         max_missions: int | None = None) -> dict:
+        """Start the persistent supervisor in a background thread (non-blocking)."""
+        return self._supervisor_service(project_id).start(
+            mode=mode, max_missions=max_missions,
+        )
+
+    def supervisor_stop(self, project_id: int, *, reason: str = "") -> dict:
+        with self._supervisor_lock:
+            service = self._supervisor_services.get(int(project_id))
+        if service is not None:
+            return service.stop(reason=reason)
+        return self._supervisor_command(project_id, "stop", reason=reason)
+
+    def supervisor_pause(self, project_id: int) -> dict:
+        with self._supervisor_lock:
+            service = self._supervisor_services.get(int(project_id))
+        if service is not None:
+            return service.pause()
+        return self._supervisor_command(project_id, "pause")
+
+    def supervisor_resume(self, project_id: int) -> dict:
+        with self._supervisor_lock:
+            service = self._supervisor_services.get(int(project_id))
+        if service is not None:
+            return service.resume()
+        return self._supervisor_command(project_id, "resume")
+
+    def _supervisor_command(self, project_id: int, name: str, *,
+                            reason: str = "") -> dict:
+        project = self.get_project(int(project_id))
+        if not project:
+            return {"ok": False, "reason": "Project not found"}
+        try:
+            from nl_coding_agent.core.supervisor import supervisor_command
+
+            return supervisor_command(
+                Path(project["root"]), name, requested_by="app", reason=reason,
+            )
+        except Exception as exc:  # surfaced to the caller, never raised into Qt
+            return {"ok": False, "error": str(exc)}
+
+    def supervisor_status(self, project_id: int) -> dict:
+        with self._supervisor_lock:
+            service = self._supervisor_services.get(int(project_id))
+        if service is not None:
+            return service.status()
+        project = self.get_project(int(project_id))
+        if not project:
+            return {"status": "idle", "error": "Project not found"}
+        try:
+            from nl_coding_agent.core.supervisor import supervisor_status
+
+            return supervisor_status(Path(project["root"]), project_id=int(project_id))
+        except Exception as exc:
+            return {"status": "unknown", "error": str(exc)}
+
+    def supervisor_preflight(self, project_id: int) -> dict:
+        project = self.get_project(int(project_id))
+        if not project:
+            return {"ok": False, "blockers": ["Project not found"]}
+        try:
+            from nl_coding_agent.core.supervisor import Supervisor
+
+            supervisor = Supervisor(Path(project["root"]), project_id=int(project_id))
+            return supervisor.preflight().to_dict()
+        except Exception as exc:
+            return {"ok": False, "blockers": [str(exc)]}
+
+    def supervisor_queue(self, project_id: int, *, limit: int = 50) -> list[dict]:
+        try:
+            from nl_coding_agent.persistence import supervisor_store
+
+            return supervisor_store.list_queue(int(project_id), limit=int(limit))
+        except Exception:
+            return []
+
+    def get_permissions(self, project_id: int | None = None) -> dict:
+        """Read-only effective permission policy for the GUI/settings view."""
+        try:
+            from nl_coding_agent.core import permissions
+
+            return {
+                "scopes": list(permissions.SCOPES),
+                "policy": permissions.get_policy(project_id),
+                "cloud_escalation_enabled": self.is_cloud_escalation_enabled(),
+            }
+        except Exception as exc:
+            return {"scopes": [], "policy": {}, "error": str(exc)}
+
+    def shutdown_supervisors(self) -> None:
+        with self._supervisor_lock:
+            services = list(self._supervisor_services.values())
+            self._supervisor_services.clear()
+        for service in services:
+            try:
+                service.shutdown()
+            except Exception:
+                pass
 
     # --- Audit ---
 

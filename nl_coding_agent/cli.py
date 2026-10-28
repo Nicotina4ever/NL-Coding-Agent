@@ -333,6 +333,368 @@ def status(project_cfg: dict) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------- #
+# Stage-3 persistent supervisor surfaces (C3d)
+# --------------------------------------------------------------------------- #
+
+_SUPERVISOR_COMMANDS = ("run", "start", "stop", "pause", "resume", "status",
+                        "index", "recover", "advance-stage")
+
+
+def supervisor_exit_code(status: str) -> int:
+    """Documented supervisor CLI exit codes (plan section 9.1)."""
+    text = str(status or "").strip().lower()
+    if text in ("completed", "idle", "off"):
+        return 0
+    if text in ("waiting_for_resources", "waiting_for_approval"):
+        return 4
+    if text in ("stopped", "paused", "stopping", "lease-lost", "lease_lost"):
+        return 3
+    if text in ("blocked", "failed", "already-running", "already_running"):
+        return 1
+    return 2
+
+
+def _print_supervisor_json(payload) -> None:
+    print(json.dumps(payload, indent=2, ensure_ascii=False, default=str))
+
+
+def _supervisor_open_project(root: Path) -> dict:
+    from nl_coding_agent.projects.registry import open_project
+
+    return open_project(root)
+
+
+def _launch_detached(command: list[str], log_path: Path) -> int:
+    """Start one detached supervisor process (not an OS service; documented limitation)."""
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    stream = log_path.open("a", encoding="utf-8")
+    creationflags = 0
+    if hasattr(subprocess, "DETACHED_PROCESS"):
+        creationflags = int(subprocess.DETACHED_PROCESS) | int(
+            getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        )
+    try:
+        process = subprocess.Popen(  # noqa: S603 - fixed argv, no shell
+            command,
+            cwd=str(APP_ROOT),
+            stdin=subprocess.DEVNULL,
+            stdout=stream,
+            stderr=subprocess.STDOUT,
+            creationflags=creationflags,
+            close_fds=True,
+        )
+    finally:
+        stream.close()
+    return int(process.pid)
+
+
+def _cmd_supervisor_run(args, *, detach: bool = False) -> int:
+    root = Path(args.project).resolve()
+    mode = str(getattr(args, "mode", None) or "automatic")
+    if mode == "assisted" and not getattr(args, "confirm_assisted", False):
+        print(
+            "ERROR: --mode assisted requires --confirm-assisted (assisted autonomy "
+            "asks for explicit consent at risky boundaries).",
+            file=sys.stderr,
+        )
+        return 2
+    max_missions = int(getattr(args, "max_missions", 1) or 1)
+    if detach:
+        command = [
+            sys.executable, "nl_agent.py", "supervisor", "run",
+            "--project", str(root), "--mode", mode,
+            "--max-missions", str(max_missions),
+        ]
+        for flag, value in (("--dev-model", getattr(args, "dev_model", None)),
+                            ("--reviewer-model", getattr(args, "reviewer_model", None)),
+                            ("--debug-model", getattr(args, "debug_model", None))):
+            if value:
+                command.extend([flag, value])
+        log_path = APP_ROOT / "logs" / "supervisor.log"
+        try:
+            pid = _launch_detached(command, log_path)
+        except Exception as exc:
+            print(f"ERROR: could not start the detached supervisor: {exc}", file=sys.stderr)
+            return 2
+        payload = {"ok": True, "detached": True, "pid": pid,
+                   "log": str(log_path), "command": command}
+        if getattr(args, "json", False):
+            _print_supervisor_json(payload)
+        else:
+            print(f"Supervisor started (pid {pid}); log: {log_path}")
+        return 0
+    from nl_coding_agent.core.supervisor import run_supervisor
+
+    try:
+        result = run_supervisor(
+            root,
+            mode=mode,
+            max_missions=max_missions,
+            developer_model=getattr(args, "dev_model", None),
+            reviewer_model=getattr(args, "reviewer_model", None),
+            debug_model=getattr(args, "debug_model", None),
+        )
+    except Exception as exc:  # noqa: BLE001 - CLI boundary
+        print(f"ERROR: supervisor run failed: {exc}", file=sys.stderr)
+        return 2
+    status = str(result.get("status") or "blocked")
+    if getattr(args, "json", False):
+        _print_supervisor_json(result)
+    else:
+        print(f"Supervisor status: {status}")
+        for mission in result.get("missions") or []:
+            print(
+                f"  Mission #{mission.get('id')}: {mission.get('status')} "
+                f"{mission.get('verdict') or ''} {mission.get('diff_stat') or ''}"
+            )
+        if result.get("stopped_reason"):
+            print(f"Stopped: {result['stopped_reason']}")
+        if result.get("retry_after_s"):
+            print(f"Retry after: {result['retry_after_s']}s")
+        print(f"Resume command: {result.get('resume_command') or ''}")
+    return supervisor_exit_code(status)
+
+
+def _cmd_supervisor_start(args) -> int:
+    root = Path(args.project).resolve()
+    mode = str(getattr(args, "mode", None) or "automatic")
+    try:
+        project = _supervisor_open_project(root)
+        from nl_coding_agent.persistence import database
+
+        key = "supervisor.project." + str(int(project["id"]))
+        config = database.get_json_setting(key)
+        config["mode"] = mode
+        database.set_json_setting(key, config)
+    except Exception as exc:
+        print(f"ERROR: cannot persist supervisor mode: {exc}", file=sys.stderr)
+        return 2
+    return _cmd_supervisor_run(args, detach=True)
+
+
+def _cmd_supervisor_control(args, command: str) -> int:
+    root = Path(args.project).resolve()
+    reason = str(getattr(args, "reason", "") or "")
+    try:
+        from nl_coding_agent.core.supervisor import supervisor_command
+
+        result = supervisor_command(
+            root, command, requested_by="cli", reason=reason,
+        )
+    except Exception as exc:  # noqa: BLE001 - CLI boundary
+        print(f"ERROR: supervisor {command} failed: {exc}", file=sys.stderr)
+        return 2
+    if getattr(args, "json", False):
+        _print_supervisor_json(result)
+    else:
+        print(f"Supervisor {command} command accepted: {result}")
+    return 0 if result.get("ok", True) else 1
+
+
+def _cmd_supervisor_status(args) -> int:
+    root = Path(args.project).resolve()
+    try:
+        from nl_coding_agent.core.supervisor import supervisor_status
+
+        status = supervisor_status(root)
+    except Exception as exc:  # noqa: BLE001 - CLI boundary
+        print(f"ERROR: supervisor status failed: {exc}", file=sys.stderr)
+        return 2
+    if getattr(args, "json", False):
+        _print_supervisor_json(status)
+    else:
+        run = status.get("run") or {}
+        print(f"Supervisor status: {run.get('status') or status.get('status') or 'idle'}")
+        print(f"Mode: {status.get('mode')}  Project: {status.get('root')}")
+        print(f"Program stage: {status.get('program_stage')}")
+        print(f"Queue counts: {status.get('queue_counts') or {}}")
+        lease = status.get("lease")
+        if lease:
+            print(f"Lease: {lease.get('owner_id')} pid {lease.get('owner_pid')} "
+                  f"until {lease.get('expires_at')}")
+        else:
+            print("Lease: free")
+        print(f"Resume command: {status.get('resume_command') or ''}")
+    return 0
+
+
+def _cmd_supervisor_index(args) -> int:
+    root = Path(args.project).resolve()
+    from nl_coding_agent.core import backlog
+
+    try:
+        index = backlog.load_project_index(root)
+    except backlog.BacklogError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+    stage = backlog.current_program_stage(
+        index, override=None,
+    )
+    payload = {
+        "ok": True,
+        "source": index.source_path,
+        "fingerprint": index.source_fingerprint,
+        "schema_version": index.schema_version,
+        "requirements": len(index.requirements),
+        "stages": [
+            {"stage": item.stage, "name": item.name, "status": item.status,
+             "depends_on_stages": list(item.depends_on_stages)}
+            for item in index.stages
+        ],
+        "current_stage": (
+            {"stage": stage.stage, "name": stage.name, "status": stage.status}
+            if stage is not None else None
+        ),
+        "warnings": list(index.warnings),
+    }
+    exit_code = 0
+    do_sync = bool(getattr(args, "sync", False))
+    do_check = bool(getattr(args, "check", False)) or not (
+        do_sync or getattr(args, "show_next", False)
+    )
+    do_next = bool(getattr(args, "show_next", False))
+    project_id = None
+    if do_sync or do_next:
+        try:
+            project = _supervisor_open_project(root)
+            project_id = int(project["id"])
+        except Exception as exc:
+            payload["project_error"] = str(exc)
+            exit_code = 2
+    if do_sync and project_id is not None:
+        payload["sync"] = backlog.sync_backlog_mirror(project_id, index)
+    if do_next and project_id is not None:
+        try:
+            selected = backlog.select_next_requirement(
+                project_id, project_root=root, index=index,
+            )
+            payload["next"] = selected
+        except backlog.BacklogError as exc:
+            payload["ok"] = False
+            payload["error"] = str(exc)
+            exit_code = 2
+    if getattr(args, "json", False):
+        _print_supervisor_json(payload)
+    else:
+        print(f"Backlog: {payload['source']}")
+        print(f"Schema: {payload['schema_version']}  Requirements: {payload['requirements']}")
+        current = payload["current_stage"]
+        print("Current stage: " + (
+            f"{current['stage']} - {current['name']} [{current['status']}]"
+            if current else "(none; program complete)"
+        ))
+        for warning in payload["warnings"]:
+            print(f"WARNING: {warning}")
+        if do_next:
+            next_item = payload.get("next")
+            if next_item:
+                print(f"Next: {next_item['requirement_id']} - {next_item['title']}")
+            else:
+                print("Next: (no eligible requirement in the current stage)")
+    return exit_code
+
+
+def _cmd_supervisor_recover(args) -> int:
+    root = Path(args.project).resolve()
+    try:
+        from nl_coding_agent.core.supervisor import Supervisor
+
+        supervisor = Supervisor(root)
+        if getattr(args, "dry_run", False):
+            report = supervisor.preflight().to_dict()
+            payload = {"ok": bool(report.get("ok")), "dry_run": True,
+                       "preflight": report}
+            exit_code = 0 if report.get("ok") else 2
+        else:
+            actions = supervisor.reconcile()
+            payload = {"ok": True, "dry_run": False, "actions": actions}
+            exit_code = 0
+    except Exception as exc:  # noqa: BLE001 - CLI boundary
+        print(f"ERROR: supervisor recovery failed: {exc}", file=sys.stderr)
+        return 2
+    if getattr(args, "json", False):
+        _print_supervisor_json(payload)
+    else:
+        if payload.get("dry_run"):
+            report = payload["preflight"]
+            print("Recovery preflight: " + ("OK" if report.get("ok") else "BLOCKED"))
+            for blocker in report.get("blockers") or []:
+                print(f"  BLOCKER: {blocker}")
+            for warning in report.get("warnings") or []:
+                print(f"  WARNING: {warning}")
+        else:
+            print("Recovery actions: " + (", ".join(payload["actions"]) or "none"))
+    return exit_code
+
+
+def _cmd_supervisor_advance_stage(args) -> int:
+    root = Path(args.project).resolve()
+    if not getattr(args, "confirm", False):
+        print(
+            "ERROR: advance-stage requires --confirm and recorded evidence; human/backend only.",
+            file=sys.stderr,
+        )
+        return 2
+    evidence = list(getattr(args, "evidence", None) or [])
+    if not evidence:
+        print("ERROR: advance-stage requires at least one --evidence path.", file=sys.stderr)
+        return 2
+    try:
+        project = _supervisor_open_project(root)
+        from nl_coding_agent.core import backlog
+        from nl_coding_agent.persistence import database
+
+        index = backlog.load_project_index(root)
+        wanted = int(args.stage)
+        stages = {stage.stage: stage for stage in index.stages}
+        if wanted not in stages:
+            print(f"ERROR: program stage {wanted} does not exist in the index.",
+                  file=sys.stderr)
+            return 2
+        key = "supervisor.project." + str(int(project["id"]))
+        config = database.get_json_setting(key)
+        config["program_stage_override"] = wanted
+        config["advanced_by"] = "cli"
+        config["advance_evidence"] = evidence
+        database.set_json_setting(key, config)
+        database.log_event(
+            database.init_db(), "Program stage override recorded: " + str(wanted),
+            source="supervisor", project_id=int(project["id"]),
+            event_kind="advance-stage",
+            payload=json.dumps({"stage": wanted, "evidence": evidence}),
+        )
+    except Exception as exc:  # noqa: BLE001 - CLI boundary
+        print(f"ERROR: advance-stage failed: {exc}", file=sys.stderr)
+        return 2
+    payload = {"ok": True, "program_stage_override": wanted, "evidence": evidence}
+    if getattr(args, "json", False):
+        _print_supervisor_json(payload)
+    else:
+        print(f"Program stage override recorded: {wanted} (evidence: {', '.join(evidence)})")
+    return 0
+
+
+def _dispatch_supervisor(args) -> int:
+    command = str(getattr(args, "supervisor_command", "") or "").strip().lower()
+    if command == "run":
+        return _cmd_supervisor_run(args)
+    if command == "start":
+        return _cmd_supervisor_start(args)
+    if command in ("stop", "pause", "resume"):
+        return _cmd_supervisor_control(args, command)
+    if command == "status":
+        return _cmd_supervisor_status(args)
+    if command == "index":
+        return _cmd_supervisor_index(args)
+    if command == "recover":
+        return _cmd_supervisor_recover(args)
+    if command == "advance-stage":
+        return _cmd_supervisor_advance_stage(args)
+    print(f"ERROR: unknown supervisor command: {command}", file=sys.stderr)
+    return 2
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="NL Coding Agent CLI")
     parser.add_argument("--models", default=str(DEFAULT_MODELS))
@@ -365,7 +727,7 @@ def main() -> int:
     sb.add_argument("--goal", help="Goal of the self-build mission")
     sb.add_argument("--from-roadmap", action="store_true", help="Use docs/NEXT_SELF_BUILD_MISSION.md")
     sb.add_argument("--autonomous", "--loop", dest="autonomous", action="store_true",
-                    help="Resume durable work, then run the next roadmap mission in a bounded loop")
+                    help="Deprecated: bounded compatibility loop delegated to the persistent supervisor (use 'supervisor run')")
     sb.add_argument("--resume", type=int, help="Resume this mission before selecting new work")
     sb.add_argument("--max-missions", type=int, default=1,
                     help="Maximum missions in one autonomous run (1-5, default 1)")
@@ -375,10 +737,72 @@ def main() -> int:
     sb.add_argument("--reviewer-model", help="Override the reviewer model")
     sb.add_argument("--debug-model", help="Override the debugger model")
 
+    # Persistent supervisor command group (stage 3)
+    sv = sub.add_parser(
+        "supervisor", help="Persistent autonomous supervisor (lease/heartbeat/queue)"
+    )
+    svs = sv.add_subparsers(dest="supervisor_command", required=True)
+
+    def _add_common(p):
+        p.add_argument("--project", default=".")
+        p.add_argument("--json", action="store_true", help="Machine-readable JSON output")
+
+    run_p = svs.add_parser("run", help="Run the supervisor loop (bounded by --max-missions)")
+    _add_common(run_p)
+    run_p.add_argument("--mode", choices=["off", "assisted", "automatic"], default="automatic")
+    run_p.add_argument("--max-missions", type=int, default=1)
+    run_p.add_argument("--confirm-assisted", action="store_true",
+                       help="Required to run --mode assisted from the CLI")
+    run_p.add_argument("--dev-model", help="Override the developer model")
+    run_p.add_argument("--reviewer-model", help="Override the reviewer model")
+    run_p.add_argument("--debug-model", help="Override the debugger model")
+
+    start_p = svs.add_parser("start", help="Persist the mode and start a detached supervisor process")
+    _add_common(start_p)
+    start_p.add_argument("--mode", choices=["off", "assisted", "automatic"], default="automatic")
+    start_p.add_argument("--max-missions", type=int, default=1)
+    start_p.add_argument("--confirm-assisted", action="store_true")
+    start_p.add_argument("--dev-model", help="Override the developer model")
+    start_p.add_argument("--reviewer-model", help="Override the reviewer model")
+    start_p.add_argument("--debug-model", help="Override the debugger model")
+
+    stop_p = svs.add_parser("stop", help="Request a graceful supervisor stop")
+    _add_common(stop_p)
+    stop_p.add_argument("--reason", default="")
+    for name, help_text in (
+        ("pause", "Pause the supervisor at the next mission boundary"),
+        ("resume", "Clear pause/stop flags and allow the supervisor to continue"),
+        ("status", "Show supervisor mode/run/lease/queue status"),
+    ):
+        command_p = svs.add_parser(name, help=help_text)
+        _add_common(command_p)
+
+    index_p = svs.add_parser("index", help="Check/sync the indexed blueprint backlog")
+    _add_common(index_p)
+    index_p.add_argument("--check", action="store_true", help="Validate the index (default)")
+    index_p.add_argument("--sync", action="store_true", help="Sync the SQLite backlog mirror")
+    index_p.add_argument("--show-next", action="store_true", help="Print the next eligible requirement")
+
+    recover_p = svs.add_parser("recover", help="Reconcile supervisor queue/stage/journal state")
+    _add_common(recover_p)
+    recover_p.add_argument("--dry-run", action="store_true",
+                           help="Only report the preflight; do not repair anything")
+
+    advance_p = svs.add_parser(
+        "advance-stage", help="Explicitly advance the program stage (human/backend only)"
+    )
+    _add_common(advance_p)
+    advance_p.add_argument("--stage", type=int, required=True)
+    advance_p.add_argument("--evidence", action="append", default=[])
+    advance_p.add_argument("--confirm", action="store_true")
+
     # GUI subcommand
     sub.add_parser("gui")
 
     args = parser.parse_args()
+
+    if args.command == "supervisor":
+        return _dispatch_supervisor(args)
 
     if args.command == "roadmap":
         from nl_coding_agent.core.roadmap import format_mission, next_mission
@@ -460,6 +884,12 @@ def main() -> int:
     if args.command == "selfbuild":
         root = Path(args.project).resolve()
         if args.autonomous:
+            print(
+                "WARNING: 'selfbuild --autonomous' is deprecated in stage 3; use "
+                "'nl_agent.py supervisor run' (the persistent supervisor). "
+                "Delegating through the compatibility shim.",
+                file=sys.stderr,
+            )
             if args.goal:
                 raise SystemExit("Error: --autonomous selects work from durable state/roadmap; do not pass --goal")
             from nl_coding_agent.core.mission_lock import MissionLockError, mission_lock

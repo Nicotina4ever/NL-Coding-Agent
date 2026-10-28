@@ -1,4 +1,11 @@
-"""Bounded autonomous self-build loop with durable selection and recovery."""
+"""Legacy bounded self-build loop - deprecated compatibility shim (stage 3 C3d).
+
+The persistent supervisor (nl_coding_agent.core.supervisor) now owns mission
+selection and execution. run_autonomous() remains as a thin adapter so existing
+CLI launchers/tests keep working: it preserves the C5/C7 fail-closed guards
+(promotion journal preflight, legacy harness refusal) and maps the supervisor
+result to the legacy {status, missions, stopped_reason, resume_command} shape.
+"""
 from __future__ import annotations
 
 import hashlib
@@ -11,6 +18,7 @@ from typing import Callable
 
 from nl_coding_agent.core import promotion
 from nl_coding_agent.core.roadmap import next_mission
+from nl_coding_agent.core.supervisor import run_supervisor
 from nl_coding_agent.persistence.database import db_path
 from nl_coding_agent.persistence.missions import (
     create_mission,
@@ -185,6 +193,49 @@ def _resume_command_for_results(
     return _resume_command(root, mission_id)
 
 
+def _map_supervisor_result(result: dict, root: Path) -> dict:
+    """Map a Supervisor.run() result to the legacy run_autonomous result shape."""
+    sup_status = str(result.get("status") or "blocked")
+    if sup_status in ("completed",):
+        status = "completed"
+    elif sup_status in ("idle", "off"):
+        status = "idle"
+    else:
+        status = "blocked"
+    missions = []
+    for mission in result.get("missions") or []:
+        missions.append({
+            "id": mission.get("id"),
+            "status": mission.get("status"),
+            "verdict": mission.get("verdict"),
+            "diff_stat": mission.get("diff_stat"),
+            "error": mission.get("error"),
+        })
+    return {
+        "status": status,
+        "missions": missions,
+        "stopped_reason": str(result.get("stopped_reason") or ""),
+        "resume_command": str(result.get("resume_command") or _resume_command(root)),
+        "supervisor": {
+            "status": sup_status,
+            "run_id": result.get("run_id"),
+            "mode": result.get("mode"),
+            "completed": result.get("completed"),
+            "failed": result.get("failed"),
+            "retry_after_s": result.get("retry_after_s"),
+        },
+    }
+
+
+def _blocked_result(root: Path, reason: str, mission_id: int | None = None) -> dict:
+    return {
+        "status": "blocked",
+        "missions": [],
+        "stopped_reason": reason,
+        "resume_command": _resume_command(root, mission_id),
+    }
+
+
 def run_autonomous(
     project_root: str | Path,
     max_missions: int = 1,
@@ -196,19 +247,64 @@ def run_autonomous(
     on_event: Callable | None = None,
     orchestrator_factory: Callable | None = None,
 ) -> dict:
-    """Run bounded self-build missions, resuming durable work before creating new work."""
+    """Deprecated adapter: delegate bounded self-build work to the stage-3 supervisor."""
     root = Path(project_root).resolve()
     limit = max(1, min(int(max_missions), MAX_AUTONOMOUS_MISSIONS))
+    _log(
+        "Self-Build Mode is deprecated; delegating to the persistent stage-3 supervisor "
+        "(use: nl_agent.py supervisor run).",
+        on_event,
+    )
+    if stop_after:
+        _log(
+            "--stop-after is a legacy recovery-test flag; the persistent supervisor stops "
+            "at safe boundaries through supervisor stop/pause instead.",
+            on_event,
+        )
+
+    # C7 guard: an explicitly selected legacy mission is never resumed by the new harness.
+    if resume_mission_id is not None:
+        mission = get_mission(resume_mission_id)
+        if not mission:
+            raise ValueError(f"Mission #{resume_mission_id} not found")
+        if not _is_harness_mission(mission, promotion.HARNESS_VERSION):
+            reason = (
+                f"Mission #{mission['id']} predates the staged-candidate harness "
+                "(harness_version != 2) and cannot be resumed safely. "
+                "Create a new mission instead."
+            )
+            _log(reason, on_event)
+            return _blocked_result(root, reason)
+        if str(mission.get("status") or "") == "completed":
+            _log(
+                f"Mission #{mission['id']} is already completed; no new work is started.",
+                on_event,
+            )
+            return {
+                "status": "completed",
+                "missions": [{
+                    "id": mission["id"],
+                    "status": "completed",
+                    "verdict": mission.get("review_verdict"),
+                    "diff_stat": mission.get("diff_stat"),
+                    "error": None,
+                }],
+                "stopped_reason": f"Mission #{mission['id']} was already completed.",
+                "resume_command": _resume_command(root),
+            }
+        if mission.get("project_id") is None:
+            from nl_coding_agent.persistence.missions import set_mission_project
+
+            project = open_project(root)
+            set_mission_project(int(mission["id"]), int(project["id"]))
+        _log(
+            f"Selected explicit mission #{mission['id']}; the supervisor queue will "
+            "resume it before selecting new work.",
+            on_event,
+        )
+
     project = open_project(root)
     project_id = int(project["id"])
-    state = _load_state()
-    project_state = state["projects"].setdefault(str(root), {})
-    results: list[dict] = []
-    stopped_reason = ""
-    next_resume_id = resume_mission_id
-
-    _log(f"Self-Build Mode starting in {root} (max missions: {limit})", on_event)
-
     missions_at_start = list_missions(project_id)
     legacy_resumable = [
         mission
@@ -222,189 +318,46 @@ def run_autonomous(
             + ", ".join("#" + str(m["id"]) for m in legacy_resumable),
             on_event,
         )
+
+    # C5 guard: unresolved promotion journals block new work before any model call.
     blocking = promotion.preflight(root, mission_lookup=find_mission_by_staging_dir)
     if blocking:
-        stopped_reason = (
+        reason = (
             "Unresolved candidate promotion state: " + " | ".join(blocking)
             + "; resume the mission to reconcile before starting new work."
         )
-        _log(stopped_reason, on_event)
-        return {
-            "status": "blocked",
-            "missions": [],
-            "stopped_reason": stopped_reason,
-            "resume_command": _resume_command(root, _first_journal_mission_id(root)),
-        }
+        _log(reason, on_event)
+        return _blocked_result(root, reason, _first_journal_mission_id(root))
 
-    for index in range(limit):
-        missions = list_missions(project_id)
-        mission = None
-        selected_roadmap = None
-
-        if next_resume_id is not None:
-            mission = get_mission(next_resume_id)
-            if not mission:
-                raise ValueError(f"Mission #{next_resume_id} not found")
-            if not _is_harness_mission(mission, promotion.HARNESS_VERSION):
-                stopped_reason = (
-                    f"Mission #{mission['id']} predates the staged-candidate harness "
-                    "(harness_version != 2) and cannot be resumed safely. "
-                    "Create a new mission instead."
-                )
-                _log(stopped_reason, on_event)
-                _save_state(state)
-                return {
-                    "status": "blocked",
-                    "missions": [],
-                    "stopped_reason": stopped_reason,
-                    "resume_command": _resume_command(root),
-                }
-            if mission.get("project_id") is None:
-                from nl_coding_agent.persistence.missions import set_mission_project
-
-                set_mission_project(next_resume_id, project_id)
-                mission = get_mission(next_resume_id)
-            next_resume_id = None
-            _log(f"Selected explicit mission #{mission['id']} for resume", on_event)
-        else:
-            mission = select_resumable_mission(
-                missions, harness_version=promotion.HARNESS_VERSION
-            )
-            if mission is not None:
-                _log(
-                    f"Selected durable mission #{mission['id']} "
-                    f"({mission.get('status')})",
-                    on_event,
-                )
-
-        if mission is None:
+    event_sink = None
+    if on_event is not None:
+        def event_sink(payload: dict) -> None:  # type: ignore[no-redef]
             try:
-                roadmap = next_mission(root)
-            except FileNotFoundError as exc:
-                stopped_reason = str(exc)
-                _log(f"No roadmap mission available: {stopped_reason}", on_event)
-                break
+                on_event(str((payload or {}).get("message") or ""))
+            except Exception:
+                pass
 
-            selected_roadmap = roadmap
-            if roadmap.get("all_gates_done"):
-                stopped_reason = "Roadmap acceptance gates are already marked complete."
-                _log(stopped_reason, on_event)
-                break
-
-            fingerprint = roadmap_fingerprint(roadmap)
-            if project_state.get("last_completed_fingerprint") == fingerprint:
-                stopped_reason = (
-                    "The current roadmap mission was already completed as "
-                    f"mission #{project_state.get('last_completed_mission_id', '?')}. "
-                    "Update docs/NEXT_SELF_BUILD_MISSION.md before continuing."
-                )
-                _log(stopped_reason, on_event)
-                break
-
-            completed = completed_roadmap_mission(missions, roadmap)
-            if completed is not None:
-                project_state["last_completed_fingerprint"] = fingerprint
-                project_state["last_completed_mission_id"] = completed["id"]
-                project_state["updated_at"] = _now()
-                _save_state(state)
-                stopped_reason = (
-                    f"The current roadmap mission is already completed as mission "
-                    f"#{completed['id']}. Update docs/NEXT_SELF_BUILD_MISSION.md."
-                )
-                _log(stopped_reason, on_event)
-                break
-
-            pending = pending_roadmap_mission(
-                missions, roadmap, harness_version=promotion.HARNESS_VERSION
-            )
-            if pending is not None:
-                mission = pending
-                _log(f"Reusing pending roadmap mission #{mission['id']}", on_event)
-            else:
-                mission_id = create_mission(
-                    project_id=project_id,
-                    title=roadmap["title"],
-                    goal=roadmap["goal"],
-                )
-                mission = get_mission(mission_id)
-                _log(f"Created roadmap mission #{mission_id}", on_event)
-
-        if mission.get("status") == "completed":
-            results.append({
-                "id": mission["id"],
-                "status": "completed",
-                "verdict": mission.get("review_verdict"),
-                "diff_stat": mission.get("diff_stat"),
-            })
-            if selected_roadmap is not None:
-                project_state["last_completed_fingerprint"] = roadmap_fingerprint(selected_roadmap)
-                project_state["last_completed_mission_id"] = mission["id"]
-                project_state["updated_at"] = _now()
-                _save_state(state)
-            elif reconcile_completed_mission(project_state, root, mission):
-                _save_state(state)
-            continue
-
-        _log(
-            f"Running mission #{mission['id']}: {str(mission.get('title') or '')[:100]}",
-            on_event,
-        )
-        if orchestrator_factory:
-            orch = orchestrator_factory(root)
-        else:
-            from nl_coding_agent.agents.orchestrator import MultiAgentOrchestrator
-
-            orch = MultiAgentOrchestrator(root)
-
-        result = orch.run_mission(
-            mission_id=mission["id"],
-            goal=mission.get("goal"),
+    try:
+        supervisor_result = run_supervisor(
+            root,
+            project_id=project_id,
+            mode="automatic",
+            max_missions=limit,
             developer_model=developer_model,
             reviewer_model=reviewer_model,
             debug_model=debug_model,
-            stop_after=stop_after,
+            orchestrator_factory=orchestrator_factory,
+            event_sink=event_sink,
         )
-        results.append({
-            "id": mission["id"],
-            "status": result.get("status"),
-            "verdict": result.get("verdict"),
-            "diff_stat": result.get("diff_stat"),
-            "error": result.get("error"),
-        })
+    except Exception as exc:  # noqa: BLE001 - legacy adapter surfaces a blocked result
+        reason = "Supervisor delegation failed: " + str(exc)
+        _log(reason, on_event)
+        return _blocked_result(root, reason)
 
-        if result.get("status") != "completed":
-            stopped_reason = (
-                f"Mission #{mission['id']} ended with status "
-                f"{result.get('status')}."
-            )
-            if result.get("error"):
-                stopped_reason += f" {result['error']}"
-            _log(stopped_reason, on_event)
-            break
-
-        if selected_roadmap is not None:
-            project_state["last_completed_fingerprint"] = roadmap_fingerprint(selected_roadmap)
-            project_state["last_completed_mission_id"] = mission["id"]
-            project_state["updated_at"] = _now()
-            _save_state(state)
-        elif reconcile_completed_mission(project_state, root, mission):
-            _save_state(state)
-
-        if index + 1 >= limit:
-            stopped_reason = f"Reached the requested limit of {limit} mission(s)."
-            break
-
-    _save_state(state)
-    statuses = {item.get("status") for item in results}
-    if not results:
-        status = "idle"
-    elif statuses == {"completed"}:
-        status = "completed"
-    else:
-        status = "blocked"
-    return {
-        "status": status,
-        "missions": results,
-        "stopped_reason": stopped_reason,
-        "resume_command": _resume_command_for_results(root, status, results),
-    }
+    mapped = _map_supervisor_result(supervisor_result, root)
+    _log(
+        "Supervisor delegation finished: " + mapped["status"]
+        + (" (" + mapped["stopped_reason"] + ")" if mapped["stopped_reason"] else ""),
+        on_event,
+    )
+    return mapped

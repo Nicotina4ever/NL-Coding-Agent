@@ -45,6 +45,10 @@ class TaskBoardWidget(QWidget):
         self._roadmap_btn.clicked.connect(self._load_roadmap)
         header.addWidget(self._roadmap_btn)
 
+        self._queue_label = QLabel("Queue: empty")
+        self._queue_label.setStyleSheet("color: #7E8798; font-size: 12px;")
+        header.addWidget(self._queue_label)
+
         self._refresh_btn = QPushButton("Refresh")
         self._refresh_btn.clicked.connect(self.refresh)
         header.addWidget(self._refresh_btn)
@@ -121,12 +125,18 @@ class TaskBoardWidget(QWidget):
             ]
         visible = missions
         for mission in visible:
-            label = f"#{mission['id']}  [{mission['status']}]  {mission.get('title', '')[:70]}"
+            requirement = mission.get("requirement_id")
+            suffix = ("  [" + str(requirement) + "]") if requirement else ""
+            label = (
+                f"#{mission['id']}  [{mission['status']}]  "
+                f"{mission.get('title', '')[:70]}{suffix}"
+            )
             item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, mission["id"])
             self._mission_list.addItem(item)
             if selected == mission["id"]:
                 self._mission_list.setCurrentItem(item)
+        self._update_queue_summary()
         if visible and self._mission_list.currentRow() < 0:
             self._mission_list.setCurrentRow(0)
         elif not visible:
@@ -136,6 +146,37 @@ class TaskBoardWidget(QWidget):
             self._details.setPlainText("No missions yet. Create one from the CLI or load a roadmap mission.")
             self._status_label.setText("No missions")
             self._progress.setValue(0)
+
+    def _queue_by_mission(self, project_id: int) -> dict[int, dict]:
+        queue: dict[int, dict] = {}
+        try:
+            items = self._services.supervisor_queue(project_id, limit=50)
+        except Exception:
+            items = []
+        for item in items:
+            mission_id = item.get("mission_id")
+            if mission_id is not None:
+                queue[int(mission_id)] = item
+        return queue
+
+    def _update_queue_summary(self):
+        project_id = self._project["id"] if self._project else None
+        if project_id is None:
+            self._queue_label.setText("Queue: no project")
+            return
+        try:
+            items = self._services.supervisor_queue(project_id, limit=50)
+        except Exception:
+            items = []
+        if not items:
+            self._queue_label.setText("Queue: empty")
+            return
+        counts: dict[str, int] = {}
+        for item in items:
+            state = str(item.get("state") or "?")
+            counts[state] = counts.get(state, 0) + 1
+        text = ", ".join(f"{state} {count}" for state, count in sorted(counts.items()))
+        self._queue_label.setText("Queue: " + text)
 
     @Slot(QListWidgetItem, QListWidgetItem)
     def _on_mission_selected(self, current, previous):
@@ -188,9 +229,19 @@ class TaskBoardWidget(QWidget):
         )
         self._run_btn.setEnabled(details.get("status") in ("pending", "interrupted", "failed", "blocked"))
 
+        queue_item = None
+        project_id = details.get("project_id")
+        if project_id is not None:
+            queue_item = self._queue_by_mission(int(project_id)).get(int(mission_id))
         lines = [
             f"Mission #{mission_id} — {details.get('title', '')}",
             f"Status: {details.get('status')}",
+            f"Requirement: {details.get('requirement_id') or '(none)'}",
+            "Queue state: " + (
+                str(queue_item.get("state")) + " / attempts "
+                + str(queue_item.get("attempts") or 0)
+                if queue_item else "(not queued)"
+            ),
             f"Goal: {details.get('goal', '')}",
             "",
             f"Result: {details.get('result_summary') or '(none yet)'}",
