@@ -17,7 +17,9 @@ from pathlib import Path
 from crewai import Agent, Crew, LLM, Process, Task
 
 from nl_coding_agent.app.services import Event, get_event_bus
+from nl_coding_agent.core import candidate_verification, promotion
 from nl_coding_agent.core.mission_lock import MissionLockError, mission_lock
+from nl_coding_agent.core.promotion import GateFailure
 from nl_coding_agent.core.roadmap import extract_paths
 from nl_coding_agent.core.task_graph import TaskCollisionError, TaskGraph
 from nl_coding_agent.core.workspace import (
@@ -32,6 +34,7 @@ from nl_coding_agent.persistence.missions import (
     get_handoffs,
     get_latest_attempt,
     get_mission,
+    get_task,
     get_task_attempts,
     get_tasks,
     get_verification_runs,
@@ -42,14 +45,15 @@ from nl_coding_agent.persistence.missions import (
     record_task_attempt,
     record_verification_run,
     reset_interrupted_tasks,
+    set_mission_staging,
+    set_promotion_status,
     update_mission_result,
     update_mission_status,
     update_task_status,
 )
 from nl_coding_agent.tools.crew_tools import get_project_tools
 from nl_coding_agent.tools.filesystem import scoped_patch_file, scoped_write_file
-from nl_coding_agent.tools.git_tools import get_git_diff, get_git_status
-from nl_coding_agent.tools.verification import run_verification
+from nl_coding_agent.tools.git_tools import get_git_diff
 
 DEFAULT_DEVELOPER_MODEL = os.environ.get(
     "NL_DEVELOPER_MODEL", "ollama/qwen2.5-coder:7b-instruct-q4_K_M"
@@ -58,6 +62,11 @@ DEFAULT_REVIEWER_MODEL = os.environ.get(
     "NL_REVIEWER_MODEL", "ollama/qwen3.5:9b"
 )
 DEFAULT_DEBUG_MODEL = os.environ.get("NL_DEBUG_MODEL", DEFAULT_DEVELOPER_MODEL)
+
+VERIFY_TIMEOUT_S = int(os.environ.get("NL_VERIFY_TIMEOUT_S", "600"))
+MAX_REPAIR_ATTEMPTS = int(os.environ.get("NL_MAX_REPAIRS", "2"))
+MAX_TOTAL_STAGE_ATTEMPTS = MAX_REPAIR_ATTEMPTS + 3   # hard ceiling across resumes
+HARNESS_VERSION = promotion.HARNESS_VERSION
 
 
 class DeveloperNoChangeError(RuntimeError):
@@ -222,18 +231,39 @@ class MultiAgentOrchestrator:
         self.root = Path(project_root).resolve()
         self.base_url = base_url
         self.bus = get_event_bus()
+        self._last_verification = None
 
     # ------------------------------------------------------------------ helpers
 
     def _emit(self, source: str, level: str, message: str, **payload) -> None:
         self.bus.emit(Event(source=source, level=level, message=message, payload=payload or None))
 
-    def _call_model(self, agent, task) -> str:
-        """Single seam for model invocation.
+    def _call_model(
+        self,
+        role: str,
+        model_name: str,
+        prompt: str,
+        *,
+        goal: str,
+        backstory: str,
+        expected_output: str,
+        tools: list | None = None,
+    ) -> str:
+        """Single CrewAI invocation seam; tests monkeypatch this method.
 
-        Tests monkeypatch this method to inject deterministic fake model output
-        without loading any LLM; real runs use CrewAI exactly as before.
+        No stage method may construct Agent/Task/Crew itself: every model call goes
+        through here so the staged-candidate harness can be tested without Ollama.
         """
+        agent = Agent(
+            role=role,
+            goal=goal,
+            backstory=backstory,
+            llm=_make_llm(model_name, self.base_url),
+            tools=tools or [],
+            verbose=True,
+            allow_delegation=False,
+        )
+        task = Task(description=prompt, expected_output=expected_output, agent=agent)
         crew = Crew(
             agents=[agent],
             tasks=[task],
@@ -372,15 +402,216 @@ class MultiAgentOrchestrator:
                 + f" (allowed: {', '.join(write_paths)})"
             )
 
-    def _finalize(
+    # ----------------------------------------------------------- harness helpers
+
+    def _mission_input_paths(self) -> list[str]:
+        """Files that are mission input and must never be modified by the model."""
+        return [p for p in promotion.MISSION_INPUT_DENY if (self.root / p).is_file()]
+
+    def _recovery_dir(self) -> Path:
+        return db_path().parent / "recovery"
+
+    def _evidence_dir(self) -> Path:
+        return db_path().parent / "verification"
+
+    def _save_promotion_status(self, mission_id: int, status: str | None) -> None:
+        set_promotion_status(mission_id, status)
+        self._emit("harness", "info", f"Promotion state: {status}", mission_id=mission_id)
+
+    def _assert_harness_mission(self, mission: dict) -> None:
+        if mission.get("harness_version") != HARNESS_VERSION:
+            raise GateFailure(
+                f"Mission #{mission['id']} predates the staged-candidate harness "
+                f"(harness_version={mission.get('harness_version')!r}); create a new mission "
+                "instead of resuming it.",
+                code="legacy-mission",
+            )
+
+    def _ensure_stage(self, mission_id: int, dev_task: dict | None, goal: str) -> promotion.Stage:
+        mission = get_mission(mission_id) or {}
+        stored = mission.get("staging_dir")
+        if stored:
+            stage = promotion.load_stage(stored)
+            if stage.project_root != self.root:
+                raise GateFailure("Staged candidate belongs to a different project root", code="stage-mismatch")
+            return stage
+        write_paths = list((dev_task or {}).get("write_paths") or [])
+        scope = promotion.derive_scope(self.root, write_paths or extract_paths(goal))
+        stage = promotion.begin_stage(self.root, mission_id, scope)
+        set_mission_staging(mission_id, str(stage.stage_dir))
+        self._save_promotion_status(mission_id, "staged")
+        record_handoff(
+            mission_id,
+            "orchestrator",
+            "developer",
+            f"Candidate stage created: {stage.stage_dir.name}",
+            {"stage_dir": str(stage.stage_dir), "scope": list(stage.scope)},
+        )
+        return stage
+
+    def _validate_stage(self, stage: promotion.Stage) -> dict:
+        verdict = promotion.validate(stage, deny_paths=self._mission_input_paths())
+        if verdict["valid"]:
+            self._save_promotion_status(stage.mission_id, "validated")
+        return verdict
+
+    def _run_verification(self, stage: promotion.Stage, task_id: int) -> candidate_verification.VerificationReport:
+        baseline = promotion.read_manifest(stage)["baseline"]
+        report = candidate_verification.verify_candidate(
+            stage.workspace,
+            stage.stage_dir,
+            baseline,
+            timeout_s=VERIFY_TIMEOUT_S,
+            report_path=stage.stage_dir / "verification" / "report.json",
+        )
+        for suite in (report.candidate, report.oracle):
+            record_verification_run(
+                mission_id=stage.mission_id,
+                task_id=task_id,
+                command=f"verify:{suite.suite} " + " ".join(suite.command),
+                exit_code=suite.exit_code if suite.exit_code is not None else -1,
+                stdout=_truncate(suite.stdout_tail, 40_000),
+                stderr=_truncate(suite.stderr_tail, 40_000),
+                passed=suite.passed,
+            )
+        self._last_verification = report
+        if report.passed:
+            promotion.mark_verified(
+                stage,
+                passed=True,
+                evidence=json.dumps({
+                    "candidate": report.candidate.failures or "pass",
+                    "oracle": report.oracle.failures or "pass",
+                    "duration_s": round(report.candidate.duration_s + report.oracle.duration_s, 2),
+                })[:2000],
+            )
+            self._save_promotion_status(stage.mission_id, "verified")
+        return report
+
+    def _last_verification_dict(self) -> dict | None:
+        report = self._last_verification
+        if report is None:
+            return None
+        try:
+            return candidate_verification.report_to_dict(report)
+        except Exception:
+            return None
+
+    def _rebind_persisted_verification(self, mission_id: int, stage: promotion.Stage) -> None:
+        """Keep a persisted verified candidate verifiable across a resume.
+
+        Re-validating a persisted candidate resets the broker's verified marker, so a
+        resumed mission that had already passed verification must re-bind the recorded
+        evidence to the exact staged hashes before promotion is allowed.
+        """
+        manifest = promotion.read_manifest(stage)
+        if manifest.get("verified"):
+            self._save_promotion_status(mission_id, "verified")
+            return
+        if not manifest.get("validated"):
+            raise GateFailure(
+                "Persisted staged candidate is not validated; cannot reuse verification evidence",
+                code="stage-not-validated",
+            )
+        try:
+            promotion.mark_verified(
+                stage,
+                passed=True,
+                evidence=str(manifest.get("evidence") or "restored from persisted tester completion"),
+            )
+        except Exception as exc:  # broker refuses if staged bytes moved since validation
+            raise GateFailure(
+                "Staged candidate changed after verification; re-verification required: " + str(exc),
+                code="stage-invalid",
+                details={"error": str(exc)},
+            ) from exc
+        self._save_promotion_status(mission_id, "verified")
+
+    def _promote_candidate(self, stage: promotion.Stage) -> dict:
+        self._save_promotion_status(stage.mission_id, "promoting")
+        try:
+            result = promotion.promote(stage, recovery_dir=self._recovery_dir())
+        except GateFailure as exc:
+            self._save_promotion_status(
+                stage.mission_id,
+                "cas-conflict" if exc.code == "cas-conflict" else "promotion-failed",
+            )
+            raise
+        self._save_promotion_status(stage.mission_id, "promoted")
+        record_handoff(
+            stage.mission_id,
+            "orchestrator",
+            "user",
+            f"Promoted {len(result['promoted'])} file(s) to the live tree",
+            {"promoted": result["promoted"], "hashes": result.get("hashes", {})},
+        )
+        return result
+
+    def _persisted_review(self, mission_id: int) -> tuple[str, str]:
+        for handoff in reversed(get_handoffs(mission_id)):
+            if handoff.get("from_role") != "reviewer" or handoff.get("to_role") != "orchestrator":
+                continue
+            payload = handoff.get("payload") or {}
+            verdict = payload.get("verdict")
+            if verdict in ("APPROVE", "REJECT"):
+                return payload.get("review_notes") or handoff.get("summary") or "", verdict
+        for task in get_tasks(mission_id):
+            if task.get("agent_role") != "reviewer":
+                continue
+            output = self._latest_output(task["id"])
+            if output.strip():
+                return output, parse_reviewer_verdict(output)
+        return "", "REJECT"
+
+    # -------------------------------------------------------------- finalization
+
+    def _result_payload(
         self,
         mission_id: int,
+        *,
         status: str,
-        baseline: dict[str, str],
-        review_text: str = "",
+        mission_diff: str = "",
+        diff_stat: str = "",
+        changed_paths: list[str] | None = None,
+        review: str = "",
         verdict: str = "",
-        summary: str = "",
+        error: str | None = None,
+        promotion_status: str | None = None,
     ) -> dict:
+        if promotion_status is None:
+            mission = get_mission(mission_id) or {}
+            promotion_status = mission.get("promotion_status")
+        payload = {
+            "status": status,
+            "mission_id": mission_id,
+            "git_diff": get_git_diff(self.root),
+            "mission_diff": mission_diff,
+            "diff_stat": diff_stat,
+            "changed_paths": list(changed_paths or []),
+            "review": review,
+            "verdict": verdict,
+            "promotion_status": promotion_status,
+            "handoffs": get_handoffs(mission_id),
+            "verification_runs": get_verification_runs(mission_id),
+            "tasks": get_tasks(mission_id),
+            "attempts": get_task_attempts(mission_id),
+            "progress": mission_progress(mission_id),
+        }
+        if error is not None:
+            payload["error"] = error
+        return payload
+
+    def _finalize_completed(
+        self,
+        mission_id: int,
+        goal: str,
+        baseline: dict[str, str],
+        *,
+        review_text: str,
+        verdict: str,
+        summary: str,
+    ) -> dict:
+        """Single writer of missions.status='completed' (live diff is authoritative)."""
         diff, changed, stat = self._mission_diff(baseline)
         changed = self._collect_changed_paths(mission_id, changed)
         if not diff.strip() and changed:
@@ -388,9 +619,11 @@ class MultiAgentOrchestrator:
             if recovered_diff.strip():
                 diff = recovered_diff
                 stat = diff_stats(diff)
+        mission = get_mission(mission_id) or {}
+        promotion_status = mission.get("promotion_status") or "promoted"
         update_mission_result(
             mission_id,
-            status,
+            "completed",
             result_summary=summary or None,
             review_verdict=verdict or None,
             diff_stat=stat,
@@ -400,36 +633,134 @@ class MultiAgentOrchestrator:
             mission_id,
             "orchestrator",
             "user",
-            summary or f"Mission finished with status {status}",
+            summary or "Mission finished with status completed",
             {
-                "status": status,
+                "status": "completed",
                 "verdict": verdict,
                 "changed_paths": changed,
                 "diff_stat": stat,
+                "promotion_status": promotion_status,
             },
         )
         self._emit(
             "orchestrator",
-            "info" if status == "completed" else "warning",
-            f"Mission #{mission_id} finished: {status}",
+            "info",
+            f"Mission #{mission_id} finished: completed",
             mission_id=mission_id,
             changed_paths=changed,
         )
-        return {
-            "status": status,
-            "mission_id": mission_id,
-            "git_diff": get_git_diff(self.root),
-            "mission_diff": diff,
-            "diff_stat": stat,
-            "changed_paths": changed,
-            "review": review_text,
-            "verdict": verdict,
-            "handoffs": get_handoffs(mission_id),
-            "verification_runs": get_verification_runs(mission_id),
-            "tasks": get_tasks(mission_id),
-            "attempts": get_task_attempts(mission_id),
-            "progress": mission_progress(mission_id),
-        }
+        return self._result_payload(
+            mission_id,
+            status="completed",
+            mission_diff=diff,
+            diff_stat=stat,
+            changed_paths=changed,
+            review=review_text,
+            verdict=verdict,
+            promotion_status=promotion_status,
+        )
+
+    def _finalize_blocked(
+        self,
+        mission_id: int,
+        reason: str,
+        verdict: str,
+        *,
+        review_text: str = "",
+        stage: promotion.Stage | None = None,
+        code: str | None = None,
+        details: dict | None = None,
+    ) -> dict:
+        """Blocked before/without promotion: nothing from the candidate is applied."""
+        staged_paths: list[str] = []
+        stage_dir: str | None = None
+        if stage is not None:
+            stage_dir = str(stage.stage_dir)
+            try:
+                staged_paths = sorted((promotion.read_manifest(stage).get("changed") or {}).keys())
+            except Exception:
+                staged_paths = []
+        update_mission_result(
+            mission_id,
+            "blocked",
+            result_summary=reason,
+            review_verdict=verdict or None,
+            diff_stat="",
+            changed_paths=[],
+        )
+        record_handoff(
+            mission_id,
+            "orchestrator",
+            "user",
+            reason,
+            {
+                "status": "blocked",
+                "code": code,
+                "details": details,
+                "staged_paths": staged_paths,
+                "stage_dir": stage_dir,
+            },
+        )
+        self._emit(
+            "orchestrator",
+            "warning",
+            f"Mission #{mission_id} blocked: {reason}",
+            mission_id=mission_id,
+            code=code,
+        )
+        return self._result_payload(
+            mission_id,
+            status="blocked",
+            diff_stat="",
+            changed_paths=[],
+            review=review_text,
+            verdict=verdict,
+            error=reason,
+        )
+
+    def _finalize_interrupted(
+        self,
+        mission_id: int,
+        stage: promotion.Stage | None,
+        *,
+        summary: str,
+    ) -> dict:
+        """Interrupted after a stage: the staged candidate is retained, live unchanged."""
+        staged_paths: list[str] = []
+        stage_dir: str | None = None
+        if stage is not None:
+            stage_dir = str(stage.stage_dir)
+            try:
+                staged_paths = sorted((promotion.read_manifest(stage).get("changed") or {}).keys())
+            except Exception:
+                staged_paths = []
+        update_mission_status(mission_id, "interrupted")
+        record_handoff(
+            mission_id,
+            "orchestrator",
+            "user",
+            summary,
+            {
+                "status": "interrupted",
+                "staged_paths": staged_paths,
+                "stage_dir": stage_dir,
+                "live_changes": "none",
+            },
+        )
+        self._emit("orchestrator", "warning", summary, mission_id=mission_id)
+        return self._result_payload(
+            mission_id,
+            status="interrupted",
+            diff_stat="",
+            changed_paths=[],
+        )
+
+    def _failed_result(self, mission_id: int, exc: Exception) -> dict:
+        message = f"Mission #{mission_id} failed: {exc}"
+        self._emit("orchestrator", "error", message, mission_id=mission_id)
+        record_handoff(mission_id, "orchestrator", "user", message, {"error": str(exc)})
+        update_mission_status(mission_id, "failed")
+        return self._result_payload(mission_id, status="failed", error=str(exc))
 
     # ---------------------------------------------------------------- public API
 
@@ -455,22 +786,16 @@ class MultiAgentOrchestrator:
         debug_model = debug_model or DEFAULT_DEBUG_MODEL
 
         if mission["status"] == "completed":
-            diff, changed, stat = self._mission_diff(self._snapshot())
-            return {
-                "status": "completed",
-                "mission_id": mission_id,
-                "git_diff": get_git_diff(self.root),
-                "mission_diff": "",
-                "diff_stat": mission.get("diff_stat") or "",
-                "changed_paths": json.loads(mission.get("changed_paths") or "[]"),
-                "review": mission.get("result_summary") or "",
-                "verdict": mission.get("review_verdict") or "",
-                "handoffs": get_handoffs(mission_id),
-                "verification_runs": get_verification_runs(mission_id),
-                "tasks": get_tasks(mission_id),
-                "attempts": get_task_attempts(mission_id),
-                "progress": mission_progress(mission_id),
-            }
+            return self._result_payload(
+                mission_id,
+                status="completed",
+                mission_diff="",
+                diff_stat=mission.get("diff_stat") or "",
+                changed_paths=json.loads(mission.get("changed_paths") or "[]"),
+                review=mission.get("result_summary") or "",
+                verdict=mission.get("review_verdict") or "",
+                promotion_status=mission.get("promotion_status"),
+            )
 
         try:
             with mission_lock(mission_id):
@@ -485,13 +810,7 @@ class MultiAgentOrchestrator:
         except MissionLockError as exc:
             self._emit("orchestrator", "error", str(exc), mission_id=mission_id)
             update_mission_status(mission_id, "blocked")
-            return {
-                "status": "blocked",
-                "mission_id": mission_id,
-                "error": str(exc),
-                "handoffs": get_handoffs(mission_id),
-                "verification_runs": get_verification_runs(mission_id),
-            }
+            return self._result_payload(mission_id, status="blocked", error=str(exc))
 
     def _run_locked(
         self,
@@ -504,123 +823,181 @@ class MultiAgentOrchestrator:
     ) -> dict:
         mission = get_mission(mission_id) or {}
         existing_tasks = get_tasks(mission_id)
-        if existing_tasks:
-            reset_ids = reset_interrupted_tasks(mission_id)
-            if reset_ids or mission.get("status") in ("running", "interrupted", "failed", "blocked"):
-                increment_resume_count(mission_id)
-                message = (
-                    f"Resuming mission #{mission_id}; reset interrupted tasks {reset_ids}"
-                    if reset_ids
-                    else f"Resuming mission #{mission_id} from persisted state"
-                )
-                record_handoff(mission_id, "system", "orchestrator", message, {"reset_tasks": reset_ids})
-                self._emit("orchestrator", "info", message, mission_id=mission_id)
-
-        mark_mission_started(mission_id)
-        self._emit(
-            "orchestrator",
-            "info",
-            f"Starting mission #{mission_id}: {goal[:160]}",
-            mission_id=mission_id,
-            project=str(self.root),
-        )
-
-        tasks = get_tasks(mission_id) if existing_tasks else self._plan_tasks(mission_id, goal)
-        self._validate_plan(tasks)
-        if existing_tasks:
-            baseline = self._load_baseline(mission_id)
-            if baseline is None:
-                baseline = self._snapshot()
-                self._emit(
-                    "orchestrator", "warning",
-                    "No persisted mission baseline found; using the current working tree as baseline.",
-                    mission_id=mission_id,
-                )
-        else:
-            baseline = self._snapshot()
-            self._save_baseline(mission_id, baseline)
-
-        task_map = {t["agent_role"]: t for t in tasks}
-        dev_task = task_map.get("developer")
-        test_task = task_map.get("tester")
-        rev_task = task_map.get("reviewer")
-
+        stage: promotion.Stage | None = None
+        baseline: dict[str, str] = {}
         try:
-            # 1. Developer
-            if dev_task and dev_task["status"] != "completed":
-                self._run_developer_stage(mission_id, dev_task, goal, developer_model, baseline)
-            elif dev_task:
-                output = self._latest_output(dev_task["id"])
-                self._emit("developer", "info", "Developer stage already completed; reusing persisted result.")
-                record_handoff(
-                    mission_id, "developer", "tester",
-                    "Developer stage recovered from persistence.",
-                    {"output_sample": _truncate(output, 1000)},
+            self._assert_harness_mission(mission)
+
+            if existing_tasks:
+                reset_ids = reset_interrupted_tasks(mission_id)
+                if reset_ids or mission.get("status") in ("running", "interrupted", "failed", "blocked"):
+                    increment_resume_count(mission_id)
+                    message = (
+                        f"Resuming mission #{mission_id}; reset interrupted tasks {reset_ids}"
+                        if reset_ids
+                        else f"Resuming mission #{mission_id} from persisted state"
+                    )
+                    record_handoff(mission_id, "system", "orchestrator", message, {"reset_tasks": reset_ids})
+                    self._emit("orchestrator", "info", message, mission_id=mission_id)
+
+            mark_mission_started(mission_id)
+            self._emit(
+                "orchestrator",
+                "info",
+                f"Starting mission #{mission_id}: {goal[:160]}",
+                mission_id=mission_id,
+                project=str(self.root),
+            )
+
+            tasks = get_tasks(mission_id) if existing_tasks else self._plan_tasks(mission_id, goal)
+            self._validate_plan(tasks)
+            if existing_tasks:
+                loaded = self._load_baseline(mission_id)
+                if loaded is None:
+                    baseline = self._snapshot()
+                    self._emit(
+                        "orchestrator", "warning",
+                        "No persisted mission baseline found; using the current working tree as baseline.",
+                        mission_id=mission_id,
+                    )
+                else:
+                    baseline = loaded
+            else:
+                baseline = self._snapshot()
+                self._save_baseline(mission_id, baseline)
+
+            task_map = {t["agent_role"]: t for t in tasks}
+            dev_task = task_map.get("developer")
+            test_task = task_map.get("tester")
+            rev_task = task_map.get("reviewer")
+
+            # Candidate stage: every model write lands inside stage.workspace, never live.
+            stage = self._ensure_stage(mission_id, dev_task, goal)
+            outcome = promotion.reconcile(stage, recovery_dir=self._recovery_dir())
+            if outcome.get("state") == "conflict":
+                self._save_promotion_status(mission_id, "rollback_conflict")
+                return self._finalize_blocked(
+                    mission_id,
+                    "Promotion journal conflict: " + json.dumps(outcome, default=str),
+                    "REJECT",
+                    stage=stage,
+                    code="rollback-conflict",
+                    details=outcome,
                 )
+            if outcome.get("state") == "promotion-complete" or promotion.is_live_promoted(stage):
+                self._save_promotion_status(mission_id, "promoted")
+                result = self._finalize_completed(
+                    mission_id,
+                    goal,
+                    baseline,
+                    review_text="",
+                    verdict="APPROVE",
+                    summary="Promotion recovered after crash.",
+                )
+                promotion.cleanup_after_terminal(
+                    stage,
+                    mission_status="completed",
+                    evidence_dir=self._evidence_dir(),
+                    verification=self._last_verification_dict(),
+                )
+                return result
+
+            # 1. Developer: staged candidate only.
+            if dev_task and dev_task["status"] != "completed":
+                self._run_developer_stage(mission_id, dev_task, goal, developer_model, baseline, stage)
+            elif dev_task:
+                self._emit(
+                    "developer", "info",
+                    "Developer stage already completed; re-validating the persisted staged candidate.",
+                )
+                verdict = self._validate_stage(stage)
+                if not verdict["valid"]:
+                    raise GateFailure(
+                        "Persisted staged candidate no longer validates: "
+                        + "; ".join(verdict["errors"]),
+                        code="candidate-rejected",
+                        details={"errors": verdict["errors"]},
+                    )
 
             if stop_after == "developer":
-                return self._finalize(
-                    mission_id, "interrupted", baseline,
-                    summary="Mission interrupted after developer stage (requested). Resume to continue.",
+                return self._finalize_interrupted(
+                    mission_id,
+                    stage,
+                    summary="Interrupted after developer stage (staged candidate retained).",
                 )
 
-            # 2. Tester / Debugger
+            # 2. Tester: independent candidate + oracle verification, bounded repairs.
             if test_task and test_task["status"] != "completed":
-                self._run_tester_stage(mission_id, test_task, debug_model, baseline)
+                self._run_tester_stage(mission_id, test_task, debug_model, baseline, stage)
             elif test_task:
-                self._emit("tester", "info", "Tester stage already completed; reusing persisted verification.")
-                record_handoff(
-                    mission_id, "tester", "reviewer",
-                    "Verification recovered from persistence.",
-                    {"verification_runs": len(get_verification_runs(mission_id))},
-                )
+                self._emit("tester", "info", "Tester stage already completed; reusing persisted verification evidence.")
+                self._rebind_persisted_verification(mission_id, stage)
 
             if stop_after == "tester":
-                return self._finalize(
-                    mission_id, "interrupted", baseline,
-                    summary="Mission interrupted after tester stage (requested). Resume to continue.",
+                return self._finalize_interrupted(
+                    mission_id,
+                    stage,
+                    summary="Interrupted after tester stage (verified candidate retained).",
                 )
 
-            # 3. Reviewer
-            review_text = ""
-            verdict = "REJECT"
+            # 3. Reviewer: reviews the candidate, never an applied diff.
             if rev_task and rev_task["status"] != "completed":
-                review_text, verdict = self._run_reviewer_stage(mission_id, rev_task, reviewer_model, baseline)
-            elif rev_task:
-                review_text = self._latest_output(rev_task["id"])
-                verdict = parse_reviewer_verdict(review_text)
+                review_text, verdict = self._run_reviewer_stage(mission_id, rev_task, reviewer_model, baseline, stage)
+            else:
+                review_text, verdict = self._persisted_review(mission_id)
                 self._emit(
                     "reviewer", "info",
                     f"Reviewer stage recovered from persistence; verdict {verdict}.",
                 )
 
-            if verdict == "APPROVE":
-                return self._finalize(
-                    mission_id, "completed", baseline,
-                    review_text=review_text, verdict=verdict,
-                    summary="Reviewer APPROVED the mission diff.",
+            if verdict != "APPROVE":
+                self._save_promotion_status(mission_id, "review_rejected")
+                return self._finalize_blocked(
+                    mission_id,
+                    "Reviewer REJECTED the candidate diff.",
+                    "REJECT",
+                    review_text=review_text,
+                    stage=stage,
+                    code="review-rejected",
                 )
-            return self._finalize(
-                mission_id, "blocked", baseline,
-                review_text=review_text, verdict="REJECT",
-                summary="Reviewer REJECTED the mission diff. Inspect the recorded review and diff.",
+
+            # 4. Promotion is the last gate: only here does the live tree change.
+            promotion_result = self._promote_candidate(stage)
+            result = self._finalize_completed(
+                mission_id,
+                goal,
+                baseline,
+                review_text=review_text,
+                verdict="APPROVE",
+                summary=f"Reviewer APPROVED; promoted {len(promotion_result['promoted'])} file(s).",
             )
-        except Exception as exc:
-            message = f"Mission #{mission_id} failed: {exc}"
-            self._emit("orchestrator", "error", message, mission_id=mission_id)
-            record_handoff(mission_id, "orchestrator", "user", message, {"error": str(exc)})
-            update_mission_status(mission_id, "failed")
-            return {
-                "status": "failed",
-                "mission_id": mission_id,
-                "error": str(exc),
-                "git_diff": get_git_diff(self.root),
-                "handoffs": get_handoffs(mission_id),
-                "verification_runs": get_verification_runs(mission_id),
-                "tasks": get_tasks(mission_id),
-                "attempts": get_task_attempts(mission_id),
-                "progress": mission_progress(mission_id),
-            }
+            promotion.cleanup_after_terminal(
+                stage,
+                mission_status="completed",
+                evidence_dir=self._evidence_dir(),
+                verification=self._last_verification_dict(),
+            )
+            return result
+        except GateFailure as exc:
+            self._save_promotion_status(mission_id, exc.code.replace("-", "_"))
+            return self._finalize_blocked(
+                mission_id,
+                str(exc),
+                "REJECT",
+                stage=stage,
+                code=exc.code,
+                details=exc.details,
+            )
+        except (VerificationError, DeveloperNoChangeError, ScopeViolationError) as exc:
+            return self._finalize_blocked(
+                mission_id,
+                str(exc),
+                "REJECT",
+                stage=stage,
+                code=type(exc).__name__,
+            )
+        except Exception as exc:  # noqa: BLE001 - surfaced as a failed mission with stage retained
+            return {**self._failed_result(mission_id, exc), "promotion_status": "error"}
 
     # ------------------------------------------------------------------ stages
 
@@ -631,33 +1008,20 @@ class MultiAgentOrchestrator:
         goal: str,
         model_name: str,
         baseline: dict[str, str],
+        stage: promotion.Stage,
     ) -> str:
         task_id = task_rec["id"]
-        write_paths = task_rec.get("write_paths") or extract_paths(goal)
+        write_paths = task_rec.get("write_paths") or list(stage.scope)
         update_task_status(task_id, "running")
         self._emit(
             "developer", "info",
             f"Developer agent starting work on task #{task_id} with {model_name}",
             model=model_name,
             write_paths=write_paths,
+            stage_dir=str(stage.stage_dir),
         )
 
-        tools = get_project_tools(self.root)
-        dev_agent = Agent(
-            role="Implementation Developer",
-            goal=f"Implement the requested code change directly in the project files: {goal}",
-            backstory=(
-                "You are an expert autonomous software engineer. You inspect existing code using read_file "
-                "or list_dir, and you write the necessary files or patches using write_file or patch_file. "
-                "You can also use ```write:<file_path>\\n<content>``` blocks. "
-                "You must produce real file changes, not only a plan."
-            ),
-            llm=_make_llm(model_name, self.base_url),
-            tools=tools,
-            verbose=True,
-            allow_delegation=False,
-        )
-
+        tools = get_project_tools(stage.workspace)
         scope_text = (
             "Declared write scope (do not modify other files):\n- " + "\n- ".join(write_paths)
             if write_paths
@@ -665,70 +1029,83 @@ class MultiAgentOrchestrator:
         )
         prompt = f"""
 PROJECT ROOT: {self.root}
+WORKSPACE (staged copy; write relative paths here): {stage.workspace}
 MISSION GOAL: {goal}
 
 {scope_text}
 
 INSTRUCTIONS:
 1. Read the relevant existing files first.
-2. Implement the requested change directly in the project files.
+2. Implement the requested change directly in the staged workspace files.
 3. Prefer patch_file for small edits. For complete files use write_file or this exact block format:
 ```write:<relative_path>
 <valid source code>
 ```
-4. Do NOT output 'diff --git' or unified-diff headers inside a source file.
-5. Do NOT claim success without actually writing the files.
-6. Finish with a short summary of the files you changed.
+4. Do NOT edit files outside the declared write scope: the candidate is rejected if you do.
+5. Do NOT output 'diff --git' or unified-diff headers inside a source file.
+6. Nothing is live until review and promotion; only the staged copy may change.
+7. There is no shell or test runner tool: the independent tester verifies later.
+8. Do NOT claim success without actually writing the files.
+9. Finish with a short summary of the files you changed.
 """
-        crew_task = Task(
-            description=prompt,
-            expected_output="Summary of files actually modified and the changes made.",
-            agent=dev_agent,
+        output = self._call_model(
+            "Implementation Developer",
+            model_name,
+            prompt,
+            goal=f"Implement the requested code change in the staged candidate: {goal}",
+            backstory=(
+                "You are an expert autonomous software engineer. You inspect existing code using read_file "
+                "or list_dir, and you write the necessary files or patches using write_file or patch_file. "
+                "You can also use ```write:<file_path>\n<content>``` blocks. "
+                "You must produce real file changes in the staged workspace, not only a plan."
+            ),
+            expected_output="Summary of files actually modified in the staged workspace and the changes made.",
+            tools=tools,
         )
-        before = self._snapshot()
-        try:
-            output = self._call_model(dev_agent, crew_task)
-            actions = _apply_text_actions(self.root, output)
-            after = self._snapshot()
-            diff, changed = diff_snapshots(before, after)
-            self._check_scope(changed, write_paths)
-
-            if not changed:
-                raise DeveloperNoChangeError(
-                    "Developer produced no workspace change. "
-                    f"Actions parsed: {actions or 'none'}. The model output did not modify files."
-                )
-
-            record_task_attempt(
-                task_id,
-                "completed",
-                output=_truncate(output),
+        actions = _apply_text_actions(stage.workspace, output)
+        promotion.normalize_staged_newlines(stage)
+        verdict = self._validate_stage(stage)
+        diff, changed, _stat = promotion.candidate_diff(stage)
+        # The no-change check runs before the invalid-verdict branch: validate() reports an
+        # empty candidate as invalid, which would otherwise mask DeveloperNoChangeError.
+        if not changed:
+            error_msg = (
+                "Developer produced no workspace change. "
+                f"Actions parsed: {actions or 'none'}. The model output did not modify files."
             )
-            update_task_status(task_id, "completed")
-            summary = (
-                f"Developer modified {len(changed)} file(s): {', '.join(changed)}. "
-                f"Actions: {len(actions)}."
+            record_task_attempt(task_id, "failed", output=_truncate(output), error=_truncate(error_msg, 2000))
+            update_task_status(task_id, "failed", error=_truncate(error_msg, 2000))
+            raise DeveloperNoChangeError(error_msg)
+        if not verdict["valid"]:
+            error_msg = "; ".join(verdict["errors"])
+            record_task_attempt(task_id, "failed", output=_truncate(output), error=_truncate(error_msg, 2000))
+            update_task_status(task_id, "failed", error=_truncate(error_msg, 2000))
+            raise GateFailure(
+                "Staged candidate rejected by the validation gate: " + error_msg,
+                code="candidate-rejected",
+                details={"errors": verdict["errors"]},
             )
-            record_handoff(
-                mission_id=mission_id,
-                from_role="developer",
-                to_role="tester",
-                summary=summary,
-                payload={
-                    "model": model_name,
-                    "changed_paths": changed,
-                    "actions": actions,
-                    "diff_sample": _truncate(diff, 4000),
-                    "output_sample": _truncate(output, 1500),
-                },
-            )
-            self._emit("developer", "info", summary, mission_id=mission_id, changed_paths=changed)
-            return output
-        except Exception as exc:
-            record_task_attempt(task_id, "failed", error=str(exc))
-            update_task_status(task_id, "failed", error=str(exc))
-            self._emit("developer", "error", f"Developer failed: {exc}", mission_id=mission_id)
-            raise
+        record_task_attempt(task_id, "completed", output=_truncate(output))
+        update_task_status(task_id, "completed")
+        summary = (
+            f"Developer staged {len(changed)} file(s): {', '.join(changed)}. "
+            f"Actions: {len(actions)}."
+        )
+        record_handoff(
+            mission_id=mission_id,
+            from_role="developer",
+            to_role="tester",
+            summary=summary,
+            payload={
+                "model": model_name,
+                "changed_paths": changed,
+                "actions": actions,
+                "diff_sample": _truncate(diff, 4000),
+                "output_sample": _truncate(output, 1500),
+            },
+        )
+        self._emit("developer", "info", summary, mission_id=mission_id, changed_paths=changed)
+        return output
 
     def _run_tester_stage(
         self,
@@ -736,67 +1113,109 @@ INSTRUCTIONS:
         task_rec: dict,
         debug_model: str,
         baseline: dict[str, str],
-        max_retries: int = 2,
+        stage: promotion.Stage,
+        max_attempts: int | None = None,
     ) -> dict:
         task_id = task_rec["id"]
+        fresh = get_task(task_id) or task_rec
+        attempts_used = int(fresh.get("attempts") or 0)
+        max_attempts = MAX_REPAIR_ATTEMPTS if max_attempts is None else max_attempts
+        if attempts_used > MAX_TOTAL_STAGE_ATTEMPTS:
+            raise VerificationError("Verification repair budget exhausted across resumes.")
+        write_paths = task_rec.get("write_paths") or list(stage.scope)
         update_task_status(task_id, "running")
         self._emit(
             "tester", "info",
-            f"Tester running automated verification on project {self.root.name}",
+            f"Tester independently verifying the staged candidate for mission #{mission_id}",
             mission_id=mission_id,
+            max_attempts=max_attempts,
         )
 
-        last_res = None
-        for attempt in range(max_retries + 1):
-            res = run_verification(self.root, timeout=300)
-            last_res = res
-            record_verification_run(
-                mission_id=mission_id,
-                task_id=task_id,
-                command=res["command"],
-                exit_code=res["exit_code"],
-                stdout=_truncate(res["stdout"], 40_000),
-                stderr=_truncate(res["stderr"], 40_000),
-                passed=res["passed"],
-            )
+        last_error = "candidate validation never passed"
+        report = None
+        for attempt in range(max_attempts + 1):
+            verdict = self._validate_stage(stage)
+            if not verdict["valid"]:
+                errors = "; ".join(verdict["errors"])
+                last_error = errors
+                record_verification_run(
+                    mission_id=mission_id,
+                    task_id=task_id,
+                    command="harness:validate",
+                    exit_code=1,
+                    stdout="",
+                    stderr=_truncate(errors, 40_000),
+                    passed=False,
+                )
+                if attempt >= max_attempts:
+                    break
+                record_handoff(
+                    mission_id=mission_id,
+                    from_role="tester",
+                    to_role="debugger",
+                    summary=f"Candidate validation failed (attempt {attempt + 1}); calling debugger.",
+                    payload={"error": _truncate(errors, 4000), "attempt": attempt + 1},
+                )
+                self._run_debugger(mission_id, debug_model, errors, write_paths, baseline, stage)
+                continue
 
-            if res["passed"]:
-                summary = f"Verification PASSED with '{res['command']}' in {res['duration_s']}s"
+            report = self._run_verification(stage, task_id)
+            if report.passed:
+                summary = (
+                    "Candidate and oracle suites PASSED "
+                    f"(candidate {report.candidate.duration_s}s, oracle {report.oracle.duration_s}s)"
+                )
                 record_handoff(
                     mission_id=mission_id,
                     from_role="tester",
                     to_role="reviewer",
                     summary=summary,
-                    payload={"exit_code": 0, "command": res["command"]},
+                    payload={
+                        "candidate": report.candidate.passed,
+                        "oracle": report.oracle.passed,
+                        "report": str(report.verify_dir / "evidence" / "report.json"),
+                    },
                 )
                 record_task_attempt(task_id, "completed", output=summary)
                 update_task_status(task_id, "completed")
                 self._emit("tester", "info", summary, mission_id=mission_id)
-                return res
+                return {"report": report}
 
-            if attempt >= max_retries:
+            last_error = report.error or "candidate/oracle suite failed"
+            if attempt >= max_attempts:
                 break
-
-            error_msg = f"Test failure (exit code {res['exit_code']}):\n{res['stdout']}\n{res['stderr']}"
-            self._emit(
-                "tester", "warning",
-                f"Verification failed on attempt {attempt + 1}. Calling debugger.",
-                mission_id=mission_id,
+            error_msg = (
+                f"Verification failed (attempt {attempt + 1}): {report.error}\n"
+                f"CANDIDATE:\n{report.candidate.stdout_tail[-4000:]}\n{report.candidate.stderr_tail[-4000:]}\n"
+                f"ORACLE:\n{report.oracle.stdout_tail[-4000:]}\n{report.oracle.stderr_tail[-4000:]}"
             )
             record_handoff(
                 mission_id=mission_id,
                 from_role="tester",
                 to_role="debugger",
-                summary=f"Tests failed (attempt {attempt + 1})",
-                payload={"error": _truncate(error_msg, 4000)},
+                summary=f"Verification failed on attempt {attempt + 1}. Calling debugger.",
+                payload={"error": _truncate(error_msg, 4000), "attempt": attempt + 1},
             )
-            self._run_debugger(mission_id, debug_model, error_msg, task_rec.get("write_paths") or [], baseline)
+            self._emit(
+                "tester", "warning",
+                f"Verification failed on attempt {attempt + 1}. Calling debugger.",
+                mission_id=mission_id,
+            )
+            self._run_debugger(mission_id, debug_model, error_msg, write_paths, baseline, stage)
 
-        update_task_status(task_id, "failed", error="Tests failed after retries")
-        record_task_attempt(task_id, "failed", error=f"Tests failed after {max_retries} retries")
+        error_summary = _truncate(last_error, 4000)
+        record_task_attempt(task_id, "failed", error=error_summary)
+        update_task_status(task_id, "failed", error=error_summary)
+        self._save_promotion_status(mission_id, "verification_failed")
+        failures = []
+        if report is not None:
+            if not report.candidate.passed:
+                failures.append("candidate: " + str(report.candidate.failures or report.candidate.error))
+            if not report.oracle.passed:
+                failures.append("oracle: " + str(report.oracle.failures or report.oracle.error))
         raise VerificationError(
-            f"Verification failed after {max_retries} retries. Last output:\n"
-            f"{(last_res or {}).get('stderr', '')[-3000:]}"
+            f"Verification failed after {max_attempts + 1} attempt(s): "
+            + ("; ".join(failures) if failures else error_summary)
         )
 
     def _run_debugger(
@@ -806,54 +1225,54 @@ INSTRUCTIONS:
         error_msg: str,
         write_paths: list[str],
         baseline: dict[str, str],
+        stage: promotion.Stage,
     ) -> None:
-        """Debugger agent repairs code based on test failures."""
-        tools = get_project_tools(self.root)
-        debugger = Agent(
-            role="Software Debugger",
-            goal="Analyze the test failure error and fix the code to make tests pass.",
-            backstory=(
-                "You are an expert troubleshooter. You read error logs, locate broken code, "
-                "and apply precise fixes using write_file or patch_file."
-            ),
-            llm=_make_llm(model_name, self.base_url),
-            tools=tools,
-            verbose=True,
-            allow_delegation=False,
-        )
-
+        """Debugger agent repairs only the staged candidate based on verification failures."""
+        tools = get_project_tools(stage.workspace)
         scope_text = (
-            "Stay inside the declared write scope:\n- " + "\n- ".join(write_paths)
+            "Stay inside the staged declared write scope:\n- " + "\n- ".join(write_paths)
             if write_paths
             else "Stay focused on the failing code."
         )
         prompt = f"""
 PROJECT ROOT: {self.root}
+WORKSPACE (staged copy; write relative paths here): {stage.workspace}
 TEST FAILURE LOGS:
 {_truncate(error_msg, 12_000)}
 
 {scope_text}
 
 INSTRUCTIONS:
-1. Examine the failing tests and the current code.
-2. Fix the error directly in the source files using patch_file or:
+1. Examine the failing tests and the current staged code.
+2. Fix the error directly in the staged source files using patch_file or:
 ```write:<relative_path>
 <valid source code>
 ```
-3. Do NOT include 'diff --git' or unified-diff headers inside a source file.
-4. Keep changes minimal and focused on resolving the error.
+3. Do NOT edit files outside the declared write scope; out-of-scope changes are rejected.
+4. Nothing is live until review and promotion; only the staged copy may change.
+5. There is no shell or test runner tool available.
+6. Do NOT include 'diff --git' or unified-diff headers inside a source file.
+7. Keep changes minimal and focused on resolving the error.
 """
-        task = Task(description=prompt, expected_output="Summary of the fix actually applied.", agent=debugger)
-        before = self._snapshot()
-        output = self._call_model(debugger, task)
-        actions = _apply_text_actions(self.root, output)
-        after = self._snapshot()
-        diff, changed = diff_snapshots(before, after)
-        self._check_scope(changed, write_paths)
+        output = self._call_model(
+            "Software Debugger",
+            model_name,
+            prompt,
+            goal="Analyze the verification failure and fix the staged candidate.",
+            backstory=(
+                "You are an expert troubleshooter. You read error logs, locate broken code, "
+                "and apply precise fixes using write_file or patch_file in the staged workspace."
+            ),
+            expected_output="Summary of the staged fix actually applied.",
+            tools=tools,
+        )
+        actions = _apply_text_actions(stage.workspace, output)
+        promotion.normalize_staged_newlines(stage)
+        diff, changed, _stat = promotion.candidate_diff(stage)
         summary = (
-            f"Debugger modified {len(changed)} file(s): {', '.join(changed)}."
+            f"Debugger staged {len(changed)} file(s): {', '.join(changed)}."
             if changed
-            else "Debugger produced no file change."
+            else "Debugger produced no staged file change."
         )
         record_handoff(
             mission_id,
@@ -876,75 +1295,61 @@ INSTRUCTIONS:
         task_rec: dict,
         model_name: str,
         baseline: dict[str, str],
+        stage: promotion.Stage,
     ) -> tuple[str, str]:
         task_id = task_rec["id"]
         update_task_status(task_id, "running")
-        diff, changed, stat = self._mission_diff(baseline)
-        changed = self._collect_changed_paths(mission_id, changed)
-        recovered = False
-        if not diff.strip() and changed:
-            recovered_diff = get_git_diff(self.root)
-            if recovered_diff.strip():
-                diff = recovered_diff
-                stat = diff_stats(diff)
-                recovered = True
-        self._emit(
-            "reviewer", "info",
-            f"Reviewer inspecting mission diff ({stat}) on task #{task_id}",
-            mission_id=mission_id,
-        )
-
-        reviewer = Agent(
-            role="Code Reviewer & Quality Gatekeeper",
-            goal="Verify code quality, adherence to scope, and absence of regressions in the mission diff.",
-            backstory=(
-                "You are a strict, diligent senior engineer. You review only the mission diff. "
-                "You give an APPROVE or REJECT verdict on the first line."
-            ),
-            llm=_make_llm(model_name, self.base_url),
-            verbose=True,
-            allow_delegation=False,
-        )
-
-        recovery_note = (
-            "\nNOTE: this mission was resumed and its original baseline was not persisted. "
-            "The diff below is the current working-tree diff recovered from handoffs; "
-            "review it as the mission's change set.\n"
-            if recovered
-            else ""
+        diff, changed, stat = promotion.candidate_diff(stage)
+        manifest = promotion.read_manifest(stage)
+        validation_text = (
+            f"validated={bool(manifest.get('validated'))} validated_by_broker=True "
+            f"verified={bool(manifest.get('verified'))} "
+            f"evidence={(str(manifest.get('evidence') or '(none)'))[:500]}"
         )
         verification_text = "\n".join(
             f"- {run.get('command')}: exit {run.get('exit_code')} "
             f"({'PASS' if run.get('passed') else 'FAIL'})"
             for run in get_verification_runs(mission_id)
         ) or "- No verification run recorded."
+        self._emit(
+            "reviewer", "info",
+            f"Reviewer inspecting the staged candidate ({stat}) on task #{task_id}",
+            mission_id=mission_id,
+        )
         prompt = f"""
 PROJECT ROOT: {self.root}
-MISSION CHANGED FILES: {', '.join(changed) or '(none)'}
-{recovery_note}
-GIT STATUS:
-{get_git_status(self.root)}
+CANDIDATE STAGE: {stage.stage_dir}
+CANDIDATE CHANGED FILES: {', '.join(changed) or '(none)'}
+
+VALIDATION RESULT:
+{validation_text}
 
 VERIFICATION RUNS:
 {verification_text}
 
-MISSION-SCOPED DIFF TO REVIEW:
+CANDIDATE DIFF TO REVIEW:
 {_truncate(diff, 60_000)}
 
 INSTRUCTIONS:
-1. Review only the mission-scoped diff above; unrelated pre-existing working-tree changes are not part of this mission.
-2. Check correctness, safety, scope adherence, and missing tests.
-3. Base every claim on the diff, changed-file list, and verification runs above. Do not invent imports, files, or failures that are not present in that evidence.
-4. Start your response with exactly 'APPROVE' or 'REJECT' on the first line.
-5. Follow the verdict with concise review notes and blocking issues.
+1. This candidate is NOT yet applied to the live project. Review only the candidate diff above.
+2. An APPROVE verdict leads to promotion; a REJECT verdict keeps the candidate unapplied.
+3. Check correctness, safety, scope adherence, and missing tests.
+4. Base every claim on the candidate diff, changed-file list, validation result and verification runs above. Do not invent imports, files, or failures that are not present in that evidence.
+5. Start your response with exactly 'APPROVE' or 'REJECT' on the first line.
+6. Follow the verdict with concise review notes and blocking issues.
 """
-        task = Task(
-            description=prompt,
-            expected_output="APPROVE or REJECT verdict on the first line, followed by review notes.",
-            agent=reviewer,
-        )
         try:
-            review_text = self._call_model(reviewer, task)
+            review_text = self._call_model(
+                "Code Reviewer & Quality Gatekeeper",
+                model_name,
+                prompt,
+                goal="Verify code quality, adherence to scope, and absence of regressions in the candidate diff.",
+                backstory=(
+                    "You are a strict, diligent senior engineer. You review only the candidate diff. "
+                    "You give an APPROVE or REJECT verdict on the first line."
+                ),
+                expected_output="APPROVE or REJECT verdict on the first line, followed by review notes.",
+            )
             verdict = parse_reviewer_verdict(review_text)
             record_task_attempt(task_id, "completed", output=_truncate(review_text))
             update_task_status(task_id, "completed")
@@ -959,8 +1364,10 @@ INSTRUCTIONS:
                     "verdict": verdict,
                     "review_notes": _truncate(review_text, 2000),
                     "changed_paths": changed,
+                    "candidate": True,
                 },
             )
+            self._save_promotion_status(mission_id, "reviewed" if verdict == "APPROVE" else "review_rejected")
             self._emit("reviewer", "info", summary, mission_id=mission_id, verdict=verdict)
             return review_text, verdict
         except Exception as exc:
