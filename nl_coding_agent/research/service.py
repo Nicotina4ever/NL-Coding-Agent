@@ -28,6 +28,13 @@ from typing import Any, Callable, Mapping, Sequence
 from nl_coding_agent.core import auto_review, permissions
 
 from .fetch import FetchDenied, FetchError, Fetcher, RetrievalPolicy, Transport
+from .injection import (
+    MAX_WARNINGS,
+    InjectionScan,
+    combine_scans,
+    scan_payload,
+    scan_text,
+)
 from .github import GitHubError, GitHubResearchClient
 from .huggingface import HuggingFaceError, HuggingFaceResearchClient
 from .providers import (
@@ -172,6 +179,62 @@ class ResearchService:
                 + ", http_transport=" + ("injected" if self._http_transport else "none")
                 + ", tokens=REDACTED)")
 
+    # -------------------------------------------------------- injection scan
+    @staticmethod
+    def _scan_injection(values, *, source: str = "") -> InjectionScan:
+        """Scan bounded untrusted values without executing/evaluating anything."""
+        scans = []
+        for label, value in values:
+            if value in (None, ""):
+                continue
+            if isinstance(value, (str, bytes)):
+                scans.append(scan_text(value, source=source + "." + label))
+            else:
+                scans.append(scan_payload(value, source=source + "." + label))
+        return combine_scans(scans)
+
+    @staticmethod
+    def _injection_summary(scan: InjectionScan) -> dict:
+        return {"count": scan.count, "kinds": list(scan.kinds),
+                "highest_severity": scan.highest_severity,
+                "scanned_chars": scan.scanned_chars,
+                "truncated": bool(scan.truncated),
+                "content_sha256": scan.content_sha256, "untrusted": True}
+
+    def _audit_injection(self, operation: str, scan: InjectionScan, *,
+                         canonical_url: str = "", ref: str = "",
+                         source_id: int | None = None,
+                         project_id: int | None = None,
+                         mission_id: int | None = None) -> None:
+        if not scan.has_signals:
+            return
+        try:
+            from nl_coding_agent.persistence.database import init_db, log_event
+            conn = init_db()
+            try:
+                for signal in scan.signals[:20]:
+                    payload = {
+                        "url": str(canonical_url or "")[:2000],
+                        "ref": str(source_id if source_id is not None
+                                   else ref or "")[:500],
+                        "sha256": signal.sha256,
+                        "hash": signal.sha256,
+                        "kind": signal.kind,
+                    }
+                    log_event(
+                        conn,
+                        "Untrusted research content contained instruction-like text",
+                        source="research", payload=json.dumps(payload,
+                                                              ensure_ascii=False,
+                                                              sort_keys=True),
+                        project_id=project_id, mission_id=mission_id,
+                        event_kind="research_injection")
+            finally:
+                conn.close()
+        except Exception:
+            # Audit persistence must not turn a successful read into an error.
+            pass
+
     # ------------------------------------------------------------- boundary
     def capability_for_operation(self, operation: str) -> str:
         capability = CAPABILITY_BY_OPERATION.get(str(operation))
@@ -303,14 +366,28 @@ class ResearchService:
                 boundary=boundary_result.boundary,
                 payload={"routing": decision.as_dict(),
                          "provider_status": response.status.as_dict()})
+        results = [item.as_dict() for item in response.results]
+        scans = []
+        for item in results:
+            item_url = str(item.get("url") or "search")
+            item_scan = scan_payload(item, source=item_url)
+            if item_scan.has_signals:
+                self._audit_injection("search", item_scan,
+                                      canonical_url=item_url, ref=str(query),
+                                      project_id=project_id,
+                                      mission_id=mission_id)
+            scans.append(item_scan)
+        scan = combine_scans(scans)
         return ResearchResult(
             operation="search", capability=boundary_result.capability,
             outcome=OUTCOME_ALLOWED, reason="",
             boundary=boundary_result.boundary,
             payload={"routing": decision.as_dict(),
                      "provider_status": response.status.as_dict(),
-                     "results": [item.as_dict() for item in response.results],
-                     "untrusted": True})
+                     "results": results,
+                     "untrusted": True,
+                     "injection_warnings": scan.warnings(MAX_WARNINGS),
+                     "injection_scan": self._injection_summary(scan)})
 
     # --------------------------------------------------------------- fetch
     def fetch_read(self, url: str, *, project_id: int | None = None,
@@ -374,6 +451,12 @@ class ResearchService:
                             "text": page.text, "markdown": page.markdown,
                             "truncated": page.truncated, "untrusted": True,
                             "removed": list(page.removed)}
+        scan_values = [("html", document.content), ("title", title)]
+        if not isinstance(page, UnsupportedDocument):
+            scan_values.extend([("text", page.text), ("markdown", page.markdown),
+                                ("metadata", dict(page.metadata))])
+        scan = self._scan_injection(scan_values,
+                                    source=document.canonical_url)
         try:
             saved = self.store.save_source(
                 document.canonical_url, requested_url=document.source.requested_url,
@@ -391,6 +474,13 @@ class ResearchService:
             return self._error("fetch_read", permissions.CAPABILITY_WEB_FETCH, exc,
                                captured[-1] if captured else None)
         provenance = document.source.provenance.to_dict()
+        self._audit_injection("fetch_read", scan,
+                              canonical_url=document.canonical_url,
+                              ref=str(saved["id"]), source_id=saved["id"],
+                              project_id=project_id, mission_id=mission_id)
+        warnings = scan.warnings(MAX_WARNINGS)
+        if isinstance(page_payload, dict):
+            page_payload["injection_warnings"] = warnings
         return ResearchResult(
             operation="fetch_read", capability=permissions.CAPABILITY_WEB_FETCH,
             outcome=OUTCOME_ALLOWED, boundary=(captured[-1].boundary if captured else {}),
@@ -398,7 +488,9 @@ class ResearchService:
                      "canonical_url": document.canonical_url,
                      "title": title, "supported": supported,
                      "page": page_payload, "provenance": provenance,
-                     "untrusted": True})
+                     "untrusted": True,
+                     "injection_warnings": warnings,
+                     "injection_scan": self._injection_summary(scan)})
 
     # ----------------------------------------------------------- investigators
     def _github(self):
@@ -431,6 +523,10 @@ class ResearchService:
             return self._error(operation, boundary_result.capability, exc, boundary_result)
         saved = None
         citation = None
+        canonical_url = str((result_dict.get("provenance") or {}).get(
+            "canonical_url") or "")
+        scan = self._scan_injection([("result", result_dict)],
+                                    source=canonical_url or operation)
         try:
             provenance = result_dict.get("provenance") or {}
             canonical_url = str(provenance.get("canonical_url") or "")
@@ -451,13 +547,19 @@ class ResearchService:
                     saved["id"], note=operation + " read-only investigator result")
         except ResearchStoreError as exc:
             return self._error(operation, boundary_result.capability, exc, boundary_result)
+        self._audit_injection(operation, scan, canonical_url=canonical_url,
+                              ref=str(saved["id"] if saved else ""),
+                              source_id=saved["id"] if saved else None,
+                              project_id=project_id, mission_id=mission_id)
         return ResearchResult(operation=operation, capability=boundary_result.capability,
                               outcome=OUTCOME_ALLOWED,
                               boundary=boundary_result.boundary,
                               payload={"action": action, "result": result_dict,
                                        "source_id": saved["id"] if saved else None,
                                        "citation_id": citation["id"] if citation else None,
-                                       "untrusted": True})
+                                       "untrusted": True,
+                                       "injection_warnings": scan.warnings(MAX_WARNINGS),
+                                       "injection_scan": self._injection_summary(scan)})
 
     def github_lookup(self, *, action: str = "repository",
                       full_name: str | None = None, query: str | None = None,

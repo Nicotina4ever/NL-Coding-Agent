@@ -10,7 +10,9 @@ Increments:
   knowledge store (sources/citations/findings/conflicts). No real provider
   transport or SDK exists;
 - R3: read-only GitHub and Hugging Face Hub investigator clients through injected
-  transports (no network library import, no real network in tests).
+  transports (no network library import, no real network in tests);
+- R7: bounded deterministic prompt-injection/untrusted-content scanning integrated
+  into service results with redacted warnings and source='research' audit events.
 
 Still absent: a real network transport/acceptance, browser automation,
 PDF/Office extraction, research planning/GUI and model/agent integration.
@@ -18,6 +20,16 @@ Real-network acceptance remains MANUAL-PENDING (see docs/RESEARCH_ENGINE.md).
 """
 from __future__ import annotations
 
+from .injection import (
+    InjectionScan,
+    InjectionScanError,
+    InjectionSignal,
+    combine_scans,
+    scan_html,
+    scan_payload,
+    scan_text,
+    warnings_for,
+)
 from .fetch import (
     DEFAULT_ACCEPT,
     DEFAULT_USER_AGENT,
@@ -182,6 +194,8 @@ from .tools import (
 )
 
 __all__ = [
+    "InjectionScan", "InjectionScanError", "InjectionSignal", "combine_scans",
+    "scan_html", "scan_payload", "scan_text", "warnings_for",
     "KIND_BINARY", "KIND_HTML", "KIND_JSON", "KIND_MARKDOWN", "KIND_TEXT",
     "KIND_UNSUPPORTED", "RESEARCH_SCHEMA_VERSION", "TRUST_MARKER", "Citation",
     "Provenance", "ResearchModelError", "RetrievedDocument", "Source",
