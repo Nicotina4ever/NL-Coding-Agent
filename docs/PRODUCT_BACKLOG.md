@@ -8,6 +8,8 @@
 
 **Snapshot:** 2026-10-28 16:12 Europe/Rome - git HEAD 7e778da (clean at snapshot; only the backlog deliverables untracked/modified) - Python 3.12.10 (python/python.exe) - measured pytest --collect-only = **134 tests collected** (full suite not run by this consolidation; see [NL-BP-150](#nl-bp-150)). Phase 2 (task-6) was being implemented concurrently: C1a/C1b/C2/C3/C4/C5 landed during consolidation; C6 (orchestrator staging wiring) and C7 remain pending at this snapshot.
 
+**Addendum import v3.7 (2026-10-28, queue-only):** 39 new planned requirements NL-BP-166..204 from the preserved user addendum docs/product-blueprint/addenda/ were added under a new pending program stage 7 after a read-only dedupe cross-check; no existing ID/acceptance/status or stage 1-6 status was changed and no implementation started. Totals: 156 requirements (33 verified / 64 partial / 56 planned / 3 blocked).
+
 ## How to use this backlog
 
 1. **Pick from the top, not from chat.** Execute only requirements that are READY (all dependencies done). P0 first, then P1; a single active requirement/milestone at a time unless write scopes are disjoint.
@@ -41,19 +43,21 @@ evidence only.
 
 | Stage | Name | Status | Requirements | IDs | Depends on |
 |---|---|---|---|---|---|
-| 1 | Repository relocation and path reconciliation | COMPLETE | 1 | NL-BP-143 | - |
-| 2 | Transactional staging, safety and self-healing | COMPLETE | 15 | NL-BP-3-5, 54-60, 65, 72-74, 76 | 1 |
-| 3 | Persistent autonomous supervisor and verified handoff | COMPLETE (Tier B blocked evidence) | 13 | NL-BP-12, 50-53, 61-64, 66, 67, 75, 77 | 2 |
-| 4 | Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities | COMPLETE | 40 | NL-BP-1, 2, 6-11, 13, 20-46, 68-71 | 3 |
-| 5 | Repository cleanup and optimization | COMPLETE | 8 | NL-BP-90-97 | 4 |
-| 6 | Lightweight portable/bootstrapper and final release testing | IN PROGRESS |  40 | NL-BP-110-124, 140-142, 144-151 | 5 |
+| 1 | Repository relocation and path reconciliation | COMPLETE | 1 | NL-BP 143 | - |
+| 2 | Transactional staging, safety and self-healing | COMPLETE | 15 | NL-BP 3-5, 54-60, 65, 72-74, 76 | 1 |
+| 3 | Persistent autonomous supervisor and verified handoff | COMPLETE | 13 | NL-BP 12, 50-53, 61-64, 66-67, 75, 77 | 2 |
+| 4 | Complete CrewAI integration, model intelligence, GUI, multimodal and voice capabilities | COMPLETE | 40 | NL-BP 1-2, 6-11, 13, 20-46, 68-71 | 3 |
+| 5 | Repository cleanup and optimization | COMPLETE | 8 | NL-BP 90-97 | 4 |
+| 6 | Lightweight portable/bootstrapper and final release testing | IN PROGRESS | 40 | NL-BP 110-124, 140-142, 144-165 | 5 |
+| 7 | Universal autonomy, research intelligence and Mega Suite | PENDING | 39 | NL-BP 166-204 | 6 |
 
 Execution rule: a later stage starts only when the previous stage's gates pass, unless the
-Lead records an explicit evidence-backed exception for independent low-risk work. Stage 1 is
-complete (verified relocation: see docs/WORKSPACE_MIGRATION.md); Stage 2 is complete (verified
-harness C1-C9b, permissions/tool registry, SH-06); Stage 3 is in progress: the persistent
-supervisor core/CLI/service/GUI (C3a-C3d) and SH-07 Tier A (fake model) are implemented, while
-SH-07 Tier B (real local models) remains pending explicit authorization and blocks NL-BP-063.
+Lead records an explicit evidence-backed exception for independent low-risk work. Stages 1-5
+are complete; stage 6 is in progress (cross-platform private beta extension; real-hardware,
+clean-machine, CI and owner authorization items remain MANUAL-PENDING). Stage 7 - Universal
+autonomy, research intelligence and Mega Suite - is **pending/queued** from the user addendum
+imported by task-59; it must not start before stage 6 gates or an explicit Lead exception.
+SH-07 Tier B (real local models) remains BLOCKED in NL-BP-063 and is not relaxed by the addendum.
 
 ## Summary
 
@@ -61,18 +65,18 @@ SH-07 Tier B (real local models) remains pending explicit authorization and bloc
 |---|---|---|---|---|---|
 | verified | 20 | 13 | 0 | 0 | 33 |
 | partial | 26 | 26 | 11 | 1 | 64 |
-| planned | 7 | 4 | 5 | 1 | 17 |
+| planned | 31 | 15 | 9 | 1 | 56 |
 | blocked | 3 | 0 | 0 | 0 | 3 |
-| **Total** | 56 | 43 | 16 | 2 | 117 |
+| **Total** | **80** | **54** | **20** | **2** | **156** |
 
 | Area | Requirements | verified | partial | planned | blocked |
 |---|---|---|---|---|---|
-| Area 1 - CrewAI + CrewAI Flows first-class integration | 13 | 6 | 7 | 0 | 0 |
-| Area 2 - Studio GUI + multimodal chat | 27 | 1 | 7 | 19 | 0 |
-| Area 3 - Universal autonomous development | 28 | 16 | 6 | 5 | 1 |
-| Area 4 - Repository hygiene | 8 | 2 | 4 | 2 | 0 |
-| Area 5 - Lightweight installation + portable distribution | 15 | 2 | 5 | 8 | 0 |
-| Area 6 - Release acceptance criteria | 12 | 0 | 5 | 4 | 3 |
+| Area 1 - CrewAI + CrewAI Flows first-class integration | 15 | 6 | 7 | 2 | 0 |
+| Area 2 - Studio GUI + multimodal chat | 32 | 3 | 23 | 6 | 0 |
+| Area 3 - Universal autonomous development | 46 | 16 | 6 | 23 | 1 |
+| Area 4 - Repository hygiene | 8 | 3 | 5 | 0 | 0 |
+| Area 5 - Lightweight installation + portable distribution | 27 | 2 | 12 | 13 | 0 |
+| Area 6 - Release acceptance criteria | 28 | 3 | 11 | 12 | 2 |
 
 ### Area ownership
 
@@ -86,6 +90,8 @@ SH-07 Tier B (real local models) remains pending explicit authorization and bloc
 | Area 6 - Release acceptance criteria | `task-14` | Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds. |
 
 ## Changelog
+
+**v3.7 (2026-10-28)** - Queue-only import of the user-supplied Universal Autonomy/Research/Mega Suite addendum (preserved unchanged at docs/product-blueprint/addenda/, MANIFEST verified; docs/product-blueprint/addenda/README_IMPORT.md rules respected: merge, do not replace). Read-only cross-check against the 117 live requirements produced a 20-group dedupe mapping; 39 genuinely new capabilities became planned requirements **NL-BP-166..204** under a new pending program stage 7. Covered capabilities stayed on existing IDs (dynamic teams 066/067, competence index 068/069, staged gates 054-060/063, multi-platform beta 152-165, Studio 020-046, distribution 110-124). No existing ID, acceptance criterion or stage 1-6 status was rewritten; no code, mission or network run started. SH-07 Tier B remains BLOCKED; owner authorization is still required for publication, deletion, cloud use and external distribution. Totals: 156 requirements; 33 verified / 64 partial / 56 planned / 3 blocked. This update also synchronises the program/summary tables and requirement appendix in this file with INDEX.json (previously they still showed the 103-entry view).
 
 **v3.6 (2026-10-28)** - Stage-4 G1 GUI safety controls: Settings > Advanced self-build controls (no autostart/no GUI start), read-only plan/history and an always-reachable emergency Pause/Stop using the cooperative supervisor path (NL-BP-023/024 partial, 064 evidence; 20 new offscreen tests). Stage-6j/6k: genuine WSL2 Ubuntu execution evidence (shell syntax, launcher execution, reproducibility/package/rehearsal/acceptance/fetch/beta plans), POSIX Self-Build launcher bad-substitution fix, and byte-identical cross-platform release manifests/beta package. Full suite 722 passed. The user-supplied universal-autonomy/research addendum is preserved as queue-only input; no features from it are implemented. External/manual acceptance items unchanged.
 
@@ -359,6 +365,40 @@ _CrewAI as a first-class engine dependency (not a cloned vendor checkout), agent
   - docs/CURRENT_STATE.md section 4 records the charmap fix
 - **Sources:** specifiche/01_ARCHITETTURA_E_RUNTIME.md; 03_MASTER_CHECKLIST.md#P0-10
 - **Note:** Vendor code is not patched; decoding is handled at the tool/log boundary.
+
+<a id="nl-bp-183"></a>
+### NL-BP-183 - Model Competence Lab: multi-backend inspection, capability verification and role benchmarks
+
+- **Area:** CORE - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-008, NL-BP-009, NL-BP-069, NL-BP-070
+- **Acceptance gates:**
+  - Inspects models across Ollama, LM Studio, llama.cpp, MLX/macOS, OpenAI-compatible services and optional cloud, verifying actual tool/JSON/vision/audio capabilities.
+  - Runs role-specific benchmarks (coding, test authoring, editing, review, repair, research) recording model ID, quantization, backend, prompts, options, time, memory and hardware.
+  - Uses an independent judge/evaluator: the evaluated model is never the sole judge.
+  - Results feed the existing Model/Agent Competence Index (NL-BP-069) and Model Advisor (NL-BP-068); no invented rankings.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #4
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #4
+- **Note:** Extends existing competence index/advisor; genuinely new is the lab-level multi-backend inspection/benchmark harness with independent judging.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-187"></a>
+### NL-BP-187 - Plugin/SDK extension ecosystem with documented interfaces
+
+- **Area:** CORE - **Priority:** P2 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-008, NL-BP-009, NL-BP-073
+- **Acceptance gates:**
+  - Documents interfaces for adding agent roles, parsers, model backends, tools, research connectors, UI panels and project adapters.
+  - Third-party skills carry provenance and explicit sandbox limitations; retrieved README instructions are never executed by default.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #6
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #6
+- **Note:** Expansion of Tool Registry (NL-BP-073) into a documented plugin/SDK surface.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
 
 ## Area 2 - Studio GUI + multimodal chat
 
@@ -806,6 +846,87 @@ _Professional NL-branded Studio shell; multimodal mission chat (drag-and-drop, C
   - FINAL-REQ/area-2; specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md
 - **Sources:** specifiche/11_IDE_TOOLS_LSP_DAP_MCP.md; FINAL-REQ/area-2
 - **Note:** MCP appears in the final area 2 list; no client/registry exists.
+
+<a id="nl-bp-190"></a>
+### NL-BP-190 - Visual quality lab: screenshot baselines, accessibility, DPI and multi-monitor checks
+
+- **Area:** STUDIO - **Priority:** P1 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-020, NL-BP-046, NL-BP-044
+- **Acceptance gates:**
+  - Performs screenshot-baseline and human-reviewed UI comparison plus DPI/font-scaling, accessibility, keyboard-only, resize, multi-monitor and theme checks.
+  - Measures GPU/CPU performance and debugs visual regressions without treating screenshots as proof of code correctness.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #5
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #5
+- **Note:** New quality capability; existing accessibility (NL-BP-044) covers rules/requirements but not a visual regression lab.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-191"></a>
+### NL-BP-191 - GUI interaction automation / local computer use
+
+- **Area:** STUDIO - **Priority:** P1 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-168, NL-BP-190
+- **Acceptance gates:**
+  - Optional local accessibility-tree automation, screenshots, clicking/typing in controlled workspaces.
+  - Uses live user approval for cross-project/high-impact UI actions; interactive GUI tests are separated from headless CI tests.
+  - Actions are bounded, auditable and cancellable.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #5
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #5
+- **Note:** New capability; distinct from headless offscreen GUI tests. Requires the permission engine (NL-BP-168).
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-192"></a>
+### NL-BP-192 - Multi-window / multi-session workspace
+
+- **Area:** STUDIO - **Priority:** P1 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-021, NL-BP-043
+- **Acceptance gates:**
+  - Supports concurrent projects without conflicting edits, with tabs/sessions/handoff, project-specific knowledge and per-workspace model selection.
+  - Restart restores sessions and never merges unrelated project state.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #5
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #5
+- **Note:** New UX capability; current GUI is single-window/single-project.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-193"></a>
+### NL-BP-193 - Advanced IDE parity: profiling, merge conflicts, code actions and quick-open
+
+- **Area:** STUDIO - **Priority:** P2 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-037, NL-BP-038, NL-BP-039, NL-BP-040, NL-BP-041
+- **Acceptance gates:**
+  - Adds profiling, merge-conflict resolution, code actions and quick-open on top of the existing editor/LSP/terminal/Git/test surfaces.
+  - Every action is backed by a real implementation with a test; no mocked panels are described as features.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #5
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #5
+- **Note:** Fills explicit IDE gaps left by NL-BP-037..042.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-194"></a>
+### NL-BP-194 - OCR-on-demand extraction for images, screenshots and documents
+
+- **Area:** STUDIO - **Priority:** P2 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-028, NL-BP-030
+- **Acceptance gates:**
+  - Invokes OCR only when needed for images/screenshots/scans, with language selection and page/region citation plus confidence.
+  - Runs locally/offline by default and never silently uploads attachments to cloud.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #5
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #5
+- **Note:** New extraction capability; existing media backends (NL-BP-030) do not include OCR.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
 
 ## Area 3 - Universal autonomous development
 
@@ -1326,6 +1447,307 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
 - **Sources:** specifiche/13A_GPU_CONTENTION_CLOUD_FALLBACK.md; specifiche/13_RESOURCE_SCHEDULER.md; 03_MASTER_CHECKLIST.md#P2-13
 - **Note:** No contention detection, adaptive timeouts or cloud policy engine exists.
 
+<a id="nl-bp-166"></a>
+### NL-BP-166 - Trusted Auto Review autonomy profile for routine scoped work
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-064, NL-BP-072, NL-BP-073
+- **Acceptance gates:**
+  - Trusted Auto Review auto-approves routine authorized read/write/patch, staged edits, shell tests, local private package installs, debugging, approved network research and next-mission progress under a durable project policy, with no per-action prompt spam.
+  - Independent code review and every existing staged-candidate/regression gate remain mandatory even when tool actions are auto-approved.
+  - Separate controls exist for tool auto-authorization, automated review, background mission continuation, external network, cloud LLM use, user-file access and release/deployment; enabling one never silently enables another.
+  - The effective policy is inspectable, revocable, auditable and persisted across restart.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.1
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.1
+- **Note:** Extends the existing Off/Assisted/Automatic modes (NL-BP-064) with the user-requested Trusted profile; does not weaken NL-BP-054/055-060/063 gates.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-167"></a>
+### NL-BP-167 - Full Autonomy / Unrestricted profile with truthful OS-rights disclosure
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-166, NL-BP-168, NL-BP-072
+- **Acceptance gates:**
+  - Explicit user-opt-in profile grants broad execution and optional external registered path permissions with per-scope configuration.
+  - The UI discloses the effective operating-system rights and warns that application-level filters cannot reliably sandbox arbitrary shell processes; it recommends isolated/disposable workspaces and never claims total reversibility.
+  - Deletion, publication, secrets, remote writes and other high-impact permissions remain separately controlled or are explicitly owner-overridden with risk, scope and audit trail.
+  - Emergency stop remains reachable and irreversible actions outside the approved policy stay refused.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.1
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.1
+- **Note:** No forced arbitrary max-mission cap is imposed by the addendum; existing bounded repair/gates and human stop controls stay authoritative.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-168"></a>
+### NL-BP-168 - Expanded permission capability taxonomy with durable scoped approvals
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-072, NL-BP-073
+- **Acceptance gates:**
+  - Capabilities cover read, write, execute, install-private, install-system, web-search, web-fetch, browser-interact, download, open-external-project, model-inference-local, model-inference-cloud, secret-use, git-commit, git-push, publish-release, delete, network-write, mcp-call and microphone.
+  - Scopes cover tool, process, path, project, external registered resource, host/domain, repository, task, mission, workspace, session and saved policy, with allow-once, allow-mission, allow-project, always-allow-matching-scope, deny and revoke.
+  - A pending WAIT_APPROVAL decision survives crash/restart; approvals are durable, auditable and fail closed at the execution boundary when denied.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.2
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.2
+- **Note:** Extends NL-BP-072/073 without rewriting their acceptance; the existing application filter is explicitly not an OS sandbox.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-169"></a>
+### NL-BP-169 - Research: multi-provider web search router
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-168, NL-BP-073
+- **Acceptance gates:**
+  - Multiple configurable search providers are probed for availability at runtime (e.g. Brave/Tavily/Exa/other) with no mandatory paid API.
+  - Supports general/technical/domain/date searches, query reformulation, source-reliability ranking, latency/cost/rate-limit policy and manual provider override.
+  - When no provider is configured, offline/known-URL modes and honest limitations are shown.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1
+- **Note:** No tracked search capability exists today; adjacent infrastructure is NL-BP-042 (MCP) and NL-BP-043 (project context retrieval).
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-170"></a>
+### NL-BP-170 - Research: web page/document reader and JS browser automation
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-168, NL-BP-169
+- **Acceptance gates:**
+  - Fetches HTTP(S) resources with redirects/canonical URLs, HTML-to-readable text, code blocks, tables, PDFs, metadata and links under size/time limits and caching.
+  - JavaScript-heavy documentation can be read through browser automation (e.g. Playwright), including optional accessibility tree, screenshots and forms, under a distinct permission.
+  - SSRF protection covers localhost/private IP ranges unless explicitly authorized; retrieval provenance is retained.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1
+- **Note:** Browser interaction is a separate capability/grant, not an implicit side effect of web search.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-171"></a>
+### NL-BP-171 - Research: GitHub/repository investigator pinned to commit SHAs
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-168, NL-BP-073
+- **Acceptance gates:**
+  - Uses official GitHub REST/GraphQL and/or GitHub MCP for branches, tags, commits, API docs, code search, issues, PRs, reviews, changelog/release chronology, workflows, license and security disclosures.
+  - Private-repository operations use only authorized tokens/scopes; discoveries are pinned to an actual commit SHA.
+  - Never silently clones or executes untrusted projects.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1
+- **Note:** New capability; no git-hosting investigator exists in the live backlog.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-172"></a>
+### NL-BP-172 - Research: Hugging Face model investigator without checkpoint download
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-168, NL-BP-008
+- **Acceptance gates:**
+  - Reads Hub API metadata, model cards, file manifests, licensing/gates and revisions.
+  - Reports architecture, quantization and RAM/VRAM/disk estimates with explicit uncertainty, plus compatibility with Ollama/llama.cpp/MLX/Transformers where applicable.
+  - Discovery never downloads checkpoints, accepts licenses or runs model code.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1
+- **Note:** Adjacent existing requirement: NL-BP-124 (shared model cache reuse) and NL-BP-008 (provider discovery); neither investigates Hub metadata.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-173"></a>
+### NL-BP-173 - Research: ecosystem and package documentation discovery
+
+- **Area:** AUTONOMY - **Priority:** P1 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-169, NL-BP-170
+- **Acceptance gates:**
+  - Covers PyPI, crates.io, npm, NuGet, Qt, CMake, official SDK docs/release notes, compatibility data, vulnerability databases, migration guides, licenses and attribution.
+  - Prefers primary sources and cross-checks contested claims.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1
+- **Note:** Planned extension of the research engine; no package-ecosystem investigator exists today.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-174"></a>
+### NL-BP-174 - Local-first research knowledge store with citations and provenance
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-169, NL-BP-170, NL-BP-171, NL-BP-172, NL-BP-043
+- **Acceptance gates:**
+  - Stores referenced excerpts with citation URL, retrieval timestamp, code/version/SHA, confidence and contradictions.
+  - Uses local embeddings via existing services, deduplication, cache expiry/refresh and project/team knowledge sharing.
+  - Untrusted retrieved code is never retained as executable instructions.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.1
+- **Note:** Extends project context retrieval (NL-BP-043) to external research evidence; no web knowledge store exists today.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-175"></a>
+### NL-BP-175 - Untrusted-source and prompt-injection resistance for research content
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-168, NL-BP-170
+- **Acceptance gates:**
+  - Web pages, repository text and model cards are treated as untrusted data, never as instructions; prompt-injection fixtures are ignored.
+  - Network request permission is separated from trusting retrieved page content.
+  - Retrieved instructions are never executed by default; research decisions and rejections are auditable.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.2
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.2
+- **Note:** Security requirement for the research engine; dovetails with the full-autonomy disclosure (NL-BP-167).
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-176"></a>
+### NL-BP-176 - Research-aware agent planning and upgrade/update checks
+
+- **Area:** AUTONOMY - **Priority:** P1 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-169, NL-BP-170, NL-BP-174, NL-BP-062
+- **Acceptance gates:**
+  - Permissioned research tools and citation-backed findings are woven into coding plans, update checks and library/model compatibility assessments.
+  - Findings retain evidence links in mission decisions; no unsourced claims are presented as verified.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #4
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #4
+- **Note:** Integration requirement for research-aware agents; the supervisor/next-mission machinery itself is NL-BP-061/062/063.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-177"></a>
+### NL-BP-177 - Multi-root project workspace with read-only discovery first
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-077, NL-BP-043
+- **Acceptance gates:**
+  - Indexes several user-selected directories across drives, Git repositories and language ecosystems, read-only by default.
+  - Never recursively scans all of K:\AI without explicit consent.
+  - Supports Python/C++/Rust/JS/Go plus DAW/audio integration adapters; each root carries ownership and permission profiles.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #3
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #3
+- **Note:** Extends single-project discovery (NL-BP-077) to a multi-root workspace; no bulk sibling scan is authorized by this requirement.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-178"></a>
+### NL-BP-178 - Project Genome: versioned measurable codebase intelligence map
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-177
+- **Acceptance gates:**
+  - Per project discovers launch/build entry points, dependency graph and lockfiles, Python ABI versions, CUDA/native library requirements, Git state, databases, models/caches, services, module/API boundaries, tests/coverage, shared assets/branding, licenses, target OS, runtime constraints, disk usage and known fragile assumptions.
+  - Measured facts are separated from guesses; the map is versioned, searchable and refreshed incrementally.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #3.1
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #3.1
+- **Note:** New capability; project facts exist in SQLite (project_facts) but there is no genome model/graph.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-179"></a>
+### NL-BP-179 - Integration Forge: merge/keep-separate/share-service matrix and non-monolith architecture
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-178
+- **Acceptance gates:**
+  - Shows a merge/keep-separate/share-service matrix across the user's NL audio/video/voice/teleprompter projects, respecting actual code and ownership.
+  - Proposes a common launcher/shell, modules/plugins, shared model hub and shared runtime where compatible, with isolated environments where ABI/backend conflicts require it.
+  - Detects duplicate Python distributions, model checkpoints, FFmpeg, CUDA/ONNX/PyTorch, databases and packages; never forces a single Python runtime.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #3.2
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #3.2
+- **Note:** Product-level Mega Suite foundation; no integration analysis exists today.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-180"></a>
+### NL-BP-180 - Integration contracts: generated adapters, contract tests, migration shims and rollback
+
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-179, NL-BP-055
+- **Acceptance gates:**
+  - Generates typed module APIs, CLI/IPC adapters, migration shims, contract tests, service boundaries, config migration and rollback plans.
+  - Uses staged gradual (strangler) migration instead of mass rewrite; integration edits stay in staging until independent gates pass.
+  - Preserves functioning tools, user data, project identity and settings; compares functional outcomes on authorized golden fixtures where available.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #3.2
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #3.2
+- **Note:** Implementation half of the Integration Forge; reuses the staged-candidate harness (NL-BP-055..060).
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-181"></a>
+### NL-BP-181 - Integration Dashboard: readiness, conflicts, disk savings and reversible rollout
+
+- **Area:** AUTONOMY - **Priority:** P1 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-179, NL-BP-180
+- **Acceptance gates:**
+  - Dashboard shows projects, modules, integration readiness, incompatible dependencies, shared services, proposed moves, expected actual disk savings, test status, upgrade steps and reversible rollout.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #3.2
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #3.2
+- **Note:** UI/reporting surface for the Integration Forge.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-182"></a>
+### NL-BP-182 - Project-specific permission profiles for external projects
+
+- **Area:** AUTONOMY - **Priority:** P1 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-168, NL-BP-177
+- **Acceptance gates:**
+  - Per-external-project profiles define read-only discovery, approved modification, protected directories/tool paths and remote collaboration/access.
+  - Profiles are separate from the owning user's project policy and can be revoked.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #3.2
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #3.2
+- **Note:** Extends the permission engine (NL-BP-168) to other users' projects; no permission is granted by this planning requirement.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-188"></a>
+### NL-BP-188 - Task-specific automation with controlled notifications
+
+- **Area:** AUTONOMY - **Priority:** P2 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-075, NL-BP-067
+- **Acceptance gates:**
+  - Automates library updates, flaky-test tracking, benchmark/ASR model updates, release-readiness notifications and controlled periodic research.
+  - No unapproved outward notifications or API costs; schedules and costs are auditable.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #6
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #6
+- **Note:** Scheduling/notification automation; existing diagnostics dashboard (NL-BP-075) is read-only.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
 ## Area 4 - Repository hygiene
 
 _Read-only audits, removal of duplicate/generated/obsolete artifacts, consolidated build outputs, one verified candidate, no destructive action without explicit authorization._
@@ -1710,6 +2132,220 @@ _Online native bootstrapper, private runtimes into a user-selected location, no 
 - **Sources:** specifiche/16_BOOTSTRAP_INSTALLER_DISTRIBUZIONE.md; 03_MASTER_CHECKLIST.md#P3-06
 - **Note:** Optional channel; online lightweight bootstrapper is the primary distribution.
 
+<a id="nl-bp-152"></a>
+### NL-BP-152 - Cross-platform compatibility audit and support matrix for Windows x64/ARM64, Linux x86_64/ARM64 and macOS Intel/Apple Silicon
+
+- **Area:** DISTRO - **Priority:** P0 - **Status:** partial
+- **Blueprint priority:** new (cross-platform private beta directive 2026-10-28)
+- **Dependencies:** NL-BP-149
+- **Acceptance gates:**
+  - every tracked module/native dependency is classified verified, partial or unsupported per OS/CPU
+  - Windows-only code paths and assumptions are identified with file/line evidence
+  - matrix distinguishes CI-verified from real-hardware MANUAL-PENDING support
+  - audit is evidence-based (imports, platform APIs, wheels, subprocess flags), not a claim list
+- **Evidence:**
+  - not started; program directive 2026-10-28
+  - Committed docs/PLATFORM_COMPATIBILITY_MATRIX.md (six-target, 13 feature rows incl. CI-vs-MANUAL-PENDING split, 17 Windows-first assumptions with file:line, 30-row native dependency matrix) and nl_coding_agent/core/platform_support.py + 31 tests. Audit/implementation evidence exists; non-Windows runtime/wheel availability remains unverified (no network) and only Windows x64 is locally exercised.
+- **Sources:** user cross-platform beta program directive 2026-10-28
+- **Note:** Committed docs/PLATFORM_COMPATIBILITY_MATRIX.md (six-target, 13 feature rows incl. CI-vs-MANUAL-PENDING split, 17 Windows-first assumptions with file:line, 30-row native dependency matrix) and nl_coding_agent/core/platform_support.py + 31 tests. Audit/implementation evidence exists; non-Windows runtime/wheel availability remains unverified (no network) and only Windows x64 is locally exercised.
+- **Program stage:** 6 - Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)
+
+<a id="nl-bp-153"></a>
+### NL-BP-153 - Platform abstraction layer: OS/CPU detection, native adapters and clear unsupported-configuration handling
+
+- **Area:** DISTRO - **Priority:** P0 - **Status:** partial
+- **Blueprint priority:** new (cross-platform private beta directive 2026-10-28)
+- **Dependencies:** NL-BP-152
+- **Acceptance gates:**
+  - one shared application codebase with explicit platform adapters (paths, process creation flags, clipboard, audio, GPU probes)
+  - unsupported combinations fail closed with actionable messages and never silently degrade
+  - unit tests cover each declared platform branch without executing platform-specific hardware
+  - no forked application codebase per OS
+- **Evidence:**
+  - not started
+  - platform_support.py provides canonical six-target OS/CPU detection, fail-closed unsupported handling, feature declarations and read-only optional-backend probes (31 tests). Adapters are not yet wired through every GUI/CLI path; POSIX gaps identified in the matrix (detached flags, shell=True verification path, python.exe-only discovery, Windows resume strings, NVIDIA-only GPU probe).
+- **Sources:** user cross-platform beta program directive 2026-10-28
+- **Note:** platform_support.py provides canonical six-target OS/CPU detection, fail-closed unsupported handling, feature declarations and read-only optional-backend probes (31 tests). Adapters are not yet wired through every GUI/CLI path; POSIX gaps identified in the matrix (detached flags, shell=True verification path, python.exe-only discovery, Windows resume strings, NVIDIA-only GPU probe).
+- **Program stage:** 6 - Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)
+
+<a id="nl-bp-154"></a>
+### NL-BP-154 - Native per-platform runtime provisioning manifests (Windows x64/ARM64, Linux x86_64/ARM64, macOS Intel/Apple Silicon), verified downloads and offline bundles
+
+- **Area:** DISTRO - **Priority:** P0 - **Status:** partial
+- **Blueprint priority:** new (cross-platform private beta directive 2026-10-28)
+- **Dependencies:** NL-BP-153, NL-BP-114
+- **Acceptance gates:**
+  - one runtime/dependency manifest per OS/CPU with pinned versions, sizes and sha256
+  - provisioner never reuses Windows embedded Python or Windows binaries on Linux/macOS
+  - downloads are hash+size verified with atomic staging; offline bundle path works
+  - no global Python/pip/uv/conda required; manifests are validated by tests with fake artifacts
+- **Evidence:**
+  - not started; stage-6a installer supports a single template manifest only
+  - installer/platform_targets.py, runtime_manifest.py/json and provision.py implement six native targets, host detection, strict native-identity guard (no Windows runtime on Linux/macOS), measured-only sha256/size policy, six-target release_ready gate, offline/cache/atomic/repair/update reuse and macOS separate-arch decision; 57 targeted tests. Real native runtime/dependency archives and clean-host execution remain MANUAL-PENDING.
+  - Native runtime measurement path is verified end-to-end with synthetic archives: scripts/rehearse_release.py exercises fetch_native_runtimes offline measurement -> six-target measured draft (release_ready 6/6) -> build_release native candidate with per-target runtime archives -> manifest/hash validation, while canonical installer manifests stay byte-identical. Real runtime archives and hashes remain MANUAL-PENDING.
+- **Sources:** user cross-platform beta program directive 2026-10-28
+- **Note:** Native runtime measurement path is verified end-to-end with synthetic archives: scripts/rehearse_release.py exercises fetch_native_runtimes offline measurement -> six-target measured draft (release_ready 6/6) -> build_release native candidate with per-target runtime archives -> manifest/hash validation, while canonical installer manifests stay byte-identical. Real runtime archives and hashes remain MANUAL-PENDING.
+- **Program stage:** 6 - Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)
+
+<a id="nl-bp-155"></a>
+### NL-BP-155 - Cross-platform bootstrapper CLI and native application candidates for private beta (Windows/Linux/macOS, x64+ARM64 where feasible)
+
+- **Area:** DISTRO - **Priority:** P0 - **Status:** partial
+- **Blueprint priority:** new (cross-platform private beta directive 2026-10-28)
+- **Dependencies:** NL-BP-154
+- **Acceptance gates:**
+  - install --target works per supported OS with no admin/global install
+  - platform candidates contain the correct native runtime and launch the app
+  - unsupported configurations are refused with clear guidance
+  - CI builds are distinguished from real-hardware acceptance (MANUAL-PENDING)
+- **Evidence:**
+  - not started; stage-6b candidate is Windows-only
+  - Cross-platform provisioner/planning exists for all six targets (installer/provision.py, bootstrap.py provision CLI, release-builder six-platform manifests); no real native application candidates/packages have been built or tested on Linux/macOS/ARM64 yet.
+  - POSIX launchers now ship for Linux/macOS: scripts/launchers/NL Coding Agent.sh, doctor.sh, status.sh, Self-Build Mode.sh and a macOS .command wrapper, mapped by stage_portable to the payload root and staged executable; launchers resolve source vs payload layout, use provisioned python/bin/python3 when present, warn only for developer system-python fallback, fail closed when a packaged payload lacks a runtime, forward args and preserve exit codes. Native runtime archives and native candidates are still unmeasured/MANUAL-PENDING; launchers were statically/shell-syntax validated, not executed on a real non-Windows runtime.
+  - POSIX launchers ship for Linux/macOS and the synthetic rehearsal proves the candidate/provisioning chain for all six targets (offline install+verify with the generated runtime/platform manifests); no real native candidate exists yet because native runtime archives are unmeasured/MANUAL-PENDING.
+- **Sources:** user cross-platform beta program directive 2026-10-28
+- **Note:** POSIX launchers ship for Linux/macOS and the synthetic rehearsal proves the candidate/provisioning chain for all six targets (offline install+verify with the generated runtime/platform manifests); no real native candidate exists yet because native runtime archives are unmeasured/MANUAL-PENDING.
+- **Program stage:** 6 - Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)
+
+<a id="nl-bp-156"></a>
+### NL-BP-156 - GitHub Actions CI matrix: Windows, Ubuntu Linux and macOS (Apple Silicon and Intel where feasible)
+
+- **Area:** DISTRO - **Priority:** P0 - **Status:** partial
+- **Blueprint priority:** new (cross-platform private beta directive 2026-10-28)
+- **Dependencies:** NL-BP-152, NL-BP-155
+- **Acceptance gates:**
+  - workflows run unit, integration, headless GUI smoke and platform-specific bootstrapper checks
+  - matrix includes Windows x64 (and ARM64 where feasible), Linux x86_64/ARM64, macOS arm64/x86_64
+  - artifacts/checksums are produced per platform without publishing releases
+  - CI success is not treated as full platform support (manual-pending remains)
+- **Evidence:**
+  - not started
+  - .github/workflows/ci.yml implements the six-entry CI matrix (Windows x64 + experimental ARM64, Ubuntu x86_64 + experimental ARM64, macOS arm64 + Intel) with unit/integration/headless GUI/bootstrapper checks and report-only artifacts; 7 static/local-dry-run tests. Actual GitHub Actions execution and ARM64 runner availability remain MANUAL-PENDING; CI success is not platform support.
+  - GitHub Actions CI now has the six-platform regression matrix plus a blocking package-smoke job on ubuntu-latest that builds a source candidate and beta package, runs the acceptance matrix (six targets, no CI hardware claim) and the native-runtime dry-run plan, uploading reports only; workflow is statically validated and locally dry-run (9 CI tests) but actual GitHub execution remains MANUAL-PENDING.
+  - CI now includes the six-platform regression matrix, a blocking package-smoke job and a cross-platform reproducibility job (ubuntu-latest/windows-latest/macos-14); static tests validate jobs/guards and local runs PASS (package smoke 6/6; reproducibility 40/40), but actual GitHub Actions execution and cross-OS evidence remain MANUAL-PENDING.
+- **Sources:** user cross-platform beta program directive 2026-10-28
+- **Note:** CI now includes the six-platform regression matrix, a blocking package-smoke job and a cross-platform reproducibility job (ubuntu-latest/windows-latest/macos-14); static tests validate jobs/guards and local runs PASS (package smoke 6/6; reproducibility 40/40), but actual GitHub Actions execution and cross-OS evidence remain MANUAL-PENDING.
+- **Program stage:** 6 - Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)
+
+<a id="nl-bp-157"></a>
+### NL-BP-157 - Optional CPU/GPU/ASR/TTS component policy and graceful degradation (no mandatory CUDA/ROCm/Metal/MLX)
+
+- **Area:** DISTRO - **Priority:** P1 - **Status:** partial
+- **Blueprint priority:** new (cross-platform private beta directive 2026-10-28)
+- **Dependencies:** NL-BP-153
+- **Acceptance gates:**
+  - capability probes report available/absent backends per platform
+  - absent GPU/ASR/TTS backends degrade gracefully with explicit status, never a hard failure
+  - optional components are the user's choice; no silent downloads
+  - tests cover absent-backend paths
+- **Evidence:**
+  - not started
+  - platform_support.py probes and declares optional GPU/ASR/TTS backends without executing hardware and never requires CUDA/ROCm/Metal/MLX; installer runtime manifests declare optional components with degradation notes. No real GPU/ASR/TTS backends installed/tested (MANUAL-PENDING).
+- **Sources:** user cross-platform beta program directive 2026-10-28
+- **Note:** platform_support.py probes and declares optional GPU/ASR/TTS backends without executing hardware and never requires CUDA/ROCm/Metal/MLX; installer runtime manifests declare optional components with degradation notes. No real GPU/ASR/TTS backends installed/tested (MANUAL-PENDING).
+- **Program stage:** 6 - Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)
+
+<a id="nl-bp-158"></a>
+### NL-BP-158 - macOS Universal 2 feasibility decision and architecture-specific builds where Universal 2 is not feasible
+
+- **Area:** DISTRO - **Priority:** P2 - **Status:** partial
+- **Blueprint priority:** new (cross-platform private beta directive 2026-10-28)
+- **Dependencies:** NL-BP-154, NL-BP-156
+- **Acceptance gates:**
+  - native dependency support for universal2 is measured and documented
+  - if universal2 is infeasible (e.g. standalone runtime lacks universal2), separate arm64/x86_64 builds are produced
+  - decision and evidence recorded, no unverified universal claim
+- **Evidence:**
+  - not started
+  - macOS Universal 2 decision recorded: separate macos-x86_64/macos-arm64 runtimes are provisioned; universal artifact is only schema-legal when measured and shared by both targets. No macOS build has been produced/tested (MANUAL-PENDING).
+- **Sources:** user cross-platform beta program directive 2026-10-28
+- **Note:** macOS Universal 2 decision recorded: separate macos-x86_64/macos-arm64 runtimes are provisioned; universal artifact is only schema-legal when measured and shared by both targets. No macOS build has been produced/tested (MANUAL-PENDING).
+- **Program stage:** 6 - Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)
+
+<a id="nl-bp-184"></a>
+### NL-BP-184 - Build/Test Laboratory for multi-platform engineering
+
+- **Area:** DISTRO - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-140, NL-BP-122, NL-BP-119
+- **Acceptance gates:**
+  - Covers Windows and macOS/Linux targets with unit, integration, property, fuzz and security test lanes plus UI/hardware manual checkpoints.
+  - Includes audio/video golden-fixture tests where relevant, reproducibility checks and runner provenance.
+  - Provides precise failure isolation and never declares platform support from synthetic fixtures alone.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #6
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #6
+- **Note:** Extends the existing acceptance/reproducibility work (NL-BP-140/122/119) into a laboratory surface; real hardware remains manual-pending.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-185"></a>
+### NL-BP-185 - Dependency and Supply Chain Lab
+
+- **Area:** DISTRO - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-121, NL-BP-122, NL-BP-184
+- **Acceptance gates:**
+  - Maintains dependency graph, SBOM, vulnerability advisories, license obligations and version pinning.
+  - Verifies signatures/hashes and performs policy-controlled download/install into a private install root/cache; tests dependencies before upgrades.
+  - Audits public Git history and tracked files before any first public push.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #6
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #6
+- **Note:** Extends NL-BP-121 (license/SBOM/secret-free payload) and NL-BP-162 (pre-upload audit); new lab-level tooling/automation is missing.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-186"></a>
+### NL-BP-186 - Source control and collaboration integration (GitHub/GitLab)
+
+- **Area:** DISTRO - **Priority:** P1 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-168, NL-BP-073
+- **Acceptance gates:**
+  - Integrates GitHub/GitLab/remote providers for PR/issue management, branch/worktree isolation, code-owner protections, conflict detection, review provenance and optional scheduled CI monitoring.
+  - Requires human approval for public release or credentialed writes; no push/publish/visibility change without explicit owner authorization.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #6
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #6
+- **Note:** Git tooling exists only locally (NL-BP-039); remote collaboration/PR management is new.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-195"></a>
+### NL-BP-195 - Mega Suite modular installer with shared model cache and storage plan
+
+- **Area:** DISTRO - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-116, NL-BP-124
+- **Acceptance gates:**
+  - Installer selects individual products/modules and inference backends; shared model cache never duplicates weights.
+  - Optional per-module isolated environment where dependencies conflict; a visible storage plan precedes installation.
+  - Per-module update/uninstall preserves other modules and user data.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #7
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #7
+- **Note:** Extends NL-BP-116/124; new is Mega-Suite-level modular selection plus storage plan.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-196"></a>
+### NL-BP-196 - Self-update with atomic deployment, verified manifests and previous-app fallback
+
+- **Area:** DISTRO - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-117, NL-BP-122
+- **Acceptance gates:**
+  - Atomic deployment with verified manifests and fallback to the previous working application.
+  - Data-schema migrations are reversible where possible and never corrupt in-progress tasks.
+  - Supports integrity repair/uninstall and clear storage reclaim.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #7
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #7
+- **Note:** Extends NL-BP-117 repair/update baseline with explicit atomic deploy/fallback and migration safety.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
 ## Area 6 - Release acceptance criteria
 
 _Evidence gates for the final product: non-default install path; clean Windows without global Python; relocation survival; clipboard screenshot + drag-and-drop attachments; mic + local transcription; CrewAI workflows and autonomous missions execute; invalid agent edits cannot corrupt verified sources; local model discovery + evidence-based selection; reproducible organized builds._
@@ -1920,6 +2556,316 @@ _Evidence gates for the final product: non-default install path; clean Windows w
   - this consolidation: docs/PRODUCT_BACKLOG.md, docs/BLUEPRINT_INDEX.md, docs/product-blueprint/INDEX.json
 - **Sources:** specifiche/02_SELF_BUILD_E_RECOVERY.md; specifiche/19_TEST_MATRIX_E_GATE.md; 02_STATO_REALE_DA_VERIFICARE.md; 03_MASTER_CHECKLIST.md#P0-11
 - **Note:** Stage-6b measured evidence is documented; manual-pending items and the status-portability defect are labelled explicitly.
+
+<a id="nl-bp-159"></a>
+### NL-BP-159 - Private beta release packages: checksums, versioned manifests and non-developer installation instructions
+
+- **Area:** RELEASE - **Priority:** P0 - **Status:** partial
+- **Blueprint priority:** new (cross-platform private beta directive 2026-10-28)
+- **Dependencies:** NL-BP-155
+- **Acceptance gates:**
+  - per-platform beta packages with sha256 checksums and versioned manifests
+  - installation instructions are written for non-developers and are platform-specific
+  - packages contain no development data, databases, checkpoints or vendor copies
+  - packages are prepared locally/artifacts only; no release upload without owner authorization
+- **Evidence:**
+  - not started
+  - scripts/build_beta_packages.py + tests (11) produce a deterministic private-beta package from a measured source candidate: SHA256SUMS, versioned beta-manifest with six-target unmeasured runtime entries, installer manifests without fabricated hashes, INSTALL.md plus six per-platform install docs, BETA_README/VERSION and source zip. Real source-only package .workspace/dist/beta-0.2.0 (14 files / 1,097,875 B, 13 checksum entries verified, byte-identical rebuild) exists; native platform runtime packages/clean-host acceptance and signing remain MANUAL-PENDING.
+- **Sources:** user cross-platform beta program directive 2026-10-28
+- **Note:** scripts/build_beta_packages.py + tests (11) produce a deterministic private-beta package from a measured source candidate: SHA256SUMS, versioned beta-manifest with six-target unmeasured runtime entries, installer manifests without fabricated hashes, INSTALL.md plus six per-platform install docs, BETA_README/VERSION and source zip. Real source-only package .workspace/dist/beta-0.2.0 (14 files / 1,097,875 B, 13 checksum entries verified, byte-identical rebuild) exists; native platform runtime packages/clean-host acceptance and signing remain MANUAL-PENDING.
+- **Program stage:** 6 - Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)
+
+<a id="nl-bp-160"></a>
+### NL-BP-160 - Cross-platform compatibility matrix documentation: GUI, editor, clipboard, attachments, microphone, ASR/TTS, Ollama, CrewAI, terminal, Git, LSP, MCP, GPU
+
+- **Area:** RELEASE - **Priority:** P1 - **Status:** partial
+- **Blueprint priority:** new (cross-platform private beta directive 2026-10-28)
+- **Dependencies:** NL-BP-152
+- **Acceptance gates:**
+  - matrix rows cover every feature area x platform/architecture with verified/experimental/unsupported and MANUAL-PENDING labels
+  - platform-specific limitations are documented (no OS sandbox, hardware requirements, absence of optional backends)
+  - matrix is kept in sync with CI evidence
+- **Evidence:**
+  - not started
+  - docs/PLATFORM_COMPATIBILITY_MATRIX.md covers the 13 feature areas x six targets with verified/partial/unsupported + MANUAL-PENDING and native-dependency evidence; it is being re-synced to the current HEAD (task-47) and real CI/hardware evidence is still absent.
+  - Compatibility matrix/launcher sections updated for shipped POSIX .sh/.command launchers and their payload mapping, with runtime unmeasured/MANUAL-PENDING and no support-level upgrade; CI package-smoke coverage documented.
+- **Sources:** user cross-platform beta program directive 2026-10-28
+- **Note:** Compatibility matrix/launcher sections updated for shipped POSIX .sh/.command launchers and their payload mapping, with runtime unmeasured/MANUAL-PENDING and no support-level upgrade; CI package-smoke coverage documented.
+- **Program stage:** 6 - Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)
+
+<a id="nl-bp-161"></a>
+### NL-BP-161 - Private beta feedback workflow: GitHub Issue templates and opt-in diagnostic report generator with redaction
+
+- **Area:** RELEASE - **Priority:** P1 - **Status:** verified
+- **Blueprint priority:** new (cross-platform private beta directive 2026-10-28)
+- **Dependencies:** NL-BP-159
+- **Acceptance gates:**
+  - bug/feature issue templates collect platform, version and reproduction steps
+  - diagnostic report generator is opt-in and redacts secrets, API keys, personal paths, project content and database rows
+  - redaction is tested with fixture secrets/paths and never uploads automatically
+  - report can be attached to a GitHub issue manually
+- **Evidence:**
+  - not started
+  - tests/test_diagnostic_report.py (31 tests) proves opt-in local-only reports and redaction of API keys/tokens, private keys, credential URLs, cloud ids, usernames/home and personal absolute paths, plus not-collected project content/DB rows/env; .github/ISSUE_TEMPLATE beta forms validate; docs/BETA_TESTING.md and PRIVATE_BETA_RUNBOOK.md cover triage/authorization. Reports never upload automatically.
+- **Sources:** user cross-platform beta program directive 2026-10-28
+- **Note:** tests/test_diagnostic_report.py (31 tests) proves opt-in local-only reports and redaction of API keys/tokens, private keys, credential URLs, cloud ids, usernames/home and personal absolute paths, plus not-collected project content/DB rows/env; .github/ISSUE_TEMPLATE beta forms validate; docs/BETA_TESTING.md and PRIVATE_BETA_RUNBOOK.md cover triage/authorization. Reports never upload automatically.
+- **Program stage:** 6 - Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)
+
+<a id="nl-bp-162"></a>
+### NL-BP-162 - Pre-upload audit of tracked files and Git history: secrets, private databases, embedded runtimes, vendor copies and heavyweight build outputs
+
+- **Area:** RELEASE - **Priority:** P0 - **Status:** verified
+- **Blueprint priority:** new (cross-platform private beta directive 2026-10-28)
+- **Dependencies:** none
+- **Acceptance gates:**
+  - read-only audit scans tracked files and Git history for secret patterns, DB/runtime/vendor/heavy files
+  - findings are classified and reported with redacted evidence
+  - no publishing action is performed by the audit
+  - the existing private repository is preserved
+- **Evidence:**
+  - not started
+  - scripts/audit_release_secrets.py + 12 temp-Git-fixture tests + docs/SECRETS_AUDIT.md: read-only tracked-files and bounded Git-history scan with redacted evidence, classifications and exit-code upload gate; measured HEAD b139065 snapshot 321 tracked files/50 commits, 0 blocking (CLEAR-WITH-REVIEW). Re-run required before any actual upload because the tree changed; no publishing action performed.
+- **Sources:** user cross-platform beta program directive 2026-10-28
+- **Note:** scripts/audit_release_secrets.py + 12 temp-Git-fixture tests + docs/SECRETS_AUDIT.md: read-only tracked-files and bounded Git-history scan with redacted evidence, classifications and exit-code upload gate; measured HEAD b139065 snapshot 321 tracked files/50 commits, 0 blocking (CLEAR-WITH-REVIEW). Re-run required before any actual upload because the tree changed; no publishing action performed.
+- **Program stage:** 6 - Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)
+
+<a id="nl-bp-163"></a>
+### NL-BP-163 - Private repository and release authorization gates: no push, visibility change, collaborator invite or release upload without explicit owner authorization
+
+- **Area:** RELEASE - **Priority:** P0 - **Status:** partial
+- **Blueprint priority:** new (cross-platform private beta directive 2026-10-28)
+- **Dependencies:** NL-BP-162
+- **Acceptance gates:**
+  - runbook documents owner-only upload/publish steps and authorization requirements
+  - CI/release scripts have no push/publish/visibility actions
+  - developer data, runtimes and model checkpoints are excluded from artifacts
+  - the existing private repository is not modified
+- **Evidence:**
+  - not started
+  - docs/PRIVATE_BETA_RUNBOOK.md defines owner gates G-1..G-10 (no push/remote change, visibility change, collaborator invites, release upload, public posting, telemetry, history rewrite or evidence deletion without explicit owner authorization), pre-upload checklist, package content rules and per-release authorization template; CI/release static guards reject publish/push actions. Owner authorization for any external beta distribution is still required and pending.
+- **Sources:** user cross-platform beta program directive 2026-10-28
+- **Note:** docs/PRIVATE_BETA_RUNBOOK.md defines owner gates G-1..G-10 (no push/remote change, visibility change, collaborator invites, release upload, public posting, telemetry, history rewrite or evidence deletion without explicit owner authorization), pre-upload checklist, package content rules and per-release authorization template; CI/release static guards reject publish/push actions. Owner authorization for any external beta distribution is still required and pending.
+- **Program stage:** 6 - Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)
+
+<a id="nl-bp-164"></a>
+### NL-BP-164 - Cross-platform release acceptance criteria extension with MANUAL-PENDING clean-machine and real-hardware matrix
+
+- **Area:** RELEASE - **Priority:** P0 - **Status:** partial
+- **Blueprint priority:** new (cross-platform private beta directive 2026-10-28)
+- **Dependencies:** NL-BP-141, NL-BP-142, NL-BP-156, NL-BP-160
+- **Acceptance gates:**
+  - acceptance criteria are extended to Windows x64/ARM64, Linux x86_64/ARM64 and macOS Intel/Apple Silicon
+  - clean-machine installation, GUI interaction, clipboard, microphone/ASR/TTS and GPU items are marked MANUAL-PENDING until tested on real systems
+  - CI builds alone never mark raw platform support complete
+  - beta acceptance records tester, OS/CPU, package checksum and result
+- **Evidence:**
+  - not started
+  - docs/RELEASE_ACCEPTANCE.md now carries the cross-platform acceptance matrix for Windows x64/ARM64, Linux x86_64/ARM64 and macOS Intel/Apple Silicon with explicit MANUAL-PENDING real-hardware/clean-machine items; no real cross-platform acceptance has been recorded.
+  - Acceptance-matrix tooling and docs exist (docs/BETA_ACCEPTANCE.md, docs/RELEASE_ACCEPTANCE.md cross-platform criteria) and the generated matrix records all six targets as MANUAL-PENDING; no real-hardware/clean-machine acceptance records exist yet.
+- **Sources:** user cross-platform beta program directive 2026-10-28
+- **Note:** Acceptance-matrix tooling and docs exist (docs/BETA_ACCEPTANCE.md, docs/RELEASE_ACCEPTANCE.md cross-platform criteria) and the generated matrix records all six targets as MANUAL-PENDING; no real-hardware/clean-machine acceptance records exist yet.
+- **Program stage:** 6 - Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)
+
+<a id="nl-bp-165"></a>
+### NL-BP-165 - Cross-platform CI artifact provenance and real-hardware beta acceptance evidence
+
+- **Area:** RELEASE - **Priority:** P1 - **Status:** partial
+- **Blueprint priority:** new (cross-platform private beta directive 2026-10-28)
+- **Dependencies:** NL-BP-156, NL-BP-159
+- **Acceptance gates:**
+  - per-platform artifacts carry version manifest, checksums and CI job provenance
+  - real-hardware beta results are recorded separately from CI results
+  - unverified configurations remain experimental/unsupported until tested
+  - one authoritative beta acceptance report is maintained
+- **Evidence:**
+  - not started
+  - scripts/ci/checksums.py and CI report artifacts/checksums are implemented and tested; per-platform native packages and real-hardware beta acceptance records do not exist yet (MANUAL-PENDING).
+  - Beta package builder produces checksummed/versioned candidate manifests; acceptance-matrix tool validates CI-vs-real-hardware evidence and rejects false CI support claims. Real per-platform runtime artifacts, CI execution and real-hardware acceptance records remain MANUAL-PENDING.
+  - Package-smoke job produces deterministic package_smoke.json + SHA256SUMS report artifacts (reports-only upload, short retention) and validates source/beta package checksums, manifests and the acceptance matrix; real native artifacts, actual CI-triggered runs and real-hardware acceptance records remain MANUAL-PENDING.
+  - Reproducible source-release check proves deterministic archives/manifests and forbidden-content exclusions locally (40/40 checks) and is wired into a cross-platform CI job; synthetic rehearsal proves the full fetch->draft->candidate->beta->provision->acceptance wiring with explicit NOT-A-RELEASE reporting. Real native artifacts, actual CI-triggered evidence and real-hardware records remain MANUAL-PENDING.
+- **Sources:** user cross-platform beta program directive 2026-10-28
+- **Note:** Reproducible source-release check proves deterministic archives/manifests and forbidden-content exclusions locally (40/40 checks) and is wired into a cross-platform CI job; synthetic rehearsal proves the full fetch->draft->candidate->beta->provision->acceptance wiring with explicit NOT-A-RELEASE reporting. Real native artifacts, actual CI-triggered evidence and real-hardware records remain MANUAL-PENDING.
+- **Program stage:** 6 - Lightweight portable/bootstrapper and final release testing (extended cross-platform private beta)
+
+<a id="nl-bp-189"></a>
+### NL-BP-189 - Operating metrics and user-visible health dashboard
+
+- **Area:** RELEASE - **Priority:** P1 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-075, NL-BP-140
+- **Acceptance gates:**
+  - Dashboard exposes successful missions, failed gates, regressions prevented, recovery actions, API/network usage, disk/caches by owner, RAM/VRAM, inference speed and model capabilities/confidence.
+  - Logs are privacy-aware with rotation; measured and estimated values remain distinct.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #8
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #8
+- **Note:** Extends NL-BP-075 hospital/health diagnostics (autonomy area) with user-visible program metrics; kept in release area as evidence/readiness surface.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-197"></a>
+### NL-BP-197 - Source-vs-binary release separation and public-repository readiness
+
+- **Area:** RELEASE - **Priority:** P1 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-162, NL-BP-163, NL-BP-140
+- **Acceptance gates:**
+  - Public source releases contain clean sources and eligible build artifacts only, excluding private state, user files, caches, runtimes, secret history, heavy models and vendor clones.
+  - Binary releases are managed separately; nothing is uploaded without owner authorization.
+  - Docs state that changing a repository from public to private cannot revoke already-downloaded copies.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #7
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #7
+- **Note:** Extends NL-BP-162/163 with explicit source-vs-binary separation and public visibility rules.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-198"></a>
+### NL-BP-198 - Readiness taxonomy enforced across evidence and reports
+
+- **Area:** RELEASE - **Priority:** P1 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-140, NL-BP-151, NL-BP-164
+- **Acceptance gates:**
+  - Enforces the labels implemented, fixture-verified, real-model-verified, real-hardware-verified, manually-pending, blocked and planned in evidence reports/tooling.
+  - Labels are never conflated; acceptance records carry the exact label and evidence.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #8
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #8
+- **Note:** Extends the status vocabulary into machine-enforced readiness labels; no existing acceptance is rewritten.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-199"></a>
+### NL-BP-199 - Cross-app acceptance scenario on real projects
+
+- **Area:** RELEASE - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-152, NL-BP-164, NL-BP-144, NL-BP-145, NL-BP-147, NL-BP-148, NL-BP-149, NL-BP-177, NL-BP-169
+- **Acceptance gates:**
+  - Import two unrelated projects, analyze real code, permit a known external SDK tool, research verified docs/GitHub/HF, patch only in isolated staging, run trusted baseline tests and promote a safe change.
+  - Use GUI screenshot paste and ASR, hand a mission over across a restart, build a portable candidate on another target and verify a user-selectable installer path.
+  - Real hardware and external/manual checks stay separate from simulated tests.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #8
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #8
+- **Note:** End-to-end program acceptance scenario; depends on stages 1-6 plus the new capabilities.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-200"></a>
+### NL-BP-200 - Full Autonomy acceptance scenario
+
+- **Area:** RELEASE - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-166, NL-BP-167, NL-BP-168, NL-BP-063, NL-BP-061
+- **Acceptance gates:**
+  - Issue a broad goal, configure Trusted or Full scopes and observe several distinct missions without routine prompts.
+  - Demonstrate independent reviewer rejection with actual bounded repair, no accidental cloud calls and no silent irreversible actions outside the approved policy.
+  - Show the user how to inspect and revoke saved approvals.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #8
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #8
+- **Note:** Acceptance scenario for the new profiles; SH-07 Tier B (NL-BP-063) must be genuinely verified first, never relaxed.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-201"></a>
+### NL-BP-201 - Mega Suite integration acceptance scenario
+
+- **Area:** RELEASE - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-177, NL-BP-179, NL-BP-180, NL-BP-195
+- **Acceptance gates:**
+  - Detect a duplicate checkpoint/runtime, propose safe consolidation and execute one approved modular integration that preserves both original products.
+  - Build installer modules and validate on real target-OS hardware.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #8
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #8
+- **Note:** Acceptance scenario for the Integration Forge and Mega Suite installer.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-202"></a>
+### NL-BP-202 - Trusted Auto Review acceptance scenario
+
+- **Area:** RELEASE - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-166, NL-BP-168, NL-BP-072
+- **Acceptance gates:**
+  - Demonstrate dozens of allowed routine actions with no prompts, blocked writes outside declared scope and approved external FFmpeg execution.
+  - Prove persistence/revocation after restart, pending-approval expiry/deny and that an untrusted page's prompt injection is ignored.
+  - Prove the Code Reviewer can reject even in Full Autonomy, emergency stop leaves no orphaned workers and lock/lease recovery is correct.
+  - Document realistic Full Autonomy limits rather than advertising unbreakable security.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.3
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #1.3
+- **Note:** Acceptance scenario for the autonomy profiles; complements NL-BP-200.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-203"></a>
+### NL-BP-203 - Research engine acceptance: real network vs fixtures
+
+- **Area:** RELEASE - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-169, NL-BP-170, NL-BP-171, NL-BP-172, NL-BP-173, NL-BP-174, NL-BP-175
+- **Acceptance gates:**
+  - Real-network tests locate a current API, verify a GitHub issue and related commit, inspect an HF model without checkpoint download, read JS-rendered docs and cite current versions correctly.
+  - Denied-network and prompt-injection tests pass; retrieved evidence is preserved in the project research library and usable as task context.
+  - Fixtures alone never count as real-network verification.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.2
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #2.2
+- **Note:** Acceptance scenario for the research engine.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+<a id="nl-bp-204"></a>
+### NL-BP-204 - Multi-project Genome/Integration Forge acceptance on real projects
+
+- **Area:** RELEASE - **Priority:** P0 - **Status:** planned
+- **Blueprint priority:** new (user addendum 2026-10-28: universal autonomy, research and Mega Suite)
+- **Dependencies:** NL-BP-177, NL-BP-178, NL-BP-179, NL-BP-180, NL-BP-181
+- **Acceptance gates:**
+  - On at least two distinct real projects, produce a fact-backed dependency/integration report and identify one shareable component and one genuine incompatibility.
+  - Implement a small cross-project integration in staging, run contract tests, prove both original tools remain functional and roll back without touching the other project's unsaved work.
+  - Record useful disk savings without blind deletion.
+- **Evidence:**
+  - not started - queued only by task-59 from the user addendum; no code, mission or network run was started
+  - source: docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #3.3
+- **Sources:** docs/product-blueprint/addenda/2026-10-28_UNIVERSAL_AUTONOMY_RESEARCH_MEGASUITE.md #3.3
+- **Note:** Acceptance scenario for the Project Genome and Integration Forge.
+- **Program stage:** 7 - Universal autonomy, research intelligence and Mega Suite
+
+## Addendum import v3.7 - Universal Autonomy/Research/Mega Suite dedupe mapping
+
+User-supplied addendum (2026-10-28) preserved unchanged at docs/product-blueprint/addenda/ (MANIFEST verified). Queue-only import by shared task-59: the spec was cross-checked against the 117 existing requirements; only genuinely missing capabilities were added. Existing IDs, acceptance criteria and statuses were not rewritten; stages 1-6 statuses were not changed.
+
+| Group | Capability | Addendum section | Existing coverage | New requirements | Decision |
+|---|---|---|---|---|---|
+| G1 | Autonomy profiles and separate control knobs (Trusted Auto Review, Full Autonomy) | #1.1 | NL-BP-064, NL-BP-072, NL-BP-073, NL-BP-076, NL-BP-024 | NL-BP-166, NL-BP-167, NL-BP-168 | Extends existing modes/permission model with new profiles; existing acceptance unchanged. |
+| G2 | Trusted Auto Review / Full Autonomy acceptance scenario | #1.3 | NL-BP-004, NL-BP-005, NL-BP-054, NL-BP-058, NL-BP-060, NL-BP-065 | NL-BP-202 | Independent review/gates already covered; acceptance scenario is new. |
+| G3 | Web search router and web page/document reader with JS browser | #2.1 | NL-BP-042, NL-BP-043, NL-BP-009 | NL-BP-169, NL-BP-170 | MCP/project-context infrastructure exists; external web research is new. |
+| G4 | GitHub / Hugging Face / ecosystem investigators | #2.1 | NL-BP-042 | NL-BP-171, NL-BP-172, NL-BP-173 | No repository-model-ecosystem investigator exists today. |
+| G5 | Local-first research knowledge store and injection resistance | #2.1-2.2 | NL-BP-074, NL-BP-043 | NL-BP-174, NL-BP-175 | Model-facing trust boundary and project context exist; research evidence store/injection rules are new. |
+| G6 | Research-aware planning and update checks | #4 | NL-BP-061, NL-BP-062, NL-BP-063 | NL-BP-176 | Supervisor/backlog machinery exists; research-aware planning is new. |
+| G7 | Multi-root workspace and Project Genome | #3-3.1 | NL-BP-077, NL-BP-043 | NL-BP-177, NL-BP-178 | Single-project discovery exists; multi-root/genome is new. |
+| G8 | Integration Forge: matrix, contracts, dashboard, external-project profiles | #3.2 | NL-BP-055, NL-BP-072, NL-BP-121, NL-BP-122 | NL-BP-179, NL-BP-180, NL-BP-181, NL-BP-182 | Staged candidates/gates and hygiene tooling exist; cross-project integration forge is new. |
+| G9 | Model Competence Lab (multi-backend inspection, benchmark harness, independent judge) | #4 | NL-BP-008, NL-BP-009, NL-BP-068, NL-BP-069, NL-BP-070 | NL-BP-183 | Competence index/advisor/capability registry exist; lab-level multi-backend benchmark harness with independent judge is new. |
+| G10 | Dynamic Agent Factory and team optimization | #4 | NL-BP-066, NL-BP-067, NL-BP-070, NL-BP-053 | none (covered) | Already covered by planned NL-BP-066/067 plus scheduler/collision requirements; no new ID. |
+| G11 | Studio IDE, attachments/chat, voice and Model Hub completion + visual/computer-use/multi-window | #5 | NL-BP-020, NL-BP-021, NL-BP-022, NL-BP-023, NL-BP-024, NL-BP-025, NL-BP-026, NL-BP-027, NL-BP-028, NL-BP-029, NL-BP-030, NL-BP-031, NL-BP-032, NL-BP-033, NL-BP-034, NL-BP-035, NL-BP-036, NL-BP-037, NL-BP-038, NL-BP-039, NL-BP-040, NL-BP-041, NL-BP-042, NL-BP-043, NL-BP-044, NL-BP-045, NL-BP-046 | NL-BP-190, NL-BP-191, NL-BP-192, NL-BP-193, NL-BP-194 | Existing Studio requirements remain the completion baseline; visual QA, computer use, multi-window, advanced IDE gaps and OCR are new. |
+| G12 | Independent review, differential testing and quality gates | #4 | NL-BP-054, NL-BP-055, NL-BP-056, NL-BP-057, NL-BP-058, NL-BP-059, NL-BP-060, NL-BP-065, NL-BP-146, NL-BP-147 | none (covered) | Fully covered by existing staged-candidate/oracle/repair requirements; no new ID and no gate relaxation. |
+| G13 | Build/Test Laboratory and Dependency/Supply Chain Lab | #6 | NL-BP-140, NL-BP-122, NL-BP-119, NL-BP-121, NL-BP-162 | NL-BP-184, NL-BP-185 | Acceptance/reproducibility/SBOM pieces exist; laboratory-level build and supply-chain automation is new. |
+| G14 | Source control/collaboration, plugin SDK, task automation | #6 | NL-BP-039, NL-BP-073, NL-BP-075 | NL-BP-186, NL-BP-187, NL-BP-188 | Local Git tools/tool registry/diagnostics exist; remote collaboration, plugin SDK and task automation are new. |
+| G15 | Mega Suite modular installer with shared cache and storage plan | #7 | NL-BP-116, NL-BP-124, NL-BP-110, NL-BP-152, NL-BP-153, NL-BP-154, NL-BP-155, NL-BP-156, NL-BP-157, NL-BP-158 | NL-BP-195 | Portable/beta distribution work exists; Mega-Suite modular selection and storage plan are new. |
+| G16 | Self-update with atomic deploy, manifests and previous-app fallback | #7 | NL-BP-117, NL-BP-122 | NL-BP-196 | Repair/update baseline exists; atomic deployment/fallback/migration safety is new. |
+| G17 | Source-vs-binary release separation and public-repository readiness | #7 | NL-BP-162, NL-BP-163, NL-BP-140 | NL-BP-197 | Pre-upload audit/owner gates exist; explicit source/binary separation is new. |
+| G18 | Multi-platform bootstrapper, GitHub CI and real-hardware beta | #7-8 | NL-BP-110, NL-BP-111, NL-BP-112, NL-BP-113, NL-BP-114, NL-BP-115, NL-BP-116, NL-BP-117, NL-BP-118, NL-BP-119, NL-BP-120, NL-BP-121, NL-BP-122, NL-BP-123, NL-BP-124, NL-BP-140, NL-BP-141, NL-BP-142, NL-BP-144, NL-BP-145, NL-BP-146, NL-BP-147, NL-BP-148, NL-BP-149, NL-BP-150, NL-BP-151, NL-BP-152, NL-BP-153, NL-BP-154, NL-BP-155, NL-BP-156, NL-BP-157, NL-BP-158, NL-BP-159, NL-BP-160, NL-BP-161, NL-BP-162, NL-BP-163, NL-BP-164, NL-BP-165 | none (covered) | Already covered by stage-6 distribution/release and cross-platform beta requirements; no new ID. |
+| G19 | Operating metrics and readiness taxonomy | #8 | NL-BP-075, NL-BP-140, NL-BP-151, NL-BP-164 | NL-BP-189, NL-BP-198 | Diagnostics dashboard/status vocabulary exist; user-visible metrics and enforced readiness labels are new. |
+| G20 | End-to-end cross-app / Full Autonomy / Mega Suite / research / genome acceptance scenarios | #8 | NL-BP-140, NL-BP-164, NL-BP-165, NL-BP-063 | NL-BP-199, NL-BP-200, NL-BP-201, NL-BP-203, NL-BP-204 | Individual acceptance tooling exists; the addendum's program-level scenarios are new. |
+
+Program mapping: all 39 new requirements are **program stage 7** (Universal autonomy, research intelligence and Mega Suite), status planned, pending after stage 6. The addendum grants no deletion/publication/cloud authorization; SH-07 Tier B remains blocked.
 
 ## Deduplication and merge decisions
 

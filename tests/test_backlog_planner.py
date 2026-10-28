@@ -383,7 +383,9 @@ class RealIndexTests(PlannerTestCase):
         index = B.load_index(REAL_INDEX)
         self.assertEqual(index.schema_version, 1)
         self.assertGreaterEqual(len(index.requirements), 100)
-        self.assertEqual(sorted(stage.stage for stage in index.stages), [1, 2, 3, 4, 5, 6])
+        # Stage 7 (universal autonomy/research/Mega Suite) was appended by the
+        # addendum import (queue-only); stages 1-6 remain the authoritative program.
+        self.assertEqual(sorted(stage.stage for stage in index.stages), [1, 2, 3, 4, 5, 6, 7])
         fingerprint = hashlib.sha256(REAL_INDEX.read_bytes()).hexdigest()
         self.assertEqual(index.source_fingerprint, fingerprint)
         current = B.current_program_stage(index)
