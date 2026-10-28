@@ -48,6 +48,10 @@ EXIT_USAGE = 2
 EXIT_OPERATIONAL = 3
 
 
+class GuardError(RuntimeError):
+    """Raised when a required read-only Git operation fails (fail closed)."""
+
+
 def _audit():
     path = REPO_ROOT / "scripts" / "audit_release_secrets.py"
     spec = importlib.util.spec_from_file_location("nl_audit_release_secrets", path)
@@ -91,8 +95,16 @@ def _git_env() -> dict:
     return env
 
 
-def _git(root: Path, args: list, max_bytes: int = MAX_FILE_BYTES) -> tuple[bytes, bool]:
-    """Run one read-only Git command. Every subcommand is allowlisted locally."""
+def _git(root: Path, args: list, max_bytes: int = MAX_FILE_BYTES,
+         *, allow_missing: bool = False) -> tuple[bytes, bool]:
+    """Run one read-only Git command. Every subcommand is allowlisted locally.
+
+    Operational failures (git missing, timeout, non-zero exit) raise GuardError so
+    scan and hook modes fail closed instead of silently scanning an empty tree.
+    allow_missing is used only for historical blobs: a path that did not exist at
+    one bounded-history commit is expected (deleted/renamed files) and is skipped,
+    while missing git/timeout/other failures still raise.
+    """
     allowed = {"rev-parse", "ls-files", "show", "diff", "diff-tree", "log",
                "rev-list", "version", "cat-file"}
     if not args or args[0] not in allowed:
@@ -102,8 +114,15 @@ def _git(root: Path, args: list, max_bytes: int = MAX_FILE_BYTES) -> tuple[bytes
                                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                    stdin=subprocess.DEVNULL, env=_git_env(),
                                    timeout=20.0)
-    except (OSError, subprocess.TimeoutExpired):
-        return b"", True
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise GuardError("read-only git command failed ("
+                         + args[0] + "): " + type(exc).__name__) from None
+    if completed.returncode != 0:
+        if allow_missing and args[0] == "show":
+            return b"", False
+        raise GuardError("read-only git command failed ("
+                         + args[0] + ") with exit code "
+                         + str(completed.returncode))
     data = completed.stdout or b""
     truncated = len(data) > max_bytes
     return data[:max_bytes], truncated
@@ -413,11 +432,14 @@ def _scan_history(root: Path, scanner: Scanner) -> None:
                                 context="historical path classified as upload-exclusion artifact")
                 continue
             blob, truncated = _git(root, ["show", commit + ":" + rel],
-                                   max_bytes=MAX_FILE_BYTES)
+                                   max_bytes=MAX_FILE_BYTES, allow_missing=True)
             if truncated:
                 scanner.truncated = True
-            scanner.scan_blob(rel, blob, scope="history", commit=commit,
-                              size_hint=(AUDIT.LARGE_BINARY_BYTES + 1) if truncated else len(blob))
+            if blob:
+                scanner.scan_blob(
+                    rel, blob, scope="history", commit=commit,
+                    size_hint=((AUDIT.LARGE_BINARY_BYTES + 1)
+                               if truncated else len(blob)))
         if scanner.scanned_bytes > MAX_HISTORY_BYTES:
             scanner.truncated = True
             return
@@ -521,12 +543,27 @@ def _scan_mode(root: Path, mode: str, allowlist_path: str | None,
 
 
 def _hook_script(guard_path: Path) -> str:
+    """Build the POSIX pre-push hook.
+
+    Uses the interpreter that ran install-hook (not a bare python3, which may be
+    absent on Windows/Git-for-Windows) and forward-slash absolute paths so the
+    same hook works under Git Bash (Windows) and POSIX shells.
+    """
+    interpreter = sys.executable or "python3"
+    try:
+        interpreter = Path(interpreter).resolve().as_posix()
+    except OSError:
+        interpreter = str(interpreter).replace("\\", "/")
+    try:
+        guard = Path(guard_path).resolve().as_posix()
+    except OSError:
+        guard = str(guard_path).replace("\\", "/")
     return ("#!/bin/sh" + chr(10)
             + "# NL Coding Agent mandatory pre-push guard (blocking, read-only)." + chr(10)
             + "# Reads Git's pre-push refs from stdin; never pushes or rewrites history." + chr(10)
             + "set -eu" + chr(10)
             + "repo=$(git rev-parse --show-toplevel) || exit " + str(EXIT_OPERATIONAL) + chr(10)
-            + "exec python3 " + shlex.quote(str(guard_path))
+            + "exec " + shlex.quote(interpreter) + " " + shlex.quote(guard)
             + " hook --repo \"$repo\" \"$@\"" + chr(10))
 
 

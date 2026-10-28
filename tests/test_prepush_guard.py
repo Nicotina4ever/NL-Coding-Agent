@@ -30,12 +30,39 @@ def _init(tmp_path: Path) -> Path:
     return repo
 
 
-def _run(repo: Path, *args: str, stdin: str | None = None) -> subprocess.CompletedProcess:
+def _init_bare(tmp_path: Path) -> Path:
+    remote = tmp_path / "remote.git"
+    completed = _git(tmp_path, "init", "--bare", "-q", str(remote))
+    assert completed.returncode == 0, completed.stderr
+    return remote
+
+
+def _branch(repo: Path) -> str:
+    completed = _git(repo, "rev-parse", "--abbrev-ref", "HEAD")
+    return completed.stdout.strip() or "master"
+
+
+def _push(repo: Path, *extra: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", "-C", str(repo), "push", *extra, "origin", _branch(repo)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        timeout=120)
+
+
+def _install_hook(repo: Path) -> subprocess.CompletedProcess:
+    completed = _run(repo, "install-hook", "--force")
+    assert completed.returncode == 0, completed.stderr
+    return completed
+
+
+def _run(repo: Path, *args: str, stdin: str | None = None,
+         env_extra: dict | None = None) -> subprocess.CompletedProcess:
+    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+    env.update(env_extra or {})
     return subprocess.run(
         [sys.executable, str(SCRIPT), "--repo", str(repo), *args],
         input=stdin, capture_output=True, text=True, encoding="utf-8",
-        errors="replace", timeout=120, env={**os.environ,
-                                            "PYTHONDONTWRITEBYTECODE": "1"})
+        errors="replace", timeout=120, env=env)
 
 
 def _json(repo: Path, *args: str) -> tuple[subprocess.CompletedProcess, dict]:
@@ -187,6 +214,113 @@ def test_reports_json_and_markdown_redacted(tmp_path):
     assert SECRET not in (reports / "guard.json").read_text(encoding="utf-8")
     markdown = (reports / "guard.md").read_text(encoding="utf-8")
     assert "BLOCKED" in markdown and SECRET not in markdown
+
+
+# --------------------------------------------------------------------------- #
+# Real Git push integration: temporary bare remotes only, never the canonical repo
+# --------------------------------------------------------------------------- #
+
+def test_real_git_push_to_bare_remote_is_blocked_by_installed_hook(tmp_path):
+    repo = _init(tmp_path)
+    remote = _init_bare(tmp_path)
+    _git(repo, "remote", "add", "origin", str(remote))
+    _install_hook(repo)
+    (repo / "config.py").write_text('TOKEN = "' + SECRET + '"\n', encoding="utf-8")
+    _git(repo, "add", "config.py")
+    _git(repo, "commit", "-q", "-m", "add secret")
+
+    completed = _push(repo)
+    combined = completed.stdout + completed.stderr
+    assert completed.returncode != 0, combined
+    assert SECRET not in combined
+    # The hook blocked the push before the remote received the commit.
+    branch = _branch(repo)
+    remote_ref = _git(remote, "rev-parse", "--verify", "refs/heads/" + branch)
+    assert remote_ref.returncode != 0
+
+
+def test_real_git_push_to_bare_remote_succeeds_for_clean_commit(tmp_path):
+    repo = _init(tmp_path)
+    remote = _init_bare(tmp_path)
+    _git(repo, "remote", "add", "origin", str(remote))
+    _install_hook(repo)
+    (repo / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
+    _git(repo, "add", "app.py")
+    _git(repo, "commit", "-q", "-m", "clean change")
+
+    completed = _push(repo)
+    assert completed.returncode == 0, completed.stderr
+    branch = _branch(repo)
+    remote_ref = _git(remote, "rev-parse", "--verify", "refs/heads/" + branch)
+    assert remote_ref.returncode == 0
+    # The hook really ran: a secret introduced in a later commit is blocked.
+    (repo / "later.py").write_text("AWS = \"" + SECRET + "\"\n", encoding="utf-8")
+    _git(repo, "add", "later.py")
+    _git(repo, "commit", "-q", "-m", "later secret")
+    blocked = _push(repo)
+    assert blocked.returncode != 0
+    assert SECRET not in (blocked.stdout + blocked.stderr)
+
+
+def test_git_push_no_verify_bypass_is_outside_the_hooks_control(tmp_path):
+    repo = _init(tmp_path)
+    remote = _init_bare(tmp_path)
+    _git(repo, "remote", "add", "origin", str(remote))
+    _install_hook(repo)
+    (repo / "config.py").write_text('TOKEN = "' + SECRET + '"\n', encoding="utf-8")
+    _git(repo, "add", "config.py")
+    _git(repo, "commit", "-q", "-m", "add secret")
+
+    completed = _push(repo, "--no-verify")
+    assert completed.returncode == 0, completed.stderr
+    branch = _branch(repo)
+    remote_ref = _git(remote, "rev-parse", "--verify", "refs/heads/" + branch)
+    assert remote_ref.returncode == 0
+    docs = (REPO / "docs" / "PRE_PUSH_GUARD.md").read_text(encoding="utf-8")
+    lowered = docs.lower()
+    assert "--no-verify" in lowered
+    assert "outside" in lowered and "control" in lowered
+
+
+def test_install_hook_force_without_backup_is_refused_and_preserves_hook(tmp_path):
+    repo = _init(tmp_path)
+    target = repo / ".git" / "hooks" / "pre-push"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    original = "#!/bin/sh\necho existing-hook\n"
+    target.write_text(original, encoding="utf-8")
+
+    completed = _run(repo, "install-hook")
+    assert completed.returncode == 2
+    assert target.read_text(encoding="utf-8") == original
+
+    completed = _run(repo, "install-hook", "--force")
+    assert completed.returncode == 2
+    assert "--backup" in completed.stderr
+    assert target.read_text(encoding="utf-8") == original
+    assert not list(target.parent.glob("pre-push.bak.*"))
+
+    completed = _run(repo, "install-hook", "--force", "--backup")
+    assert completed.returncode == 0, completed.stderr
+    backups = list(target.parent.glob("pre-push.bak.*"))
+    assert backups
+    assert backups[0].read_text(encoding="utf-8") == original
+    installed = target.read_text(encoding="utf-8")
+    assert "prepush_guard.py" in installed
+    assert "exec python3 " not in installed
+    interpreter = Path(sys.executable).resolve().as_posix()
+    assert interpreter in installed
+    assert Path(SCRIPT).resolve().as_posix() in installed
+
+
+def test_operational_git_failure_fails_closed_for_scan_and_hook(tmp_path):
+    repo = _init(tmp_path)
+    broken_path = {"PATH": str(tmp_path / "no-git-binary")}
+    completed = _run(repo, "scan-all", env_extra=broken_path)
+    assert completed.returncode == 3, completed.stdout + completed.stderr
+
+    stdin = "refs/heads/main " + "a" * 40 + " refs/heads/main " + "0" * 40 + "\n"
+    completed = _run(repo, "hook", stdin=stdin, env_extra=broken_path)
+    assert completed.returncode == 3, completed.stdout + completed.stderr
 
 
 def test_bad_repo_and_static_no_push_network_or_history_write():

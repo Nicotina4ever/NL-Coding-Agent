@@ -348,11 +348,16 @@ def test_workflow_has_blocking_secrets_scan_job_reports_only():
                 if str(step.get("uses", "")).startswith("actions/checkout@")]
     assert checkout
     assert checkout[0]["with"].get("persist-credentials") is False
+    assert checkout[0]["with"].get("fetch-depth") == 0
     commands = " ".join(str(step.get("run", "")) for step in steps)
     assert "scripts/prepush_guard.py scan-all" in commands
     assert "--json-out reports/prepush_guard.json" in commands
     assert "--markdown-out reports/prepush_guard.md" in commands
     assert "scripts/ci/checksums.py reports" in commands
+    # No bypass flags or non-blocking behavior in the blocking job.
+    assert "--no-verify" not in commands.lower()
+    assert "|| true" not in commands
+    assert "continue-on-error" not in json.dumps(job).lower()
     uploads = [step for step in steps
                if "actions/upload-artifact" in str(step.get("uses", ""))]
     assert uploads
@@ -362,5 +367,21 @@ def test_workflow_has_blocking_secrets_scan_job_reports_only():
                       "publish", "visibility", "collaborator", "docker push",
                       "pull_request_target"):
         assert forbidden not in text, forbidden
-    assert "continue-on-error" not in job or job["continue-on-error"] is False
+
+
+def test_pre_push_guard_docs_cover_install_bypass_and_release_head_rerun():
+    docs = (REPO / "docs" / "PRE_PUSH_GUARD.md").read_text(encoding="utf-8")
+    lowered = docs.lower()
+    assert "install-hook" in docs
+    assert "--force" in docs and "--backup" in docs
+    assert "scan-all" in docs
+    assert "exit" in lowered and "fail closed" in lowered
+    assert "--no-verify" in lowered
+    assert "outside" in lowered and "control" in lowered
+    assert "earlier public" in lowered or "before any" in lowered
+    assert "final release-head" in lowered
+    assert "bounded" in lowered
+    assert "not a substitute" in lowered
+    assert "owner authorization" in lowered
+    assert "scan-all at current head" in lowered or "measured evidence" in lowered
 
