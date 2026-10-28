@@ -685,3 +685,28 @@ Stage-8 second implementation increment (2026-10-28)
 No network/model/GUI/autonomous run occurred. Scheduler/continuation, Goals GUI, adaptive
 replanning, document reconciliation/extraction/plan approval and end-to-end acceptance remain
 pending; stage-6 external acceptance is unchanged.
+
+Stage-8 third implementation increment (2026-10-28)
+
+- Goals GUI (NL-BP-212/216 partial): the 11th Studio page shows project-scoped goals with
+  status/priority/progress/dependencies/blocked indicators and filters, a validated create dialog
+  with objective/acceptance/priority/dependencies/attachments/reference, valid-transition lifecycle
+  actions, a verification-gated Complete action with blocker display, milestones, next-work,
+  progress summary and read-only decisions/blockers panes. No widget business logic, direct DB or
+  network access; controls are disabled/explained without a project/facade. 8 offscreen tests and
+  the headless 11-page CI smoke pass.
+- Verification-gated completion (NL-BP-215 partial): AppServices.goal_complete now runs the
+  independent GoalVerifier first, persists the append-only report and only completes a goal on a
+  verified verdict; missing/partial/contradicted/stale/untrusted/self evidence or absent criteria
+  are refused with blockers/outstanding criteria and no status mutation. The CLI adds goal verify
+  and goal complete with file/stdin/inline JSON evidence, --dry-run and JSON/text output; read-only
+  verify/records/false-completion helpers are exposed; GoalService remains the only status owner.
+  12 gate tests (62 goal tests total).
+- Full suite 1007 passed after removing teammate smoke scripts accidentally left in the root build
+  directory; relocation/supervisor gates green.
+
+Remaining: autonomous scheduler/continuation and multi-goal resource/conflict handling,
+autonomy-policy integration, versioned adaptive replanning, goal templates, full task-queue/
+active-agent/decision-log GUI views, verifier reuse of staged-candidate/oracle gates, automated
+evidence execution and real external/human evidence. No network/model/autonomous run occurred;
+stage-6 external acceptance is unchanged.
