@@ -6,7 +6,7 @@ from PySide6.QtCore import (QBuffer, QIODevice, QObject, QRunnable, QSize, Qt,
 from PySide6.QtGui import QImage, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (QApplication, QCheckBox, QFileDialog, QHBoxLayout,
                                QLabel, QListWidget, QListWidgetItem, QPushButton,
-                               QTextEdit, QVBoxLayout, QWidget)
+                               QTextBrowser, QTextEdit, QVBoxLayout, QWidget)
 
 
 from nl_coding_agent.gui import i18n as _i18n
@@ -67,6 +67,19 @@ class _Prepare(QRunnable):
 
 class ChatInput(QTextEdit):
     attachment_paste = Signal()
+    submit_requested = Signal()
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802 - Qt override
+        key = event.key()
+        if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            if event.modifiers() & Qt.ControlModifier:
+                self.insertPlainText("\n")
+                event.accept()
+                return
+            self.submit_requested.emit()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def insertFromMimeData(self, source) -> None:  # noqa: N802 - Qt override
         if source is not None and (source.hasImage() or source.hasUrls()):
@@ -124,6 +137,12 @@ class ChatPanel(QWidget):
         self._hint.setStyleSheet("color: #AB83C6;")
         self._hint.setAccessibleName("Mission chat hint")
         layout.addWidget(self._hint)
+        self._transcript = QTextBrowser()
+        self._transcript.setObjectName("chatTranscript")
+        self._transcript.setReadOnly(True)
+        self._transcript.setAccessibleName("Chat transcript")
+        self._transcript.setMinimumHeight(80)
+        layout.addWidget(self._transcript, 1)
         self._input = ChatInput()
         self._input.setObjectName("chatInput")
         self._input.setPlaceholderText(_tr(
@@ -134,6 +153,7 @@ class ChatPanel(QWidget):
         self._input.setAccessibleDescription(
             "Type the mission goal. Drop files/folders or paste attachments.")
         self._input.attachment_paste.connect(self._paste_attachments)
+        self._input.submit_requested.connect(self._submit)
         layout.addWidget(self._input, 1)
         self._attachments_list = QListWidget()
         self._attachments_list.setObjectName("chatAttachments")
@@ -192,7 +212,7 @@ class ChatPanel(QWidget):
         self._status.setAccessibleName("Attachment preparation status")
         footer.addWidget(self._status)
         self._submit_btn = QPushButton(_tr(
-            "chat.send_mission", "Send mission"))
+            "chat.send_mission", "Invia"))
         self._submit_btn.setObjectName("primaryButton")
         self._submit_btn.setAccessibleName("Submit mission")
         self._submit_btn.setToolTip(_tr(
@@ -223,7 +243,7 @@ class ChatPanel(QWidget):
             "chat.read_aloud", "Read transcript aloud"))
         self._attach_btn.setText(_tr("chat.attach_files", "Attach files…"))
         self._remove_btn.setText(_tr("chat.remove", "Remove"))
-        self._submit_btn.setText(_tr("chat.send_mission", "Send mission"))
+        self._submit_btn.setText(_tr("chat.send_mission", "Invia"))
         self.set_project(self._project)
 
     def set_project(self, project) -> None:
@@ -321,9 +341,27 @@ class ChatPanel(QWidget):
         self._refresh()
         self._set_status("Attachment removed")
 
+    def append_user_message(self, text: str) -> None:
+        from html import escape
+        self._transcript.append(f"<b>Tu:</b> {escape(str(text))}")
+
+    def append_assistant_message(self, text: str, *, tool_activity: str = "") -> None:
+        from html import escape
+        markup = f"<b>Assistente:</b> {escape(str(text))}"
+        if tool_activity:
+            markup += f"<br><i>Strumenti: {escape(tool_activity)}</i>"
+        self._transcript.append(markup)
+
+    def append_system_message(self, text: str) -> None:
+        from html import escape
+        self._transcript.append(f"<i>{escape(str(text))}</i>")
+
     def clear_attachments(self) -> None:
         self._attachments.clear()
         self._refresh()
+
+    def clear_transcript(self) -> None:
+        self._transcript.clear()
 
     def _refresh(self) -> None:
         self._attachments_list.clear()
@@ -372,6 +410,8 @@ class ChatPanel(QWidget):
         if not text and not self._attachments:
             self._set_status("Write a mission or attach at least one file")
             return
+        if text:
+            self.append_user_message(text)
         payload = {
             "text": text,
             "project_id": (self._project or {}).get("id"),

@@ -386,13 +386,13 @@ class MainWindow(QMainWindow):
         root_layout.addWidget(header)
 
         # ── Main area (sidebar + center + inspector) ─────────────────────────
-        main_splitter = QSplitter(Qt.Orientation.Horizontal)
-        main_splitter.setChildrenCollapsible(False)
+        self._main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._main_splitter.setChildrenCollapsible(False)
 
         # Sidebar
         self._sidebar = SidebarWidget(translator=self._i18n)
         self._sidebar.page_changed.connect(self._switch_page)
-        main_splitter.addWidget(self._sidebar)
+        self._main_splitter.addWidget(self._sidebar)
 
         # Center stacked widget
         self._stack = QStackedWidget()
@@ -455,30 +455,40 @@ class MainWindow(QMainWindow):
         self._goals_panel = GoalsPanel(self._services)
         self._stack.addWidget(self._goals_panel)  # index 10 = goals
 
-        main_splitter.addWidget(self._stack)
+        self._main_splitter.addWidget(self._stack)
 
         # Inspector panel
         self._inspector = InspectorPanel(translator=self._i18n)
-        main_splitter.addWidget(self._inspector)
+        self._main_splitter.addWidget(self._inspector)
 
-        main_splitter.setSizes([180, 760, 300])
+        self._main_splitter.setSizes([180, 760, 300])
         self._inspector.setMinimumWidth(268)
-        main_splitter.setStretchFactor(0, 0)
-        main_splitter.setStretchFactor(1, 1)
-        main_splitter.setStretchFactor(2, 0)
+        self._main_splitter.setStretchFactor(0, 0)
+        self._main_splitter.setStretchFactor(1, 1)
+        self._main_splitter.setStretchFactor(2, 0)
 
         # ── Vertical splitter (main area + log panel) ─────────────────────────
-        v_splitter = QSplitter(Qt.Orientation.Vertical)
-        v_splitter.setChildrenCollapsible(False)
-        v_splitter.addWidget(main_splitter)
+        self._v_splitter = QSplitter(Qt.Orientation.Vertical)
+        self._v_splitter.setChildrenCollapsible(False)
+        self._v_splitter.addWidget(self._main_splitter)
 
         self._log_panel = LogPanel()
-        v_splitter.addWidget(self._log_panel)
-        v_splitter.setSizes([580, 150])
-        v_splitter.setStretchFactor(0, 1)
-        v_splitter.setStretchFactor(1, 0)
+        self._v_splitter.addWidget(self._log_panel)
+        self._v_splitter.setSizes([580, 150])
+        self._v_splitter.setStretchFactor(0, 1)
+        self._v_splitter.setStretchFactor(1, 0)
 
-        root_layout.addWidget(v_splitter)
+        from PySide6.QtCore import QSettings
+        _settings = QSettings("NL Coding Agent", "Studio")
+        try:
+            if _settings.contains("main_splitter_state"):
+                self._main_splitter.restoreState(_settings.value("main_splitter_state"))
+            if _settings.contains("v_splitter_state"):
+                self._v_splitter.restoreState(_settings.value("v_splitter_state"))
+        except Exception:
+            pass
+
+        root_layout.addWidget(self._v_splitter)
 
         # ── Status bar ────────────────────────────────────────────────────────
         sb = QStatusBar()
@@ -747,6 +757,15 @@ class MainWindow(QMainWindow):
         self._problems_panel.set_project(project)
         self._research_panel.set_project(project)
         self._goals_panel.set_project(project)
+        try:
+            self._chat_panel.clear_transcript()
+            for item in self._services.list_chat_messages(project_id=project["id"]):
+                if item.get("role") == "user":
+                    self._chat_panel.append_user_message(item.get("content", ""))
+                else:
+                    self._chat_panel.append_assistant_message(item.get("content", ""))
+        except Exception:
+            pass
         self._update_supervisor_status()
         self._log_panel.append_log(
             "projects", "info",
@@ -801,6 +820,9 @@ class MainWindow(QMainWindow):
                 plan_id=result["plan_id"])
             dialog.exec()
             return
+        if self._services.chat_workflow(text) == "chat":
+            self._run_chat_conversation(text, attachment_ids)
+            return
         title = (text[:60] if text else "Mission with attachments") or "Mission"
         goal = text or "Review the attached files and describe the requested change."
         try:
@@ -827,6 +849,27 @@ class MainWindow(QMainWindow):
                    "Mission #{mission_id} created from chat with {count} "
                    "attachment(s) (no model run).",
                    mission_id=str(mission_id), count=str(len(attachment_ids))))
+
+    def _run_chat_conversation(self, text: str, attachment_ids: list[int]) -> None:
+        thread = ChatReplyThread(self._services, self._current_project, text,
+                                attachment_ids, self)
+        self._chat_reply_threads = getattr(self, "_chat_reply_threads", [])
+        self._chat_reply_threads.append(thread)
+
+        def _finish(result: dict):
+            if result.get("ok"):
+                self._chat_panel.append_assistant_message(
+                    str(result.get("reply") or ""),
+                    tool_activity=str(result.get("tool_activity") or ""))
+            else:
+                self._chat_panel.append_system_message(
+                    str(result.get("reply") or "Chat failed"))
+            self._log_panel.append_log(
+                "chat", "info" if result.get("ok") else "error",
+                tr_for(self._i18n, "status.chat_reply", "Assistant replied"))
+
+        thread.reply_ready.connect(_finish)
+        thread.start()
 
     @Slot(int)
     def _on_mission_selected(self, mission_id: int):
@@ -1036,5 +1079,29 @@ class MainWindow(QMainWindow):
         from nl_coding_agent.app.services import get_event_bus
         self._stop_threads()
         QCoreApplication.processEvents()
+        try:
+            from PySide6.QtCore import QSettings
+            _settings = QSettings("NL Coding Agent", "Studio")
+            _settings.setValue("main_splitter_state", self._main_splitter.saveState())
+            _settings.setValue("v_splitter_state", self._v_splitter.saveState())
+            _settings.sync()
+        except Exception:
+            pass
         get_event_bus().unsubscribe(self._on_bus_event)
         event.accept()
+class ChatReplyThread(QThread):
+    reply_ready = Signal(dict)
+
+    def __init__(self, services, project, text, attachment_ids, parent=None):
+        super().__init__(parent)
+        self._services = services
+        self._project = project
+        self._text = text
+        self._attachment_ids = attachment_ids
+
+    def run(self):
+        try:
+            self.reply_ready.emit(self._services.chat_conversation(
+                self._project, self._text, self._attachment_ids))
+        except Exception as exc:
+            self.reply_ready.emit({"ok": False, "reply": str(exc), "tool_activity": ""})

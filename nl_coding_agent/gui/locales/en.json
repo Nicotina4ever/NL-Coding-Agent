@@ -119,7 +119,7 @@
     "chat.remove": "Remove",
     "chat.remove_tooltip": "Remove selected attachment (Delete)",
     "chat.ready": "Ready",
-    "chat.send_mission": "Send mission",
+    "chat.send_mission": "Invia",
     "chat.submit_tooltip": "Submit the mission (Ctrl+Enter)",
     "chat.hint": "Drop files or folders here, or paste with Ctrl+V (text, files, images, Windows screenshots). Ctrl+Enter submits.",
     "chat.open_project": "Open a project to submit a mission",

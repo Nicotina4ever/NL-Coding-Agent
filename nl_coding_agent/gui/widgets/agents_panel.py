@@ -121,6 +121,13 @@ class AgentsPanel(QWidget):
         refresh_btn.clicked.connect(self.refresh)
         layout.addWidget(refresh_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
+        self._configure_btn = QPushButton(_tr(
+            "agents.configure", "Configure custom agents"))
+        self._configure_btn.setObjectName("secondaryButton")
+        self._configure_btn.setAccessibleName("Configure custom agents")
+        self._configure_btn.clicked.connect(self._open_custom_agents)
+        layout.addWidget(self._configure_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+
         self._render(self._services.get_agent_roles(), [], None)
         _register_retranslate(self)
 
@@ -140,6 +147,13 @@ class AgentsPanel(QWidget):
             _tr("agents.header_role", "Role"),
             _tr("agents.header_model", "Model"),
             _tr("agents.header_availability", "Availability")])
+
+    def _open_custom_agents(self) -> None:
+        from nl_coding_agent.gui.dialogs.custom_agents import CustomAgentsDialog
+
+        dialog = CustomAgentsDialog(self._services, self)
+        dialog.exec()
+        self.refresh()
 
     def refresh(self):
         if self._thread is not None and self._thread.isRunning():

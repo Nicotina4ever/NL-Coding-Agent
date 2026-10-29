@@ -237,6 +237,39 @@ class AppServices:
     def get_database_path(self) -> Path:
         return db_path()
 
+    def _chat_store_dir(self) -> Path:
+        path = db_path().parent / "chat"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def _chat_history_path(self, project_id: int | None = None) -> Path:
+        if project_id is None:
+            return self._chat_store_dir() / "global.json"
+        return self._chat_store_dir() / f"project-{int(project_id)}.json"
+
+    def list_chat_messages(self, *, project_id: int | None = None) -> list[dict]:
+        path = self._chat_history_path(project_id)
+        if not path.is_file():
+            return []
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+        return list(data if isinstance(data, list) else data.get("messages", []))
+
+    def _append_chat_message(self, project_id: int | None, role: str, content: str) -> dict:
+        from datetime import datetime
+        item = {
+            "role": role,
+            "content": str(content or ""),
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+        }
+        messages = self.list_chat_messages(project_id=project_id)
+        messages.append(item)
+        self._chat_history_path(project_id).write_text(
+            json.dumps(messages, ensure_ascii=False, indent=2), encoding="utf-8")
+        return item
+
     def get_ollama_url(self) -> str:
         config = self.get_model_config()
         return str((config.get("ollama") or {}).get("base_url") or "http://127.0.0.1:11434")
@@ -269,7 +302,138 @@ class AppServices:
                 "note": "" if role_model("debugger") else "defaults to developer",
             },
             {"role": "reviewer", "model": role_model("reviewer"), "kind": "llm"},
-        ]
+        ] + self._custom_agent_role_entries()
+
+    def _custom_agent_role_entries(self) -> list[dict]:
+        entries: list[dict] = []
+        for item in self.list_custom_agents():
+            if not item.get("enabled", True):
+                continue
+            entries.append({
+                "role": str(item.get("name") or item.get("role") or "custom"),
+                "model": str(item.get("model") or ""),
+                "kind": "llm",
+                "note": "custom agent",
+                "custom_agent_id": item.get("id"),
+                "instructions": item.get("instructions", ""),
+                "tools": item.get("tools", []),
+                "permissions": item.get("permissions", []),
+            })
+        return entries
+        path = db_path().parent / "custom_agents.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def _custom_agents_path(self) -> Path:
+        path = db_path().parent / "custom_agents.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+
+        path = self._custom_agents_path()
+        if not path.is_file():
+            return []
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+        return [dict(item) for item in (data if isinstance(data, list) else [])
+                if isinstance(item, dict)]
+
+    def list_custom_agents(self) -> list[dict]:
+        path = self._custom_agents_path()
+        if not path.is_file():
+            return []
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+        return [dict(item) for item in (data if isinstance(data, list) else [])
+                if isinstance(item, dict)]
+
+    def get_custom_agent(self, agent_id) -> dict | None:
+        for item in self.list_custom_agents():
+            if str(item.get("id")) == str(agent_id):
+                return dict(item)
+        return None
+
+    def create_custom_agent(self, name: str, **fields) -> dict:
+        import uuid
+        agent = {
+            "id": uuid.uuid4().hex[:12],
+            "name": str(name or "Custom agent").strip() or "Custom agent",
+            "enabled": True,
+            "provider": str(fields.pop("provider", "ollama") or "ollama"),
+            "model": str(fields.pop("model", "") or ""),
+            "role": str(fields.pop("role", "") or ""),
+            "instructions": str(fields.pop("instructions", "") or ""),
+            "tools": list(fields.pop("tools", []) or []),
+            "permissions": list(fields.pop("permissions", []) or []),
+            "role_id": str(fields.pop("role_id", "") or ""),
+        }
+        agent.update({k: v for k, v in fields.items() if v is not None})
+        agents = self.list_custom_agents()
+        agents.append(agent)
+        self._custom_agents_path().write_text(
+            json.dumps(agents, ensure_ascii=False, indent=2), encoding="utf-8")
+        self._bus.emit(Event(source="agents", level="info",
+                            message=f"Created custom agent {agent['name']}",
+                            payload={"agent_id": agent["id"]}))
+        return agent
+
+    def update_custom_agent(self, agent_id, **fields) -> dict | None:
+        agents = self.list_custom_agents()
+        updated = None
+        for item in agents:
+            if str(item.get("id")) == str(agent_id):
+                item.update({k: v for k, v in fields.items() if v is not None})
+                if "name" in fields:
+                    item["name"] = str(item.get("name") or "Custom agent")
+                updated = dict(item)
+        if updated is None:
+            return None
+        self._custom_agents_path().write_text(
+            json.dumps(agents, ensure_ascii=False, indent=2), encoding="utf-8")
+        return updated
+
+    def delete_custom_agent(self, agent_id) -> bool:
+        agents = self.list_custom_agents()
+        before = len(agents)
+        agents = [item for item in agents if str(item.get("id")) != str(agent_id)]
+        if len(agents) == before:
+            return False
+        self._custom_agents_path().write_text(
+            json.dumps(agents, ensure_ascii=False, indent=2), encoding="utf-8")
+        return True
+
+    def duplicate_custom_agent(self, agent_id, name: str | None = None) -> dict | None:
+        item = self.get_custom_agent(agent_id)
+        if item is None:
+            return None
+        clone = dict(item)
+        clone.pop("id", None)
+        clone["name"] = name or (str(clone.get("name") or "Custom agent") + " copy")
+        clone["enabled"] = True
+        return self.create_custom_agent(clone.pop("name"), **clone)
+
+    def list_agents(self, *args, **kwargs):
+        return self.list_custom_agents(*args, **kwargs)
+
+    def get_agent(self, *args, **kwargs):
+        return self.get_custom_agent(*args, **kwargs)
+
+    def add_custom_agent(self, *args, **kwargs):
+        return self.create_custom_agent(*args, **kwargs)
+
+    def save_custom_agent(self, *args, **kwargs):
+        return self.update_custom_agent(*args, **kwargs)
+
+    def remove_custom_agent(self, *args, **kwargs):
+        return self.delete_custom_agent(*args, **kwargs)
+
+    def clone_custom_agent(self, *args, **kwargs):
+        return self.duplicate_custom_agent(*args, **kwargs)
+
+    # Aliases are defined in AppServices after all method declarations.
 
     def get_runtime_settings(self, project_root: str | Path | None = None) -> dict:
         root = None
@@ -291,7 +455,17 @@ class AppServices:
     @staticmethod
     def chat_workflow(text: str) -> str:
         from nl_coding_agent.core.doc_planning import is_document_plan_request
-        return "document_plan" if is_document_plan_request(text) else "coding"
+
+        if is_document_plan_request(text):
+            return "document_plan"
+        lowered = str(text or "").lower()
+        coding_terms = (
+            "implement", "fix", "build", "create mission", "create goal", "modify",
+            "patch", "sviluppa", "implementa", "correggi", "modifica", "aggiungi",
+            "create code", "change code", "refactor", "debug", "test")
+        if any(term in lowered for term in coding_terms):
+            return "coding"
+        return "chat"
 
     def chat_document_plan(self, project: dict, text: str, attachment_ids=None) -> dict:
         """Use the existing corpus/plan lifecycle; never create a coding mission."""
@@ -308,6 +482,79 @@ class AppServices:
         return self.docs_plan_generate(
             project_root=project["root"], project_id=project["id"],
             objective=text, paths=paths, consent=True)
+
+    def chat_conversation(self, project: dict, text: str, attachment_ids=None) -> dict:
+        """Ordinary persistent conversational chat; never creates a mission."""
+        project_id = (project or {}).get("id")
+        self._append_chat_message(project_id, "user", text)
+        attachments = []
+        if attachment_ids:
+            from nl_coding_agent.app.attachments import get_attachment
+            for attachment_id in attachment_ids:
+                try:
+                    attachments.append(get_attachment(int(attachment_id)))
+                except Exception:
+                    pass
+        tool_activity = ""
+        if attachments:
+            tool_activity = "Allegati ricevuti: " + ", ".join(
+                str(item.get("name") or item.get("id")) for item in attachments)
+        reply = self._chat_reply(
+            project=project, text=text, attachments=attachments, tool_activity=tool_activity)
+        self._append_chat_message(project_id, "assistant", reply)
+        messages = self.list_chat_messages(project_id=project_id)
+        self._bus.emit(Event(
+            source="chat", level="info", message="Chat reply",
+            payload={"project_id": project_id, "role": "assistant"}))
+        return {
+            "ok": True,
+            "reply": reply,
+            "tool_activity": tool_activity,
+            "messages": messages,
+        }
+
+    def _chat_reply(self, *, project: dict, text: str, attachments, tool_activity: str) -> str:
+        context = "\n".join(
+            f"- {item.get('extracted_text', '')[:2000]}" for item in attachments
+            if item.get("has_text"))
+        context_block = "\nContesto allegati:\n" + context if context else ""
+        prompt = (
+            "Sei l'assistente di NL Coding Agent. Rispondi in modo naturale, "
+            "conciso e utile. Non creare missioni, modifiche o file a meno che "
+            "l'utente non lo chieda esplicitamente.\n\n"
+            + (f"Contesto del progetto: {str((project or {}).get('root') or '')}\n")
+            + context_block + "\n\nUtente:\n" + str(text or "")
+        )
+        if not self.check_ollama():
+            return ("Sono offline. Posso rispondere solo in modo limitato adesso; "
+                    "avvia Ollama per una risposta completa." + (
+                        "\n\n" + tool_activity if tool_activity else ""))
+        model = ""
+        try:
+            config = self.get_model_config() or {}
+            roles = config.get("roles") or {}
+            model = ((roles.get("developer") or {}).get("model")
+                     or (roles.get("architect") or {}).get("model") or "")
+        except Exception:
+            model = ""
+        model_name = model.split("/", 1)[-1] if model else ""
+        if not model_name:
+            model_name = "qwen3.5:9b"
+        try:
+            import urllib.request
+            import json as _json
+            payload = {"model": model_name, "prompt": prompt, "stream": False}
+            raw = _json.dumps(payload).encode("utf-8")
+            request = urllib.request.Request(
+                self.get_ollama_url().rstrip("/") + "/api/generate",
+                data=raw, headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(request, timeout=120) as response:
+                data = _json.loads(response.read().decode("utf-8"))
+            reply = str(data.get("response") or "").strip()
+            return reply or "Non ho ricevuto una risposta dal modello."
+        except Exception as exc:
+            return f"Impossibile contattare il modello: {exc}" + (
+                "\n\n" + tool_activity if tool_activity else "")
 
     def create_mission(self, project_id: int | None, title: str, goal: str) -> int:
         from nl_coding_agent.persistence.missions import create_mission as _create_m
