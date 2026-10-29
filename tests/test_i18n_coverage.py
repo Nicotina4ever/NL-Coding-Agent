@@ -122,7 +122,7 @@ def test_secondary_panels_have_italian_english_and_live_retranslation(services):
             assert getter(panels[name]) == expected, (name, getter(panels[name]))
         # Representative secondary strings/table headers/buttons.
         assert panels["task_board"]._refresh_btn.text() == "Aggiorna"
-        assert panels["chat"]._submit_btn.text() == "Invia missione"
+        assert panels["chat"]._submit_btn.text() == "Invia"
         assert panels["agents"]._table.horizontalHeaderItem(0).text() == "Ruolo"
         assert panels["models"]._tabs.tabText(0) == "Modelli"
         assert panels["terminal"]._run_btn.text() == "Esegui"

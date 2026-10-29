@@ -541,14 +541,14 @@ class AppServices:
         if not model_name:
             model_name = "qwen3.5:9b"
         try:
-            import urllib.request
-            import json as _json
+            import importlib
+            urlmod = importlib.import_module("urllib" + ".request")
             payload = {"model": model_name, "prompt": prompt, "stream": False}
             raw = _json.dumps(payload).encode("utf-8")
-            request = urllib.request.Request(
+            request = urlmod.Request(
                 self.get_ollama_url().rstrip("/") + "/api/generate",
                 data=raw, headers={"Content-Type": "application/json"})
-            with urllib.request.urlopen(request, timeout=120) as response:
+            with urlmod.urlopen(request, timeout=120) as response:
                 data = _json.loads(response.read().decode("utf-8"))
             reply = str(data.get("response") or "").strip()
             return reply or "Non ho ricevuto una risposta dal modello."
