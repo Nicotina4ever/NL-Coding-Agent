@@ -275,8 +275,28 @@ class MultiAgentOrchestrator:
         )
         self.bus = get_event_bus()
         self._last_verification = None
+        self._last_agent_result = None
 
     # ------------------------------------------------------------------ helpers
+
+    def _agent_metadata(self, model_name: str) -> dict:
+        """Actual CrewAI result evidence for the last call, bounded and JSON-safe."""
+        result = self._last_agent_result
+        metadata = {"model": str(model_name or ""), "provider": "ollama"}
+        if result is not None:
+            metadata.update({
+                "model": str(getattr(result, "model", None) or model_name or ""),
+                "provider": str(getattr(result, "provider", None) or "ollama"),
+                "duration_s": getattr(result, "duration_s", None),
+                "tools_used": list(getattr(result, "tools_used", ()) or ()),
+            })
+            usage = getattr(result, "usage", None)
+            if usage:
+                try:
+                    metadata["usage"] = dict(usage)
+                except Exception:
+                    pass
+        return metadata
 
     def _emit(self, source: str, level: str, message: str, **payload) -> None:
         self.bus.emit(Event(source=source, level=level, message=message, payload=payload or None))
@@ -290,6 +310,48 @@ class MultiAgentOrchestrator:
         """
         if control is not None:
             control.checkpoint(stage)
+
+    def _record_model_assignments(self, mission_id: int, routes: dict[str, str]) -> None:
+        """Resolve role routes through the existing ModelRouter and persist the snapshot.
+
+        The exact routes chosen by the caller remain the execution routes (no silent
+        substitution); the router validates permissions and stores immutable bindings
+        for later results-based model selection.
+        """
+        try:
+            from nl_coding_agent.models.model_router import ModelRouter
+
+            overrides: dict[str, dict] = {}
+            for role, route in routes.items():
+                text = str(route or "").strip()
+                if not text:
+                    continue
+                provider, _, model_name = text.partition("/")
+                if not model_name:
+                    provider, model_name = "ollama", text
+                overrides[role] = {
+                    "provider_id": provider or "ollama",
+                    "model_name": model_name,
+                }
+            if not overrides:
+                return
+            router = ModelRouter(role_bindings=overrides, project_id=self.project_id)
+            resolved = {role: router.resolve(role) for role in overrides}
+            router.record_mission_snapshot(mission_id, resolved)
+            self._emit(
+                "orchestrator", "info",
+                "Model assignments recorded: " + ", ".join(
+                    f"{role}={binding.model_name}" for role, binding in sorted(resolved.items())
+                ),
+                mission_id=mission_id,
+                model_bindings={role: binding.to_dict() for role, binding in resolved.items()},
+            )
+        except Exception as exc:  # noqa: BLE001 - assignment evidence must not fake a route
+            self._emit(
+                "orchestrator", "warning",
+                "Model assignment snapshot unavailable: " + type(exc).__name__ + ": " + str(exc),
+                mission_id=mission_id,
+            )
 
     def _call_model(
         self,
@@ -321,6 +383,7 @@ class MultiAgentOrchestrator:
             tools=tools,
             project_id=self.project_id,
         )
+        self._last_agent_result = result
         return result.text
 
     def _snapshot(self) -> dict[str, str]:
@@ -380,13 +443,55 @@ class MultiAgentOrchestrator:
                 paths.add(line[len("--- a/"):].strip())
         return sorted(paths)
 
+    @staticmethod
+    def _needs_architecture_review(goal: str, write_paths: list[str]) -> bool:
+        """Proportional team policy: read-only architecture only for broad/multi-file work."""
+        source_paths = [str(path) for path in (write_paths or [])
+                        if not str(path).replace("\\", "/").lower().startswith("tests/")
+                        and not str(path).lower().endswith((".md", ".rst", ".txt"))]
+        if len(set(source_paths)) >= 2:
+            return True
+        lowered = str(goal or "").lower()
+        markers = ("refactor", "architecture", "architettura", "design", "progett",
+                   "migrate", "migrazione", "multi-file", "multiple modules",
+                   "several modules", "system-wide", "across the")
+        return any(marker in lowered for marker in markers)
+
+    @staticmethod
+    def _needs_audit(goal: str) -> bool:
+        lowered = str(goal or "").lower()
+        markers = ("audit", "security", "sicurezza", "vulnerab", "dependency",
+                   "dipenden", "performance", "prestazion", "risk", "rischio")
+        return any(marker in lowered for marker in markers)
+
     def _plan_tasks(self, mission_id: int, goal: str) -> list[dict]:
         write_paths = extract_paths(goal)
+        analysis_tasks: list[dict] = []
+        if self._needs_architecture_review(goal, write_paths):
+            analysis_tasks.append(add_task(
+                mission_id,
+                "Architecture Analysis",
+                "Read-only architectural analysis of the current project for the mission objective; "
+                "produce constraints and an implementation outline for the developer.",
+                "architect",
+                write_paths=[],
+            ))
+        if self._needs_audit(goal):
+            analysis_tasks.append(add_task(
+                mission_id,
+                "Risk & Test Audit",
+                "Read-only audit of security, dependency, compatibility and test risks relevant to the "
+                "mission objective; hand constraints to the developer.",
+                "auditor",
+                depends_on=[analysis_tasks[-1]] if analysis_tasks else [],
+                write_paths=[],
+            ))
         t1 = add_task(
             mission_id,
             "Code Implementation",
             goal,
             "developer",
+            depends_on=[analysis_tasks[-1]] if analysis_tasks else [],
             write_paths=write_paths,
         )
         t2 = add_task(
@@ -888,6 +993,7 @@ class MultiAgentOrchestrator:
         debug_model: str | None = None,
         stop_after: str | None = None,
         control: RunControl | None = None,
+        architect_model: str | None = None,
     ) -> dict:
         """Execute or resume a complete mission through all gates.
 
@@ -913,6 +1019,7 @@ class MultiAgentOrchestrator:
         developer_model = developer_model or DEFAULT_DEVELOPER_MODEL
         reviewer_model = reviewer_model or DEFAULT_REVIEWER_MODEL
         debug_model = debug_model or DEFAULT_DEBUG_MODEL
+        architect_model = architect_model or developer_model
 
         if mission["status"] == "completed":
             return self._result_payload(
@@ -937,6 +1044,7 @@ class MultiAgentOrchestrator:
                     debug_model,
                     stop_after,
                     control,
+                    architect_model,
                 )
         except MissionLockError as exc:
             self._emit("orchestrator", "error", str(exc), mission_id=mission_id)
@@ -952,11 +1060,13 @@ class MultiAgentOrchestrator:
         debug_model: str,
         stop_after: str | None,
         control: RunControl | None = None,
+        architect_model: str | None = None,
     ) -> dict:
         mission = get_mission(mission_id) or {}
         existing_tasks = get_tasks(mission_id)
         stage: promotion.Stage | None = None
         baseline: dict[str, str] = {}
+        architect_model = str(architect_model or developer_model or "")
         try:
             from nl_coding_agent.core.doc_planning import is_document_plan_request
             if is_document_plan_request(goal):
@@ -989,6 +1099,16 @@ class MultiAgentOrchestrator:
 
             tasks = get_tasks(mission_id) if existing_tasks else self._plan_tasks(mission_id, goal)
             self._validate_plan(tasks)
+            planned_roles = {str(task.get("agent_role") or "") for task in tasks}
+            assignment_routes = {
+                "architect": architect_model,
+                "developer": developer_model,
+                "reviewer": reviewer_model,
+                "debugger": debug_model,
+            }
+            if "auditor" in planned_roles:
+                assignment_routes["auditor"] = developer_model
+            self._record_model_assignments(mission_id, assignment_routes)
             if existing_tasks:
                 loaded = self._load_baseline(mission_id)
                 if loaded is None:
@@ -1005,6 +1125,7 @@ class MultiAgentOrchestrator:
                 self._save_baseline(mission_id, baseline)
 
             task_map = {t["agent_role"]: t for t in tasks}
+            arch_task = task_map.get("architect")
             dev_task = task_map.get("developer")
             test_task = task_map.get("tester")
             rev_task = task_map.get("reviewer")
@@ -1040,11 +1161,19 @@ class MultiAgentOrchestrator:
                 )
                 return result
 
+            self._checkpoint(control, "before-architect")
+            architecture_notes = self._run_planned_analysis(
+                mission_id, tasks, goal,
+                {"architect": architect_model, "auditor": developer_model},
+            )
+            self._checkpoint(control, "after-architect")
+
             self._checkpoint(control, "before-developer")
 
             # 1. Developer: staged candidate only.
             if dev_task and dev_task["status"] != "completed":
-                self._run_developer_stage(mission_id, dev_task, goal, developer_model, baseline, stage)
+                self._run_developer_stage(mission_id, dev_task, goal, developer_model, baseline, stage,
+                                          architecture_notes=architecture_notes)
             elif dev_task:
                 self._emit(
                     "developer", "info",
@@ -1159,6 +1288,136 @@ class MultiAgentOrchestrator:
 
     # ------------------------------------------------------------------ stages
 
+    def _analysis_notes(self, mission_id: int, role: str) -> str:
+        """Read a persisted analysis handoff so resumed missions reuse completed work."""
+        for handoff in reversed(get_handoffs(mission_id)):
+            if handoff.get("from_role") == role and handoff.get("to_role") == "developer":
+                payload = handoff.get("payload") or {}
+                return str(payload.get("notes") or "")
+        return ""
+
+    def _architect_notes(self, mission_id: int) -> str:
+        return self._analysis_notes(mission_id, "architect")
+
+    def _run_analysis_stage(
+        self,
+        mission_id: int,
+        task_rec: dict,
+        goal: str,
+        model_name: str,
+        *,
+        role: str,
+        display_role: str,
+        purpose: str,
+    ) -> str:
+        """Shared read-only analysis stage for architect/auditor; hands notes to the developer."""
+        task_id = task_rec["id"]
+        update_task_status(task_id, "running")
+        self._emit(
+            role, "info",
+            f"{display_role} analysing the project before implementation with {model_name}",
+            mission_id=mission_id,
+        )
+        tools = get_project_tools(self.root, read_only=True)
+        prompt = f"""
+PROJECT ROOT: {self.root}
+MISSION GOAL: {goal}
+
+You are the read-only {display_role} in a multi-agent coding mission.
+Inspect only the files needed to understand the existing design, constraints and tests.
+Do not modify any file; you have no write tools.
+
+{purpose}
+
+Do not claim that changes were made. The Developer will perform them in a staged candidate.
+"""
+        try:
+            notes = self._call_model(
+                display_role,
+                model_name,
+                prompt,
+                goal=f"{display_role} analysis for this mission: {goal}",
+                backstory=(
+                    f"You are a read-only {display_role}. You inspect the existing project and "
+                    "hand precise constraints to the implementation developer. You never edit files."
+                ),
+                expected_output="Concise analysis notes: files, interfaces, constraints, risks, verification targets.",
+                tools=tools,
+            )
+            metadata = self._agent_metadata(model_name)
+            summary = f"{display_role} analysis delivered ({len(notes)} chars)."
+            record_task_attempt(task_id, "completed", output=_truncate(notes, 12_000),
+                                metadata=metadata)
+            update_task_status(task_id, "completed")
+            record_handoff(
+                mission_id,
+                role,
+                "developer",
+                summary,
+                {
+                    "role": role,
+                    "model": metadata.get("model") or model_name,
+                    "notes": _truncate(notes, 8_000),
+                    "read_only": True,
+                    "agent": metadata,
+                },
+            )
+            self._emit(role, "info", summary, mission_id=mission_id)
+            return str(notes or "")
+        except Exception as exc:
+            record_task_attempt(task_id, "failed", error=_truncate(str(exc), 2000),
+                                metadata=self._agent_metadata(model_name))
+            update_task_status(task_id, "failed", error=_truncate(str(exc), 2000))
+            self._emit(role, "error", f"{display_role} analysis failed: {exc}",
+                       mission_id=mission_id)
+            raise GateFailure(f"{display_role} analysis failed: " + str(exc),
+                              code=role + "-failed") from exc
+
+    def _run_architect_stage(self, mission_id: int, task_rec: dict, goal: str,
+                             model_name: str) -> str:
+        return self._run_analysis_stage(
+            mission_id, task_rec, goal, model_name,
+            role="architect", display_role="Software Architect",
+            purpose=("Produce concise implementation notes for the Developer: files that must change "
+                     "and why; interfaces/tests to preserve; minimal outline and risks; what "
+                     "independent verification should prove."),
+        )
+
+    def _run_auditor_stage(self, mission_id: int, task_rec: dict, goal: str,
+                           model_name: str) -> str:
+        return self._run_analysis_stage(
+            mission_id, task_rec, goal, model_name,
+            role="auditor", display_role="Repository Auditor",
+            purpose=("Produce concise risk notes for the Developer: security/dependency/compatibility "
+                     "risks, existing tests and interfaces to preserve, and what the independent "
+                     "tester/reviewer must verify."),
+        )
+
+    def _run_planned_analysis(self, mission_id: int, tasks: list[dict], goal: str,
+                              models: dict[str, str]) -> str:
+        """Execute every planned read-only analysis task in order and combine its notes."""
+        notes: list[str] = []
+        for task in tasks:
+            role = str(task.get("agent_role") or "")
+            if role not in ("architect", "auditor"):
+                continue
+            if task.get("status") == "completed":
+                analysis = self._analysis_notes(mission_id, role)
+                self._emit(role, "info", "Analysis recovered from persisted handoff.",
+                           mission_id=mission_id)
+            elif role == "architect":
+                analysis = self._run_architect_stage(
+                    mission_id, task, goal, models.get("architect") or models.get("developer") or "")
+            elif role == "auditor":
+                analysis = self._run_auditor_stage(
+                    mission_id, task, goal, models.get("auditor") or models.get("developer") or "")
+            else:
+                continue
+            if str(analysis or "").strip():
+                label = "Architecture" if role == "architect" else "Audit"
+                notes.append(f"[{label}]\n{analysis.strip()}")
+        return "\n\n".join(notes)
+
     def _run_developer_stage(
         self,
         mission_id: int,
@@ -1167,6 +1426,8 @@ class MultiAgentOrchestrator:
         model_name: str,
         baseline: dict[str, str],
         stage: promotion.Stage,
+        *,
+        architecture_notes: str = "",
     ) -> str:
         task_id = task_rec["id"]
         write_paths = task_rec.get("write_paths") or list(stage.scope)
@@ -1185,12 +1446,20 @@ class MultiAgentOrchestrator:
             if write_paths
             else "No explicit write scope was declared. Stay focused on the goal."
         )
+        architecture_text = (
+            "ARCHITECT NOTES (read-only analysis, use as guidance; verify against the code):\n"
+            + _truncate(architecture_notes, 8_000)
+            if str(architecture_notes or "").strip()
+            else "ARCHITECT NOTES: (not required for this mission)"
+        )
         prompt = f"""
 PROJECT ROOT: {self.root}
 WORKSPACE (staged copy; write relative paths here): {stage.workspace}
 MISSION GOAL: {goal}
 
 {scope_text}
+
+{architecture_text}
 
 INSTRUCTIONS:
 1. Read the relevant existing files first.
@@ -1200,11 +1469,12 @@ INSTRUCTIONS:
 <valid source code>
 ```
 4. Do NOT edit files outside the declared write scope: the candidate is rejected if you do.
-5. Do NOT output 'diff --git' or unified-diff headers inside a source file.
-6. Nothing is live until review and promotion; only the staged copy may change.
-7. There is no shell or test runner tool: the independent tester verifies later.
-8. Do NOT claim success without actually writing the files.
-9. Finish with a short summary of the files you changed.
+5. Preserve every existing public function and test unless the objective explicitly asks to remove or rename it. Do not move functions between files.
+6. Do NOT output 'diff --git' or unified-diff headers inside a source file.
+7. Nothing is live until review and promotion; only the staged copy may change.
+8. There is no shell or test runner tool: the independent tester verifies later.
+9. Do NOT claim success without actually writing the files.
+10. Finish with a short summary of the files you changed.
 """
         output = self._call_model(
             "Implementation Developer",
@@ -1224,6 +1494,7 @@ INSTRUCTIONS:
         promotion.normalize_staged_newlines(stage)
         verdict = self._validate_stage(stage)
         diff, changed, _stat = promotion.candidate_diff(stage)
+        metadata = self._agent_metadata(model_name)
         # The no-change check runs before the invalid-verdict branch: validate() reports an
         # empty candidate as invalid, which would otherwise mask DeveloperNoChangeError.
         if not changed:
@@ -1231,19 +1502,21 @@ INSTRUCTIONS:
                 "Developer produced no workspace change. "
                 f"Actions parsed: {actions or 'none'}. The model output did not modify files."
             )
-            record_task_attempt(task_id, "failed", output=_truncate(output), error=_truncate(error_msg, 2000))
+            record_task_attempt(task_id, "failed", output=_truncate(output), error=_truncate(error_msg, 2000),
+                                metadata=metadata)
             update_task_status(task_id, "failed", error=_truncate(error_msg, 2000))
             raise DeveloperNoChangeError(error_msg)
         if not verdict["valid"]:
             error_msg = "; ".join(verdict["errors"])
-            record_task_attempt(task_id, "failed", output=_truncate(output), error=_truncate(error_msg, 2000))
+            record_task_attempt(task_id, "failed", output=_truncate(output), error=_truncate(error_msg, 2000),
+                                metadata=metadata)
             update_task_status(task_id, "failed", error=_truncate(error_msg, 2000))
             raise GateFailure(
                 "Staged candidate rejected by the validation gate: " + error_msg,
                 code="candidate-rejected",
                 details={"errors": verdict["errors"]},
             )
-        record_task_attempt(task_id, "completed", output=_truncate(output))
+        record_task_attempt(task_id, "completed", output=_truncate(output), metadata=metadata)
         update_task_status(task_id, "completed")
         summary = (
             f"Developer staged {len(changed)} file(s): {', '.join(changed)}. "
@@ -1260,6 +1533,7 @@ INSTRUCTIONS:
                 "actions": actions,
                 "diff_sample": _truncate(diff, 4000),
                 "output_sample": _truncate(output, 1500),
+                "agent": metadata,
             },
         )
         self._emit("developer", "info", summary, mission_id=mission_id, changed_paths=changed)
@@ -1432,6 +1706,7 @@ INSTRUCTIONS:
         actions = _apply_text_actions(stage.workspace, output)
         promotion.normalize_staged_newlines(stage)
         diff, changed, _stat = promotion.candidate_diff(stage)
+        metadata = self._agent_metadata(model_name)
         summary = (
             f"Debugger staged {len(changed)} file(s): {', '.join(changed)}."
             if changed
@@ -1448,6 +1723,7 @@ INSTRUCTIONS:
                 "actions": actions,
                 "diff_sample": _truncate(diff, 4000),
                 "output_sample": _truncate(output, 1500),
+                "agent": metadata,
             },
         )
         self._emit("debugger", "info", summary, mission_id=mission_id, changed_paths=changed)
@@ -1522,7 +1798,9 @@ INSTRUCTIONS:
                 expected_output="APPROVE or REJECT verdict on the first line, followed by review notes.",
             )
             verdict = parse_reviewer_verdict(review_text)
-            record_task_attempt(task_id, "completed", output=_truncate(review_text))
+            metadata = self._agent_metadata(model_name)
+            record_task_attempt(task_id, "completed", output=_truncate(review_text),
+                                metadata=metadata)
             update_task_status(task_id, "completed")
             summary = f"Review completed with verdict: {verdict}"
             record_handoff(
@@ -1536,13 +1814,15 @@ INSTRUCTIONS:
                     "review_notes": _truncate(review_text, 2000),
                     "changed_paths": changed,
                     "candidate": True,
+                    "agent": metadata,
                 },
             )
             self._save_promotion_status(mission_id, "reviewed" if verdict == "APPROVE" else "review_rejected")
             self._emit("reviewer", "info", summary, mission_id=mission_id, verdict=verdict)
             return review_text, verdict
         except Exception as exc:
-            record_task_attempt(task_id, "failed", error=str(exc))
+            record_task_attempt(task_id, "failed", error=str(exc),
+                                metadata=self._agent_metadata(model_name))
             update_task_status(task_id, "failed", error=str(exc))
             self._emit("reviewer", "error", f"Review failed: {exc}", mission_id=mission_id)
             raise

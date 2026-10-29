@@ -1,0 +1,458 @@
+{
+  "generated_at": "2026-10-29",
+  "delivery": "installed VSIX",
+  "package": {
+    "name": "NL Coder",
+    "version": "0.3.0",
+    "vsix": ".workspace/dist/NL-Coding-Agent-0.3.0.vsix",
+    "bytes": 4699386,
+    "sha256": "d5d0ad89413ad461755478fead7002b6a4cc568702973d3d9a6c1b2e850f8c7c"
+  },
+  "isolated_run": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\frontend-accept\\vsix-team-1793316056555",
+  "project_root": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\frontend-accept\\vsix-team-1793316056555\\project",
+  "planner": {
+    "policy": "architect for multi-file/design; auditor for security/audit objectives; developer/tester/reviewer always required",
+    "planned_roles": [
+      "architect",
+      "developer",
+      "tester",
+      "reviewer"
+    ],
+    "task_count": 4,
+    "single_file_expected_team": [
+      "developer",
+      "tester",
+      "reviewer"
+    ]
+  },
+  "mission": {
+    "id": 1,
+    "project_id": 1,
+    "status": "completed",
+    "review_verdict": "APPROVE",
+    "promotion_status": "promoted",
+    "diff_stat": "2 file(s), +4/-2",
+    "changed_paths": "[\"src/calc.py\", \"src/stats.py\"]",
+    "result_summary": "Reviewer APPROVED; promoted 2 file(s).",
+    "harness_version": 2,
+    "resume_count": 0
+  },
+  "tasks": [
+    {
+      "id": 1,
+      "title": "Architecture Analysis",
+      "status": "completed",
+      "agent_role": "architect",
+      "attempts": 1,
+      "depends_on": [],
+      "write_paths": [],
+      "last_error": null
+    },
+    {
+      "id": 2,
+      "title": "Code Implementation",
+      "status": "completed",
+      "agent_role": "developer",
+      "attempts": 1,
+      "depends_on": [
+        1
+      ],
+      "write_paths": [
+        "src/calc.py",
+        "src/stats.py"
+      ],
+      "last_error": null
+    },
+    {
+      "id": 3,
+      "title": "Test & Verification",
+      "status": "completed",
+      "agent_role": "tester",
+      "attempts": 1,
+      "depends_on": [
+        2
+      ],
+      "write_paths": [],
+      "last_error": null
+    },
+    {
+      "id": 4,
+      "title": "Code Review",
+      "status": "completed",
+      "agent_role": "reviewer",
+      "attempts": 1,
+      "depends_on": [
+        3
+      ],
+      "write_paths": [],
+      "last_error": null
+    }
+  ],
+  "handoffs": [
+    {
+      "from_role": "orchestrator",
+      "to_role": "developer",
+      "summary": "Candidate stage created: mission-1-010yiic0",
+      "payload_keys": [
+        "scope",
+        "stage_dir"
+      ],
+      "model": null,
+      "agent": null,
+      "notes_tail": "",
+      "changed_paths": null,
+      "verdict": null,
+      "candidate": null,
+      "oracle": null
+    },
+    {
+      "from_role": "architect",
+      "to_role": "developer",
+      "summary": "Software Architect analysis delivered (1536 chars).",
+      "payload_keys": [
+        "agent",
+        "model",
+        "notes",
+        "read_only",
+        "role"
+      ],
+      "model": "ollama/qwen2.5-coder:7b-instruct-q4_K_M",
+      "agent": {
+        "model": "ollama/qwen2.5-coder:7b-instruct-q4_K_M",
+        "provider": "ollama",
+        "duration_s": 9.516,
+        "tools_used": [
+          "read_file",
+          "list_dir"
+        ],
+        "usage": {
+          "total_tokens": 878,
+          "prompt_tokens": 502,
+          "cached_prompt_tokens": 5,
+          "completion_tokens": 376,
+          "reasoning_tokens": 0,
+          "cache_creation_tokens": 0,
+          "successful_requests": 1
+        }
+      },
+      "notes_tail": " b)\",\n      \"description\": \"This function should return the result of a - b.\"\n    },\n    {\n      \"file\": \"src/stats.py\",\n      \"function\": \"mean(values)\",\n      \"description\": \"This function should return the arithmetic mean of the values provided.\"\n    }\n  ],\n  \"minimal_outline\": {\n    \"src/calc.py\": {\n      \"sub(a, b)\": \"def sub(a, b): return a - b\"\n    },\n    \"src/stats.py\": {\n      \"mean(values)\": \"def mean(values): return sum(values) / len(values)\"\n    }\n  },\n  \"risks\": [\n    {\n      \"risk\": \"Incorrect implementation of subtraction or mean\",\n      \"mitigation\": \"Ensure the implementation follows the mathematical definition of subtraction and mean.\"\n    },\n    {\n      \"risk\": \"Type errors in function parameters\",\n      \"mitigation\": \"Add type hints to ensure that the functions are called with the correct types.\"\n    }\n  ],\n  \"verification_targets\": [\n    {\n      \"target\": \"Unit tests for sub(a, b)\",\n      \"description\": \"Ensure that the sub function returns the correct result for various inputs.\"\n    },\n    {\n      \"target\": \"Unit tests for mean(values)\",\n      \"description\": \"Ensure that the mean function returns the correct arithmetic mean for various inputs.\"\n    }\n  ]\n}\n```",
+      "changed_paths": null,
+      "verdict": null,
+      "candidate": null,
+      "oracle": null
+    },
+    {
+      "from_role": "developer",
+      "to_role": "tester",
+      "summary": "Developer staged 2 file(s): src/calc.py, src/stats.py. Actions: 2.",
+      "payload_keys": [
+        "actions",
+        "agent",
+        "changed_paths",
+        "diff_sample",
+        "model",
+        "output_sample"
+      ],
+      "model": "ollama/qwen2.5-coder:7b-instruct-q4_K_M",
+      "agent": {
+        "model": "ollama/qwen2.5-coder:7b-instruct-q4_K_M",
+        "provider": "ollama",
+        "duration_s": 2.609,
+        "tools_used": [
+          "read_file",
+          "list_dir",
+          "write_file",
+          "patch_file"
+        ],
+        "usage": {
+          "total_tokens": 1325,
+          "prompt_tokens": 1235,
+          "cached_prompt_tokens": 5,
+          "completion_tokens": 90,
+          "reasoning_tokens": 0,
+          "cache_creation_tokens": 0,
+          "successful_requests": 1
+        }
+      },
+      "notes_tail": "",
+      "changed_paths": [
+        "src/calc.py",
+        "src/stats.py"
+      ],
+      "verdict": null,
+      "candidate": null,
+      "oracle": null
+    },
+    {
+      "from_role": "tester",
+      "to_role": "reviewer",
+      "summary": "Candidate and oracle suites PASSED (candidate 1.26s, oracle 1.45s)",
+      "payload_keys": [
+        "candidate",
+        "oracle",
+        "report"
+      ],
+      "model": null,
+      "agent": null,
+      "notes_tail": "",
+      "changed_paths": null,
+      "verdict": null,
+      "candidate": true,
+      "oracle": true
+    },
+    {
+      "from_role": "reviewer",
+      "to_role": "orchestrator",
+      "summary": "Review completed with verdict: APPROVE",
+      "payload_keys": [
+        "agent",
+        "candidate",
+        "changed_paths",
+        "model",
+        "review_notes",
+        "verdict"
+      ],
+      "model": "ollama/qwen2.5-coder:7b-instruct-q4_K_M",
+      "agent": {
+        "model": "ollama/qwen2.5-coder:7b-instruct-q4_K_M",
+        "provider": "ollama",
+        "duration_s": 2.828,
+        "tools_used": [],
+        "usage": {
+          "total_tokens": 1079,
+          "prompt_tokens": 986,
+          "cached_prompt_tokens": 5,
+          "completion_tokens": 93,
+          "reasoning_tokens": 0,
+          "cache_creation_tokens": 0,
+          "successful_requests": 1
+        }
+      },
+      "notes_tail": "",
+      "changed_paths": [
+        "src/calc.py",
+        "src/stats.py"
+      ],
+      "verdict": "APPROVE",
+      "candidate": true,
+      "oracle": null
+    },
+    {
+      "from_role": "orchestrator",
+      "to_role": "user",
+      "summary": "Promoted 2 file(s) to the live tree",
+      "payload_keys": [
+        "hashes",
+        "promoted"
+      ],
+      "model": null,
+      "agent": null,
+      "notes_tail": "",
+      "changed_paths": null,
+      "verdict": null,
+      "candidate": null,
+      "oracle": null
+    },
+    {
+      "from_role": "orchestrator",
+      "to_role": "user",
+      "summary": "Reviewer APPROVED; promoted 2 file(s).",
+      "payload_keys": [
+        "changed_paths",
+        "diff_stat",
+        "promotion_status",
+        "status",
+        "verdict"
+      ],
+      "model": null,
+      "agent": null,
+      "notes_tail": "",
+      "changed_paths": [
+        "src/calc.py",
+        "src/stats.py"
+      ],
+      "verdict": "APPROVE",
+      "candidate": null,
+      "oracle": null
+    }
+  ],
+  "attempts": [
+    {
+      "task_id": 1,
+      "agent_role": "architect",
+      "task_title": "Architecture Analysis",
+      "status": "completed",
+      "metadata": {
+        "model": "ollama/qwen2.5-coder:7b-instruct-q4_K_M",
+        "provider": "ollama",
+        "duration_s": 9.516,
+        "tools_used": [
+          "read_file",
+          "list_dir"
+        ],
+        "usage": {
+          "total_tokens": 878,
+          "prompt_tokens": 502,
+          "cached_prompt_tokens": 5,
+          "completion_tokens": 376,
+          "reasoning_tokens": 0,
+          "cache_creation_tokens": 0,
+          "successful_requests": 1
+        }
+      },
+      "output_tail": "```json\n{\n  \"files_to_change\": [\n    {\n      \"file\": \"src/calc.py\",\n      \"reason\": \"Add a function to perform subtraction.\"\n    },\n    {\n      \"file\": \"src/stats.py\",\n      \"reason\": \"Add a function to calculate the arithmetic mean.\"\n    }\n  ],\n  \"interfaces_to_preserve\": [\n    {\n      \"file\": \"src/calc.py\",\n      \"function\": \"sub(a, b)\",\n      \"description\": \"This function should return the result of a - b.\"\n    },\n    {\n      \"file\": \"src/stats.py\",\n      \"function\": \"mean(values)\",\n      \"description\": \"This function should return the arithmetic mean of the values provided.\"\n    }\n  ],\n  \"minimal_outline\": {\n    \"src/calc.py\": {\n      \"sub(a, b)\": \"def sub(a, b): return a - b\"\n    },\n    \"src/stats.py\": {\n      \"mean(values)\": \"def mean(values): return sum(values) / len(values)\"\n    }\n  },\n  \"risks\": [\n    {\n      \"risk\": \"Incorrect implementation of subtraction or mean\",\n      \"mitigation\": \"Ensure the implementation follows the mathematical definition of subtraction and mean.\"\n    },\n    {\n      \"risk\": \"Type errors in function parameters\",\n      \"mitigation\": \"Add type hints to ensure that the functions are called with the correct types.\"\n    }\n  ],\n  \"verification_targets\": [\n    {\n      \"target\": \"Unit tests for sub(a, b)\",\n      \"description\": \"Ensure that the sub function returns the correct result for various inputs.\"\n    },\n    {\n      \"target\": \"Unit tests for mean(values)\",\n      \"description\": \"Ensure that the mean function returns the correct arithmetic mean for various inputs.\"\n    }\n  ]\n}\n```",
+      "error": ""
+    },
+    {
+      "task_id": 2,
+      "agent_role": "developer",
+      "task_title": "Code Implementation",
+      "status": "completed",
+      "metadata": {
+        "model": "ollama/qwen2.5-coder:7b-instruct-q4_K_M",
+        "provider": "ollama",
+        "duration_s": 2.609,
+        "tools_used": [
+          "read_file",
+          "list_dir",
+          "write_file",
+          "patch_file"
+        ],
+        "usage": {
+          "total_tokens": 1325,
+          "prompt_tokens": 1235,
+          "cached_prompt_tokens": 5,
+          "completion_tokens": 90,
+          "reasoning_tokens": 0,
+          "cache_creation_tokens": 0,
+          "successful_requests": 1
+        }
+      },
+      "output_tail": "```write:src/calc.py\ndef sub(a, b):\n    return a - b\n```\n\n```write:src/stats.py\ndef mean(values):\n    return sum(values) / len(values)\n```\n\nSummary of files actually modified in the staged workspace and the changes made:\n- `src/calc.py`: Added the `sub(a, b)` function.\n- `src/stats.py`: Added the `mean(values)` function.",
+      "error": ""
+    },
+    {
+      "task_id": 3,
+      "agent_role": "tester",
+      "task_title": "Test & Verification",
+      "status": "completed",
+      "metadata": {},
+      "output_tail": "Candidate and oracle suites PASSED (candidate 1.26s, oracle 1.45s)",
+      "error": ""
+    },
+    {
+      "task_id": 4,
+      "agent_role": "reviewer",
+      "task_title": "Code Review",
+      "status": "completed",
+      "metadata": {
+        "model": "ollama/qwen2.5-coder:7b-instruct-q4_K_M",
+        "provider": "ollama",
+        "duration_s": 2.828,
+        "tools_used": [],
+        "usage": {
+          "total_tokens": 1079,
+          "prompt_tokens": 986,
+          "cached_prompt_tokens": 5,
+          "completion_tokens": 93,
+          "reasoning_tokens": 0,
+          "cache_creation_tokens": 0,
+          "successful_requests": 1
+        }
+      },
+      "output_tail": "APPROVE\n\nThe candidate diff correctly adds the `sub(a, b)` function in `src/calc.py` and the `mean(values)` function in `src/stats.py`, as specified in the mission objective. The changes are within the authorized write scope and do not introduce any new imports or files. The validation runs indicate that the candidate passes both the candidate and oracle tests, ensuring that the functions work as expected. There are no blocking issues identified.",
+      "error": ""
+    }
+  ],
+  "model_bindings": {
+    "architect": {
+      "base_url": "",
+      "capabilities": {},
+      "capability_sources": {},
+      "config_sha256": "faa392094fa6dd61beaec1bb247bf91ada3645181229460865386865590f395f",
+      "measured_at": "2026-10-29T23:21:13+00:00",
+      "model_name": "qwen2.5-coder:7b-instruct-q4_K_M",
+      "params": {},
+      "provider_id": "ollama",
+      "role": "architect",
+      "snapshot_of": "model_router",
+      "source": "role_config"
+    },
+    "debugger": {
+      "base_url": "",
+      "capabilities": {},
+      "capability_sources": {},
+      "config_sha256": "8cf16942ac63edbaff73f87d5fe92d2c49fecfb3bcf4760d04f02cafb0e0d178",
+      "measured_at": "2026-10-29T23:21:13+00:00",
+      "model_name": "qwen2.5-coder:7b-instruct-q4_K_M",
+      "params": {},
+      "provider_id": "ollama",
+      "role": "debugger",
+      "snapshot_of": "model_router",
+      "source": "role_config"
+    },
+    "developer": {
+      "base_url": "",
+      "capabilities": {},
+      "capability_sources": {},
+      "config_sha256": "a63b72e5f1f6ff3fb1d389fabae1bae031efda053e9c54cc9b38ad26200414bd",
+      "measured_at": "2026-10-29T23:21:13+00:00",
+      "model_name": "qwen2.5-coder:7b-instruct-q4_K_M",
+      "params": {},
+      "provider_id": "ollama",
+      "role": "developer",
+      "snapshot_of": "model_router",
+      "source": "role_config"
+    },
+    "reviewer": {
+      "base_url": "",
+      "capabilities": {},
+      "capability_sources": {},
+      "config_sha256": "6c0356f51bfca64243d7fa6c961ddf4ec8936d4d54bd17552ec0a723dff53945",
+      "measured_at": "2026-10-29T23:21:13+00:00",
+      "model_name": "qwen2.5-coder:7b-instruct-q4_K_M",
+      "params": {},
+      "provider_id": "ollama",
+      "role": "reviewer",
+      "snapshot_of": "model_router",
+      "source": "role_config"
+    }
+  },
+  "verification": [
+    {
+      "command": "verify:candidate",
+      "exit_code": 0,
+      "passed": true,
+      "stdout_tail": "..                                                                       [100%]\r\n2 passed in 0.15s\r\n",
+      "stderr_tail": ""
+    },
+    {
+      "command": "verify:oracle",
+      "exit_code": 0,
+      "passed": true,
+      "stdout_tail": "..                                                                       [100%]\r\n2 passed in 0.10s\r\n",
+      "stderr_tail": ""
+    }
+  ],
+  "diff": {
+    "ok": true,
+    "stat": "2 file(s), +4/-2",
+    "changed_paths": [
+      "src/calc.py",
+      "src/stats.py"
+    ],
+    "diff": "--- a/src/calc.py\n+++ b/src/calc.py\n@@ -1 +1,2 @@\n-# Arithmetic helpers live in this module.\n+def sub(a, b):\n+    return a - b\n--- a/src/stats.py\n+++ b/src/stats.py\n@@ -1 +1,2 @@\n-# Statistics helpers live in this module.\n+def mean(values):\n+    return sum(values) / len(values)"
+  },
+  "live_files": {
+    "src/calc.py": "def sub(a, b):\n    return a - b\n",
+    "src/stats.py": "def mean(values):\n    return sum(values) / len(values)\n"
+  },
+  "result_visibility": {
+    "dashboard_received_detail": true,
+    "dashboard_received_model_bindings": true,
+    "dashboard_received_attempt_metadata": true,
+    "dashboard_received_verification": true,
+    "dashboard_received_diff": true
+  },
+  "cost_note": "Local Ollama inference; no billed provider cost was available. Token usage and duration are recorded per attempt for future results-based routing."
+}

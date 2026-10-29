@@ -5,8 +5,8 @@
     "version": "0.3.0",
     "vsix": ".workspace/dist/NL-Coding-Agent-0.3.0.vsix",
     "icon": "assets/icon.png",
-    "bytes": 4699027,
-    "sha256": "41941f945c14df53f0ad2842f202afa1fc4d3ad5929d4e356ab006010984c625",
+    "bytes": 4699386,
+    "sha256": "d5d0ad89413ad461755478fead7002b6a4cc568702973d3d9a6c1b2e850f8c7c",
     "extension_id": "nlcodingagent.nl-coding-agent"
   },
   "verified_at": "2026-10-29",
@@ -48,6 +48,11 @@
       "name": "Installed VSIX chat feature acceptance",
       "command": "node test/runInstalledChatFeatureTests.cjs .workspace/dist/NL-Coding-Agent-0.3.0.vsix",
       "result": "VSIX-CHAT-FEATURE-PASS from the installed final NL Coder payload; same model/attachment/editor/URL/history/automatic checks"
+    },
+    {
+      "name": "Installed VSIX proportional team mission",
+      "command": "node test/runInstalledTeamMissionTests.cjs .workspace/dist/NL-Coding-Agent-0.3.0.vsix",
+      "result": "VSIX-TEAM-MISSION-PASS from the installed payload: architect+developer+tester+reviewer all executed, model bindings/attempt metadata persisted, candidate+oracle passed, 2 files promoted, dashboard received mission detail and diff"
     },
     {
       "name": "Real mission acceptance (dev host)",

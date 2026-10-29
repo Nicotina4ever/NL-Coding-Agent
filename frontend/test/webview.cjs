@@ -217,7 +217,19 @@ function testWebviewBehaviour() {
             { id: 1, command: 'verify:candidate pytest tests', exit_code: 0, passed: true, stdout: '2 passed' },
             { id: 2, command: 'verify:oracle pytest tests', exit_code: 0, passed: true, stdout: '2 passed' }
         ],
-        attempts: [{ id: 1, task_title: 'Code Implementation', agent_role: 'developer', status: 'completed', output: '```write:src/calc.py\n...' }],
+        attempts: [{
+            id: 1, task_title: 'Code Implementation', agent_role: 'developer', status: 'completed',
+            output: '```write:src/calc.py\n...',
+            metadata: {
+                model: 'qwen2.5-coder:7b-instruct-q4_K_M', provider: 'ollama',
+                duration_s: 12.4, usage: { total_tokens: 321 }
+            }
+        }],
+        model_bindings: {
+            architect: { role: 'architect', provider_id: 'ollama', model_name: 'qwen2.5-coder:7b-instruct-q4_K_M', source: 'role_config' },
+            developer: { role: 'developer', provider_id: 'ollama', model_name: 'qwen2.5-coder:7b-instruct-q4_K_M', source: 'role_config' },
+            reviewer: { role: 'reviewer', provider_id: 'ollama', model_name: 'qwen2.5-coder:7b-instruct-q4_K_M', source: 'role_config' }
+        },
         progress: { total: 3, completed: 3, failed: 0, running: 0, pending: 0, percent: 100 }
     };
     const state = {
@@ -300,6 +312,9 @@ function testWebviewBehaviour() {
     assert(detailText.includes('verify:candidate'), 'verification command rendered');
     assert(detailText.includes('Tool activity'), 'persisted tool activity rendered');
     assert(detailText.includes('Wrote src/calc.py'), 'recorded write action rendered');
+    assert(detailText.includes('ModelRouter snapshot'), 'model assignment section rendered');
+    assert(detailText.includes('qwen2.5-coder'), 'role model assignment rendered');
+    assert(detailText.includes('12.4s') && detailText.includes('321 tokens'), 'attempt model/usage evidence rendered');
     assert(detailText.includes('def sub'), 'diff rendered');
     const engineText = collectText(get('engine-content'));
     assert(engineText.includes('Permissions'), 'engine permissions rendered');

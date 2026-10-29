@@ -333,16 +333,19 @@ def record_task_attempt(
     status: str,
     output: str = "",
     error: str = "",
+    metadata: dict | None = None,
 ) -> int:
     """Record an execution attempt for a task and bump its attempt counter."""
     now = _now()
+    metadata_json = json.dumps(dict(metadata or {}), ensure_ascii=False)
     with _db() as conn, conn:
         cur = conn.execute(
             """
-            INSERT INTO task_attempts (task_id, started_at, finished_at, status, output, error)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO task_attempts (task_id, started_at, finished_at, status, output, error,
+                                       metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (task_id, now, now, status, output, error),
+            (task_id, now, now, status, output, error, metadata_json),
         )
         conn.execute(
             "UPDATE tasks SET attempts=attempts+1, last_error=CASE WHEN ?<>'' THEN ? ELSE last_error END, updated_at=? WHERE id=?",

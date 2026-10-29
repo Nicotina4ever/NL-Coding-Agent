@@ -79,8 +79,8 @@ No model text is inserted with `innerHTML`.
 | Installed VSIX mission | `node test/runInstalledVsixTests.cjs .workspace/dist/NL-Coding-Agent-0.3.0.vsix` | `VSIX-INSTALLED-MISSION-PASS` |
 | Python focused | 11 relevant test modules | 140 passed |
 
-VSIX: `.workspace\dist\NL-Coding-Agent-0.3.0.vsix`, 4,699,027 bytes, SHA-256
-`41941f945c14df53f0ad2842f202afa1fc4d3ad5929d4e356ab006010984c625`. The installed extension appears as
+VSIX: `.workspace\dist\NL-Coding-Agent-0.3.0.vsix`, 4,699,386 bytes, SHA-256
+`d5d0ad89413ad461755478fead7002b6a4cc568702973d3d9a6c1b2e850f8c7c`. The installed extension appears as
 **NL Coder** (`displayName`), with the real product logo at `assets/icon.png` and the unchanged extension
 id `nlcodingagent.nl-coding-agent`. Logs and machine-readable evidence:
 `docs/evidence/frontend/chat-features-evidence.json` plus `CHAT_FEATURES_ACCEPTANCE_DEV.log`,

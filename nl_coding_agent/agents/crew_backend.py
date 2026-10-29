@@ -145,6 +145,26 @@ def _tool_names(tools: list | None) -> tuple[str, ...]:
     return tuple(names)
 
 
+def _usage_metrics(crew) -> dict | None:
+    """Best-effort, JSON-safe token usage from CrewAI; never invent a value."""
+    try:
+        metrics = getattr(crew, "usage_metrics", None)
+        if metrics is None:
+            return None
+        if hasattr(metrics, "model_dump"):
+            data = metrics.model_dump()
+        elif hasattr(metrics, "dict"):
+            data = metrics.dict()
+        elif isinstance(metrics, Mapping):
+            data = dict(metrics)
+        else:
+            return None
+        return {str(key): value for key, value in dict(data).items()
+                if isinstance(value, (str, int, float, bool, type(None)))}
+    except Exception:
+        return None
+
+
 def _default_llm_factory(model_name: str, *, base_url: str, temperature: float,
                          project_id: int | None = None) -> LLM:
     # Lazy import avoids an orchestrator <-> backend import cycle; the permission
@@ -323,6 +343,7 @@ class CrewAIBackend:
             text=str(output),
             model=str(model_name),
             provider=self.provider,
+            usage=_usage_metrics(crew),
             duration_s=round(time.monotonic() - started, 3),
             tools_used=_tool_names(tools),
         )

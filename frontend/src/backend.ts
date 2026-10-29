@@ -318,6 +318,23 @@ export interface MissionAttempt {
     finished_at?: string;
     error?: string;
     output?: string;
+    metadata?: {
+        model?: string;
+        provider?: string;
+        duration_s?: number | null;
+        tools_used?: string[];
+        usage?: Record<string, unknown>;
+        [key: string]: unknown;
+    };
+}
+
+export interface MissionModelBinding {
+    role?: string;
+    provider_id?: string;
+    model_name?: string;
+    source?: string;
+    config_sha256?: string;
+    [key: string]: unknown;
 }
 
 export interface MissionDetail {
@@ -326,6 +343,7 @@ export interface MissionDetail {
     handoffs: MissionHandoff[];
     verification_runs: VerificationRun[];
     attempts: MissionAttempt[];
+    model_bindings?: Record<string, MissionModelBinding>;
     progress: MissionProgress;
 }
 

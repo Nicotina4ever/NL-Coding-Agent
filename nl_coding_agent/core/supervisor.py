@@ -111,6 +111,7 @@ class SupervisorConfig:
     developer_model: str | None = None
     reviewer_model: str | None = None
     debug_model: str | None = None
+    architect_model: str | None = None
     pipeline: str = "sequential"
     work_source: str = "backlog"
 
@@ -1217,6 +1218,7 @@ class Supervisor:
             developer_model=self.config.developer_model,
             reviewer_model=self.config.reviewer_model,
             debug_model=self.config.debug_model,
+            architect_model=self.config.architect_model,
         )
         self._executors[key] = executor
         return executor
@@ -1299,6 +1301,7 @@ class Supervisor:
                 developer_model=self.config.developer_model,
                 reviewer_model=self.config.reviewer_model,
                 debug_model=self.config.debug_model,
+                architect_model=self.config.architect_model,
                 control=self.control,
             )
         except RunStopped as exc:

@@ -502,6 +502,8 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("tasks", "last_error", "TEXT"),
     ("tasks", "started_at", "TEXT"),
     ("tasks", "finished_at", "TEXT"),
+    # Per-attempt model/tool/usage evidence for future results-based routing (additive).
+    ("task_attempts", "metadata_json", "TEXT NOT NULL DEFAULT '{}'"),
     # Staged-candidate harness identity/metadata (phase 2, additive only).
     ("missions", "harness_version", "INTEGER"),
     ("missions", "staging_dir", "TEXT"),

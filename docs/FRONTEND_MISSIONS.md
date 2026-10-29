@@ -14,7 +14,8 @@ implements a second orchestrator.
 
 | Requirement | Implementation |
 |---|---|
-| Real model selection and existing settings | Chat-model selector; mission developer/reviewer selectors; **Engine** tab fed by the new read-only `engine_settings` tool (model config, providers, roles, chat default, agent roles, permissions, runtime paths, mission route defaults). Optional live probe uses the existing Model Hub (`GET /api/tags`, `/api/ps`), never loads a model. |
+| Real model selection and existing settings | Chat-model selector; mission developer/reviewer selectors; **Engine** tab fed by the read-only `engine_settings` tool (model config, providers, roles, chat default, agent roles, permissions, runtime paths, mission route defaults). Mission detail shows the persisted ModelRouter role bindings and per-attempt model/usage/duration evidence. Optional live probe uses the existing Model Hub (`GET /api/tags`, `/api/ps`), never loads a model. |
+| Proportional team composition | The existing `_plan_tasks` planner always requires developer/tester/reviewer and adds a **read-only architect** for multi-file or design objectives, and a **read-only auditor** for security/audit objectives. Both pipelines use one shared analysis executor; the architect notes are passed into the developer prompt. Single-file missions keep the three-role team. |
 | Start missions from Chat | Chat composer **Mission** mode and `/mission <objective>` shortcut, plus **NL Coding Agent: Start Mission…** command. Both call the existing `start_mission` MCP tool with exact provider/model routes. |
 | Progress, agents, tool activity | Polled `mission_detail` shows status, progress bar, task rows (agent role/status/attempts), handoffs (`from → to`, summaries, payloads) and a **Tool activity (persisted evidence only)** section listing recorded write actions and the verification commands actually executed, plus task attempts (model output/error). The engine persists **no raw per-call tool telemetry**; no calls are invented. |
 | Stop / resume / list persistent missions | **Missions** tab lists persisted rows; Stop calls `cancel_mission` (cooperative safe checkpoint); Resume calls `start_mission(resume_mission_id=…)` with the identical persisted goal; Open loads detail and diff. |
@@ -96,6 +97,15 @@ Verified results (logs and exported record in `docs/evidence/frontend/`):
   exit code 0.
 - Live `src/calc.py` contains `def sub(a, b): return a - b`; retained diff:
   `1 file(s), +3/-0`.
+- Proportional team acceptance (isolated two-file project): planner selected
+  `architect -> developer -> tester -> reviewer`. All four tasks completed; the architect
+  delivered read-only notes and token-usage metadata consumed by the developer; developer
+  changed `src/calc.py` + `src/stats.py`; candidate and oracle suites both passed (2/2,
+  exit 0); reviewer returned `APPROVE`; live files contain `sub` and `mean`; retained
+  diff `2 file(s), +4/-2`; ModelRouter bindings and per-attempt model/usage metadata are
+  visible in mission detail. The same path passed from the installed VSIX
+  (`TEAM_MISSION_ACCEPTANCE_INSTALLED.log`), with the same retained diff.
+  Evidence: `team-mission-evidence.json` and `TEAM_MISSION_ACCEPTANCE.log`.
 - Dedicated stop/resume run: stop accepted → `interrupted` with the live tree untouched → resume →
   `completed`, `APPROVE`, `promoted`, `resume_count 1`.
 - The same mission acceptance passes from the **installed VSIX payload** in an isolated Insiders
@@ -116,8 +126,8 @@ node test/runInstalledChatFeatureTests.cjs  # same chat flows from the installed
 
 ## VSIX
 
-- Package: `.workspace\dist\NL-Coding-Agent-0.3.0.vsix` (4,699,027 bytes; SHA-256
-  `41941f945c14df53f0ad2842f202afa1fc4d3ad5929d4e356ab006010984c625`; includes the real product icon at
+- Package: `.workspace\dist\NL-Coding-Agent-0.3.0.vsix` (4,699,386 bytes; SHA-256
+  `d5d0ad89413ad461755478fead7002b6a4cc568702973d3d9a6c1b2e850f8c7c`; includes the real product icon at
   `assets/icon.png`, display name **NL Coder**, runtime deps `@modelcontextprotocol/sdk` + `zod`,
   compiled `out/`, media).
 - Normal local install: `code-insiders --install-extension .workspace\dist\NL-Coding-Agent-0.3.0.vsix`.
@@ -139,6 +149,10 @@ node test/runInstalledChatFeatureTests.cjs  # same chat flows from the installed
   through the existing text-block fallback; native CrewAI tool calls are visible through their staged
   diff and `changed_paths`, not as an invocation log. The UI labels the available evidence and does not
   fabricate calls.
+- Team composition is proportional but bounded by the current planner policy: developer/tester/reviewer
+  are always required; architect/auditor are read-only additions. Multiple tasks per role and the
+  CrewAI Flow pipeline are implemented but not active in the Chat path (Flow remains opt-in/sequential
+  default). See [MULTI_AGENT_RUNTIME.md](MULTI_AGENT_RUNTIME.md).
 - Reviewer judgment is nondeterministic; a REJECT is a legitimate `blocked` mission with its staged
   diff, verification and notes still available.
 - Resume after an immediate stop can briefly show the stale `interrupted` row; the controller waits for

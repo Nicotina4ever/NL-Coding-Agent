@@ -31,6 +31,8 @@
     "test:webview": "node test/webview.cjs",
     "test:extension": "node test/runExtensionTests.cjs",
     "test:mission": "node test/runMissionTests.cjs",
+    "test:team-mission": "node test/runTeamMissionTests.cjs",
+    "test:installed-team-mission": "node test/runInstalledTeamMissionTests.cjs",
     "test:resume": "node test/runResumeTests.cjs",
     "test:vsix": "node test/runInstalledVsixTests.cjs",
     "test:chat-features": "node test/runChatFeatureTests.cjs",

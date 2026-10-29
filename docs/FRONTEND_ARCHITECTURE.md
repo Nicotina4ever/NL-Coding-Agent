@@ -112,7 +112,8 @@ The webview has three sections:
   history shown comes from `chat_history`, not a second webview transcript.
 - **Missions:** the project's persisted missions with status/verdict/diff stat, Open/Stop/Resume
   actions, and a detail view containing the objective, progress, tasks/agents, handoffs, candidate and
-  oracle verification runs, reviewer notes, attempts and the candidate/retained diff. Mission mode in
+  oracle verification runs, reviewer notes, attempts and the candidate/retained diff. Mission detail also
+  shows the ModelRouter role bindings and per-attempt model/duration/token metadata. Mission mode in
   the chat composer starts a mission through `start_mission`; `/mission <objective>` is a shortcut.
 - **Engine:** project identity, execution mode, read-only permission policy, agent roles,
   providers/models, configured mission route defaults, a **Research** section with the effective
@@ -120,7 +121,8 @@ The webview has three sections:
   **read-only here**; the extension never writes `config/models.yaml`, permissions or the engine DB.
 
 The complete chat contract, permission requirements and evidence are in
-[FRONTEND_CHAT.md](FRONTEND_CHAT.md).
+[FRONTEND_CHAT.md](FRONTEND_CHAT.md). The multi-agent runtime audit (CrewAI, Flows, Supervisor,
+ModelRouter, handoffs and proportional team policy) is in [MULTI_AGENT_RUNTIME.md](MULTI_AGENT_RUNTIME.md).
 
 ### Mission lifecycle and approvals
 
@@ -215,7 +217,7 @@ Acceptance harnesses:
 | Real Insiders chat | `node test/runChatFeatureTests.cjs` | `CHAT-FEATURE-ACCEPTANCE-PASS`: model → conversation, file + editor-selection attachments, authorized `https://example.com/` → context, 6-message persisted history, automatic route |
 | Real mission (dev host) | `node test/runMissionTests.cjs` | `MISSION-ACCEPTANCE-PASS`: mission #1 completed, verdict `APPROVE`, promotion `promoted`, candidate+oracle passed, live `src/calc.py` changed, retained diff returned, dashboard got detail+diff |
 | Stop + resume | `node test/runResumeTests.cjs` | `STOP-RESUME-ACCEPTANCE-PASS`: stop accepted → `interrupted` with live tree untouched → resume → completed/APPROVE/promoted |
-| VSIX package/install | `npm run package:vsix` + Insiders CLI | `NL-Coding-Agent-0.3.0.vsix` (4.48 MB, SHA-256 `41941f94…`) installed as `nlcodingagent.nl-coding-agent` in an isolated profile; display name **NL Coder**, real `assets/icon.png` |
+| VSIX package/install | `npm run package:vsix` + Insiders CLI | `NL-Coding-Agent-0.3.0.vsix` (4.48 MB, SHA-256 `d5d0ad89…`) installed as `nlcodingagent.nl-coding-agent` in an isolated profile; display name **NL Coder**, real `assets/icon.png` |
 | Installed VSIX chat | `node test/runInstalledChatFeatureTests.cjs` | `VSIX-CHAT-FEATURE-PASS`: same model/attachment/editor/URL/history/automatic checks from the installed payload |
 | Installed VSIX mission | `node test/runInstalledVsixTests.cjs …0.3.0.vsix` | `VSIX-INSTALLED-MISSION-PASS`: same real mission/diff/verification from the installed payload |
 | Python focused | 11 relevant test modules | 140 passed |

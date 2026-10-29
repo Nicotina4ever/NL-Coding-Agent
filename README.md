@@ -152,8 +152,11 @@ verification, reviewer verdict and the candidate or retained diff; Stop and Resu
 existing cooperative lifecycle. Mission execution is opt-in with `nlCodingAgent.allowExecution` (each
 start/stop still asks for confirmation); without it the engine is read-only. URL fetch requires
 owner-created `NETWORK` + `web-fetch` grants and an approving research profile (the extension never
-grants permissions). Commands: **Start Chat**, **Start Mission…**, **Show Missions**, **Show Engine
-Settings**, **Toggle Mission Execution**, **Show Backend Status**, **Reconnect Backend**.
+grants permissions). The mission planner is proportional: the core developer/tester/reviewer team gains
+a read-only architect for multi-file/design work and an auditor for security/audit objectives; the
+multi-agent runtime audit is in `docs/MULTI_AGENT_RUNTIME.md`. Commands: **Start Chat**, **Start
+Mission…**, **Show Missions**, **Show Engine Settings**, **Toggle Mission Execution**, **Show Backend
+Status**, **Reconnect Backend**.
 
 A locally installable VSIX is produced with:
 

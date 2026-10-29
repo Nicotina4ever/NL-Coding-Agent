@@ -18,8 +18,12 @@ from nl_coding_agent.tools.filesystem import (
 )
 
 
-def get_project_tools(project_root: Path | str) -> list:
-    """Create the model-facing tool suite scoped strictly to project_root."""
+def get_project_tools(project_root: Path | str, *, read_only: bool = False) -> list:
+    """Create the model-facing tool suite scoped strictly to project_root.
+
+    read_only=True removes write_file/patch_file for analysis roles, so a read-only
+    agent cannot modify the live project even if the model tries.
+    """
     root = Path(project_root).resolve()
 
     @tool("read_file")
@@ -55,4 +59,7 @@ def get_project_tools(project_root: Path | str) -> list:
         except Exception as e:
             return f"Error listing directory '{path}': {e}"
 
-    return [read_file, write_file, patch_file, list_dir]
+    tools = [read_file, list_dir]
+    if not read_only:
+        tools.extend([write_file, patch_file])
+    return tools

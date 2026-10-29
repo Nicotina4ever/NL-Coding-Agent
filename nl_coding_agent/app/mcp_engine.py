@@ -40,6 +40,18 @@ def _bounded_payload(value, limit: int = 2000, depth: int = 0):
     return value
 
 
+def _json_mapping(value) -> dict:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, dict) else {}
+        except (TypeError, ValueError):
+            return {}
+    return {}
+
+
 def _attachment_view(item: dict, *, include_preview: bool = True) -> dict:
     """Project a persisted attachment without exposing its host storage path."""
     text = str(item.get("extracted_text") or "")
@@ -521,9 +533,11 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
             "finished_at": item.get("finished_at"),
             "error": _bounded_text(item.get("error"), 2000),
             "output": _bounded_text(item.get("output"), 12000),
+            "metadata": _bounded_payload(_json_mapping(item.get("metadata_json"))),
         } for item in details.get("attempts", [])]
         return {"mission": mission_view, "tasks": tasks, "handoffs": handoffs,
                 "verification_runs": verification_runs, "attempts": attempts,
+                "model_bindings": services.mission_model_bindings(mission_id),
                 "progress": details.get("progress") or {}}
 
     @server.tool(annotations=read_only)
@@ -534,11 +548,14 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
 
     @server.tool()
     def start_mission(goal: str, developer_model: str, reviewer_model: str,
-                      approved: bool = False, resume_mission_id: int | None = None) -> dict:
+                      approved: bool = False, resume_mission_id: int | None = None,
+                      architect_model: str | None = None) -> dict:
         """Start/resume through the resource-gated engine only with owner-enabled execution.
 
         Exact model routes are required; this does not approve a candidate or bypass tests.
-        Returns a queued mission id; use status/events to monitor actual completion.
+        *architect_model* is optional; when omitted the developer route is used for the
+        read-only architecture stage. Returns a queued mission id; use status/events to
+        monitor actual completion.
         """
         require_execution(approved)
         if not goal.strip() or not developer_model.strip() or not reviewer_model.strip():
@@ -554,12 +571,14 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         try:
             task_id = services.run_mission(mission_id, project["root"], goal,
                 developer_model=developer_model, reviewer_model=reviewer_model,
+                architect_model=architect_model,
                 on_done=lambda result: active.discard(mission_id))
         except Exception:
             active.discard(mission_id)
             raise
         return {"mission_id": mission_id, "dispatch": "queued", "task_id": task_id,
-                "models": {"developer": developer_model, "reviewer": reviewer_model}}
+                "models": {"developer": developer_model, "reviewer": reviewer_model,
+                           "architect": architect_model or developer_model}}
 
     @server.tool()
     def cancel_mission(mission_id: int, approved: bool = False) -> dict:

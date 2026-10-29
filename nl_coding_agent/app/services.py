@@ -1112,6 +1112,14 @@ class AppServices:
                 "status": mission["status"], "verdict": mission.get("review_verdict"),
                 "promotion_status": mission.get("promotion_status")}
 
+    def mission_model_bindings(self, mission_id: int) -> dict[str, dict]:
+        """Read the ModelRouter bindings persisted for a mission (read-only)."""
+        from nl_coding_agent.models.model_router import ModelRouter
+        try:
+            return ModelRouter(project_id=None).load_mission_snapshot(int(mission_id))
+        except Exception:
+            return {}
+
     def get_mission_details(self, mission_id: int) -> dict | None:
         from nl_coding_agent.persistence.missions import (
             get_mission, get_tasks, get_handoffs, get_verification_runs,
@@ -1140,6 +1148,7 @@ class AppServices:
         developer_model: str | None = None,
         reviewer_model: str | None = None,
         debug_model: str | None = None,
+        architect_model: str | None = None,
         stop_after: str | None = None,
     ) -> str:
         """Schedule autonomous multi-agent mission execution on the sequential scheduler."""
@@ -1163,7 +1172,8 @@ class AppServices:
             try:
                 overrides = {key: value for key, value in {
                     "developer_model": developer_model, "reviewer_model": reviewer_model,
-                    "debug_model": debug_model}.items() if value is not None}
+                    "debug_model": debug_model, "architect_model": architect_model}.items()
+                    if value is not None}
                 config = SupervisorConfig.load(mission.get("project_id"), overrides=overrides)
                 def factory(project_root):
                     orchestrator = MultiAgentOrchestrator(project_root, project_id=mission.get("project_id"))

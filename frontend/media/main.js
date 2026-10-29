@@ -619,8 +619,39 @@
             const details = el('details', 'nl-attempt');
             const route = (attempt.agent_role || '?') + (attempt.task_title ? ' · ' + attempt.task_title : '');
             details.appendChild(el('summary', '', route + ' — ' + (attempt.status || '')));
+            const metadata = attempt.metadata || {};
+            if (metadata.model || metadata.duration_s || (metadata.usage && metadata.usage.total_tokens)) {
+                const bits = [];
+                if (metadata.model) { bits.push('model ' + metadata.model); }
+                if (metadata.provider) { bits.push(metadata.provider); }
+                if (metadata.duration_s !== undefined && metadata.duration_s !== null) {
+                    bits.push(Number(metadata.duration_s).toFixed(1) + 's');
+                }
+                if (metadata.usage && metadata.usage.total_tokens) {
+                    bits.push(metadata.usage.total_tokens + ' tokens');
+                }
+                details.appendChild(el('div', 'nl-muted nl-attempt-meta', bits.join(' · ')));
+            }
             details.appendChild(el('pre', 'nl-output', (attempt.output || '') + (attempt.error ? '\nERROR: ' + attempt.error : '')));
             wrap.appendChild(details);
+        });
+        return wrap;
+    }
+
+    function renderModelAssignments(detail) {
+        const bindings = detail.model_bindings || {};
+        const roles = Object.keys(bindings).sort();
+        if (!roles.length) {
+            return el('p', 'nl-muted', 'No ModelRouter binding snapshot recorded for this mission.');
+        }
+        const wrap = el('div', 'nl-permissions');
+        roles.forEach(function (role) {
+            const binding = bindings[role] || {};
+            const row = el('div', 'nl-permission');
+            row.appendChild(el('span', '', role));
+            const model = [binding.provider_id, binding.model_name].filter(Boolean).join('/');
+            row.appendChild(el('span', 'nl-muted', model + (binding.source ? ' · ' + binding.source : '')));
+            wrap.appendChild(row);
         });
         return wrap;
     }
@@ -698,6 +729,8 @@
 
         missionDetailEl.appendChild(el('h3', 'nl-detail-subtitle', 'Tasks & agents'));
         missionDetailEl.appendChild(renderTasks(detail));
+        missionDetailEl.appendChild(el('h3', 'nl-detail-subtitle', 'Model assignments (ModelRouter snapshot)'));
+        missionDetailEl.appendChild(renderModelAssignments(detail));
         missionDetailEl.appendChild(el('h3', 'nl-detail-subtitle', 'Agent handoffs'));
         missionDetailEl.appendChild(renderHandoffs(detail));
         missionDetailEl.appendChild(el('h3', 'nl-detail-subtitle', 'Tool activity (persisted evidence only)'));

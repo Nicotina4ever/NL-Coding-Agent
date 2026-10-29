@@ -39,7 +39,8 @@ class SupervisorMissionExecutor:
                  goal: str, *, control=None,
                  developer_model: str | None = None,
                  reviewer_model: str | None = None,
-                 debug_model: str | None = None) -> None:
+                 debug_model: str | None = None,
+                 architect_model: str | None = None) -> None:
         self.orchestrator = orchestrator
         self.mission_id = int(mission_id)
         self.goal = str(goal or "")
@@ -47,6 +48,7 @@ class SupervisorMissionExecutor:
         self.developer_model = developer_model or DEFAULT_DEVELOPER_MODEL
         self.reviewer_model = reviewer_model or DEFAULT_REVIEWER_MODEL
         self.debug_model = debug_model or DEFAULT_DEBUG_MODEL
+        self.architect_model = architect_model or self.developer_model
         self.stage = None
         self.baseline: dict[str, str] = {}
         self.mission: dict = {}
@@ -82,6 +84,16 @@ class SupervisorMissionExecutor:
                                {"reset_tasks": reset_ids})
         tasks = get_tasks(self.mission_id) if existing_tasks else orch._plan_tasks(self.mission_id, self.goal)
         orch._validate_plan(tasks)
+        planned_roles = {str(task.get("agent_role") or "") for task in tasks}
+        assignment_routes = {
+            "architect": self.architect_model,
+            "developer": self.developer_model,
+            "reviewer": self.reviewer_model,
+            "debugger": self.debug_model,
+        }
+        if "auditor" in planned_roles:
+            assignment_routes["auditor"] = self.developer_model
+        orch._record_model_assignments(self.mission_id, assignment_routes)
         if existing_tasks:
             baseline = orch._load_baseline(self.mission_id)
             if baseline is None:
@@ -126,12 +138,20 @@ class SupervisorMissionExecutor:
     def run_developer(self, state) -> StepResult:
         try:
             self.prepare()
+            self._checkpoint("before-architect")
+            planned_tasks = list(self.tasks.values())
+            architecture_notes = self.orchestrator._run_planned_analysis(
+                self.mission_id, planned_tasks, self.goal,
+                {"architect": self.architect_model, "auditor": self.developer_model},
+            )
+            self._checkpoint("after-architect")
             self._checkpoint("before-developer")
             task = self.tasks.get("developer")
             if task and task["status"] != "completed":
                 self.orchestrator._run_developer_stage(
                     self.mission_id, task, self.goal,
                     self.developer_model, self.baseline, self.stage,
+                    architecture_notes=architecture_notes,
                 )
             elif task:
                 verdict = self.orchestrator._validate_stage(self.stage)

@@ -4,6 +4,28 @@
 
 NL Coding Agent is a local-first, multi-agent software development workstation. It opens existing projects, discovers their structure and documentation, persists missions in SQLite, and runs a real `Developer -> Tester -> Debugger -> Reviewer` cycle using local Ollama models. The current implementation has been exercised end-to-end with a live local model and a real interruption/resume cycle.
 
+## Multi-agent runtime audit + proportional team mission (2026-10-29)
+
+The real Chat/extension path was audited end-to-end. It uses the existing `Supervisor → MultiAgentOrchestrator`
+sequential pipeline with the production `CrewAIBackend`: every LLM stage is one CrewAI Agent/Task/Crew,
+the tester is deterministic verification, and promotion/gates are deterministic. The CrewAI Flow pipeline
+and multi-agent `CrewSpec`/`run_crew`, memory and hierarchical delegation exist but are **not active** in
+the Chat path; `SupervisorConfig.pipeline` remains `sequential`. `ModelRouter` is now wired for
+permission-checked role bindings and `mission_model_snapshots`; it does not yet choose models from
+results. See [MULTI_AGENT_RUNTIME.md](MULTI_AGENT_RUNTIME.md) for the full implemented/exists-not-wired/
+missing table.
+
+`_plan_tasks` is the single proportional team seam shared by the sequential and Flow executors. It adds a
+read-only architect for multi-file/design objectives and a read-only auditor for security/audit objectives,
+then passes their notes into the developer. A real isolated two-file mission completed with
+`architect → developer → tester → reviewer`: all four tasks completed, handoffs persisted, candidate and
+oracle suites passed (2/2 each, exit 0), reviewer `APPROVE`, promotion `promoted`, live `src/calc.py` and
+`src/stats.py` changed, retained diff `2 file(s), +4/-2`. Per-attempt `metadata_json` records model,
+provider, duration, bound tools and CrewAI token usage; ModelRouter bindings are visible in mission detail.
+The same mission passed from the installed **VSIX 0.3.0**; evidence:
+[`team-mission-evidence.json`](evidence/frontend/team-mission-evidence.json),
+`TEAM_MISSION_ACCEPTANCE.log`, `TEAM_MISSION_ACCEPTANCE_INSTALLED.log`.
+
 ## NL Coder VS Code extension + mission control + VSIX (2026-10-29)
 
 The `frontend/` extension is now **NL Coder 0.3.0**: complete NL Chat plus real mission control over the
@@ -31,8 +53,8 @@ Real acceptance in VS Code Insiders 1.145.0-insider on isolated projects:
   PASS, live `src/calc.py` changed (`def sub`), retained diff `1 file(s), +3/-0`; stop/resume reached
   `completed` (`resume_count 1`).
 
-The packaged **VSIX 0.3.0** (4,699,027 bytes, SHA-256
-`41941f945c14df53f0ad2842f202afa1fc4d3ad5929d4e356ab006010984c625`,
+The packaged **VSIX 0.3.0** (4,699,386 bytes, SHA-256
+`d5d0ad89413ad461755478fead7002b6a4cc568702973d3d9a6c1b2e850f8c7c`,
 `nlcodingagent.nl-coding-agent`) installs in an isolated Insiders profile and the chat and mission
 acceptance both pass from the installed payload. Evidence and exact commands:
 [FRONTEND_CHAT.md](FRONTEND_CHAT.md), [FRONTEND_MISSIONS.md](FRONTEND_MISSIONS.md),
