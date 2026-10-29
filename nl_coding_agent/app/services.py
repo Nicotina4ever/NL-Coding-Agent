@@ -571,6 +571,10 @@ class AppServices:
             f"- {item.get('extracted_text', '')[:2000]}" for item in attachments
             if item.get("has_text"))
         context_block = "\nContesto allegati:\n" + context if context else ""
+        config = self.get_model_config() or {}
+        roles = config.get("roles") or {}
+        provider_spec = str((((roles.get("chat") or roles.get("developer") or {})
+                            .get("model")) or "")).strip()
         prompt = (
             "Sei l'assistente di NL Coding Agent. Rispondi in modo naturale, "
             "conciso e utile. Non creare missioni, modifiche o file a meno che "
@@ -578,29 +582,89 @@ class AppServices:
             + (f"Contesto del progetto: {str((project or {}).get('root') or '')}\n")
             + context_block + "\n\nUtente:\n" + str(text or "")
         )
-        if not self.check_ollama():
+        if not self.check_ollama() and provider_spec.startswith("ollama"):
             return ("Sono offline. Posso rispondere solo in modo limitato adesso; "
                     "avvia Ollama per una risposta completa." + (
                         "\n\n" + tool_activity if tool_activity else ""))
-        model = ""
-        try:
-            config = self.get_model_config() or {}
-            roles = config.get("roles") or {}
-            model = ((roles.get("developer") or {}).get("model")
-                     or (roles.get("architect") or {}).get("model") or "")
-        except Exception:
-            model = ""
-        model_name = model.split("/", 1)[-1] if model else ""
+        provider, model_name, configured_provider_id, error = self._resolve_chat_provider(provider_spec)
+        if error:
+            return error + ("\n\n" + tool_activity if tool_activity else "")
+        if not provider:
+            return "Nessun provider/modello valido per la chat. Configura roles.chat oppure roles.developer in models.yaml." + (
+                "\n\n" + tool_activity if tool_activity else "")
         if not model_name:
-            model_name = "qwen3.5:9b"
+            return "Nessun modello configurato per la chat. Configura roles.chat oppure roles.developer in models.yaml." + (
+                "\n\n" + tool_activity if tool_activity else "")
         try:
-            from nl_coding_agent.models.providers import generate_ollama_text
-            reply = generate_ollama_text(
-                self.get_ollama_url(), model_name, prompt, timeout=120.0).strip()
+            reply = provider.generate(model_name, prompt, timeout=120.0).strip()
             return reply or "Non ho ricevuto una risposta dal modello."
         except Exception as exc:
             return f"Impossibile contattare il modello: {exc}" + (
                 "\n\n" + tool_activity if tool_activity else "")
+
+        return reply
+
+    @staticmethod
+    def chat_workflow(text: str) -> str:
+        from nl_coding_agent.core.doc_planning import is_document_plan_request
+
+        if is_document_plan_request(text):
+            return "document_plan"
+        lowered = str(text or "").lower()
+        coding_terms = (
+            "implement", "fix", "build", "create mission", "create goal", "modify",
+            "patch", "sviluppa", "implementa", "correggi", "modifica", "aggiungi",
+            "create code", "change code", "refactor", "debug", "test")
+        if any(term in lowered for term in coding_terms):
+            return "coding"
+        return "chat"
+
+    def _resolve_chat_provider(self, provider_spec: str):
+        from nl_coding_agent.models.providers import build_providers, ModelHub
+
+        config = self.get_model_config() or {}
+        providers = build_providers(config)
+        by_id = {getattr(item, "provider_id", ""): item for item in providers}
+        provider_id = None
+        model_name = provider_spec
+        if "/" in provider_spec:
+            provider_id, model_name = provider_spec.split("/", 1)
+            model_name = model_name.strip()
+            provider_id = provider_id.strip()
+        if provider_id and provider_id in by_id:
+            candidates = [by_id[provider_id]]
+        else:
+            candidates = list(providers)
+        snapshot = ModelHub(candidates).discover(timeout=5.0)
+        available = {model.name: model for model in snapshot.models}
+        reachable = [p for p in snapshot.providers if p.reachable]
+        if not candidates:
+            return None, model_name, None, "Nessun provider configurato in models.yaml."
+        if not reachable:
+            errors = "; ".join(p.error for p in snapshot.providers if p.error) or "provider non raggiungibile"
+            return None, model_name, None, f"Provider non raggiungibile: {errors}"
+        selected_provider = None
+        for provider in reachable:
+            if provider_id and provider.provider_id != provider_id:
+                continue
+            selected_provider = provider
+            if any(m.name == model_name for m in provider.models):
+                break
+        if selected_provider is None:
+            selected_provider = reachable[0]
+        selected_id = getattr(selected_provider, "provider_id", "")
+        actual_model = model_name
+        if not actual_model:
+            if selected_provider.models:
+                actual_model = selected_provider.models[0].name
+            else:
+                return selected_provider, "", selected_id, (
+                    "Provider raggiungibile ma senza modelli disponibili.")
+        if selected_provider.models and actual_model not in available:
+            return selected_provider, actual_model, selected_id, (
+                f"Modello non disponibile su {selected_provider.label}: {actual_model}. "
+                "Seleziona un modello installato.")
+        return selected_provider, actual_model, selected_id, ""
 
     def create_mission(self, project_id: int | None, title: str, goal: str) -> int:
         from nl_coding_agent.persistence.missions import create_mission as _create_m

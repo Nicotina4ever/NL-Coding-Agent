@@ -249,6 +249,39 @@ class OpenAICompatibleProvider:
                 elapsed_ms=int((time.perf_counter() - started) * 1000),
             )
 
+    def generate(self, model: str, prompt: str, timeout: float = 120.0) -> str:
+        request = urllib.request.Request(
+            f"{self.base_url}/api/generate",
+            data=json.dumps({"model": model, "prompt": prompt, "stream": False}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        return str(data.get("response") or "")
+
+    def generate(self, model: str, prompt: str, timeout: float = 120.0) -> str:
+        headers = {"Content-Type": "application/json"}
+        headers.update(self._headers())
+        body = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+        }
+        request = urllib.request.Request(
+            f"{self.base_url}/chat/completions",
+            data=json.dumps(body).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        choices = data.get("choices") or []
+        if choices and isinstance(choices[0], dict):
+            message = choices[0].get("message") or {}
+            if isinstance(message, dict):
+                return str(message.get("content") or "")
+        return str(data.get("response") or "")
+
     def unload(self, name: str) -> bool:
         return False
 
