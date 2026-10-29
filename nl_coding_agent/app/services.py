@@ -452,9 +452,62 @@ class AppServices:
 
     # --- Audit ---
 
-    @staticmethod
-    def chat_workflow(text: str) -> str:
-        from nl_coding_agent.core.doc_planning import is_document_plan_request
+    def goal_create_from_document_plan(self, plan_id: int, *,
+                                      project_id: int | None = None,
+                                      project_root=None,
+                                      activate: bool = False) -> dict:
+        """Bootstrap a Goal from an approved document plan's provenance metadata.
+
+        The selected plan remains metadata: this only creates a normal goal and
+        its milestones. No execution, code editing or mission is started.
+        """
+        try:
+            plan_result = self.docs_plan_get(int(plan_id))
+        except Exception as exc:
+            return self._goal_error(exc)
+        if not isinstance(plan_result, dict) or not plan_result.get("ok"):
+            return plan_result if isinstance(plan_result, dict) else self._goal_error(
+                RuntimeError("document plan unavailable"))
+        plan = plan_result.get("plan") or plan_result.get("current") or {}
+        if not isinstance(plan, dict):
+            return self._goal_error(RuntimeError("document plan is invalid"))
+        resolved_project_id = project_id
+        if resolved_project_id is None:
+            resolved_project_id = plan.get("project_id")
+        objective = str(plan.get("objective") or plan.get("title") or "").strip()
+        acceptance = plan.get("acceptance_criteria") or []
+        milestones = plan.get("milestones") or []
+        goal_result = self.goal_create(
+            objective or f"Document-driven goal from plan {plan_id}",
+            title=str(plan.get("title") or f"Document plan {plan_id}"),
+            project_id=resolved_project_id,
+            acceptance_criteria=acceptance,
+            reference_metadata={
+                "source": "document_plan",
+                "document_plan_id": int(plan_id),
+                "plan_version": plan.get("current_version") or plan.get("version"),
+                "project_root": str(project_root or plan.get("root") or plan.get("project_root") or ""),
+            },
+            source="document_plan",
+            origin="import")
+        if not goal_result.get("ok"):
+            return goal_result
+        goal = goal_result["goal"]
+        goal_id = int(goal["id"])
+        for item in milestones:
+            from collections.abc import Mapping as _Mapping
+            if not isinstance(item, _Mapping):
+                continue
+            self.goal_milestone_create(goal_id, str(item.get("title") or item.get("key") or "milestone"),
+                                      key=str(item.get("key") or ""),
+                                      priority=str(item.get("priority") or "P1"),
+                                      dependencies=item.get("dependencies") or [],
+                                      validation=item.get("validation")
+                                      or item.get("validation_strategy") or "")
+        if activate:
+            self.goal_activate(goal_id)
+        return {"ok": True, "goal": goal, "plan_id": int(plan_id),
+                "milestones": len(milestones)}
 
         if is_document_plan_request(text):
             return "document_plan"
