@@ -1,6 +1,8 @@
 """F3a: read-only Git status/branch/diff/log panel (explicit refresh)."""
 from __future__ import annotations
 
+from nl_coding_agent.gui.i18n import ui_text
+
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListWidget, QPushButton,
                                QTabWidget, QPlainTextEdit, QVBoxLayout, QWidget)
@@ -64,9 +66,9 @@ class GitPanel(QWidget):
             "git.no_repository", "No repository loaded"))
         self._branch.setStyleSheet("color: #AB83C6;")
         header.addWidget(self._branch, 1)
-        self._refresh_btn = QPushButton(_tr("git.refresh", "Refresh"))
+        self._refresh_btn = QPushButton(_tr("git.refresh", ui_text("Refresh")))
         self._refresh_btn.setAccessibleName("Refresh read-only git data")
-        self._refresh_btn.setToolTip("Explicit refresh of branch/status/diff/log (read-only)")
+        self._refresh_btn.setToolTip(ui_text("Explicit refresh of branch/status/diff/log (read-only)"))
         self._refresh_btn.clicked.connect(self.refresh)
         header.addWidget(self._refresh_btn)
         layout.addLayout(header)
@@ -88,17 +90,26 @@ class GitPanel(QWidget):
         self._log.setAccessibleName("Recent Git log")
         self._tabs.addTab(self._diff, _tr("git.diff", "Diff"))
         self._tabs.addTab(self._log, _tr("git.log", "Log"))
+        self._candidate = QPlainTextEdit()
+        self._candidate.setReadOnly(True)
+        self._candidate.setAccessibleName("Mission candidate diff")
+        self._tabs.addTab(self._candidate, _tr("git.candidate", "Candidate"))
         layout.addWidget(self._tabs, 2)
         _register_retranslate(self)
 
     def retranslate(self) -> None:
         self._title.setText(_tr("git.title", "GIT"))
-        self._refresh_btn.setText(_tr("git.refresh", "Refresh"))
+        self._refresh_btn.setText(_tr("git.refresh", ui_text("Refresh")))
         self._tabs.setTabText(0, _tr("git.diff", "Diff"))
         self._tabs.setTabText(1, _tr("git.log", "Log"))
+        self._tabs.setTabText(2, _tr("git.candidate", "Candidate"))
 
     def set_project(self, project):
         self._project = dict(project) if project else None
+        self._candidate.clear()
+        self._changes.clear()
+        self._diff.clear()
+        self._log.clear()
         if project:
             self.refresh()
         else:
@@ -108,23 +119,47 @@ class GitPanel(QWidget):
             self._diff.clear()
             self._log.clear()
             self._status.setText(_tr(
-                "git.open_project", "Open a project to inspect its repository."))
+                "git.open_project", ui_text("Open a project to inspect its repository.")))
 
     def refresh(self):
         if not self._project:
-            self._status.setText("Open a project to inspect its repository.")
+            self._status.setText(ui_text("Open a project to inspect its repository."))
             return
         self._status.setText(_tr(
             "git.loading", "Loading Git data (read-only)…"))
         root = self._project["root"]
         self._pool.start(_Task(lambda: {
+            "_project_root": root,
             "status": self._services.git_status(root),
             "diff": self._services.git_diff(root),
             "log": self._services.git_log(root),
         }, self._signals))
 
+    def review_mission(self, mission_id, project_id):
+        root = (self._project or {}).get("root")
+        def inspect():
+            try:
+                result = self._services.mission_candidate_diff(mission_id, project_id=project_id)
+            except Exception as exc:
+                result = {"ok": False, "error": str(exc)}
+            return {**result, "candidate_review": True, "_project_root": root}
+        self._pool.start(_Task(inspect, self._signals))
+
     @Slot(dict)
     def _on_data(self, data):
+        if "_project_root" in data and data["_project_root"] != (self._project or {}).get("root"):
+            return
+        if data.get("candidate_review"):
+            if data.get("ok"):
+                self._candidate.setPlainText("#" + str(data["mission_id"]) + " · " +
+                    str(data.get("status")) + " · " + str(data.get("verdict") or "—") +
+                    "\n" + _tr("git.candidate_notice", "Staged candidate; this view never applies changes.") +
+                    "\n\n" + (data.get("diff") or _tr("git.no_candidate_diff", "No candidate differences")))
+                self._tabs.setCurrentWidget(self._candidate)
+            else:
+                self._candidate.setPlainText(str(data.get("error") or "Candidate unavailable"))
+                self._tabs.setCurrentWidget(self._candidate)
+            return
         status = dict(data.get("status") or {})
         if not status.get("ok"):
             self._status.setText("Git unavailable: " + str(status.get("error")
@@ -141,4 +176,4 @@ class GitPanel(QWidget):
         log = dict(data.get("log") or {})
         self._diff.setPlainText(diff.get("diff") or "(no unstaged diff)")
         self._log.setPlainText(log.get("log") or "(no log)")
-        self._status.setText("Read-only Git data refreshed. No destructive operation was executed.")
+        self._status.setText(ui_text("Read-only Git data refreshed. No destructive operation was executed."))

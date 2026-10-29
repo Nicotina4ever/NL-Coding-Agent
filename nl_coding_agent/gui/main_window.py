@@ -1,6 +1,8 @@
 """Main application window."""
 from __future__ import annotations
 
+from nl_coding_agent.gui.widgets.studio_workspace import studio_settings
+
 import sys
 from pathlib import Path
 
@@ -276,6 +278,7 @@ class EmergencyControls(QWidget):
 
 
 class MainWindow(QMainWindow):
+    bus_event_received = Signal(object)
     def __init__(self, services: AppServices):
         super().__init__()
         self._services = services
@@ -299,7 +302,9 @@ class MainWindow(QMainWindow):
             self.setWindowIcon(QIcon(str(_LOGO_PATH)))
 
         self._build_ui()
+        self._install_workspace()
         self._connect_event_bus()
+        QTimer.singleShot(0, self._restore_project_session)
 
         # Start Ollama check (stoppable single-shot, not a bare singleShot)
         self._initial_ollama_timer = QTimer(self)
@@ -431,6 +436,7 @@ class MainWindow(QMainWindow):
         # Multimodal mission chat (F1): local attachment pipeline + explicit submit.
         self._chat_panel = ChatPanel(services=self._services)
         self._chat_panel.submitted.connect(self._on_chat_submitted)
+        self._chat_panel.context_requested.connect(self._reference_open_file)
         self._stack.addWidget(self._chat_panel)  # index 7 = chat
 
         # Studio IDE (F3a): editor / terminal / read-only Git / problems.
@@ -479,8 +485,7 @@ class MainWindow(QMainWindow):
         self._v_splitter.setStretchFactor(0, 1)
         self._v_splitter.setStretchFactor(1, 0)
 
-        from PySide6.QtCore import QSettings
-        _settings = QSettings("NL Coding Agent", "Studio")
+        _settings = studio_settings()
         try:
             if _settings.contains("main_splitter_state"):
                 self._main_splitter.restoreState(_settings.value("main_splitter_state"))
@@ -558,6 +563,128 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+Shift+P"), self,
                   activated=self._show_command_palette)
 
+    def _install_workspace(self):
+        from nl_coding_agent.gui.widgets.studio_workspace import StudioWorkspace
+        # Keep dedicated settings/project/model pages and their stable stack indices.
+        for widget in (self._files_panel, self._tasks_panel, self._agents_panel,
+                       self._chat_panel, self._ide_tabs, self._research_panel,
+                       self._goals_panel):
+            index = self._stack.indexOf(widget)
+            self._stack.removeWidget(widget)
+            self._stack.insertWidget(index, QWidget())
+        area = Qt.DockWidgetArea
+        panels = [
+            ("files", "Files", self._files_panel, area.LeftDockWidgetArea),
+            ("chat", "Chat", self._chat_panel, area.RightDockWidgetArea),
+            ("terminal", "Terminal", self._terminal_panel, area.BottomDockWidgetArea),
+            ("git", "Changes", self._git_panel, area.BottomDockWidgetArea),
+            ("problems", "Diagnostics", self._problems_panel, area.BottomDockWidgetArea),
+            ("tasks", "Missions", self._tasks_panel, area.BottomDockWidgetArea),
+            ("goals", "Goals", self._goals_panel, area.BottomDockWidgetArea),
+            ("research", "Research", self._research_panel, area.BottomDockWidgetArea),
+            ("agents", "Agents", self._agents_panel, area.BottomDockWidgetArea),
+            ("logs", "Output", self._log_panel, area.BottomDockWidgetArea),
+            ("inspector", "Inspector", self._inspector, area.RightDockWidgetArea),
+        ]
+        self._workspace = StudioWorkspace(self._editor_panel, panels,
+            lambda key, default: tr_for(self._i18n, key, default))
+        self._ide_tabs = self._workspace.tabs
+        self._ide_tabs.setTabsClosable(True)
+        from PySide6.QtWidgets import QTabBar
+        self._ide_tabs.tabBar().setTabButton(0, QTabBar.ButtonPosition.RightSide, None)
+        self._ide_tabs.tabCloseRequested.connect(self._close_workspace_tab)
+        self._stack.removeWidget(self._stack.widget(8))
+        self._stack.insertWidget(8, self._workspace)
+        self._files_panel.set_browser_only(True)
+        self._sidebar.setMaximumWidth(140)
+        self._main_splitter.setSizes([140, 1140])
+        self._default_workspace_state = self._workspace.saveState(1)
+        self._panels_menu = self.menuBar().addMenu(tr_for(self._i18n, "workspace.panels", "Panels"))
+        for dock in self._workspace.docks.values():
+            self._panels_menu.addAction(dock.toggleViewAction())
+        self._panels_menu.addSeparator()
+        self._document_plan_action = self._panels_menu.addAction(tr_for(self._i18n, "workspace.documents", "Document plan"),
+                                   lambda: self._open_document_plan())
+        self._reset_layout_action = self._panels_menu.addAction(
+            tr_for(self._i18n, "workspace.reset", "Reset layout"),
+            lambda: self._workspace.restoreState(self._default_workspace_state, 1))
+        QShortcut(QKeySequence("Ctrl+Alt+C"), self, activated=lambda: self._switch_page("chat"))
+        QShortcut(QKeySequence("Ctrl+Alt+E"), self, activated=lambda: self._switch_page("ide"))
+        QShortcut(QKeySequence("Ctrl+Alt+D"), self, activated=self._open_document_plan)
+        settings = studio_settings()
+        if settings.contains("workspace/docks_v1"):
+            self._workspace.restoreState(settings.value("workspace/docks_v1"), 1)
+        else:
+            QTimer.singleShot(0, lambda: self._workspace.resizeDocks(
+                [self._workspace.docks["terminal"]], [220], Qt.Orientation.Vertical))
+        if settings.contains("workspace/geometry"):
+            self.restoreGeometry(settings.value("workspace/geometry"))
+        self._tasks_panel.document_plan_requested.connect(self._open_document_plan)
+        self._tasks_panel.review_requested.connect(self._review_mission_candidate)
+        self._projects_panel._plan_btn.clicked.disconnect()
+        def project_plan():
+            project = self._projects_panel._current_project_for_plan()
+            if project:
+                self._on_project_opened(project)
+                if self._current_project == project:
+                    self._open_document_plan()
+        self._projects_panel._plan_btn.clicked.connect(project_plan)
+
+    def _restore_project_session(self):
+        if self._current_project:
+            return
+        settings = studio_settings()
+        root = settings.value("workspace/project", "")
+        if not root or not Path(root).is_dir():
+            return
+        try:
+            self._on_project_opened(self._services.open_project(root))
+            paths = settings.value("workspace/open_files", []) or []
+            for path in paths if isinstance(paths, list) else [paths]:
+                self._editor_panel.open_file(str(path))
+            active = settings.value("workspace/active_file", "")
+            if active in self._editor_panel._tabs:
+                self._editor_panel.open_file(active)
+        except Exception as exc:
+            self._log_panel.append_log("workspace", "error", str(exc))
+
+    def _close_workspace_tab(self, index):
+        if index == 0:
+            return
+        panel = self._ide_tabs.widget(index)
+        thread = getattr(panel, "_generation_thread", None)
+        if getattr(panel, "_loading", False) or (thread and thread.isRunning()):
+            self.statusBar().showMessage(tr_for(self._i18n, "docs.wait", "Wait for document analysis to finish."))
+            return
+        self._ide_tabs.removeTab(index)
+        panel.deleteLater()
+        if panel is getattr(self, "_document_panel", None):
+            self._document_panel = None
+
+    def _open_document_plan(self, plan_id=None):
+        if not self._current_project:
+            self._switch_page("projects")
+            return
+        from nl_coding_agent.gui.dialogs.document_plan import DocumentPlanDialog
+        existing = getattr(self, "_document_panel", None)
+        if existing and (existing._loading or
+                (getattr(existing, "_generation_thread", None) is not None and existing._generation_thread.isRunning())):
+            self._stack.setCurrentIndex(8)
+            self._ide_tabs.setCurrentWidget(existing)
+            return
+        if existing:
+            index = self._ide_tabs.indexOf(existing)
+            self._ide_tabs.removeTab(index)
+            existing.deleteLater()
+        self._document_panel = DocumentPlanDialog(
+            self._services, self._current_project, self, plan_id=plan_id, embedded=True)
+        self._document_panel.return_to_editor.connect(lambda: self._switch_page("ide"))
+        self._ide_tabs.addTab(self._document_panel,
+            tr_for(self._i18n, "workspace.documents", "Document plan"))
+        self._stack.setCurrentIndex(8)
+        self._ide_tabs.setCurrentWidget(self._document_panel)
+        self._sidebar.select_page("ide")
+
     def _retranslate_ui(self, _language: str | None = None) -> None:
         self.setWindowTitle(tr_for(
             self._i18n, "app.window_title", "NL Coding Agent"))
@@ -566,6 +693,11 @@ class MainWindow(QMainWindow):
         if not self._current_project:
             self._project_label.setText(tr_for(
                 self._i18n, "app.no_project", "No project open"))
+        if hasattr(self, "_workspace"):
+            self._workspace.retranslate(lambda key, default: tr_for(self._i18n, key, default))
+            self._document_plan_action.setText(tr_for(self._i18n, "workspace.documents", "Document plan"))
+            self._panels_menu.setTitle(tr_for(self._i18n, "workspace.panels", "Panels"))
+            self._reset_layout_action.setText(tr_for(self._i18n, "workspace.reset", "Reset layout"))
         self._autonomy_btn.setText(tr_for(
             self._i18n, "app.autonomy_status", "Autonomy status"))
         self._autonomy_btn.setToolTip(tr_for(
@@ -592,9 +724,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_ide_tabs") and self._ide_tabs is not None:
             for index, key, default in (
                     (0, "ide.editor", "Editor"),
-                    (1, "ide.terminal", "Terminal"),
-                    (2, "ide.git", "Git"),
-                    (3, "ide.problems", "Problems")):
+                    (1, "workspace.documents", "Document plan")):
                 self._ide_tabs.setTabText(
                     index, tr_for(self._i18n, key, default))
         # Keep the empty-state status labels translated; runtime values remain.
@@ -710,16 +840,37 @@ class MainWindow(QMainWindow):
 
     def _connect_event_bus(self):
         bus = get_event_bus()
-        bus.subscribe(self._on_bus_event)
+        self.bus_event_received.connect(self._on_bus_event)
+        self._bus_callback = self.bus_event_received.emit
+        bus.subscribe(self._bus_callback)
 
+    @Slot(object)
     def _on_bus_event(self, event: Event):
         self._log_panel.append_log(event.source, event.level, event.message)
+        mission_id = (event.payload or {}).get("mission_id")
+        if mission_id and self._current_project:
+            details = self._services.get_mission_details(mission_id)
+            if details and details.get("project_id") == self._current_project["id"]:
+                self._chat_panel.append_system_message(event.source + ": " + event.message)
 
     @Slot(str)
     def _switch_page(self, key: str):
+        if hasattr(self, "_workspace") and key in self._workspace.docks:
+            self._stack.setCurrentIndex(8)
+            self._workspace.reveal(key)
+            self._sidebar.select_page(key)
+            if key == "research":
+                self._research_panel.on_page_shown()
+            elif key == "goals":
+                self._goals_panel.on_page_shown()
+            elif key == "tasks":
+                self._tasks_panel.refresh()
+            return
         idx = self._page_index.get(key, 0)
         self._stack.setCurrentIndex(idx)
         self._sidebar.select_page(key)
+        if key == "ide":
+            self._ide_tabs.setCurrentWidget(self._editor_panel)
         if key == "models":
             self._models_panel.refresh()
         elif key == "files":
@@ -739,8 +890,18 @@ class MainWindow(QMainWindow):
 
     @Slot(dict)
     def _on_project_opened(self, project: dict):
+        document = getattr(self, "_document_panel", None)
+        if document and (document._loading or
+                (getattr(document, "_generation_thread", None) is not None and document._generation_thread.isRunning())):
+            self.statusBar().showMessage(tr_for(self._i18n, "docs.wait", "Wait for document analysis to finish."))
+            return
         if not self._editor_panel.set_project(project):
             return  # Keep every workspace panel bound to the original project.
+        old_document = getattr(self, "_document_panel", None)
+        if old_document and self._current_project != project:
+            self._ide_tabs.removeTab(self._ide_tabs.indexOf(old_document))
+            old_document.deleteLater()
+            self._document_panel = None
         self._current_project = project
         self._project_label.setText(tr_for(
             self._i18n, "activity.opened", "Opened: {name}",
@@ -770,6 +931,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         self._update_supervisor_status()
+        self._switch_page("ide")
         self._log_panel.append_log(
             "projects", "info",
             tr_for(self._i18n, "status.project_opened_log",
@@ -796,11 +958,20 @@ class MainWindow(QMainWindow):
             tr_for(self._i18n, "status.file_opened_log",
                    "Opened file: {path}", path=rel_path))
 
+    def _reference_open_file(self):
+        tab = self._editor_panel._tabs_widget.currentWidget()
+        if tab is None:
+            self._chat_panel.append_system_message(tr_for(self._i18n, "chat.no_open_file", "Open a file in the editor first."))
+            return
+        selection = tab.textCursor().selectedText().replace("\u2029", "\n")
+        self._on_editor_ask_in_chat(selection or tab.toPlainText(), tab.rel_path)
+
     @Slot(str, str)
     def _on_editor_ask_in_chat(self, text: str, rel_path: str) -> None:
         context = ("Selected code from " + rel_path + "\n\n"
                    + "```\n" + text + "\n```\n")
         self._chat_panel.add_text(context)
+        self._chat_panel.append_system_message(tr_for(self._i18n, "chat.reference", "Context: {path}", path=rel_path))
         self._switch_page("chat")
         self._log_panel.append_log(
             "editor", "info",
@@ -819,25 +990,24 @@ class MainWindow(QMainWindow):
         text = str(payload.get("text") or "").strip()
         attachment_ids = [int(item) for item in payload.get("attachment_ids") or []
                           if item is not None]
-        if self._services.chat_workflow(text) == "document_plan":
-            try:
-                result = self._services.chat_document_plan(
-                    self._current_project, text, attachment_ids)
-            except Exception as exc:  # noqa: BLE001 - GUI boundary
-                self._log_panel.append_log("chat", "error", str(exc))
-                return
-            if not result.get("ok"):
-                self._log_panel.append_log(
-                    "chat", "error", str(result.get("error", {}).get("message", result)))
-                return
-            from nl_coding_agent.gui.dialogs.document_plan import DocumentPlanDialog
-            dialog = DocumentPlanDialog(
-                self._services, self._current_project, self,
-                plan_id=result["plan_id"])
-            dialog.exec()
+        if payload.get("action", "chat") == "document_plan":
+            self._open_document_plan()
+            project = dict(self._current_project)
+            self._document_panel.start_generation(lambda: self._services.chat_document_plan(
+                project, text, attachment_ids))
             return
-        if self._services.chat_workflow(text) == "chat":
-            self._run_chat_conversation(text, attachment_ids)
+        if payload.get("action", "chat") == "chat":
+            self._run_chat_conversation(text, attachment_ids, payload.get("model"))
+            return
+        if payload.get("action") == "goal":
+            self._switch_page("goals")
+            if not self._goals_panel._create_goal_dialog(objective=text, attachment_ids=attachment_ids):
+                self._chat_panel._input.setPlainText(text)
+                self._chat_panel._attachments = list(payload.get("attachments") or [])
+                self._chat_panel._refresh()
+            return
+        if payload.get("action") != "coding":
+            self._chat_panel.append_system_message(tr_for(self._i18n, "chat.unknown_action", "Unknown action"))
             return
         title = (text[:60] if text else "Mission with attachments") or "Mission"
         goal = text or "Review the attached files and describe the requested change."
@@ -866,9 +1036,9 @@ class MainWindow(QMainWindow):
                    "attachment(s) (no model run).",
                    mission_id=str(mission_id), count=str(len(attachment_ids))))
 
-    def _run_chat_conversation(self, text: str, attachment_ids: list[int]) -> None:
+    def _run_chat_conversation(self, text: str, attachment_ids: list[int], model=None) -> None:
         thread = ChatReplyThread(self._services, self._current_project, text,
-                                attachment_ids, self)
+                                attachment_ids, self, model=model)
         self._chat_reply_threads = getattr(self, "_chat_reply_threads", [])
         self._chat_reply_threads.append(thread)
         project_id = self._current_project["id"]
@@ -898,6 +1068,14 @@ class MainWindow(QMainWindow):
         thread.start()
 
     @Slot(int)
+    def _review_mission_candidate(self, mission_id):
+        if not self._current_project:
+            return
+        self._stack.setCurrentIndex(8)
+        self._workspace.reveal("git")
+        self._git_panel.review_mission(mission_id, self._current_project["id"])
+
+    @Slot(int)
     def _on_mission_selected(self, mission_id: int):
         details = self._services.get_mission_details(mission_id)
         if details:
@@ -907,16 +1085,18 @@ class MainWindow(QMainWindow):
     def _on_mission_finished(self, result: dict):
         mission_id = result.get("mission_id")
         status = result.get("status", "unknown")
-        self._log_panel.append_log(
-            "orchestrator", "info" if status == "completed" else "warning",
+        # The orchestrator emits the authoritative outcome once; callback refreshes UI.
+        self.statusBar().showMessage(
             tr_for(self._i18n, "status.mission_finished_log",
                    "Mission #{mission_id} finished: {status}",
-                   mission_id=str(mission_id), status=str(status)),
-        )
+                   mission_id=str(mission_id), status=str(status)), 6000)
+
         self._tasks_panel.refresh()
+        self._git_panel.refresh()
+        self._problems_panel.refresh()
         if mission_id:
             details = self._services.get_mission_details(mission_id)
-            if details:
+            if details and self._current_project and details.get("project_id") == self._current_project["id"]:
                 self._inspector.show_mission(details)
 
     @Slot(int)
@@ -1103,7 +1283,12 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         from PySide6.QtCore import QCoreApplication
         from nl_coding_agent.app.services import get_event_bus
-        if any(thread.isRunning() for thread in getattr(self, "_chat_reply_threads", [])):
+        model_thread = getattr(self._chat_panel, "_model_thread", None)
+        document = getattr(self, "_document_panel", None)
+        document_thread = getattr(document, "_generation_thread", None)
+        if ((document_thread is not None and document_thread.isRunning()) or
+                (model_thread is not None and model_thread.isRunning()) or
+                any(thread.isRunning() for thread in getattr(self, "_chat_reply_threads", []))):
             self.statusBar().showMessage(tr_for(
                 self._i18n, "chat.wait_before_close",
                 "Wait for the pending Chat reply before closing."))
@@ -1112,31 +1297,39 @@ class MainWindow(QMainWindow):
         if not self._editor_panel.confirm_close():
             event.ignore()
             return
+        settings = studio_settings()
+        settings.setValue("workspace/docks_v1", self._workspace.saveState(1))
+        settings.setValue("workspace/geometry", self.saveGeometry())
+        settings.setValue("workspace/project", (self._current_project or {}).get("root", ""))
+        settings.setValue("workspace/open_files", list(self._editor_panel._tabs))
+        tab = self._editor_panel._tabs_widget.currentWidget()
+        settings.setValue("workspace/active_file", getattr(tab, "rel_path", ""))
+        settings.sync()
         self._stop_threads()
         QCoreApplication.processEvents()
         try:
-            from PySide6.QtCore import QSettings
-            _settings = QSettings("NL Coding Agent", "Studio")
+            _settings = studio_settings()
             _settings.setValue("main_splitter_state", self._main_splitter.saveState())
             _settings.setValue("v_splitter_state", self._v_splitter.saveState())
             _settings.sync()
         except Exception:
             pass
-        get_event_bus().unsubscribe(self._on_bus_event)
+        get_event_bus().unsubscribe(self._bus_callback)
         event.accept()
 class ChatReplyThread(QThread):
     reply_ready = Signal(dict)
 
-    def __init__(self, services, project, text, attachment_ids, parent=None):
+    def __init__(self, services, project, text, attachment_ids, parent=None, *, model=None):
         super().__init__(parent)
         self._services = services
         self._project = project
         self._text = text
         self._attachment_ids = attachment_ids
+        self._model = model
 
     def run(self):
         try:
             self.reply_ready.emit(self._services.chat_conversation(
-                self._project, self._text, self._attachment_ids))
+                self._project, self._text, self._attachment_ids, **({"model_spec": self._model} if self._model else {})))
         except Exception as exc:
             self.reply_ready.emit({"ok": False, "reply": str(exc), "tool_activity": ""})
