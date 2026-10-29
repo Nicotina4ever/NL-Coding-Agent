@@ -32,6 +32,7 @@ class _ProjectFilterProxy(QSortFilterProxyModel):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._text = ""
+        self.project_root = None
 
     def set_filter_text(self, text: str):
         self._text = (text or "").strip().lower()
@@ -40,6 +41,10 @@ class _ProjectFilterProxy(QSortFilterProxyModel):
     def filterAcceptsRow(self, source_row: int, source_parent: QModelIndex) -> bool:
         model = self.sourceModel()
         index = model.index(source_row, 0, source_parent)
+        if self.project_root is not None:
+            path = Path(model.filePath(index)).resolve()
+            if path == self.project_root or path in self.project_root.parents:
+                return True
         name = model.fileName(index)
         lowered = name.lower()
         if lowered in _BLOCKED_NAMES or lowered.startswith("."):
@@ -88,6 +93,7 @@ class FileViewerWidget(QWidget):
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
         self._model = QFileSystemModel(self)
+        self._model.directoryLoaded.connect(self._directory_loaded)
         self._model.setFilter(QDir.Filter.AllEntries | QDir.Filter.NoDotAndDotDot)
         self._model.setReadOnly(True)
         self._proxy = _ProjectFilterProxy(self)
@@ -132,7 +138,15 @@ class FileViewerWidget(QWidget):
     def set_project(self, project: dict | None):
         self._project = project
         self._root = Path(project["root"]).resolve() if project and project.get("root") else None
+        self._proxy.project_root = self._root
+        self._proxy.invalidateFilter()
         self.refresh()
+
+    @Slot(str)
+    def _directory_loaded(self, path):
+        if self._root and Path(path).resolve() == self._root:
+            index = self._model.index(str(self._root))
+            self._tree.setRootIndex(self._proxy.mapFromSource(index))
 
     @Slot()
     def refresh(self):

@@ -586,6 +586,19 @@
     "chat.unknown_action": "Azione sconosciuta",
     "docs.wait": "Attendi la fine dell’analisi documentale.",
     "studio.source.coverage": "Copertura",
-    "studio.source.cited_sources_total_coverage": " fonti citate; la copertura totale del progetto non è misurata. Esamina i limiti sotto."
+    "studio.source.cited_sources_total_coverage": " fonti citate; la copertura totale del progetto non è misurata. Esamina i limiti sotto.",
+    "chat.select_model": "Seleziona modello",
+    "chat.select_model_prompt": "Scegli un modello:",
+    "git.candidate": "Candidato",
+    "git.candidate_notice": "Candidato in staging: questa vista non applica modifiche.",
+    "git.no_candidate_diff": "Nessuna differenza nel candidato",
+    "task_board.review": "Esamina candidato",
+    "task_board.mission_state": "Missione #{id}: {status} · {completed}/{total} attività · riprese: {resumes}",
+    "mission.state_pending": "in attesa",
+    "mission.state_running": "in esecuzione",
+    "mission.state_completed": "completata",
+    "mission.state_failed": "fallita",
+    "mission.state_blocked": "bloccata",
+    "mission.state_interrupted": "interrotta"
   }
 }

@@ -1070,6 +1070,10 @@ class MainWindow(QMainWindow):
             return
         self._stack.setCurrentIndex(8)
         self._workspace.reveal("git")
+        dock = self._workspace.docks["git"]
+        if (not dock.isFloating() and dock.height() < 360
+                and self._workspace.dockWidgetArea(dock) == Qt.DockWidgetArea.BottomDockWidgetArea):
+            self._workspace.resizeDocks([dock], [360], Qt.Orientation.Vertical)
         self._git_panel.review_mission(mission_id, self._current_project["id"])
 
     @Slot(int)

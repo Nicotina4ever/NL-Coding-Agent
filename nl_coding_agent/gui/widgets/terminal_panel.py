@@ -89,7 +89,8 @@ class TerminalPanel(QWidget):
         self._run_btn = QPushButton(_tr("terminal.run", "Run"))
         self._run_btn.setAccessibleName("Run terminal command")
         self._run_btn.setToolTip(ui_text("Run the explicit human command (Ctrl+Enter)"))
-        self._run_btn.clicked.connect(self.run_command)
+        # clicked(bool) is not an argv value; keep button and Return semantics equal.
+        self._run_btn.clicked.connect(lambda: self.run_command())
         row.addWidget(self._run_btn)
         self._clear_btn = QPushButton(_tr("terminal.clear", "Clear"))
         self._clear_btn.setAccessibleName("Clear terminal output")

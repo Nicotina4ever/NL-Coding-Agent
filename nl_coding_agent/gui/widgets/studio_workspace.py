@@ -27,7 +27,7 @@ class StudioWorkspace(QMainWindow):
             dock = QDockWidget(translate("workspace." + key, title), self)
             dock.setObjectName("studioDock_" + key)
             dock.panel = widget
-            if area == Qt.DockWidgetArea.BottomDockWidgetArea:
+            if key in ("goals", "research", "agents"):
                 # Large focused workspaces must not dictate the editor's minimum height.
                 scroll = QScrollArea()
                 scroll.setWidgetResizable(True)

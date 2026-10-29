@@ -172,3 +172,45 @@ def test_event_bus_unsubscribes_bound_method():
     bus.unsubscribe(listener.receive)
     bus.emit(Event("test", "info", "once"))
     assert listener.events == []
+
+
+def test_terminal_button_uses_the_visible_command(studio, monkeypatch):
+    seen = []
+    monkeypatch.setattr(studio._services, "terminal_policy", lambda project, argv:
+                        seen.append(argv) or {"allowed": False, "reason": "test boundary"})
+    studio._workspace.reveal("terminal")
+    studio._terminal_panel._input.setText("python --version")
+    QTest.mouseClick(studio._terminal_panel._run_btn, Qt.MouseButton.LeftButton)
+    assert seen == [["python", "--version"]]
+
+
+def test_explorer_binds_real_root_beneath_ignored_ancestors(studio):
+    browser = studio._files_panel
+    QTest.qWait(100)
+    root = browser._tree.rootIndex()
+    assert root.isValid()
+    source = browser._proxy.mapToSource(root)
+    from pathlib import Path
+    assert Path(browser._model.filePath(source)).resolve() == Path(studio._current_project["root"]).resolve()
+    names = [browser._proxy.index(i, 0, root).data()
+             for i in range(browser._proxy.rowCount(root))]
+    assert "code.py" in names
+
+
+def test_candidate_diff_reuses_staging_and_refuses_cross_project_reads(studio, tmp_path):
+    from nl_coding_agent.core import promotion
+    from nl_coding_agent.persistence.missions import set_mission_staging
+    project = studio._current_project
+    mission = studio._services.create_mission(project["id"], "Candidate", "Change code.py")
+    stage = promotion.begin_stage(project["root"], mission, ["code.py"])
+    set_mission_staging(mission, str(stage.stage_dir))
+    (stage.workspace / "code.py").write_text("value = 2\n")
+    result = studio._services.mission_candidate_diff(mission, project_id=project["id"])
+    assert result["ok"] and "+value = 2" in result["diff"]
+    from pathlib import Path
+    assert (Path(project["root"]) / "code.py").read_text() == "value = 1\n"
+    other = tmp_path / "other"
+    other.mkdir()
+    other_project = studio._services.open_project(other)
+    with pytest.raises(ValueError, match="does not belong"):
+        studio._services.mission_candidate_diff(mission, project_id=other_project["id"])

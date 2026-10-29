@@ -4,6 +4,65 @@
 
 NL Coding Agent is a local-first, multi-agent software development workstation. It opens existing projects, discovers their structure and documentation, persists missions in SQLite, and runs a real `Developer -> Tester -> Debugger -> Reviewer` cycle using local Ollama models. The current implementation has been exercised end-to-end with a live local model and a real interruption/resume cycle.
 
+## Unified Studio acceptance (2026-10-29)
+
+Studio now composes its existing editor, explorer and persistent Chat into a native
+Qt dock workspace. Terminal, Git/candidate review, diagnostics, missions, Goals,
+Research and agents are contextual panels; project/settings/model pages remain.
+Dock positions, visibility, geometry, project and open files restore from local
+`data/studio.ini` (respecting `NL_DATA_DIR`), without relying on registry writes.
+The Panels menu restores hidden panels and resets the layout. Advanced panels
+remain available; none of these changes creates another editor or execution engine.
+
+Chat defaults to conversation regardless of coding keywords. Enter sends and
+Ctrl+Enter inserts a newline, including while the terminal is visible. Plans, coding
+missions and Goals require an explicit action selection; coding creates a pending
+mission whose Run control starts execution. Model routes are visible/selectable.
+Editor selection/current-file snapshots use the attachment service, including scoped
+historical context on follow-up turns. Late attachment/Git/diagnostic results cannot
+cross projects. Goal cancellation preserves the submitted objective.
+
+Document plans open in a workspace tab with saved-plan selection, milestones,
+version/approval controls, limitations and cited-source coverage. Analysis runs off
+the GUI thread. Escape returns to the editor; the tab can be closed without rejecting
+the plan. Dirty milestone edits retain their confirmation workflow.
+
+Legacy document-only blocked missions are hidden from the ordinary mission list,
+available through History, and navigate to planning instead of offering coding Run.
+Repeated execution attempts return their blocked result without duplicate handoffs.
+The GUI no longer logs the orchestrator's outcome a second time; EventBus bound-method
+unsubscription also works across window closure/reopening.
+
+Native Windows acceptance is retained in
+`.workspace/temp/studio-acceptance-20261029/result.json` and screenshots. Using an
+isolated read-only snapshot of production SQLite, Studio opened the real VoiceBridge
+project, edited a buffer without changing its source, and obtained a real local Ollama
+answer about selected `room.ts` code. The existing plan displayed 83 milestones and
+43 cited sources, explicitly without an exhaustive-coverage claim. Mission #47 was
+not executed and gained no handoffs. Project, active file, Chat and hidden-dock state
+survived close/reopen. No QFont warning occurred on this native path.
+
+An explicit GUI coding mission on an isolated arithmetic project reached candidate
+and oracle verification (both passed), but the local reviewer returned REJECT.
+Promotion was correctly blocked; this is **not** a successful mission. The candidate
+diff remained inspectable in Git's Candidate tab. A real terminal button invocation
+returned Python 3.12.10; native testing found and repaired clicked(bool) being mistaken
+for argv. Actual successful local-model promotion evidence from the previous review
+remains separate from this GUI acceptance. Deep diagnostic/model-returned text still
+contains English; complete product/localization and human usability acceptance are
+not claimed. Restart Studio to load changed modules.
+
+Focused evidence: 70 GUI/provider/planning checks passed before the final native
+repairs; 53 focused checks then passed, and the final workspace/Chat/localization
+batch passed 31. An initial broad run reached 92% before a native Qt heap exception.
+Independent review reproduced it in a compact batch: three old fixtures deleted Qt
+owners and their children separately. Changing only cleanup to delete top-level owners
+and flush deferred deletion corrected the reproducer: 34 passed, independently rerun.
+Final broad regression: **1,243 passed, 1 failed, 14 deprecation warnings** in 191s.
+The sole remaining failure is Windows POSIX-shell WinError 1920. Evidence:
+`.workspace/temp/studio-full-final.txt`, `studio-lifecycle-fixed.txt` and independent
+`studio-gate-lifecycle-fixed.txt`. The gatekeeper approved the limited Studio increment.
+
 ## Independent review after 3016c8c (2026-10-29)
 
 Review of the recent changes found substantial defects, rather than a release-ready

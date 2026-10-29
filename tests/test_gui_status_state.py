@@ -21,12 +21,15 @@ def _cleanup():
     yield
     app = QApplication.instance()
     if app is not None:
-        for widget in app.allWidgets():
+        for widget in app.topLevelWidgets():
             try:
                 widget.close()
                 widget.deleteLater()
             except RuntimeError:
                 continue
+        # Delete each Qt owner once; its children follow Qt ownership.
+        from PySide6.QtCore import QCoreApplication, QEvent
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         app.processEvents()
 
 

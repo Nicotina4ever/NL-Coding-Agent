@@ -1,5 +1,13 @@
 # Development continuation — Goal execution integration
 
+Studio checkpoint: the 2026-10-29 dock workspace and native VoiceBridge acceptance
+are recorded at the top of CURRENT_STATE.md. The GUI arithmetic mission was rejected
+by its reviewer despite passing tests; preserve that evidence and do not mark it
+successful. The owner's subsequent platform request prioritizes the conversational
+engine path, existing MCP client interoperability, and an engine bridge for external
+clients. Reuse AppServices/Supervisor and the existing mission state; do not rebuild
+the already-integrated workspace or start another roadmap.
+
 Latest checkpoint (2026-10-29 independent review): the approved-plan bootstrap below
 has been integrated and its approval/project binding/atomicity repaired and tested.
 Do not repeat it or infer completion from the older checklist. CURRENT_STATE.md's

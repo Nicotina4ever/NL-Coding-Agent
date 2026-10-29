@@ -586,6 +586,19 @@
     "chat.unknown_action": "Unknown action",
     "docs.wait": "Wait for document analysis to finish.",
     "studio.source.coverage": "Coverage",
-    "studio.source.cited_sources_total_coverage": " cited sources; total project coverage is not measured. Review limits below."
+    "studio.source.cited_sources_total_coverage": " cited sources; total project coverage is not measured. Review limits below.",
+    "chat.select_model": "Select Model",
+    "chat.select_model_prompt": "Choose a model:",
+    "git.candidate": "Candidate",
+    "git.candidate_notice": "Staged candidate; this view never applies changes.",
+    "git.no_candidate_diff": "No candidate differences",
+    "task_board.review": "Review candidate",
+    "task_board.mission_state": "Mission #{id}: {status} · {completed}/{total} tasks · resumes: {resumes}",
+    "mission.state_pending": "pending",
+    "mission.state_running": "running",
+    "mission.state_completed": "completed",
+    "mission.state_failed": "failed",
+    "mission.state_blocked": "blocked",
+    "mission.state_interrupted": "interrupted"
   }
 }

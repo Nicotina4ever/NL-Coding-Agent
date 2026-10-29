@@ -67,6 +67,16 @@ mission except when the user explicitly runs Self-Build Mode.
 
 Equivalent CLI form (use the embedded runtime explicitly):
 
+Studio opens a dockable project workspace: files on the left, the existing editor
+in the center, persistent Chat on the right and tools/activity in bottom tabs.
+Use **Panels** to show, move or reset panels; layout, project and open files restore
+after restart. **Enter** sends Chat, **Ctrl+Enter** adds a newline. Ordinary messages
+stay conversational. Select the explicit document-plan, coding-task or Goal action
+to prepare work; a coding mission starts only through **Run / Resume**.
+**Ask in Chat** references selected code; **Open file** in Chat attaches the active
+editor snapshot. **Review candidate** displays staged changes and verdicts even when
+promotion is blocked. **Ctrl+Alt+C/E/D** focus Chat/editor/document planning.
+
 ```powershell
 python\python.exe nl_agent.py doctor
 python\python.exe nl_agent.py --help
