@@ -127,12 +127,33 @@ results remain untrusted. Model-driven automatic selection/invocation is not int
 CLI commands: `doctor`, `audit`, `work`, `status`, `roadmap`, `mission`, `mcp`,
 `selfbuild`, `supervisor`, `gui`.
 
+## VS Code frontend (NL Chat)
+
+`frontend/` is the first real IDE frontend: a VS Code / VS Code Insiders extension that talks to the
+existing engine over MCP (stdio). It has no models, missions, permissions or persistence of its own.
+The PySide6 Studio remains available and unchanged.
+
+```powershell
+cd frontend
+npm install
+npm run compile
+code-insiders --extensionDevelopmentPath="K:\AI\NL Coding Agent\frontend" "K:\path\to\a\project"
+```
+
+Run **NL Coding Agent: Start Chat**. The extension starts
+`python\python.exe nl_agent.py mcp serve --project <opened folder>` using the engine installation
+resolved from the extension location (override with the `nlCodingAgent.engineRoot` setting), binds the
+active workspace to exactly one backend project, and lists the real engine tools. Architecture,
+protocol contract and the recorded acceptance evidence are in
+`docs/FRONTEND_ARCHITECTURE.md`.
+
 ## Repository layout
 
 | Path | Role |
 |---|---|
 | `python/` | Embedded Python 3.12 runtime and installed packages. **Protected** — never edited or committed. |
 | `nl_coding_agent/` | Application source (CLI, GUI, orchestration, supervisor, flows, project registry, persistence, tools). |
+| `frontend/` | VS Code extension frontend (NL Chat over MCP). Source only; `node_modules/` and `out/` are generated locally. |
 | `nl_agent.py` | CLI entry point. |
 | `tests/` | Automated test suite. |
 | `scripts/` | Development and verification tools (read-only audits, gates, portable staging). |

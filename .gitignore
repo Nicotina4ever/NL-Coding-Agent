@@ -34,6 +34,11 @@ __pycache__/
 .venv/
 venv/
 
+# VS Code frontend dependencies and build output (source is committed; run
+# `npm install && npm run compile` inside frontend/).
+frontend/node_modules/
+frontend/out/
+
 # Test/type-check/coverage artifacts (regenerated on demand)
 .pytest_cache/
 .ruff_cache/

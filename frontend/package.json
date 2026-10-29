@@ -1,0 +1,96 @@
+{
+  "name": "nl-coding-agent",
+  "displayName": "NL Coding Agent",
+  "description": "NL Chat for the local NL Coding Engine. The Python engine remains the single source of truth for models, missions, permissions and persistence.",
+  "version": "0.1.0",
+  "publisher": "nlcodingagent",
+  "engines": {
+    "vscode": ">=1.85.0"
+  },
+  "categories": [
+    "Chat",
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:nlCodingAgent.chat",
+    "onCommand:nlCodingAgent.startChat",
+    "onCommand:nlCodingAgent.showStatus",
+    "onCommand:nlCodingAgent.reconnect"
+  ],
+  "main": "./out/extension.js",
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p .",
+    "watch": "tsc -watch -p .",
+    "test:integration": "node test/integration.cjs",
+    "test:webview": "node test/webview.cjs",
+    "test:extension": "node test/runExtensionTests.cjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.5.0"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "nlCodingAgent.startChat",
+        "title": "NL Coding Agent: Start Chat"
+      },
+      {
+        "command": "nlCodingAgent.showStatus",
+        "title": "NL Coding Agent: Show Backend Status"
+      },
+      {
+        "command": "nlCodingAgent.reconnect",
+        "title": "NL Coding Agent: Reconnect Backend"
+      }
+    ],
+    "configuration": {
+      "title": "NL Coding Agent",
+      "properties": {
+        "nlCodingAgent.engineRoot": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "markdownDescription": "Absolute path to the NL Coding Engine installation: the folder that contains `nl_agent.py` and `python\\python.exe`. Leave empty to resolve it relative to this extension (the normal in-repository or bundled layout)."
+        },
+        "nlCodingAgent.pythonPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "Optional absolute path to python.exe. Defaults to <engineRoot>\\python\\python.exe."
+        },
+        "nlCodingAgent.requestTimeoutSeconds": {
+          "type": "number",
+          "default": 180,
+          "minimum": 30,
+          "maximum": 600,
+          "description": "Timeout for one chat turn. Local models may need to load on the first request."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "nlCodingAgent",
+          "title": "NL",
+          "icon": "assets/icon.png"
+        }
+      ]
+    },
+    "views": {
+      "nlCodingAgent": [
+        {
+          "id": "nlCodingAgent.chat",
+          "name": "NL Chat",
+          "type": "webview"
+        }
+      ]
+    }
+  }
+}

@@ -4,6 +4,21 @@
 
 NL Coding Agent is a local-first, multi-agent software development workstation. It opens existing projects, discovers their structure and documentation, persists missions in SQLite, and runs a real `Developer -> Tester -> Debugger -> Reviewer` cycle using local Ollama models. The current implementation has been exercised end-to-end with a live local model and a real interruption/resume cycle.
 
+## VS Code NL Chat frontend (2026-10-29)
+
+The `frontend/` directory now contains an accepted VS Code / VS Code Insiders extension that talks to
+the existing engine over MCP stdio (`@modelcontextprotocol/sdk@1.32.2` against the server's
+`mcp==1.30.0` FastMCP). It owns no models, missions, permissions or persistence; the PySide6 Studio is
+unchanged. Real acceptance in VS Code Insiders 1.145.0-insider: the extension activated, negotiated
+MCP `2025-11-25`, discovered all 8 engine tools, mapped the opened workspace to the correct backend
+project, created the NL Chat webview, delivered a real Ollama reply (`EXT-OK` via the extension-host
+test and `NLCHAT-GUI-OK` in the driven GUI, screenshot
+`docs/evidence/frontend/NL_CHAT_GUI_ACCEPTANCE.png`), refused a cross-project `project_id`, and
+released the Python child on shutdown. Protocol level: real initialize/tools/`project_context`/
+`mission_list`/`nlc_converse` round-trip with project isolation and LLM reply `NLCHAT-OK`.
+Details and exact commands: [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md). Known limits: chat
+only (mission UI not surfaced yet), no streaming, no packaged VSIX yet, single-folder workspace.
+
 ## Shared engine MCP interoperability (2026-10-29)
 
 The existing MCP facade now uses official Python SDK 1.x sessions for stdio and
@@ -69,7 +84,7 @@ The finding supports existing Qt docks/editor and public MCP/extension interface
 no clone, Electron embedding, VS Code extension or dependency build was performed.
 
 Limits: no external server OS sandbox, remote authentication/cloud acceptance,
-automatic model-to-MCP tool routing, VS Code extension acceptance or complete natural
+automatic model-to-MCP tool routing, packaged/bundled Code - OSS acceptance or complete natural
 language capability routing. Disconnect requests cooperative cancellation; forceful
 process termination still relies on existing crash recovery. The corrected reviewer
 context and successful isolated #50 are evidence for that workflow, not general
