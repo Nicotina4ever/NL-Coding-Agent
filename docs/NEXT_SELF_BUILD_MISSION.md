@@ -38,3 +38,26 @@ NL_WORKSPACE_DIR and CREWAI_STORAGE_DIR beneath their suite data directory. Pare
 state remains unchanged. Targeted verification/backend/Goal batch: 42 passed;
 final candidate verification batch (including real state-isolation subprocesses):
 11 passed. Gatekeeper approved this additional isolation diff.
+## Objective
+
+Bring approved document-plan provenance into an explicit Goal bootstrap through existing services, then execution preview/start in the established Studio controls.
+
+## Scope of Work
+
+- `nl_coding_agent/core/doc_planning.py`
+- `nl_coding_agent/core/goals.py`
+- `nl_coding_agent/core/autonomous_roadmap_planner.py`
+- `tests/test_rollback_stub.py`
+- `tests/test_scope_permission.py`
+- `nl_coding_agent/core/autonomous_roadmap_planner.py`
+
+## Acceptance Gates
+
+- [ ] Approved-plan provenance is available for explicit Goal bootstrap
+- [ ] Goal execution preview and start reuse existing Studio controls
+- [ ] Existing version approval and original-objective verification are preserved
+- [ ] Imported text cannot authorize source edits
+
+## Execution via NL Coding Agent CLI
+
+`nl-coding-agent doctor` and targeted tests.

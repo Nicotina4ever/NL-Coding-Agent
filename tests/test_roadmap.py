@@ -22,7 +22,7 @@ from nl_coding_agent.core.workspace import (
 class TestRoadmap(unittest.TestCase):
     def test_repository_roadmap_parses(self):
         mission = next_mission(Path(__file__).resolve().parents[1])
-        self.assertIn("Supervisor Persistente", mission["title"])
+        self.assertIn("Development continuation", mission["title"])
         self.assertIn("tests/test_rollback_stub.py", mission["write_paths"])
         self.assertIn("tests/test_scope_permission.py", mission["write_paths"])
         self.assertIn("nl_coding_agent/core/autonomous_roadmap_planner.py", mission["write_paths"])
