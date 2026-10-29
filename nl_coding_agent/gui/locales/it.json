@@ -421,6 +421,8 @@
     "agents.configure": "Configura agenti personalizzati",
     "status.chat_reply": "Risposta dell assistente",
     "goals.from_document_plan": "Da piano documentale",
-    "goals.from_document_plan_tooltip": "Crea un goal dalla provenienza del piano (nessuna esecuzione)"
+    "goals.from_document_plan_tooltip": "Crea un goal dalla provenienza del piano (nessuna esecuzione)",
+    "editor.ask_chat": "Chiedi in Chat",
+    "editor.ask_chat_tooltip": "Invia il codice selezionato alla Chat come contesto"
   }
 }

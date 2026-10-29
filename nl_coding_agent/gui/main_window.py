@@ -435,6 +435,7 @@ class MainWindow(QMainWindow):
 
         # Studio IDE (F3a): editor / terminal / read-only Git / problems.
         self._editor_panel = EditorPanel(self._services)
+        self._editor_panel.ask_chat_requested.connect(self._on_editor_ask_in_chat)
         self._terminal_panel = TerminalPanel(self._services)
         self._git_panel = GitPanel(self._services)
         self._problems_panel = ProblemsPanel(self._services)
@@ -791,7 +792,25 @@ class MainWindow(QMainWindow):
             tr_for(self._i18n, "status.file_opened_log",
                    "Opened file: {path}", path=rel_path))
 
+        self._chat_panel.add_text(context)
+        self._switch_page("chat")
+        self._log_panel.append_log(
+            "editor", "info",
+            tr_for(self._i18n, "editor.selection_sent_chat",
+                   "Sent selected code to Chat"))
+
     @Slot(dict)
+    @Slot(str, str)
+    def _on_editor_ask_in_chat(self, text: str, rel_path: str) -> None:
+        context = ("Selected code from " + rel_path + "\n\n"
+                   + "```\n" + text + "\n```\n")
+        self._chat_panel.add_text(context)
+        self._switch_page("chat")
+        self._log_panel.append_log(
+            "editor", "info",
+            tr_for(self._i18n, "editor.selection_sent_chat",
+                   "Sent selected code to Chat"))
+
     def _on_chat_submitted(self, payload: dict):
         """Route document plans to the planning facade; persist other chat missions."""
         if not self._current_project:

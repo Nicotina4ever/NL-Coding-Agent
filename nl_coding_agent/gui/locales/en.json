@@ -421,6 +421,8 @@
     "agents.configure": "Configure custom agents",
     "status.chat_reply": "Assistant replied",
     "goals.from_document_plan": "From document plan",
-    "goals.from_document_plan_tooltip": "Bootstrap a goal from document-plan provenance (no execution)"
+    "goals.from_document_plan_tooltip": "Bootstrap a goal from document-plan provenance (no execution)",
+    "editor.ask_chat": "Ask in Chat",
+    "editor.ask_chat_tooltip": "Send the selected code to Chat as context"
   }
 }

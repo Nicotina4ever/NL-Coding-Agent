@@ -83,6 +83,8 @@ class EditorTab(QPlainTextEdit):
 
 
 class EditorPanel(QWidget):
+    ask_chat_requested = Signal(str, str)
+
     def __init__(self, services, parent=None, *, confirm_callback=None):
         super().__init__(parent)
         self._services = services
@@ -106,6 +108,14 @@ class EditorPanel(QWidget):
             "editor.save_tooltip", "Explicit save of the current file (Ctrl+S)"))
         self._save_btn.clicked.connect(self.save_current)
         header.addWidget(self._save_btn)
+        self._ask_chat_btn = QPushButton(_tr("editor.ask_chat", "Ask in Chat"))
+        self._ask_chat_btn.setObjectName("secondaryButton")
+        self._ask_chat_btn.setAccessibleName("Ask in Chat about the selected code")
+        self._ask_chat_btn.setToolTip(_tr(
+            "editor.ask_chat_tooltip",
+            "Send the selected code to Chat as context"))
+        self._ask_chat_btn.clicked.connect(self._ask_chat_about_selection)
+        header.addWidget(self._ask_chat_btn)
         layout.addLayout(header)
         self._tabs_widget = QTabWidget()
         self._tabs_widget.setTabsClosable(True)
@@ -185,6 +195,19 @@ class EditorPanel(QWidget):
         if tab is not None and not tab.read_only:
             tab.setPlainText(text)
             tab.document().setModified(True)
+
+    def _ask_chat_about_selection(self) -> None:
+        tab = self._tabs_widget.currentWidget()
+        if tab is None:
+            self._status.setText("No file is open.")
+            return
+        text = tab.textCursor().selectedText().replace("\u2029", "\n").strip()
+        if not text:
+            self._status.setText("Select code before asking in Chat.")
+            return
+        self.ask_chat_requested.emit(text, tab.rel_path)
+        self._status.setText("Selected code from " + tab.rel_path +
+                             " sent to Chat.")
 
     def save_current(self):
         tab = self._tabs_widget.currentWidget()
