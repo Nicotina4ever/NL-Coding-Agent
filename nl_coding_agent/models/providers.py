@@ -305,3 +305,15 @@ class ModelHub:
             if provider.provider_id == provider_id:
                 return bool(provider.unload(name))
         return False
+def generate_ollama_text(base_url: str, model: str, prompt: str, *,
+                        timeout: float = 120.0) -> str:
+    """Generate one non-streaming Ollama response. Transport lives here, not services."""
+    url = _base_url(base_url) + "/api/generate"
+    request = urllib.request.Request(
+        url,
+        data=json.dumps({"model": model, "prompt": prompt, "stream": False}).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    return str(data.get("response") or "")

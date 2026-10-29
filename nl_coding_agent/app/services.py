@@ -541,16 +541,9 @@ class AppServices:
         if not model_name:
             model_name = "qwen3.5:9b"
         try:
-            import importlib
-            urlmod = importlib.import_module("urllib" + ".request")
-            payload = {"model": model_name, "prompt": prompt, "stream": False}
-            raw = _json.dumps(payload).encode("utf-8")
-            request = urlmod.Request(
-                self.get_ollama_url().rstrip("/") + "/api/generate",
-                data=raw, headers={"Content-Type": "application/json"})
-            with urlmod.urlopen(request, timeout=120) as response:
-                data = _json.loads(response.read().decode("utf-8"))
-            reply = str(data.get("response") or "").strip()
+            from nl_coding_agent.models.providers import generate_ollama_text
+            reply = generate_ollama_text(
+                self.get_ollama_url(), model_name, prompt, timeout=120.0).strip()
             return reply or "Non ho ricevuto una risposta dal modello."
         except Exception as exc:
             return f"Impossibile contattare il modello: {exc}" + (

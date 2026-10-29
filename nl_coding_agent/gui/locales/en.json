@@ -417,6 +417,8 @@
     "projects.ingest_choose": "Choose documentation folder",
     "projects.ingest_title": "Document ingestion summary",
     "projects.ingest_unavailable": "Document ingestion unavailable",
-    "projects.document_plan": "Document plan…"
+    "projects.document_plan": "Document plan…",
+    "agents.configure": "Configure custom agents",
+    "status.chat_reply": "Assistant replied"
   }
 }

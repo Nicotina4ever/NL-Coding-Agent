@@ -417,6 +417,8 @@
     "projects.ingest_choose": "Scegli cartella documentazione",
     "projects.ingest_title": "Riepilogo acquisizione documenti",
     "projects.ingest_unavailable": "Acquisizione documenti non disponibile",
-    "projects.document_plan": "Piano documentale…"
+    "projects.document_plan": "Piano documentale…",
+    "agents.configure": "Configura agenti personalizzati",
+    "status.chat_reply": "Risposta dell assistente"
   }
 }
