@@ -204,6 +204,8 @@ class AgentsPanel(QWidget):
             self._table.setItem(row, 2, item)
 
     def _availability(self, role: dict, available: dict, reachable: bool | None):
+        if role.get("custom_agent_id"):
+            return _tr("agents.status_profile_only", "Profile only (execution pending)"), Qt.GlobalColor.gray
         if role.get("kind") == "deterministic":
             return _tr("agents.status_deterministic", "Deterministic"), Qt.GlobalColor.darkCyan
         model = str(role.get("model") or "")

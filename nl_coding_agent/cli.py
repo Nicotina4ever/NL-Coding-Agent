@@ -727,6 +727,89 @@ def _cmd_supervisor_advance_stage(args) -> int:
     return 0
 
 
+def _dispatch_json_mission(args) -> int:
+    """Structured client for the existing resource-gated mission executor."""
+    from contextlib import redirect_stderr, redirect_stdout
+    from functools import partial
+    from uuid import uuid4
+    from nl_coding_agent.agents.orchestrator import (
+        DEFAULT_DEBUG_MODEL, DEFAULT_DEVELOPER_MODEL, DEFAULT_REVIEWER_MODEL,
+        MultiAgentOrchestrator,
+    )
+    from nl_coding_agent.core.recovery_store import _atomic_write
+    from nl_coding_agent.core.supervisor import Supervisor, SupervisorConfig
+    from nl_coding_agent.persistence.missions import (
+        create_mission, get_mission, get_verification_runs,
+    )
+    from nl_coding_agent.projects.registry import open_project
+
+    token = uuid4().hex
+    log_path = logs_root() / "delegations" / (token + ".log")
+    evidence_path = state_root() / "delegations" / (token + ".json")
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    root = Path(args.project).resolve()
+    project = None
+    mission_id = args.resume
+    result = {}
+    verification = []
+    models = {}
+    with log_path.open("w", encoding="utf-8") as log, redirect_stdout(log), redirect_stderr(log):
+        try:
+            if args.list or args.show:
+                raise ValueError("--json is an execution interface; use --goal or --resume")
+            if not args.resume and not str(args.goal or "").strip():
+                raise ValueError("--goal is required for a new mission")
+            project = open_project(root)
+            if args.resume:
+                mission = get_mission(args.resume)
+                if not mission or mission.get("project_id") != project["id"]:
+                    raise ValueError("Mission does not belong to the requested project; resume denied")
+                if args.goal and args.goal != mission.get("goal"):
+                    raise ValueError("Resume preserves the persisted mission goal")
+            else:
+                mission_id = create_mission(project["id"], args.goal[:50], args.goal)
+            config = SupervisorConfig.load(project["id"], overrides={
+                "pipeline": "sequential",
+                "developer_model": args.dev_model or DEFAULT_DEVELOPER_MODEL,
+                "reviewer_model": args.reviewer_model or DEFAULT_REVIEWER_MODEL,
+                "debug_model": args.debug_model or args.dev_model or DEFAULT_DEBUG_MODEL,
+            })
+            models = {role: getattr(config, role + "_model")
+                      for role in ("developer", "reviewer", "debug")}
+
+            def factory(project_root):
+                orchestrator = MultiAgentOrchestrator(project_root, project_id=project["id"])
+                if args.stop_after:
+                    orchestrator.run_mission = partial(orchestrator.run_mission, stop_after=args.stop_after)
+                return orchestrator
+
+            result = Supervisor(root, project_id=project["id"], config=config,
+                                orchestrator_factory=factory).execute_mission(mission_id)
+            verification = get_verification_runs(mission_id)
+        except Exception as exc:
+            result = {"status": "failed", "mission_id": mission_id,
+                      "error": str(exc), "code": type(exc).__name__}
+            print(type(exc).__name__ + ": " + str(exc))
+
+    summary = {
+        "status": result.get("status", "failed"), "mission_id": mission_id,
+        "project": {"id": project["id"] if project else None, "root": str(root)},
+        "changed_paths": result.get("changed_paths") or [],
+        "models": models,
+        "verdict": result.get("verdict"), "promotion_status": result.get("promotion_status"),
+        "verification": {"runs": len(verification),
+                         "passed": sum(bool(run.get("passed")) for run in verification)},
+        "artifacts": {"log": str(log_path), "evidence": str(evidence_path)},
+    }
+    if result.get("error"):
+        summary["error"] = result["error"]
+    _atomic_write(evidence_path, json.dumps(
+        {"summary": summary, "result": result, "verification_runs": verification},
+        ensure_ascii=False, indent=2).encode("utf-8"))
+    print(json.dumps(summary, ensure_ascii=False))
+    return 0 if summary["status"] == "completed" else 1
+
+
 def _dispatch_supervisor(args) -> int:
     command = str(getattr(args, "supervisor_command", "") or "").strip().lower()
     if command == "run":
@@ -1554,6 +1637,8 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("--dev-model", help="Override the developer model")
     m.add_argument("--reviewer-model", help="Override the reviewer model")
     m.add_argument("--debug-model", help="Override the debugger model")
+    m.add_argument("--json", action="store_true",
+                   help="Execute with resource controls; emit structured result and local evidence paths")
 
     # Self-build command
     sb = sub.add_parser("selfbuild", help="Run autonomous self-development on NL Coding Agent itself")
@@ -1915,6 +2000,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "mission":
+        if args.json:
+            return _dispatch_json_mission(args)
         from nl_coding_agent.agents.orchestrator import MultiAgentOrchestrator
         from nl_coding_agent.persistence.missions import (
             create_mission, get_mission, get_tasks, list_missions,
@@ -1956,6 +2043,8 @@ def main(argv: list[str] | None = None) -> int:
                 )
             if mission.get("project_id") is None:
                 set_mission_project(m_id, project["id"])
+            elif mission["project_id"] != project["id"]:
+                raise SystemExit("Error: mission belongs to a different project; resume denied")
         else:
             if not args.goal:
                 raise SystemExit("Error: --goal is required for new missions")
@@ -1964,7 +2053,7 @@ def main(argv: list[str] | None = None) -> int:
             )
 
         print(f"=== Running Multi-Agent Mission #{m_id} on {root} ===")
-        orch = MultiAgentOrchestrator(root)
+        orch = MultiAgentOrchestrator(root, project_id=project["id"])
         res = orch.run_mission(
             mission_id=m_id,
             goal=args.goal,

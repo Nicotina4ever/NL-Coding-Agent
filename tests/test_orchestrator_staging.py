@@ -343,6 +343,59 @@ def test_resume_after_developer_interruption_promotes_once(project, mission_env)
     assert not stage_dirs(project)
 
 
+def test_resume_refuses_changed_candidate_after_tester_completion(project, mission_env):
+    mission_id = new_mission(project)
+    first = MultiAgentOrchestrator(project)
+    install_fake(first, {MODEL_DEVELOPER: [write_block("src/calc.py", CALC_WITH_SUB)]})
+    result = first.run_mission(mission_id, stop_after="tester")
+    assert result["status"] == "interrupted", result
+    stage = Path(get_mission(mission_id)["staging_dir"])
+    (stage / "workspace/src/calc.py").write_text(
+        CALC_WITH_SUB.replace("return a + b", "return a - b"), encoding="utf-8", newline="")
+    resumed = MultiAgentOrchestrator(project)
+    model = install_fake(resumed, {MODEL_REVIEWER: ["APPROVE\n"]})
+    result = resumed.run_mission(mission_id)
+    assert result["status"] == "blocked", result
+    assert "verification" in result["error"].lower()
+    assert model.roles == []
+    assert read_text(project / "src/calc.py") == CALC_SOURCE
+
+
+def test_resume_reuses_verification_only_for_identical_snapshot(project, mission_env):
+    mission_id = new_mission(project)
+    first = MultiAgentOrchestrator(project)
+    install_fake(first, {MODEL_DEVELOPER: [write_block("src/calc.py", CALC_WITH_SUB)]})
+    result = first.run_mission(mission_id, stop_after="tester")
+    assert result["status"] == "interrupted", result
+    verified_runs = get_verification_runs(mission_id)
+    assert len(verified_runs) == 2
+    resumed = MultiAgentOrchestrator(project)
+    model = install_fake(resumed, {MODEL_REVIEWER: ["APPROVE\n"]})
+    result = resumed.run_mission(mission_id)
+    assert result["status"] == "completed", result
+    assert model.roles == [MODEL_REVIEWER]
+    assert get_verification_runs(mission_id) == verified_runs
+    assert read_text(project / "src/calc.py") == CALC_WITH_SUB
+
+
+def test_revoked_write_permission_prevents_verified_candidate_promotion(project, mission_env):
+    from nl_coding_agent.core import permissions
+
+    mission_id = new_mission(project)
+    project_id = get_mission(mission_id)["project_id"]
+    orch = MultiAgentOrchestrator(project)
+    install_fake(orch, {
+        MODEL_DEVELOPER: [write_block("src/calc.py", CALC_WITH_SUB)],
+        MODEL_REVIEWER: ["APPROVE\n"],
+    }, hooks={MODEL_REVIEWER: lambda: permissions.revoke(permissions.WRITE, project_id)})
+    result = orch.run_mission(mission_id)
+    assert result["status"] == "blocked", result
+    assert "WRITE" in result["error"]
+    assert read_text(project / "src/calc.py") == CALC_SOURCE
+    assert len(get_verification_runs(mission_id)) == 2
+    assert get_mission(mission_id)["promotion_status"] != "promoted"
+
+
 @pytest.mark.parametrize("harness_version", [None, 1])
 def test_legacy_mission_is_blocked_without_writes(project, mission_env, harness_version):
     project_row = open_project(project)

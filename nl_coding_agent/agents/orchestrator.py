@@ -9,6 +9,7 @@ The orchestrator is intentionally evidence-driven:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -308,6 +309,7 @@ class MultiAgentOrchestrator:
         FakeCrewRuntime in tests) so the staged-candidate harness can be tested without
         Ollama and the default behavior stays exactly one single-agent sequential Crew.
         """
+        self._assert_execution_permissions()
         spec = resolve_role(role)
         result = self.crew_runtime.run_agent(
             spec,
@@ -468,6 +470,8 @@ class MultiAgentOrchestrator:
         self._emit("harness", "info", f"Promotion state: {status}", mission_id=mission_id)
 
     def _assert_harness_mission(self, mission: dict) -> None:
+        self._assert_project_binding(mission)
+        self._assert_execution_permissions()
         if mission.get("harness_version") != HARNESS_VERSION:
             raise GateFailure(
                 f"Mission #{mission['id']} predates the staged-candidate harness "
@@ -475,6 +479,29 @@ class MultiAgentOrchestrator:
                 "instead of resuming it.",
                 code="legacy-mission",
             )
+
+    def _assert_project_binding(self, mission: dict) -> None:
+        """Bind execution and provider policy to the mission's registered project."""
+        from nl_coding_agent.projects.registry import get_project
+
+        project_id = mission.get("project_id")
+        project = get_project(project_id) if project_id is not None else None
+        if (not project or Path(project["root"]).resolve() != self.root
+                or (self.project_id is not None and self.project_id != project_id)):
+            raise GateFailure(
+                "Mission does not belong to the requested project; execution denied",
+                code="project-mismatch",
+            )
+        self.project_id = int(project_id)
+
+    def _assert_execution_permissions(self) -> None:
+        from nl_coding_agent.core import permissions
+
+        try:
+            for scope in (permissions.READ, permissions.WRITE, permissions.EXECUTE):
+                permissions.require(scope, project_id=self.project_id)
+        except permissions.PermissionDenied as exc:
+            raise GateFailure(str(exc), code="permission-denied") from exc
 
     def _ensure_stage(self, mission_id: int, dev_task: dict | None, goal: str) -> promotion.Stage:
         mission = get_mission(mission_id) or {}
@@ -526,6 +553,7 @@ class MultiAgentOrchestrator:
             )
 
     def _run_verification(self, stage: promotion.Stage, task_id: int) -> candidate_verification.VerificationReport:
+        self._assert_execution_permissions()
         baseline = promotion.read_manifest(stage)["baseline"]
         report = candidate_verification.verify_candidate(
             stage.workspace,
@@ -553,6 +581,7 @@ class MultiAgentOrchestrator:
                     "candidate": report.candidate.failures or "pass",
                     "oracle": report.oracle.failures or "pass",
                     "duration_s": round(report.candidate.duration_s + report.oracle.duration_s, 2),
+                    "snapshot_sha256": self._candidate_fingerprint(stage),
                 })[:2000],
             )
             self._save_promotion_status(stage.mission_id, "verified")
@@ -567,6 +596,11 @@ class MultiAgentOrchestrator:
         except Exception:
             return None
 
+    @staticmethod
+    def _candidate_fingerprint(stage: promotion.Stage) -> str:
+        content = json.dumps(promotion.candidate_snapshot(stage), sort_keys=True).encode("utf-8")
+        return hashlib.sha256(content).hexdigest()
+
     def _rebind_persisted_verification(self, mission_id: int, stage: promotion.Stage) -> None:
         """Keep a persisted verified candidate verifiable across a resume.
 
@@ -575,6 +609,16 @@ class MultiAgentOrchestrator:
         evidence to the exact staged hashes before promotion is allowed.
         """
         manifest = promotion.read_manifest(stage)
+        try:
+            evidence = json.loads(manifest.get("evidence") or "{}")
+        except (TypeError, ValueError):
+            evidence = {}
+        if (not isinstance(evidence, dict)
+                or evidence.get("snapshot_sha256") != self._candidate_fingerprint(stage)):
+            raise GateFailure(
+                "Persisted verification does not match the staged candidate; re-verification required",
+                code="verification-stale",
+            )
         if manifest.get("verified"):
             self._save_promotion_status(mission_id, "verified")
             return
@@ -598,6 +642,7 @@ class MultiAgentOrchestrator:
         self._save_promotion_status(mission_id, "verified")
 
     def _promote_candidate(self, stage: promotion.Stage) -> dict:
+        self._assert_execution_permissions()
         self._save_promotion_status(stage.mission_id, "promoting")
         try:
             result = promotion.promote(stage, recovery_dir=self._recovery_dir())
@@ -852,6 +897,11 @@ class MultiAgentOrchestrator:
         mission = get_mission(mission_id)
         if not mission:
             raise ValueError(f"Mission #{mission_id} not found")
+        try:
+            self._assert_project_binding(mission)
+        except GateFailure as exc:
+            # A wrong-project request must not mutate the owning mission's state.
+            return self._result_payload(mission_id, status="blocked", error=str(exc))
         goal = (goal or mission.get("goal") or "").strip()
         if not goal:
             raise ValueError(f"Mission #{mission_id} has no goal")

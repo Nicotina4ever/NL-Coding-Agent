@@ -255,6 +255,25 @@ class GoalService:
             raise GoalNotFoundError("goal not found: " + str(goal_id))
         return goal
 
+    def create_goal_from_plan(self, objective: str, *, title: str, project_id: int,
+                              acceptance_criteria, reference_metadata: Mapping,
+                              milestones: Sequence[Mapping]) -> dict:
+        """Validate with the normal Goal rules before any imported state is written."""
+        fields = {
+            "objective": _text(objective, "objective", max_len=4000),
+            "title": _text(title, "title", max_len=300),
+            "project_id": _int_id(project_id, "project_id"),
+            "acceptance_criteria": _string_list(acceptance_criteria, "acceptance_criteria"),
+            "reference_metadata": _metadata(reference_metadata),
+        }
+        # No goal exists yet; the parser resolves only keys within this new plan.
+        specs, _ = self._parse_replan_plan({"id": 0}, milestones)
+        goal_id = goal_store.create_goal_with_milestones(fields, specs)
+        _audit("goal_created", "Goal imported from approved document plan",
+               {"goal_id": goal_id, "document_plan_id": reference_metadata.get("document_plan_id")},
+               project_id=project_id)
+        return self.get_goal(goal_id)
+
     def list_goals(self, *, project_id: int | None = None,
                    status: str | None = None, limit: int = 200,
                    offset: int = 0) -> list[dict]:

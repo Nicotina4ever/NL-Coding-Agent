@@ -139,7 +139,8 @@ class CustomAgentsDialog(QDialog):
         dialog = _EditDialog(parent=self, models=["qwen3.5:9b"])
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        self._services.create_custom_agent(dialog.values().pop("name"), **dialog.values())
+        values = dialog.values()
+        self._services.create_custom_agent(values.pop("name"), **values)
         self._refresh()
 
     def _edit(self) -> None:

@@ -281,7 +281,13 @@ class ChatPanel(QWidget):
             self._set_status("Added " + str(len(items)) + " attachment(s)")
         else:
             self._set_status("Ready")
-        self._submit_btn.setEnabled(self._pending == 0)
+        self._submit_btn.setEnabled(self._pending == 0 and not getattr(self, "_reply_pending", False))
+
+    def set_reply_pending(self, pending: bool) -> None:
+        """Keep shortcut submissions and attachment callbacks serialized too."""
+        self._reply_pending = bool(pending)
+        self._input.setEnabled(not pending)
+        self._submit_btn.setEnabled(not pending and self._pending == 0)
 
     def add_paths(self, paths, *, source: str = "drop") -> None:
         cleaned = [str(item) for item in (paths or []) if str(item or "").strip()]
@@ -403,6 +409,8 @@ class ChatPanel(QWidget):
 
     # --------------------------------------------------------------- submit
     def _submit(self) -> None:
+        if getattr(self, "_reply_pending", False):
+            return
         if self._pending > 0:
             self._set_status("Wait for attachment preparation to finish")
             return

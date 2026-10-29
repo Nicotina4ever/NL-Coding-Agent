@@ -73,3 +73,13 @@ def test_problems_panel_is_read_only_and_shows_findings(services, tmp_path):
     assert "read-only" in panel._status.text().lower()
     panel.set_project(None)
     assert panel._table.rowCount() == 0
+
+
+def test_scan_excludes_generated_children_but_not_root_ancestors(services, tmp_path):
+    root = tmp_path / "build" / ".workspace" / "actual-project"
+    (root / "python").mkdir(parents=True)
+    (root / "src").mkdir()
+    (root / "src/broken.py").write_text("def broken(:\n")
+    (root / "python/vendor.py").write_text("also broken(:\n")
+    found = services.scan_project_problems(root)
+    assert [item["path"] for item in found if item["source"] == "scan" and "path" in item] == ["src/broken.py"]

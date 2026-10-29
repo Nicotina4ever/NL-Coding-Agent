@@ -719,6 +719,7 @@ class MainWindow(QMainWindow):
     def _switch_page(self, key: str):
         idx = self._page_index.get(key, 0)
         self._stack.setCurrentIndex(idx)
+        self._sidebar.select_page(key)
         if key == "models":
             self._models_panel.refresh()
         elif key == "files":
@@ -738,6 +739,8 @@ class MainWindow(QMainWindow):
 
     @Slot(dict)
     def _on_project_opened(self, project: dict):
+        if not self._editor_panel.set_project(project):
+            return  # Keep every workspace panel bound to the original project.
         self._current_project = project
         self._project_label.setText(tr_for(
             self._i18n, "activity.opened", "Opened: {name}",
@@ -752,7 +755,6 @@ class MainWindow(QMainWindow):
         self._settings_panel.set_project(project)
         self._autonomy_panel.set_project(project)
         self._chat_panel.set_project(project)
-        self._editor_panel.set_project(project)
         self._terminal_panel.set_project(project)
         self._git_panel.set_project(project)
         self._problems_panel.set_project(project)
@@ -786,20 +788,14 @@ class MainWindow(QMainWindow):
         self._inspector.show_file(rel_path, content)
         if self._current_project:
             self._editor_panel.set_project(self._current_project)
-            self._editor_panel.open_file(rel_path)
+            if self._editor_panel.open_file(rel_path):
+                self._ide_tabs.setCurrentWidget(self._editor_panel)
+                self._switch_page("ide")
         self._log_panel.append_log(
             "files", "info",
             tr_for(self._i18n, "status.file_opened_log",
                    "Opened file: {path}", path=rel_path))
 
-        self._chat_panel.add_text(context)
-        self._switch_page("chat")
-        self._log_panel.append_log(
-            "editor", "info",
-            tr_for(self._i18n, "editor.selection_sent_chat",
-                   "Sent selected code to Chat"))
-
-    @Slot(dict)
     @Slot(str, str)
     def _on_editor_ask_in_chat(self, text: str, rel_path: str) -> None:
         context = ("Selected code from " + rel_path + "\n\n"
@@ -811,6 +807,7 @@ class MainWindow(QMainWindow):
             tr_for(self._i18n, "editor.selection_sent_chat",
                    "Sent selected code to Chat"))
 
+    @Slot(dict)
     def _on_chat_submitted(self, payload: dict):
         """Route document plans to the planning facade; persist other chat missions."""
         if not self._current_project:
@@ -874,8 +871,12 @@ class MainWindow(QMainWindow):
                                 attachment_ids, self)
         self._chat_reply_threads = getattr(self, "_chat_reply_threads", [])
         self._chat_reply_threads.append(thread)
+        project_id = self._current_project["id"]
+        self._chat_panel.set_reply_pending(True)
 
         def _finish(result: dict):
+            if not self._current_project or self._current_project["id"] != project_id:
+                return  # The reply remains persisted with its originating project.
             if result.get("ok"):
                 self._chat_panel.append_assistant_message(
                     str(result.get("reply") or ""),
@@ -887,7 +888,13 @@ class MainWindow(QMainWindow):
                 "chat", "info" if result.get("ok") else "error",
                 tr_for(self._i18n, "status.chat_reply", "Assistant replied"))
 
+        def _cleanup():
+            self._chat_reply_threads.remove(thread)
+            self._chat_panel.set_reply_pending(False)
+            thread.deleteLater()
+
         thread.reply_ready.connect(_finish)
+        thread.finished.connect(_cleanup)
         thread.start()
 
     @Slot(int)
@@ -1096,6 +1103,15 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         from PySide6.QtCore import QCoreApplication
         from nl_coding_agent.app.services import get_event_bus
+        if any(thread.isRunning() for thread in getattr(self, "_chat_reply_threads", [])):
+            self.statusBar().showMessage(tr_for(
+                self._i18n, "chat.wait_before_close",
+                "Wait for the pending Chat reply before closing."))
+            event.ignore()
+            return
+        if not self._editor_panel.confirm_close():
+            event.ignore()
+            return
         self._stop_threads()
         QCoreApplication.processEvents()
         try:

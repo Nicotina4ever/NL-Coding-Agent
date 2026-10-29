@@ -424,7 +424,7 @@ class Supervisor:
     def heartbeat(self) -> store.Lease | None:
         """Renew the project lease (and machine slot); None means the lease was lost."""
         if self.lease is None:
-            return None
+            return self.machine_lease if self._renew_machine_slot() else None
         renewed = store.renew_lease(
             int(self.project_id),
             owner_id=self.owner_id,
@@ -439,16 +439,23 @@ class Supervisor:
             return None
         self.lease = renewed
         if self.machine_lease is not None:
-            ok = store.renew_machine_lease(
-                resource_gate.INFERENCE_RESOURCE,
-                owner_id=self.owner_id,
-                version=self.machine_lease.version,
-                ttl_s=float(self.config.lease_ttl_s),
-            )
-            if not ok:
-                self.machine_lease = None
-                self._event("Machine inference lease lost", level="warning", kind="lease-lost")
+            self._renew_machine_slot()
         return renewed
+
+    def _renew_machine_slot(self) -> bool:
+        if self.machine_lease is None:
+            return False
+        if not store.renew_machine_lease(
+                resource_gate.INFERENCE_RESOURCE, owner_id=self.owner_id,
+                version=self.machine_lease.version, ttl_s=float(self.config.lease_ttl_s)):
+            self.machine_lease = None
+            self._lease_lost = True
+            self.control.request_stop("machine inference lease lost")
+            self._event("Machine inference lease lost", level="warning", kind="lease-lost")
+            return False
+        # Renewal increments the persisted CAS version; the next heartbeat must use it.
+        self._adopt_machine_lease()
+        return self.machine_lease is not None
 
     def _heartbeat_loop(self) -> None:
         interval = max(0.2, float(self.config.heartbeat_interval_s))
@@ -1332,9 +1339,14 @@ class Supervisor:
             return {"status": "waiting_for_resources",
                     "error": "Machine inference slot is busy.", "mission_id": int(mission_id)}
         self._adopt_machine_lease()
+        heartbeat_owned = self._heartbeat_thread is None or not self._heartbeat_thread.is_alive()
+        if heartbeat_owned:
+            self._start_heartbeat()
         try:
             return self._invoke_mission(int(mission_id), None)
         finally:
+            if heartbeat_owned:
+                self._stop_heartbeat()
             resource_gate.release_inference_slot(self.owner_id)
             self.machine_lease = None
 

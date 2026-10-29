@@ -44,6 +44,7 @@ class MilestoneEditDialog(QDialog):
         self._json.setAccessibleName("Milestones JSON editor")
         self._json.setPlainText(json.dumps(list(milestones or []), indent=2,
                                             ensure_ascii=False))
+        self._initial_json = self._json.toPlainText()
         layout.addWidget(self._json, 2)
         self._rationale = QLineEdit()
         self._rationale.setAccessibleName("Edit rationale (required)")
@@ -89,6 +90,16 @@ class MilestoneEditDialog(QDialog):
     def values(self) -> dict:
         return {"milestones": json.loads(self._json.toPlainText()),
                 "rationale": self._rationale.text().strip()}
+
+    def reject(self) -> None:
+        if self._json.toPlainText() != self._initial_json or self._rationale.text():
+            answer = QMessageBox.question(
+                self, "Unsaved plan edits", "Discard unsaved milestone edits?",
+                QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel)
+            if answer != QMessageBox.StandardButton.Discard:
+                return
+        super().reject()
 
 
 class DocumentPlanDialog(QDialog):
@@ -306,6 +317,14 @@ class DocumentPlanDialog(QDialog):
         return True
 
     def _load_plan(self, plan: dict):
+        # The persistence facade returns a plan header with its immutable current
+        # version nested under `current`; freshly generated plans are flat.
+        plan = dict(plan)
+        current = _dict(plan.get("current"))
+        for field in ("milestones", "acceptance_criteria", "limitations", "unknowns",
+                      "provenance", "blockers", "risks", "objective", "title"):
+            if field in current:
+                plan[field] = current[field]
         self._plan = plan
         self._plan_id = int(plan.get("plan_id") or self._plan_id or 0) or None
         self._title_value.setText(_text(plan.get("title") or "—"))
@@ -390,10 +409,13 @@ class DocumentPlanDialog(QDialog):
         if not self._plan_id:
             return False
         dialog = MilestoneEditDialog(self._plan.get("milestones") or [], self)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return False
-        values = dialog.values()
-        return self.edit_milestones(values["milestones"], values["rationale"])
+        while dialog.exec() == QDialog.DialogCode.Accepted:
+            values = dialog.values()
+            if self.edit_milestones(values["milestones"], values["rationale"]):
+                return True
+            # Preserve the edited values when the backend rejects saving them.
+            dialog._error.setText(self._status.text())
+        return False
 
     def edit_milestones(self, milestones, rationale: str) -> bool:
         method = self._facade("edit")
@@ -470,7 +492,7 @@ class DocumentPlanDialog(QDialog):
                 self, "Plan rejection reason", "Required reason:")
             if not ok:
                 return False
-        return self.reject(version=target, reason=reason)
+        return self.reject_plan(version=target, reason=reason)
 
     def approve(self, version=None, reason: str = "") -> bool:
         method = self._facade("approve")
@@ -492,7 +514,7 @@ class DocumentPlanDialog(QDialog):
         self._status.setText("Plan approved (metadata only; nothing executed).")
         return True
 
-    def reject(self, version=None, reason: str = "") -> bool:
+    def reject_plan(self, version=None, reason: str = "") -> bool:
         method = self._facade("reject")
         if not callable(method) or not self._plan_id:
             self._set_error("Rejection requires a loaded plan and docs_plan_reject.")

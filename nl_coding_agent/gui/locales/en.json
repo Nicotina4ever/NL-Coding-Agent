@@ -423,6 +423,9 @@
     "goals.from_document_plan": "From document plan",
     "goals.from_document_plan_tooltip": "Bootstrap a goal from document-plan provenance (no execution)",
     "editor.ask_chat": "Ask in Chat",
-    "editor.ask_chat_tooltip": "Send the selected code to Chat as context"
+    "editor.ask_chat_tooltip": "Send the selected code to Chat as context",
+    "chat.wait_before_close": "Wait for the pending Chat reply before closing.",
+    "editor.selection_sent_chat": "Sent selected code to Chat",
+    "agents.status_profile_only": "Profile only (execution pending)"
   }
 }

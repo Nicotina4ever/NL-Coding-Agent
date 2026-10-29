@@ -140,12 +140,31 @@ class EditorPanel(QWidget):
         answer = QMessageBox.question(self, "Unsaved changes",
                                       "Close " + rel_path + " and discard unsaved changes?",
                                       QMessageBox.StandardButton.Discard
-                                      | QMessageBox.StandardButton.Cancel)
+                                      | QMessageBox.StandardButton.Cancel,
+                                      QMessageBox.StandardButton.Cancel)
         return answer == QMessageBox.StandardButton.Discard
 
     def set_project(self, project):
+        old_root = (self._project or {}).get("root")
+        new_root = (project or {}).get("root")
+        changed = ((Path(old_root).resolve() if old_root else None)
+                   != (Path(new_root).resolve() if new_root else None))
+        if changed:
+            if not self.confirm_close():
+                return False
+            # Confirm every dirty tab before removing any, so Cancel is atomic.
+            while self._tabs_widget.count():
+                tab = self._tabs_widget.widget(0)
+                self._tabs_widget.removeTab(0)
+                tab.deleteLater()
+            self._tabs.clear()
         self._project = dict(project) if project else None
         self._status.setText("Project: " + (self._project or {}).get("root", "none"))
+        return True
+
+    def confirm_close(self) -> bool:
+        return all(not tab.is_modified() or self._confirm(tab.rel_path)
+                   for tab in self._tabs.values())
 
     def open_file(self, rel_path):
         if not self._project:
@@ -170,6 +189,7 @@ class EditorPanel(QWidget):
                         read_only=bool(info.get("read_only")), language=language,
                         reason=str(info.get("read_only_reason") or ""))
         tab.base_sha256 = str(info.get("sha256") or "")
+        tab.project_root = Path(self._project["root"]).resolve()
         tab.modified_changed.connect(self._update_titles)
         self._tabs[info["rel_path"]] = tab
         self._tabs_widget.addTab(tab, info["rel_path"])
@@ -214,11 +234,14 @@ class EditorPanel(QWidget):
         if tab is None or tab.read_only:
             self._status.setText("This file is read-only; nothing was saved.")
             return False
+        if (not self._project or Path(self._project["root"]).resolve() != tab.project_root):
+            self._status.setText("Save refused: file belongs to another project.")
+            return False
         if not tab.is_modified():
             self._status.setText("No unsaved changes.")
             return True
         result = self._services.save_editor_file(
-            self._project["root"], tab.rel_path, tab.toPlainText(),
+            tab.project_root, tab.rel_path, tab.toPlainText(),
             expected_sha256=tab.base_sha256)
         if not result.get("ok"):
             self._status.setText("Save refused: " + str(result.get("error")
@@ -238,6 +261,7 @@ class EditorPanel(QWidget):
             return False
         self._tabs_widget.removeTab(index)
         self._tabs.pop(tab.rel_path, None)
+        tab.deleteLater()
         return True
 
     def tab_count(self):

@@ -1,5 +1,14 @@
 # Development continuation — Goal execution integration
 
+Latest checkpoint (2026-10-29 independent review): the approved-plan bootstrap below
+has been integrated and its approval/project binding/atomicity repaired and tested.
+Do not repeat it or infer completion from the older checklist. CURRENT_STATE.md's
+independent-review section records current evidence and limitations, including the
+native GUI and real local-model delegation acceptance. The review run ends here;
+no subsequent development mission was started automatically. Runtime custom-agent
+configuration, cohesive workspace and contextual Chat remain incomplete product work.
+The historical continuation text below is retained for context, not current status.
+
 2026-10-29: Continue the existing indexed program. NL-BP-214 remains partial.
 
 Implemented: approved active Goal milestones execute through the existing Supervisor

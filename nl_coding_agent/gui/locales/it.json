@@ -423,6 +423,9 @@
     "goals.from_document_plan": "Da piano documentale",
     "goals.from_document_plan_tooltip": "Crea un goal dalla provenienza del piano (nessuna esecuzione)",
     "editor.ask_chat": "Chiedi in Chat",
-    "editor.ask_chat_tooltip": "Invia il codice selezionato alla Chat come contesto"
+    "editor.ask_chat_tooltip": "Invia il codice selezionato alla Chat come contesto",
+    "chat.wait_before_close": "Attendi la risposta della Chat prima di chiudere.",
+    "editor.selection_sent_chat": "Codice selezionato inviato alla Chat",
+    "agents.status_profile_only": "Solo profilo (esecuzione da integrare)"
   }
 }

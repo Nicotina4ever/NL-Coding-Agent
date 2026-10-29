@@ -4,6 +4,57 @@
 
 NL Coding Agent is a local-first, multi-agent software development workstation. It opens existing projects, discovers their structure and documentation, persists missions in SQLite, and runs a real `Developer -> Tester -> Debugger -> Reviewer` cycle using local Ollama models. The current implementation has been exercised end-to-end with a live local model and a real interruption/resume cycle.
 
+## Independent review after 3016c8c (2026-10-29)
+
+Review of the recent changes found substantial defects, rather than a release-ready
+application. Repairs preserve the existing architecture:
+
+- Resume now binds mission, registered project and permission policy. Persisted
+  verification includes a staged-tree fingerprint: changing staged code after testing
+  cannot reuse an old passing result for promotion. Permissions are rechecked at
+  execution and promotion boundaries.
+- Chat uses real provider instances, exact model routes and structured persisted
+  history. Network/cloud permission checks precede discovery and generation;
+  cross-project attachments fail closed. The historical dynamically constructed
+  urllib import was already removed; transport remains explicitly imported in providers.
+- File opening no longer raises NameError and reveals the existing editor. Dirty-tab
+  cancellation preserves all buffers and project context. Dialog Escape/X close the
+  document-plan viewer, while dirty milestone edits require confirmation. Nested
+  persisted plan versions render correctly. Approved-plan Goal import validates
+  provenance and creates Goal/milestones/dependencies atomically without execution.
+- Custom-profile creation and Problems scanning under generated-directory ancestors
+  are repaired. Profiles explicitly disclose that runtime integration is pending.
+- `mission --json` is a thin client of the existing Supervisor/orchestrator, with
+  resource heartbeat renewal, concise stdout, managed logs and verification evidence.
+
+Evidence (isolated state; no production project edited):
+
+- Native Windows Qt interaction: file editing/saving, actual document-plan rendering
+  and Escape, profile creation, and two real Ollama chat turns remembering VIOLET47.
+  `.workspace/temp/quality-native-20261029-retry/result.json` and screenshots.
+  No font warnings occurred on this path; other DPI/font configurations remain unmeasured.
+- Real local Ollama delegation added subtraction to an isolated Python project.
+  Candidate and baseline-test oracle each passed two tests; reviewer approved and
+  promotion occurred. A separate test run against the promoted project passed both.
+  `.workspace/temp/quality-delegation-real/stdout.json` links full evidence and logs.
+- Broad regression: 1,226 passed, 3 failed
+  (`.workspace/temp/quality-review-full-final.txt`). Two static CLI separation failures
+  were subsequently repaired by moving the executing mission helper into the executing
+  command group, without changing tests or hiding imports; all 40 focused CLI checks
+  then passed (`quality-dispatch-separation.txt`). The remaining observed failure is
+  the Windows POSIX shell shim access error, WinError 1920. No fully green run claimed.
+- Independent gatekeeper inspected the diff and real evidence and reran 15 relevant
+  tests successfully. Other focused GUI/provider/import repairs passed their checks.
+
+Limitations: custom-agent instructions/tools/permissions are configuration only;
+Studio still uses separate pages instead of a unified dockable workspace; Italian
+localization is incomplete. Chat routing is lexical and historical attachment contents
+are not replayed on follow-up turns. Chat file locks are intra-process. Test subprocesses
+run with the user's OS privileges, not an OS sandbox. Real cloud/credentialed external
+provider acceptance and broader hardware/DPI testing were not performed. This review
+does not establish product completion or general autonomous-code safety. Restart the
+desktop app to load the repairs.
+
 ## Mission #47 incident correction (2026-10-29)
 
 Persisted verification runs 59–64 show that VoiceBridge failed before pytest:

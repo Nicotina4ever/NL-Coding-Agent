@@ -18,16 +18,22 @@ def _app():
 
 
 @pytest.fixture(autouse=True)
-def _cleanup():
+def _cleanup(monkeypatch):
     yield
+    # Test teardown explicitly discards editors left open by validation tests.
+    monkeypatch.setattr(QMessageBox, "question",
+                        lambda *args, **kwargs: QMessageBox.StandardButton.Discard)
     app = QApplication.instance()
     if app is not None:
-        for widget in app.allWidgets():
+        for widget in app.topLevelWidgets():
             try:
                 widget.close()
                 widget.deleteLater()
             except RuntimeError:
                 continue
+        # Delete owners once, then flush before the next test enters a modal loop.
+        from PySide6.QtCore import QCoreApplication, QEvent
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         app.processEvents()
 
 
@@ -184,10 +190,10 @@ def test_approve_reject_require_reason_and_confirmation(monkeypatch):
     dialog, fake = make_dialog()
     dialog.generate_plan()
     assert dialog.approve(1, "") is False
-    assert dialog.reject(1, "") is False
+    assert dialog.reject_plan(1, "") is False
     assert dialog.approve(1, "approved") is True
     assert fake.approve_calls[-1] == (1, 1, "approved")
-    assert dialog.reject(1, "rejected") is True
+    assert dialog.reject_plan(1, "rejected") is True
     assert fake.reject_calls[-1] == (1, 1, "rejected")
     replied = []
     monkeypatch.setattr(QMessageBox, "question",
@@ -207,7 +213,7 @@ def test_no_execution_mission_goal_or_direct_db_calls():
     dialog, fake = make_dialog()
     dialog.generate_plan()
     dialog.approve(1, "ok")
-    dialog.reject(1, "no")
+    dialog.reject_plan(1, "no")
     for forbidden in ("start_mission", "create_mission", "run_mission",
                       "goal_create", "selfbuild", "execute"):
         assert not hasattr(fake, forbidden)
@@ -219,3 +225,117 @@ def test_no_execution_mission_goal_or_direct_db_calls():
                       "create_mission", "start_mission", "goal_create"):
         assert forbidden not in source, forbidden
     assert "executed" in source or "execution" in source
+
+
+@pytest.mark.parametrize("action", ["close_button", "escape", "window_close"])
+def test_leaving_plan_dialog_returns_to_parent_without_rejecting_plan(action):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QDialog, QDialogButtonBox, QWidget
+
+    _app()
+    parent = QWidget()
+    parent.show()
+    dialog, fake = make_dialog()
+    dialog.setParent(parent, dialog.windowFlags())
+    dialog.generate_plan()
+    dialog.setModal(True)
+    dialog.show()
+    _app().processEvents()
+    assert dialog.isVisible()
+    if action == "close_button":
+        button_box = dialog.findChild(QDialogButtonBox)
+        QTest.mouseClick(button_box.button(QDialogButtonBox.StandardButton.Close),
+                         Qt.MouseButton.LeftButton)
+    elif action == "escape":
+        QTest.keyClick(dialog, Qt.Key.Key_Escape)
+    else:
+        assert dialog.close()  # Same closeEvent path as the window decoration X.
+    _app().processEvents()
+    assert not dialog.isVisible()
+    assert dialog.result() == QDialog.DialogCode.Rejected
+    assert parent.isVisible()
+    assert fake.reject_calls == []
+    assert fake.plan["status"] == "draft"
+
+
+@pytest.mark.parametrize("action", ["cancel_button", "escape", "window_close"])
+def test_dirty_milestone_editor_preserves_changes_when_exit_is_cancelled(monkeypatch, action):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QDialogButtonBox
+    from nl_coding_agent.gui.dialogs.document_plan import MilestoneEditDialog
+
+    _app()
+    dialog = MilestoneEditDialog(_plan()["milestones"])
+    edited = "unsaved invalid JSON"
+    dialog._json.setPlainText(edited)
+    dialog._rationale.setText("My unsaved rationale")
+    dialog.show()
+    prompts = []
+
+    def cancel(*args, **kwargs):
+        prompts.append(args)
+        return QMessageBox.StandardButton.Cancel
+
+    monkeypatch.setattr(QMessageBox, "question", cancel)
+    if action == "cancel_button":
+        QTest.mouseClick(dialog.findChild(QDialogButtonBox).button(
+            QDialogButtonBox.StandardButton.Cancel), Qt.MouseButton.LeftButton)
+    elif action == "escape":
+        QTest.keyClick(dialog, Qt.Key.Key_Escape)
+    else:
+        assert not dialog.close()
+    assert prompts
+    assert dialog.isVisible()
+    assert dialog._json.toPlainText() == edited
+    assert dialog._rationale.text() == "My unsaved rationale"
+    monkeypatch.setattr(QMessageBox, "question",
+                        lambda *args, **kwargs: QMessageBox.StandardButton.Discard)
+    assert dialog.close()
+    assert not dialog.isVisible()
+
+
+def test_current_version_payload_is_rendered_after_persistent_reload():
+    _app()
+    dialog, fake = make_dialog()
+    flat = fake.plan
+    fake.plan = {"id": 1, "title": flat["title"], "objective": flat["objective"],
+                 "status": "draft", "current_version": 1, "current": flat}
+    assert dialog.load_plan(1)
+    assert dialog._milestone_table.rowCount() == 2
+    assert "docs plan exists" in dialog._acceptance_view.toPlainText()
+
+
+def test_failed_save_reopens_same_editor_with_unsaved_values(monkeypatch):
+    from PySide6.QtCore import QTimer
+    from nl_coding_agent.gui.dialogs import document_plan
+
+    app = _app()  # Retain QApplication through the nested native event loops.
+    dialog, fake = make_dialog()
+    dialog.generate_plan()
+    fake.fail_edit = True
+    observed = []
+
+    class ScriptedEditor(document_plan.MilestoneEditDialog):
+        def exec(self):
+            if not observed:
+                self._json.setPlainText(json.dumps([
+                    {"key": "new", "title": "My unsaved milestone", "priority": "P1"}]))
+                self._rationale.setText("My rationale")
+                observed.append(self.values())
+                QTimer.singleShot(0, self.accept)
+            else:
+                observed.append(self.values())
+                observed.append(self._error.text())
+                QTimer.singleShot(0, self.reject)
+            return super().exec()
+
+    monkeypatch.setattr(document_plan, "MilestoneEditDialog", ScriptedEditor)
+    monkeypatch.setattr(QMessageBox, "question",
+                        lambda *args, **kwargs: QMessageBox.StandardButton.Discard)
+    assert dialog.open_edit_dialog() is False
+    assert observed[0] == observed[1]
+    assert "edit refused" in observed[2]
+    assert len(fake.edit_calls) == 1
+    app.processEvents()

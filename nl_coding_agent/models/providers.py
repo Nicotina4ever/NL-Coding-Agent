@@ -84,6 +84,19 @@ def _http_json(url: str, timeout: float, headers: dict[str, str] | None = None) 
     return json.loads(raw.decode("utf-8"))
 
 
+def _post_json(url: str, body: dict, timeout: float, headers=None) -> dict:
+    request = urllib.request.Request(
+        url, data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json", **(headers or {})}, method="POST")
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("Unexpected provider response")
+    if data.get("error"):
+        raise ValueError(str(data["error"]))
+    return data
+
+
 class OllamaProvider:
     kind = "ollama"
 
@@ -157,6 +170,25 @@ class OllamaProvider:
                 error=f"Ollama discovery failed: {exc}",
                 elapsed_ms=int((time.perf_counter() - started) * 1000),
             )
+
+    def assert_generation_permitted(self, model: str, project_id=None) -> None:
+        from nl_coding_agent.core.permissions import assert_model_permitted
+        assert_model_permitted(model, self.base_url, project_id=project_id)
+
+    def generate(self, model: str, prompt: str, timeout: float = 120.0, *,
+                 project_id=None, messages=None) -> str:
+        self.assert_generation_permitted(model, project_id)
+        body = {"model": model, "stream": False}
+        if messages is not None:
+            body["messages"] = messages
+            endpoint = "/api/chat"
+        else:
+            body["prompt"] = prompt
+            endpoint = "/api/generate"
+        data = _post_json(self.base_url + endpoint, body, timeout)
+        if messages is not None:
+            return str((data.get("message") or {}).get("content") or "")
+        return str(data.get("response") or "")
 
     def unload(self, name: str) -> bool:
         return ollama_stop_model(name)
@@ -249,38 +281,27 @@ class OpenAICompatibleProvider:
                 elapsed_ms=int((time.perf_counter() - started) * 1000),
             )
 
-    def generate(self, model: str, prompt: str, timeout: float = 120.0) -> str:
-        request = urllib.request.Request(
-            f"{self.base_url}/api/generate",
-            data=json.dumps({"model": model, "prompt": prompt, "stream": False}).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            data = json.loads(response.read().decode("utf-8"))
-        return str(data.get("response") or "")
+    def assert_generation_permitted(self, model: str, project_id=None) -> None:
+        from nl_coding_agent.core import permissions
+        permissions.assert_model_permitted(model, self.base_url, project_id=project_id)
+        # A remote compatible endpoint may be a hosted model with an arbitrary
+        # name. Never infer local inference from the absence of a ':cloud' suffix.
+        if permissions.is_remote_endpoint(self.base_url):
+            permissions.require(permissions.CLOUD, project_id=project_id)
 
-    def generate(self, model: str, prompt: str, timeout: float = 120.0) -> str:
-        headers = {"Content-Type": "application/json"}
-        headers.update(self._headers())
-        body = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "stream": False,
-        }
-        request = urllib.request.Request(
-            f"{self.base_url}/chat/completions",
-            data=json.dumps(body).encode("utf-8"),
-            headers=headers,
-            method="POST",
-        )
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            data = json.loads(response.read().decode("utf-8"))
+    def generate(self, model: str, prompt: str, timeout: float = 120.0, *,
+                 project_id=None, messages=None) -> str:
+        self.assert_generation_permitted(model, project_id)
+        data = _post_json(
+            self.base_url + "/chat/completions",
+            {"model": model, "messages": messages or [{"role": "user", "content": prompt}],
+             "stream": False}, timeout, self._headers())
         choices = data.get("choices") or []
         if choices and isinstance(choices[0], dict):
             message = choices[0].get("message") or {}
             if isinstance(message, dict):
                 return str(message.get("content") or "")
-        return str(data.get("response") or "")
+        raise ValueError("Provider returned no chat completion")
 
     def unload(self, name: str) -> bool:
         return False
@@ -339,14 +360,7 @@ class ModelHub:
                 return bool(provider.unload(name))
         return False
 def generate_ollama_text(base_url: str, model: str, prompt: str, *,
-                        timeout: float = 120.0) -> str:
-    """Generate one non-streaming Ollama response. Transport lives here, not services."""
-    url = _base_url(base_url) + "/api/generate"
-    request = urllib.request.Request(
-        url,
-        data=json.dumps({"model": model, "prompt": prompt, "stream": False}).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        data = json.loads(response.read().decode("utf-8"))
-    return str(data.get("response") or "")
+                        timeout: float = 120.0, project_id=None) -> str:
+    """Compatibility wrapper over the permission-checked Ollama provider."""
+    return OllamaProvider(base_url=base_url).generate(
+        model, prompt, timeout=timeout, project_id=project_id)

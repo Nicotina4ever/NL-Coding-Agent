@@ -150,6 +150,36 @@ def get_goal(goal_id: int) -> dict | None:
                                            (int(goal_id),)).fetchone())
 
 
+def create_goal_with_milestones(goal: dict, specs: list[dict]) -> int:
+    """Persist a validated imported goal and its dependencies in one transaction."""
+    now = _now()
+    with _db() as conn, conn:
+        cursor = conn.execute(
+            "INSERT INTO goals (project_id,title,objective,acceptance_criteria_json,"
+            "priority,status,dependencies_json,source,origin,attachments_json,"
+            "reference_metadata_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (goal["project_id"], goal["title"], goal["objective"],
+             _json_dump(goal["acceptance_criteria"]), "P1", "planned", "[]",
+             "document_plan", "import", "[]", _json_dump(goal["reference_metadata"]), now, now))
+        goal_id = int(cursor.lastrowid)
+        by_title = {}
+        for order, spec in enumerate(specs):
+            cursor = conn.execute(
+                "INSERT INTO milestones (goal_id,title,description,priority,status,ordering,"
+                "dependencies_json,acceptance_criteria_json,evidence_refs_json,risk,"
+                "validation_strategy,mission_intent,created_at,updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (goal_id, spec["title"], spec["description"], spec["priority"], "pending", order,
+                 "[]", _json_dump(spec["acceptance_criteria"]), _json_dump(spec["evidence_refs"]),
+                 spec["risk"], spec["validation_strategy"], spec["mission_intent"], now, now))
+            by_title[spec["title"]] = int(cursor.lastrowid)
+        for spec in specs:
+            conn.execute("UPDATE milestones SET dependencies_json=? WHERE id=?",
+                         (_json_dump([by_title[title] for title in spec["dependency_titles"]]),
+                          by_title[spec["title"]]))
+        return goal_id
+
+
 def list_goals(*, project_id: int | None = None, status: str | None = None,
                limit: int = 200, offset: int = 0) -> list[dict]:
     clauses, params = [], []

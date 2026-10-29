@@ -72,6 +72,20 @@ python\python.exe nl_agent.py doctor
 python\python.exe nl_agent.py --help
 ```
 
+For structured delegation from Codex or another CLI client, use the existing mission
+executor (choose installed models explicitly; Ollama must be running):
+
+```powershell
+python\python.exe nl_agent.py mission --project "C:\path\to\project" --goal "Implement the requested change and preserve existing tests" --dev-model "ollama/qwen2.5-coder:7b-instruct-q4_K_M" --reviewer-model "ollama/qwen2.5-coder:7b-instruct-q4_K_M" --debug-model "ollama/qwen2.5-coder:7b-instruct-q4_K_M" --json
+```
+
+This executes source changes under the project's existing permissions and resource
+controls. Stdout is one JSON result with changed paths, verdict, promotion status and
+paths to managed logs/full verification evidence. Exit status is nonzero unless the
+mission completed. Independently inspect the diff and evidence; test execution uses
+your OS privileges. Cloud routes still require explicit project permission. Resume
+with `--resume <id>` and the same project instead of supplying a new goal.
+
 CLI commands: `doctor`, `audit`, `work`, `status`, `roadmap`, `mission`,
 `selfbuild`, `supervisor`, `gui`.
 

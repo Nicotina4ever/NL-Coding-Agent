@@ -24,6 +24,9 @@ from nl_coding_agent.models.providers import ModelHub, build_providers
 from nl_coding_agent.resources.scheduler import get_scheduler
 
 
+_CHAT_STORE_LOCK = threading.RLock()
+_CHAT_TURN_LOCKS: dict[str, threading.Lock] = {}
+
 APP_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MODELS_CONFIG = APP_ROOT / "config" / "models.yaml"
 
@@ -249,25 +252,28 @@ class AppServices:
 
     def list_chat_messages(self, *, project_id: int | None = None) -> list[dict]:
         path = self._chat_history_path(project_id)
-        if not path.is_file():
-            return []
-        try:
+        with _CHAT_STORE_LOCK:
+            if not path.is_file():
+                return []
             data = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            return []
-        return list(data if isinstance(data, list) else data.get("messages", []))
+            messages = data if isinstance(data, list) else data.get("messages") if isinstance(data, dict) else None
+            if not isinstance(messages, list) or any(
+                    not isinstance(item, dict) or item.get("role") not in ("user", "assistant", "system")
+                    or not isinstance(item.get("content"), str) for item in messages):
+                raise ValueError("Invalid chat history; original file preserved")
+            return [dict(item) for item in messages]
 
-    def _append_chat_message(self, project_id: int | None, role: str, content: str) -> dict:
+    def _append_chat_message(self, project_id: int | None, role: str, content: str,
+                             **metadata) -> dict:
         from datetime import datetime
-        item = {
-            "role": role,
-            "content": str(content or ""),
-            "created_at": datetime.now().isoformat(timespec="seconds"),
-        }
-        messages = self.list_chat_messages(project_id=project_id)
-        messages.append(item)
-        self._chat_history_path(project_id).write_text(
-            json.dumps(messages, ensure_ascii=False, indent=2), encoding="utf-8")
+        from nl_coding_agent.core.recovery_store import _atomic_write
+        item = {"role": role, "content": str(content or ""),
+                "created_at": datetime.now().isoformat(timespec="seconds"), **metadata}
+        with _CHAT_STORE_LOCK:
+            messages = self.list_chat_messages(project_id=project_id)
+            messages.append(item)
+            _atomic_write(self._chat_history_path(project_id),
+                          json.dumps(messages, ensure_ascii=False, indent=2).encode("utf-8"))
         return item
 
     def get_ollama_url(self) -> str:
@@ -313,31 +319,19 @@ class AppServices:
                 "role": str(item.get("name") or item.get("role") or "custom"),
                 "model": str(item.get("model") or ""),
                 "kind": "llm",
-                "note": "custom agent",
+                "note": "Configuration profile; custom execution is not connected yet",
+                "execution_supported": False,
                 "custom_agent_id": item.get("id"),
                 "instructions": item.get("instructions", ""),
                 "tools": item.get("tools", []),
                 "permissions": item.get("permissions", []),
             })
         return entries
-        path = db_path().parent / "custom_agents.json"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        return path
 
     def _custom_agents_path(self) -> Path:
         path = db_path().parent / "custom_agents.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         return path
-
-        path = self._custom_agents_path()
-        if not path.is_file():
-            return []
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            return []
-        return [dict(item) for item in (data if isinstance(data, list) else [])
-                if isinstance(item, dict)]
 
     def list_custom_agents(self) -> list[dict]:
         path = self._custom_agents_path()
@@ -468,57 +462,57 @@ class AppServices:
         if not isinstance(plan_result, dict) or not plan_result.get("ok"):
             return plan_result if isinstance(plan_result, dict) else self._goal_error(
                 RuntimeError("document plan unavailable"))
-        plan = plan_result.get("plan") or plan_result.get("current") or {}
-        if not isinstance(plan, dict):
-            return self._goal_error(RuntimeError("document plan is invalid"))
-        resolved_project_id = project_id
-        if resolved_project_id is None:
-            resolved_project_id = plan.get("project_id")
-        objective = str(plan.get("objective") or plan.get("title") or "").strip()
-        acceptance = plan.get("acceptance_criteria") or []
-        milestones = plan.get("milestones") or []
-        goal_result = self.goal_create(
-            objective or f"Document-driven goal from plan {plan_id}",
-            title=str(plan.get("title") or f"Document plan {plan_id}"),
-            project_id=resolved_project_id,
-            acceptance_criteria=acceptance,
-            reference_metadata={
-                "source": "document_plan",
-                "document_plan_id": int(plan_id),
-                "plan_version": plan.get("current_version") or plan.get("version"),
-                "project_root": str(project_root or plan.get("root") or plan.get("project_root") or ""),
-            },
-            source="document_plan",
-            origin="import")
-        if not goal_result.get("ok"):
-            return goal_result
-        goal = goal_result["goal"]
-        goal_id = int(goal["id"])
-        for item in milestones:
-            from collections.abc import Mapping as _Mapping
-            if not isinstance(item, _Mapping):
-                continue
-            self.goal_milestone_create(goal_id, str(item.get("title") or item.get("key") or "milestone"),
-                                      key=str(item.get("key") or ""),
-                                      priority=str(item.get("priority") or "P1"),
-                                      dependencies=item.get("dependencies") or [],
-                                      validation=item.get("validation")
-                                      or item.get("validation_strategy") or "")
-        if activate:
-            self.goal_activate(goal_id)
-        return {"ok": True, "goal": goal, "plan_id": int(plan_id),
-                "milestones": len(milestones)}
+        try:
+            plan = plan_result["plan"]
+            current = plan.get("current") or {}
+            if activate:
+                raise ValueError("Import does not activate a goal; use the normal goal lifecycle")
+            if (plan.get("status") != "approved" or not current.get("approved_at")
+                    or current.get("version") != plan.get("current_version")):
+                raise ValueError("Only an approved current document-plan version can be imported")
+            resolved_project_id = project_id if project_id is not None else plan.get("project_id")
+            if resolved_project_id is None:
+                raise ValueError("Select a registered project before importing the plan")
+            if plan.get("project_id") is not None and int(plan["project_id"]) != int(resolved_project_id):
+                raise ValueError("Document plan belongs to another project")
+            project = self.get_project(int(resolved_project_id))
+            if not project:
+                raise ValueError("Project is not registered")
+            root = Path(project["root"]).resolve()
+            if not plan.get("project_root") or Path(plan["project_root"]).resolve() != root:
+                raise ValueError("Document plan root differs from the selected project")
+            if project_root is not None and Path(project_root).resolve() != root:
+                raise ValueError("Requested project root differs from the registered project")
 
-        if is_document_plan_request(text):
-            return "document_plan"
-        lowered = str(text or "").lower()
-        coding_terms = (
-            "implement", "fix", "build", "create mission", "create goal", "modify",
-            "patch", "sviluppa", "implementa", "correggi", "modifica", "aggiungi",
-            "create code", "change code", "refactor", "debug", "test")
-        if any(term in lowered for term in coding_terms):
-            return "coding"
-        return "chat"
+            def criteria(items):
+                return [item.get("text", "") if isinstance(item, dict) else item
+                        for item in (items or [])]
+
+            milestones = []
+            for item in current.get("milestones") or []:
+                if not isinstance(item, dict):
+                    raise ValueError("Invalid document milestone")
+                milestones.append({
+                    "key": item.get("key"), "title": item.get("title"),
+                    "description": item.get("description") or "",
+                    "priority": item.get("priority") or "P1",
+                    "dependencies": item.get("dependencies") or [],
+                    "acceptance_criteria": criteria(item.get("acceptance_criteria")),
+                    "risk": item.get("risk") or "",
+                    "validation_strategy": item.get("validation_strategy") or item.get("validation") or "",
+                })
+            goal = self._goal_service().create_goal_from_plan(
+                current.get("objective") or plan.get("objective") or "",
+                title=current.get("title") or plan.get("title") or "",
+                project_id=int(resolved_project_id),
+                acceptance_criteria=criteria(current.get("acceptance_criteria")),
+                reference_metadata={"source": "document_plan", "document_plan_id": int(plan_id),
+                                    "plan_version": current["version"],
+                                    "project_root": str(root)}, milestones=milestones)
+        except Exception as exc:
+            return self._goal_error(exc)
+        return {"ok": True, "goal": goal, "plan_id": int(plan_id),
+                "milestones": len(milestones), "executed": False}
 
     def chat_document_plan(self, project: dict, text: str, attachment_ids=None) -> dict:
         """Use the existing corpus/plan lifecycle; never create a coding mission."""
@@ -537,71 +531,65 @@ class AppServices:
             objective=text, paths=paths, consent=True)
 
     def chat_conversation(self, project: dict, text: str, attachment_ids=None) -> dict:
-        """Ordinary persistent conversational chat; never creates a mission."""
+        """Persist a real conversation; attachment context never grants execution."""
         project_id = (project or {}).get("id")
-        self._append_chat_message(project_id, "user", text)
-        attachments = []
-        if attachment_ids:
+        key = str(self._chat_history_path(project_id))
+        with _CHAT_STORE_LOCK:
+            turn_lock = _CHAT_TURN_LOCKS.setdefault(key, threading.Lock())
+        if not turn_lock.acquire(blocking=False):
+            return {"ok": False, "reply": "A reply is already running for this project."}
+        try:
             from nl_coding_agent.app.attachments import get_attachment
-            for attachment_id in attachment_ids:
-                try:
-                    attachments.append(get_attachment(int(attachment_id)))
-                except Exception:
-                    pass
-        tool_activity = ""
-        if attachments:
-            tool_activity = "Allegati ricevuti: " + ", ".join(
-                str(item.get("name") or item.get("id")) for item in attachments)
-        reply = self._chat_reply(
-            project=project, text=text, attachments=attachments, tool_activity=tool_activity)
-        self._append_chat_message(project_id, "assistant", reply)
-        messages = self.list_chat_messages(project_id=project_id)
-        self._bus.emit(Event(
-            source="chat", level="info", message="Chat reply",
-            payload={"project_id": project_id, "role": "assistant"}))
-        return {
-            "ok": True,
-            "reply": reply,
-            "tool_activity": tool_activity,
-            "messages": messages,
-        }
+            from nl_coding_agent.core import permissions
+            permissions.require(permissions.READ, project_id=project_id)
+            attachments = []
+            for attachment_id in attachment_ids or []:
+                item = get_attachment(int(attachment_id))
+                if item.get("project_id") != project_id:
+                    raise ValueError("Attachment belongs to another project")
+                attachments.append(item)
+            history = self.list_chat_messages(project_id=project_id)
+            self._append_chat_message(project_id, "user", text,
+                                      attachment_ids=[item["id"] for item in attachments])
+            reply = self._chat_reply(project=project, text=text, attachments=attachments,
+                                     tool_activity="", history=history)
+            self._append_chat_message(project_id, "assistant", reply)
+            self._bus.emit(Event(source="chat", level="info", message="Chat reply",
+                                 payload={"project_id": project_id, "role": "assistant"}))
+            return {"ok": True, "reply": reply, "tool_activity": "",
+                    "messages": self.list_chat_messages(project_id=project_id)}
+        except Exception as exc:
+            return {"ok": False, "reply": str(exc),
+                    "error": {"type": type(exc).__name__, "message": str(exc)}}
+        finally:
+            turn_lock.release()
 
-    def _chat_reply(self, *, project: dict, text: str, attachments, tool_activity: str) -> str:
-        context = "\n".join(
-            f"- {item.get('extracted_text', '')[:2000]}" for item in attachments
-            if item.get("has_text"))
-        context_block = "\nContesto allegati:\n" + context if context else ""
+    def _chat_reply(self, *, project: dict, text: str, attachments, tool_activity: str,
+                    history=None) -> str:
         config = self.get_model_config() or {}
         roles = config.get("roles") or {}
-        provider_spec = str((((roles.get("chat") or roles.get("developer") or {})
-                            .get("model")) or "")).strip()
-        prompt = (
-            "Sei l'assistente di NL Coding Agent. Rispondi in modo naturale, "
-            "conciso e utile. Non creare missioni, modifiche o file a meno che "
-            "l'utente non lo chieda esplicitamente.\n\n"
-            + (f"Contesto del progetto: {str((project or {}).get('root') or '')}\n")
-            + context_block + "\n\nUtente:\n" + str(text or "")
-        )
-        if not self.check_ollama() and provider_spec.startswith("ollama"):
-            return ("Sono offline. Posso rispondere solo in modo limitato adesso; "
-                    "avvia Ollama per una risposta completa." + (
-                        "\n\n" + tool_activity if tool_activity else ""))
-        provider, model_name, configured_provider_id, error = self._resolve_chat_provider(provider_spec)
+        spec = str(((roles.get("chat") or roles.get("developer") or {}).get("model")) or "").strip()
+        project_id = (project or {}).get("id")
+        provider, model, _, error = self._resolve_chat_provider(spec, project_id=project_id)
         if error:
-            return error + ("\n\n" + tool_activity if tool_activity else "")
-        if not provider:
-            return "Nessun provider/modello valido per la chat. Configura roles.chat oppure roles.developer in models.yaml." + (
-                "\n\n" + tool_activity if tool_activity else "")
-        if not model_name:
-            return "Nessun modello configurato per la chat. Configura roles.chat oppure roles.developer in models.yaml." + (
-                "\n\n" + tool_activity if tool_activity else "")
-        try:
-            reply = provider.generate(model_name, prompt, timeout=120.0).strip()
-            return reply or "Non ho ricevuto una risposta dal modello."
-        except Exception as exc:
-            return f"Impossibile contattare il modello: {exc}" + (
-                "\n\n" + tool_activity if tool_activity else "")
-
+            raise ValueError(error)
+        messages = [{"role": "system", "content": (
+            "You are the NL Coding Agent assistant. Reply in the user's language. "
+            "Conversation has no execution tools. Never claim to have edited files or run commands. "
+            "Project: " + str((project or {}).get("root") or ""))}]
+        # Preserve role boundaries; saved errors/system notices are not model instructions.
+        for item in (history or [])[-40:]:
+            if item.get("role") in ("user", "assistant"):
+                messages.append({"role": item["role"], "content": item["content"]})
+        context = "\n".join(
+            "UNTRUSTED attachment " + str(item.get("name") or item["id"]) + ":\n"
+            + str(item.get("extracted_text") or "")[:8000]
+            for item in attachments if item.get("has_text"))
+        messages.append({"role": "user", "content": text + ("\n\n" + context if context else "")})
+        reply = provider.generate(model, text, timeout=120.0,
+                                  project_id=project_id, messages=messages).strip()
+        if not reply:
+            raise ValueError("Model returned no response")
         return reply
 
     @staticmethod
@@ -619,52 +607,30 @@ class AppServices:
             return "coding"
         return "chat"
 
-    def _resolve_chat_provider(self, provider_spec: str):
-        from nl_coding_agent.models.providers import build_providers, ModelHub
-
-        config = self.get_model_config() or {}
-        providers = build_providers(config)
-        by_id = {getattr(item, "provider_id", ""): item for item in providers}
-        provider_id = None
-        model_name = provider_spec
+    def _resolve_chat_provider(self, provider_spec: str, *, project_id=None):
+        """Resolve exactly one configured route and enforce permissions before I/O."""
+        providers = build_providers(self.get_model_config() or {})
+        by_id = {provider.provider_id: provider for provider in providers}
+        if not provider_spec:
+            return None, "", None, "No chat model configured."
         if "/" in provider_spec:
-            provider_id, model_name = provider_spec.split("/", 1)
-            model_name = model_name.strip()
-            provider_id = provider_id.strip()
-        if provider_id and provider_id in by_id:
-            candidates = [by_id[provider_id]]
+            provider_id, model = provider_spec.split("/", 1)
+        elif len(providers) == 1:
+            provider_id, model = providers[0].provider_id, provider_spec
         else:
-            candidates = list(providers)
-        snapshot = ModelHub(candidates).discover(timeout=5.0)
-        available = {model.name: model for model in snapshot.models}
-        reachable = [p for p in snapshot.providers if p.reachable]
-        if not candidates:
-            return None, model_name, None, "Nessun provider configurato in models.yaml."
-        if not reachable:
-            errors = "; ".join(p.error for p in snapshot.providers if p.error) or "provider non raggiungibile"
-            return None, model_name, None, f"Provider non raggiungibile: {errors}"
-        selected_provider = None
-        for provider in reachable:
-            if provider_id and provider.provider_id != provider_id:
-                continue
-            selected_provider = provider
-            if any(m.name == model_name for m in provider.models):
-                break
-        if selected_provider is None:
-            selected_provider = reachable[0]
-        selected_id = getattr(selected_provider, "provider_id", "")
-        actual_model = model_name
-        if not actual_model:
-            if selected_provider.models:
-                actual_model = selected_provider.models[0].name
-            else:
-                return selected_provider, "", selected_id, (
-                    "Provider raggiungibile ma senza modelli disponibili.")
-        if selected_provider.models and actual_model not in available:
-            return selected_provider, actual_model, selected_id, (
-                f"Modello non disponibile su {selected_provider.label}: {actual_model}. "
-                "Seleziona un modello installato.")
-        return selected_provider, actual_model, selected_id, ""
+            return None, provider_spec, None, "Select an explicit provider/model route."
+        provider = by_id.get(provider_id)
+        if provider is None:
+            return None, model, provider_id, "Unknown or disabled provider: " + provider_id
+        if not model.strip():
+            return None, model, provider_id, "No chat model configured."
+        provider.assert_generation_permitted(model, project_id)
+        snapshot = provider.probe(timeout=5.0)
+        if not snapshot.reachable:
+            return None, model, provider_id, snapshot.error or "Provider unavailable"
+        if model not in {item.name for item in snapshot.models}:
+            return None, model, provider_id, "Model unavailable on selected provider: " + model
+        return provider, model, provider_id, ""
 
     def create_mission(self, project_id: int | None, title: str, goal: str) -> int:
         from nl_coding_agent.persistence.missions import create_mission as _create_m
@@ -1027,10 +993,13 @@ class AppServices:
         from pathlib import Path
         root = Path(project_root).resolve()
         findings = []
-        py_files = sorted(path for path in root.rglob("*.py")
-                          if ".git" not in path.parts and ".workspace" not in path.parts
-                          and "build" not in path.parts
-                          and "__pycache__" not in path.parts)[:200]
+        from itertools import islice
+        from nl_coding_agent.core.workspace import _iter_files
+        # Apply exclusions within the selected root, never to its ancestors.
+        # Reuse the bounded-size, non-following workspace traversal.
+        py_files = islice((path for path in _iter_files(root)
+                           if path.suffix.lower() == ".py"
+                           and path.resolve().is_relative_to(root)), 200)
         for path in py_files:
             try:
                 ast.parse(path.read_text(encoding="utf-8", errors="replace"),
@@ -1102,7 +1071,9 @@ class AppServices:
 
         def _do_mission():
             from nl_coding_agent.agents.orchestrator import MultiAgentOrchestrator
-            orch = MultiAgentOrchestrator(root)
+            from nl_coding_agent.persistence.missions import get_mission
+            mission = get_mission(mission_id) or {}
+            orch = MultiAgentOrchestrator(root, project_id=mission.get("project_id"))
             try:
                 res = orch.run_mission(
                     mission_id=mission_id,
