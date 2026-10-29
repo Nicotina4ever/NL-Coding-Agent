@@ -438,6 +438,15 @@ class GoalsPanel(QWidget):
             "goals.create_tooltip", "Create a goal; objective is required"))
         self._create_btn.clicked.connect(self._create_goal_dialog)
         toolbar.addWidget(self._create_btn)
+        self._from_plan_btn = QPushButton(_tr(
+            "goals.from_document_plan", "From document plan"))
+        self._from_plan_btn.setObjectName("secondaryButton")
+        self._from_plan_btn.setAccessibleName("Create a goal from an approved document plan")
+        self._from_plan_btn.setToolTip(_tr(
+            "goals.from_document_plan_tooltip",
+            "Bootstrap a goal from document-plan provenance (no execution)"))
+        self._from_plan_btn.clicked.connect(self._create_goal_from_document_plan)
+        toolbar.addWidget(self._from_plan_btn)
         self._refresh_btn = QPushButton(_tr("goals.refresh", "Refresh"))
         self._refresh_btn.setAccessibleName("Refresh goals (read-only)")
         self._refresh_btn.clicked.connect(self.refresh)
@@ -1446,6 +1455,28 @@ class GoalsPanel(QWidget):
         return ""
 
     # ------------------------------------------------------------- actions
+    def _create_goal_from_document_plan(self) -> None:
+        from PySide6.QtWidgets import QInputDialog
+        project = getattr(self, "_project", None)
+        project_id = project.get("id") if isinstance(project, dict) else None
+        if project_id is None:
+            self._scope_label.setText("Open a project before importing a plan.")
+            return
+        plan_id, ok = QInputDialog.getInt(
+            self, "Import approved document plan",
+            "Document plan ID:", 0, 0, 10**9, 1)
+        if not ok:
+            return
+        result = self._services.goal_create_from_document_plan(
+            int(plan_id), project_id=int(project_id))
+        if not result.get("ok"):
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Goal import failed",
+                                str(result.get("error", {}).get("message", result)))
+            return
+        self._refresh_data(suppress_errors=True)
+        self._detail_tabs.setCurrentIndex(0)
+
     def _create_goal_dialog(self) -> None:
         if not self._project or not self._facade_ready:
             return
