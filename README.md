@@ -147,6 +147,24 @@ active workspace to exactly one backend project, and lists the real engine tools
 protocol contract and the recorded acceptance evidence are in
 `docs/FRONTEND_ARCHITECTURE.md`.
 
+## NL Code standalone (objective 2)
+
+The standalone Windows distribution is built from the local Code - OSS checkout and reuses the same
+extension and the same Python engine installation (no duplicated runtime or database). Accepted on
+2026-10-29: it starts from its portable profile, loads NL Chat with the real backend project and
+tools, returns a real Ollama reply and releases the engine child on close.
+
+```powershell
+pwsh -File scripts/nlcode/build_nl_code.ps1 -ResyncSource
+.\.workspace\dist\NL Code\NL Code.bat
+pwsh -File scripts/nlcode/accept_nl_code.ps1 -SeedFromLiveData
+```
+
+Build pipeline, branding overlay, portable-profile design, verification gates and the objective-3
+(verified autonomous development) plan are in `docs/NL_CODE_STANDALONE.md`. Generated sources,
+dependencies and the release candidate stay under `.workspace/`; the vendor `vscode/` checkout is not
+modified.
+
 ## Repository layout
 
 | Path | Role |

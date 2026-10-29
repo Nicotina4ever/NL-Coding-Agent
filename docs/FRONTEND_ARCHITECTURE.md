@@ -75,9 +75,12 @@ Resolution order:
    layout). This is why the engine is found at `K:\AI\NL Coding Agent` from
    `K:\AI\NL Coding Agent\frontend`.
 
-The opened user project is **never** used to locate the engine. `nlCodingAgent.pythonPath` can
-override `python.exe`; `NL_DATA_DIR`, `NL_WORKSPACE_DIR` and `NL_MODELS_CONFIG` are forwarded to the
-child when present (the SDK transport only inherits a small whitelist, so these are passed explicitly).
+The opened user project is **never** used to locate the engine. `nlCodingAgent.pythonPath`
+(or `NL_PYTHON_PATH`) can override `python.exe`; `NL_DATA_DIR`, `NL_WORKSPACE_DIR` and
+`NL_MODELS_CONFIG` are forwarded to the child when present (the SDK transport only inherits a small
+whitelist, so these are passed explicitly). The NL Code portable launcher uses `NL_ENGINE_ROOT` to
+point the bundled extension at the existing engine installation, so no per-machine setting is needed
+(see [NL_CODE_STANDALONE.md](NL_CODE_STANDALONE.md)).
 
 ## Project identity and isolation
 

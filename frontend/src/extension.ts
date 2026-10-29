@@ -59,8 +59,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
     const config = vscode.workspace.getConfiguration('nlCodingAgent');
     const timeoutSeconds = Math.max(30, config.get<number>('requestTimeoutSeconds', 180));
     const timeoutMs = timeoutSeconds * 1000;
-    const engineRoot = config.get<string>('engineRoot', '');
-    const pythonPath = config.get<string>('pythonPath', '');
+    // Settings win; the environment fallback lets a portable launcher point the
+    // bundled extension at the existing engine without per-machine settings.
+    const engineRoot = config.get<string>('engineRoot', '') || process.env.NL_ENGINE_ROOT || '';
+    const pythonPath = config.get<string>('pythonPath', '') || process.env.NL_PYTHON_PATH || '';
     const projectRoot = workspaceRoot();
 
     connection = new EngineConnection({

@@ -19,6 +19,21 @@ released the Python child on shutdown. Protocol level: real initialize/tools/`pr
 Details and exact commands: [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md). Known limits: chat
 only (mission UI not surfaced yet), no streaming, no packaged VSIX yet, single-folder workspace.
 
+## NL Code standalone distribution (objective 2, 2026-10-29)
+
+`scripts/nlcode/build_nl_code.ps1` builds a branded **NL Code** Windows x64 application from the local
+Code - OSS 1.145.0 checkout (`7801f8a5…`) under `.workspace/build/nl-code-oss`, then stages a portable
+distribution in `.workspace/dist/NL Code`. The vendor `vscode/` checkout is untouched. The app reuses
+the existing extension (`frontend/`) and the existing Python engine installation via the launcher's
+`NL_ENGINE_ROOT`; it does not duplicate the Python/CrewAI runtime or the SQLite data. Real acceptance
+(`pwsh -File scripts/nlcode/accept_nl_code.ps1 -SeedFromLiveData`, exit 0): NL Code started with its
+portable profile, loaded NL Chat (`Connected · project #75 · 8 tools`), received a real Ollama reply
+`NLCODE-GUI-OK`, kept the seeded `app_settings` hash unchanged, mapped the opened folder to project
+#75 and released the Python child (pid 46536) on close. Evidence:
+`docs/evidence/nlcode/NL_CODE_GUI_ACCEPTANCE.png`. Build/package details, machine-specific toolchain
+workarounds, first-run Copilot dialog and the **not-started** objective 3 (verified autonomous
+development of the frontend/distribution) are in [NL_CODE_STANDALONE.md](NL_CODE_STANDALONE.md).
+
 ## Shared engine MCP interoperability (2026-10-29)
 
 The existing MCP facade now uses official Python SDK 1.x sessions for stdio and

@@ -1,0 +1,69 @@
+{
+  "dist": "K:\\AI\\NL Coding Agent\\.workspace\\dist\\NL Code",
+  "project": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept\\project",
+  "dataDir": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept\\data",
+  "screenshots": [
+    "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept\\screenshots\\before-chat.png",
+    "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept\\screenshots\\after-send.png",
+    "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept\\screenshots\\after-reply.png"
+  ],
+  "results": [
+    {
+      "name": "packaged application executable present",
+      "ok": true,
+      "detail": "NL Code.exe"
+    },
+    {
+      "name": "portable launcher present",
+      "ok": true,
+      "detail": "K:\\AI\\NL Coding Agent\\.workspace\\dist\\NL Code\\NL Code.bat"
+    },
+    {
+      "name": "extension installed in portable profile",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "build metadata present",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "application window started",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "screenshot captured before interaction",
+      "ok": true,
+      "detail": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept\\screenshots\\before-chat.png"
+    },
+    {
+      "name": "NL Chat interaction captured",
+      "ok": true,
+      "detail": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept\\screenshots\\after-reply.png"
+    },
+    {
+      "name": "Python engine child bound to the acceptance project",
+      "ok": true,
+      "detail": "46536"
+    },
+    {
+      "name": "application closed",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Python engine child released on shutdown",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "existing engine settings preserved",
+      "ok": true,
+      "detail": "settings hash 55ffa705a1b42612605106ebb0787ecbf536f38824a8eba497656848cb313253"
+    }
+  ],
+  "passed": true,
+  "finishedAt": "2026-10-29T21:19:52.0980679+01:00"
+}
