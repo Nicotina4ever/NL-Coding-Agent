@@ -105,7 +105,7 @@ def test_secondary_panels_have_italian_english_and_live_retranslation(services):
 
         checks = {
             "task_board": (lambda p: p._title.text(), "Missioni e attività"),
-            "chat": (lambda p: p._title.text(), "CHAT MISSIONE"),
+            "chat": (lambda p: p._title.text(), "CHAT"),
             "agents": (lambda p: p._title.text(), "Agenti"),
             "models": (lambda p: p._title.text(), "Hub modelli"),
             "autonomy": (lambda p: p._title.text(), "Stato autonomia (sola lettura)"),
@@ -137,7 +137,7 @@ def test_secondary_panels_have_italian_english_and_live_retranslation(services):
         app.processEvents()
         english = {
             "task_board": (lambda p: p._title.text(), "Missions & Tasks"),
-            "chat": (lambda p: p._title.text(), "MISSION CHAT"),
+            "chat": (lambda p: p._title.text(), "CHAT"),
             "agents": (lambda p: p._title.text(), "Agents"),
             "models": (lambda p: p._title.text(), "Model Hub"),
             "autonomy": (lambda p: p._title.text(), "Autonomy status (read-only)"),

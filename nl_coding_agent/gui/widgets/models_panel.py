@@ -81,7 +81,7 @@ class ModelsPanel(QWidget):
         header.addWidget(self._refresh_btn)
         layout.addLayout(header)
 
-        subtitle = QLabel(
+        self._subtitle = subtitle = QLabel(
             "Inference providers, local models, speech engines and resource status."
         )
         subtitle.setStyleSheet("color: #7E8798; font-size: 12px;")

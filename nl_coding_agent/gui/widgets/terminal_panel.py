@@ -1,6 +1,8 @@
 """F3a: terminal with explicit human execution, EXECUTE policy, non-blocking QProcess."""
 from __future__ import annotations
 
+from nl_coding_agent.gui.i18n import ui_text
+
 from PySide6.QtCore import QObject, QProcess, QRunnable, Qt, QThreadPool, Signal, Slot
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit,
@@ -86,7 +88,7 @@ class TerminalPanel(QWidget):
         row.addWidget(self._input, 1)
         self._run_btn = QPushButton(_tr("terminal.run", "Run"))
         self._run_btn.setAccessibleName("Run terminal command")
-        self._run_btn.setToolTip("Run the explicit human command (Ctrl+Enter)")
+        self._run_btn.setToolTip(ui_text("Run the explicit human command (Ctrl+Enter)"))
         self._run_btn.clicked.connect(self.run_command)
         row.addWidget(self._run_btn)
         self._clear_btn = QPushButton(_tr("terminal.clear", "Clear"))
@@ -103,7 +105,8 @@ class TerminalPanel(QWidget):
         self._output.setObjectName("terminalOutput")
         self._output.setAccessibleName("Terminal output")
         layout.addWidget(self._output, 1)
-        QShortcut(QKeySequence("Ctrl+Return"), self, activated=self.run_command)
+        QShortcut(QKeySequence("Ctrl+Return"), self, activated=self.run_command,
+                  context=Qt.ShortcutContext.WidgetWithChildrenShortcut)
 
     def retranslate(self) -> None:
         self._title.setText(_tr("terminal.title", "TERMINAL"))
@@ -115,8 +118,8 @@ class TerminalPanel(QWidget):
     def set_project(self, project):
         self._project = dict(project) if project else None
         self._cwd_label.setText("cwd: " + (self._project or {}).get("root", "no project"))
-        self._status.setText("Explicit human commands only; policy-checked."
-                             if project else "Open a project to use the terminal.")
+        self._status.setText(ui_text("Explicit human commands only; policy-checked.")
+                             if project else ui_text("Open a project to use the terminal."))
 
     def run_command(self, argv=None, *, cwd_rel="."):
         if not self._project:
@@ -126,7 +129,7 @@ class TerminalPanel(QWidget):
             return
         command = argv if argv is not None else self._input.text().strip()
         if not command:
-            self._status.setText("Enter a command first.")
+            self._status.setText(ui_text("Enter a command first."))
             return
         parts = command if isinstance(command, list) else None
         try:

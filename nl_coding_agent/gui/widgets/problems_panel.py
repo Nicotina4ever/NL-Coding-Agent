@@ -1,6 +1,8 @@
 """F3a: read-only problems panel (verification runs + project scan findings)."""
 from __future__ import annotations
 
+from nl_coding_agent.gui.i18n import ui_text
+
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QPushButton, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
@@ -65,9 +67,9 @@ class ProblemsPanel(QWidget):
             "problems.no_problems", "No problems loaded"))
         self._counts.setStyleSheet("color: #AB83C6;")
         header.addWidget(self._counts, 1)
-        self._refresh_btn = QPushButton(_tr("problems.refresh", "Refresh"))
+        self._refresh_btn = QPushButton(_tr("problems.refresh", ui_text("Refresh")))
         self._refresh_btn.setAccessibleName("Refresh problems")
-        self._refresh_btn.setToolTip("Read-only verification + project scan refresh")
+        self._refresh_btn.setToolTip(ui_text("Read-only verification + project scan refresh"))
         self._refresh_btn.clicked.connect(self.refresh)
         header.addWidget(self._refresh_btn)
         layout.addLayout(header)
@@ -89,7 +91,7 @@ class ProblemsPanel(QWidget):
 
     def retranslate(self) -> None:
         self._title.setText(_tr("problems.title", "PROBLEMS"))
-        self._refresh_btn.setText(_tr("problems.refresh", "Refresh"))
+        self._refresh_btn.setText(_tr("problems.refresh", ui_text("Refresh")))
         self._table.setHorizontalHeaderLabels([
             _tr("problems.header_severity", "Severity"),
             _tr("problems.header_source", "Source"),
@@ -97,6 +99,9 @@ class ProblemsPanel(QWidget):
 
     def set_project(self, project):
         self._project = dict(project) if project else None
+        self._table.setRowCount(0)
+        self._last_rows = []
+        self._lsp_rows = []
         if project:
             self.refresh()
         else:
@@ -105,7 +110,7 @@ class ProblemsPanel(QWidget):
                 "problems.no_problems", "No problems loaded"))
             self._status.setText(_tr(
                 "problems.open_project",
-                "Open a project to inspect verification/test status."))
+                ui_text("Open a project to inspect verification/test status.")))
 
     def set_lsp_diagnostics(self, findings) -> None:
         """Merge read-only language-server diagnostics into the current table."""
@@ -130,21 +135,24 @@ class ProblemsPanel(QWidget):
                 item.setToolTip(str(value or ""))
                 self._table.setItem(index, column, item)
         self._counts.setText(str(len(merged)) + " finding(s) including LSP diagnostics")
-        self._status.setText("Read-only findings loaded (verification + scan + LSP).")
+        self._status.setText(ui_text("Read-only findings loaded (verification + scan + LSP)."))
 
     def refresh(self):
         if not self._project:
-            self._status.setText("Open a project to inspect verification/test status.")
+            self._status.setText(ui_text("Open a project to inspect verification/test status."))
             return
         self._status.setText(_tr(
             "problems.scanning", "Scanning (read-only)…"))
         project = self._project
         self._pool.start(_Task(
-            lambda: self._services.project_problems(project.get("id"), project["root"]),
+            lambda: {"_project_root": project["root"],
+                     **self._services.project_problems(project.get("id"), project["root"])},
             self._signals))
 
     @Slot(dict)
     def _on_data(self, data):
+        if "_project_root" in data and data["_project_root"] != (self._project or {}).get("root"):
+            return
         problems = list(data.get("problems") or [])
         self._table.setRowCount(0)
         for row in problems:
@@ -160,6 +168,6 @@ class ProblemsPanel(QWidget):
                              + str(counts.get("errors", 0)) + ", warnings "
                              + str(counts.get("warnings", 0)))
         if not problems:
-            self._status.setText("No problems found (verification runs + project scan).")
+            self._status.setText(ui_text("No problems found (verification runs + project scan)."))
         else:
-            self._status.setText("Read-only findings loaded. Nothing was modified.")
+            self._status.setText(ui_text("Read-only findings loaded. Nothing was modified."))

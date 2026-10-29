@@ -1,6 +1,8 @@
 """F3a: project editor tabs, Qt syntax highlighting, explicit save, unsaved guards."""
 from __future__ import annotations
 
+from nl_coding_agent.gui.i18n import ui_text
+
 import re
 from pathlib import Path
 
@@ -69,7 +71,9 @@ class EditorTab(QPlainTextEdit):
         self.setReadOnly(self.read_only)
         self.setAccessibleName("Editor: " + rel_path)
         self.setToolTip(reason or ("Read-only" if read_only else "Editable project file"))
-        font = QFont("Consolas")
+        self.setObjectName("codeEditor")
+        self.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        font = QFont("Consolas", 10)
         font.setStyleHint(QFont.StyleHint.Monospace)
         self.setFont(font)
         self._highlighter = CodeHighlighter(self.document(), language)
@@ -137,8 +141,8 @@ class EditorPanel(QWidget):
             "editor.save_tooltip", "Explicit save of the current file (Ctrl+S)"))
 
     def _default_confirm(self, rel_path):
-        answer = QMessageBox.question(self, "Unsaved changes",
-                                      "Close " + rel_path + " and discard unsaved changes?",
+        answer = QMessageBox.question(self, ui_text("Unsaved changes"),
+                                      ui_text("Close ") + rel_path + ui_text(" and discard unsaved changes?"),
                                       QMessageBox.StandardButton.Discard
                                       | QMessageBox.StandardButton.Cancel,
                                       QMessageBox.StandardButton.Cancel)
@@ -159,7 +163,7 @@ class EditorPanel(QWidget):
                 tab.deleteLater()
             self._tabs.clear()
         self._project = dict(project) if project else None
-        self._status.setText("Project: " + (self._project or {}).get("root", "none"))
+        self._status.setText(ui_text("Project: ") + (self._project or {}).get("root", ui_text("none")))
         return True
 
     def confirm_close(self) -> bool:
@@ -195,8 +199,8 @@ class EditorPanel(QWidget):
         self._tabs_widget.addTab(tab, info["rel_path"])
         self._tabs_widget.setCurrentWidget(tab)
         self._save_btn.setEnabled(not tab.read_only)
-        self._status.setText("Read-only preview: " + str(info.get("read_only_reason"))
-                             if tab.read_only else "Editing " + info["rel_path"])
+        self._status.setText(ui_text("Read-only preview: ") + str(info.get("read_only_reason"))
+                             if tab.read_only else ui_text("Editing ") + info["rel_path"])
         return True
 
     def _update_titles(self, *_args):

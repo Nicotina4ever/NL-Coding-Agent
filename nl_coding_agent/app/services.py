@@ -52,7 +52,7 @@ class EventBus:
 
     def unsubscribe(self, fn: Callable[[Event], None]) -> None:
         with self._lock:
-            self._subscribers = [s for s in self._subscribers if s is not fn]
+            self._subscribers = [s for s in self._subscribers if s != fn]
 
     def emit(self, event: Event) -> None:
         with self._lock:
@@ -530,7 +530,7 @@ class AppServices:
             project_root=project["root"], project_id=project["id"],
             objective=text, paths=paths, consent=True)
 
-    def chat_conversation(self, project: dict, text: str, attachment_ids=None) -> dict:
+    def chat_conversation(self, project: dict, text: str, attachment_ids=None, *, model_spec=None) -> dict:
         """Persist a real conversation; attachment context never grants execution."""
         project_id = (project or {}).get("id")
         key = str(self._chat_history_path(project_id))
@@ -552,7 +552,7 @@ class AppServices:
             self._append_chat_message(project_id, "user", text,
                                       attachment_ids=[item["id"] for item in attachments])
             reply = self._chat_reply(project=project, text=text, attachments=attachments,
-                                     tool_activity="", history=history)
+                                     tool_activity="", history=history, model_spec=model_spec)
             self._append_chat_message(project_id, "assistant", reply)
             self._bus.emit(Event(source="chat", level="info", message="Chat reply",
                                  payload={"project_id": project_id, "role": "assistant"}))
@@ -565,10 +565,10 @@ class AppServices:
             turn_lock.release()
 
     def _chat_reply(self, *, project: dict, text: str, attachments, tool_activity: str,
-                    history=None) -> str:
+                    history=None, model_spec=None) -> str:
         config = self.get_model_config() or {}
         roles = config.get("roles") or {}
-        spec = str(((roles.get("chat") or roles.get("developer") or {}).get("model")) or "").strip()
+        spec = model_spec or str(((roles.get("chat") or roles.get("developer") or {}).get("model")) or "").strip()
         project_id = (project or {}).get("id")
         provider, model, _, error = self._resolve_chat_provider(spec, project_id=project_id)
         if error:
@@ -577,14 +577,36 @@ class AppServices:
             "You are the NL Coding Agent assistant. Reply in the user's language. "
             "Conversation has no execution tools. Never claim to have edited files or run commands. "
             "Project: " + str((project or {}).get("root") or ""))}]
-        # Preserve role boundaries; saved errors/system notices are not model instructions.
+        def attachment_context(items, limit=8000):
+            chunks = []
+            for item in items:
+                if item.get("has_text") and limit > 0:
+                    body = str(item.get("extracted_text") or "")[:limit]
+                    chunks.append("UNTRUSTED attachment " + str(item.get("name") or item["id"]) + ":\n" + body)
+                    limit -= len(body)
+            return "\n".join(chunks)
+
+        # Saved references remain user context, never instructions or execution consent.
+        from nl_coding_agent.app.attachments import get_attachment
+        context_budget = 16000
         for item in (history or [])[-40:]:
             if item.get("role") in ("user", "assistant"):
-                messages.append({"role": item["role"], "content": item["content"]})
-        context = "\n".join(
-            "UNTRUSTED attachment " + str(item.get("name") or item["id"]) + ":\n"
-            + str(item.get("extracted_text") or "")[:8000]
-            for item in attachments if item.get("has_text"))
+                content = item["content"]
+                if item["role"] == "user" and context_budget > 0:
+                    old_attachments = []
+                    for attachment_id in item.get("attachment_ids") or []:
+                        try:
+                            saved = get_attachment(int(attachment_id))
+                            if saved.get("project_id") == project_id:
+                                old_attachments.append(saved)
+                        except (ValueError, KeyError, FileNotFoundError):
+                            continue
+                    old_context = attachment_context(old_attachments, min(8000, context_budget))
+                    context_budget -= len(old_context)
+                    if old_context:
+                        content += "\n\n" + old_context
+                messages.append({"role": item["role"], "content": content})
+        context = attachment_context(attachments)
         messages.append({"role": "user", "content": text + ("\n\n" + context if context else "")})
         reply = provider.generate(model, text, timeout=120.0,
                                   project_id=project_id, messages=messages).strip()
@@ -1034,6 +1056,30 @@ class AppServices:
     def list_missions(self, project_id: int | None = None) -> list[dict]:
         from nl_coding_agent.persistence.missions import list_missions as _list_m
         return _list_m(project_id)
+
+    def mission_candidate_diff(self, mission_id: int, *, project_id: int) -> dict:
+        """Read an existing candidate without approving, promoting or executing it."""
+        from nl_coding_agent.core import permissions, promotion
+        from nl_coding_agent.persistence.missions import get_mission
+        permissions.require(permissions.READ, project_id=project_id)
+        mission = get_mission(mission_id)
+        project = self.get_project(project_id)
+        if not mission or not project or mission.get("project_id") != project_id:
+            raise ValueError("Mission does not belong to the selected project")
+        root = Path(project["root"]).resolve()
+        if not mission.get("staging_dir"):
+            return {"ok": False, "error": "No staged candidate is available"}
+        stage_path = Path(mission["staging_dir"]).resolve()
+        if not stage_path.is_relative_to(root / "data" / "staging"):
+            raise ValueError("Candidate directory is outside project staging")
+        stage = promotion.load_stage(stage_path)
+        if stage.project_root != root or stage.mission_id != mission_id:
+            raise ValueError("Candidate manifest belongs to another project or mission")
+        diff, changed, stat = promotion.candidate_diff(stage)
+        return {"ok": True, "mission_id": mission_id, "diff": diff,
+                "changed_paths": changed, "stat": stat,
+                "status": mission["status"], "verdict": mission.get("review_verdict"),
+                "promotion_status": mission.get("promotion_status")}
 
     def get_mission_details(self, mission_id: int) -> dict | None:
         from nl_coding_agent.persistence.missions import (

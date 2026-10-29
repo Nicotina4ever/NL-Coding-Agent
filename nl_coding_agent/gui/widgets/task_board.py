@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtWidgets import (
-    QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMessageBox,
+    QCheckBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMessageBox,
     QProgressBar, QPushButton, QSplitter, QTextEdit, QTreeWidget,
     QTreeWidgetItem, QVBoxLayout, QWidget,
 )
@@ -43,6 +43,8 @@ class TaskBoardWidget(QWidget):
 
     mission_selected = Signal(int)
     mission_finished = Signal(dict)
+    document_plan_requested = Signal()
+    review_requested = Signal(int)
 
     def __init__(self, services: AppServices, parent=None):
         super().__init__(parent)
@@ -80,6 +82,12 @@ class TaskBoardWidget(QWidget):
         self._refresh_btn = QPushButton(_tr("task_board.refresh", "Refresh"))
         self._refresh_btn.clicked.connect(self.refresh)
         header.addWidget(self._refresh_btn)
+        self._history_toggle = QCheckBox(_tr("task_board.history", "History"))
+        self._history_toggle.toggled.connect(self.refresh)
+        header.addWidget(self._history_toggle)
+        self._document_btn = QPushButton(_tr("workspace.documents", "Document plan"))
+        self._document_btn.clicked.connect(self.document_plan_requested)
+        header.addWidget(self._document_btn)
         layout.addLayout(header)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -129,8 +137,12 @@ class TaskBoardWidget(QWidget):
         self._run_btn.setObjectName("primaryButton")
         self._run_btn.setEnabled(False)
         self._run_btn.clicked.connect(self._run_selected)
+        self._review_btn = QPushButton(_tr("task_board.review", "Review candidate"))
+        self._review_btn.clicked.connect(lambda: self.review_requested.emit(self._selected_mission_id)
+                                         if self._selected_mission_id else None)
+        footer.addWidget(self._review_btn)
         footer.addWidget(self._run_btn)
-        layout.addLayout(footer)
+        layout.insertLayout(1, footer)
 
     def retranslate(self) -> None:
         self._title.setText(_tr("task_board.title", "Missions & Tasks"))
@@ -140,6 +152,9 @@ class TaskBoardWidget(QWidget):
             "task_board.load_roadmap_tooltip",
             "Create a mission from docs/NEXT_SELF_BUILD_MISSION.md"))
         self._refresh_btn.setText(_tr("task_board.refresh", "Refresh"))
+        self._review_btn.setText(_tr("task_board.review", "Review candidate"))
+        self._history_toggle.setText(_tr("task_board.history", "History"))
+        self._document_btn.setText(_tr("workspace.documents", "Document plan"))
         self._run_btn.setText(_tr("task_board.run_resume", "Run / Resume"))
         self._task_tree.setHeaderLabels([
             _tr("task_board.header_task", "Task"),
@@ -172,7 +187,9 @@ class TaskBoardWidget(QWidget):
                 m for m in self._services.list_missions(None)
                 if m.get("project_id") is None
             ]
-        visible = missions
+        from nl_coding_agent.core.doc_planning import is_document_plan_request
+        visible = [m for m in missions if self._history_toggle.isChecked() or not (
+            m.get("status") == "blocked" and is_document_plan_request(m.get("goal") or ""))]
         for mission in visible:
             requirement = mission.get("requirement_id")
             suffix = ("  [" + str(requirement) + "]") if requirement else ""
@@ -277,12 +294,17 @@ class TaskBoardWidget(QWidget):
 
         progress = details.get("progress") or {}
         self._progress.setValue(int(progress.get("percent", 0)))
-        self._status_label.setText(
-            f"Mission #{mission_id}: {details.get('status')}  •  "
-            f"{progress.get('completed', 0)}/{progress.get('total', 0)} tasks  •  "
-            f"resumes: {details.get('resume_count', 0)}"
-        )
-        self._run_btn.setEnabled(details.get("status") in ("pending", "interrupted", "failed", "blocked"))
+        self._status_label.setText(_tr("task_board.mission_state",
+            "Mission #{id}: {status} · {completed}/{total} tasks · resumes: {resumes}",
+            id=mission_id, status=_tr("mission.state_" + str(details.get("status")), str(details.get("status"))),
+            completed=progress.get("completed", 0), total=progress.get("total", 0),
+            resumes=details.get("resume_count", 0)))
+        from nl_coding_agent.core.doc_planning import is_document_plan_request
+        document_only = is_document_plan_request(details.get("goal") or "")
+        self._review_btn.setEnabled(bool(details.get("staging_dir")))
+        self._document_btn.setVisible(document_only)
+        self._run_btn.setToolTip(_tr("task_board.document_only", "Historical document request: open Document plan; coding execution is unavailable.") if document_only else "")
+        self._run_btn.setEnabled(not document_only and details.get("status") in ("pending", "interrupted", "failed", "blocked"))
 
         queue_item = None
         project_id = details.get("project_id")
@@ -338,6 +360,10 @@ class TaskBoardWidget(QWidget):
             return
         details = self._services.get_mission_details(self._selected_mission_id)
         if not details:
+            return
+        from nl_coding_agent.core.doc_planning import is_document_plan_request
+        if is_document_plan_request(details.get("goal") or ""):
+            self.document_plan_requested.emit()
             return
         root = self._resolve_root(details)
         if root is None:

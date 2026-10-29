@@ -902,6 +902,10 @@ class MultiAgentOrchestrator:
         except GateFailure as exc:
             # A wrong-project request must not mutate the owning mission's state.
             return self._result_payload(mission_id, status="blocked", error=str(exc))
+        from nl_coding_agent.core.doc_planning import is_document_plan_request
+        if mission.get("status") == "blocked" and is_document_plan_request(mission.get("goal") or ""):
+            return self._result_payload(mission_id, status="blocked",
+                error=mission.get("result_summary") or "Document planning service required")
         goal = (goal or mission.get("goal") or "").strip()
         if not goal:
             raise ValueError(f"Mission #{mission_id} has no goal")

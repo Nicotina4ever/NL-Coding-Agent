@@ -1,6 +1,8 @@
 """Project-scoped file browser and read-only viewer."""
 from __future__ import annotations
 
+from nl_coding_agent.gui.i18n import ui_text
+
 from pathlib import Path
 
 from PySide6.QtCore import QDir, QModelIndex, QSortFilterProxyModel, Qt, Signal, Slot
@@ -10,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from nl_coding_agent.app.services import AppServices
+from nl_coding_agent.gui.i18n import get_i18n
 
 _BLOCKED_NAMES = {
     "python", "crewai", "crewai-tools", ".git", "data", "logs", "state",
@@ -66,21 +69,21 @@ class FileViewerWidget(QWidget):
         layout.setSpacing(8)
 
         header = QHBoxLayout()
-        title = QLabel("Project Files")
+        title = QLabel(ui_text("Project Files"))
         title.setStyleSheet("font-size: 15px; font-weight: 700;")
         header.addWidget(title)
-        header.addSpacing(12)
 
         self._filter = QLineEdit()
-        self._filter.setPlaceholderText("Filter files…")
+        self._filter.setPlaceholderText(ui_text("Filter files…"))
         self._filter.setClearButtonEnabled(True)
         self._filter.textChanged.connect(self._on_filter_changed)
-        header.addWidget(self._filter, 1)
 
-        self._refresh_btn = QPushButton("Refresh")
+        self._refresh_btn = QPushButton(ui_text("Refresh"))
         self._refresh_btn.clicked.connect(self.refresh)
+        header.addStretch()
         header.addWidget(self._refresh_btn)
         layout.addLayout(header)
+        layout.addWidget(self._filter)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
@@ -102,11 +105,12 @@ class FileViewerWidget(QWidget):
         splitter.addWidget(self._tree)
 
         right = QWidget()
+        self._preview_panel = right
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(4)
 
-        self._path_label = QLabel("Select a file")
+        self._path_label = QLabel(ui_text("Select a file"))
         self._path_label.setStyleSheet("color: #B8BECA; font-size: 12px;")
         right_layout.addWidget(self._path_label)
 
@@ -121,6 +125,10 @@ class FileViewerWidget(QWidget):
 
     # ------------------------------------------------------------------ project
 
+    def set_browser_only(self, enabled=True):
+        self._preview_panel.setVisible(not enabled)
+        self._filter.setPlaceholderText(get_i18n().tr("files.filter", ui_text("Filter files…")))
+
     def set_project(self, project: dict | None):
         self._project = project
         self._root = Path(project["root"]).resolve() if project and project.get("root") else None
@@ -130,7 +138,7 @@ class FileViewerWidget(QWidget):
     def refresh(self):
         if self._root is None or not self._root.exists():
             self._tree.setRootIndex(QModelIndex())
-            self._path_label.setText("Open a project to browse its files")
+            self._path_label.setText(ui_text("Open a project to browse its files"))
             self._viewer.clear()
             return
         source_root = self._model.setRootPath(str(self._root))
@@ -168,11 +176,13 @@ class FileViewerWidget(QWidget):
         try:
             rel_path = path.relative_to(self._root).as_posix()
         except ValueError:
-            self._path_label.setText("Path is outside the project root")
+            self._path_label.setText(ui_text("Path is outside the project root"))
             return
 
         self._path_label.setText(rel_path)
         self.file_opened.emit(rel_path)
+        if not self._preview_panel.isVisible():
+            return
 
         if path.suffix.lower() in _BINARY_SUFFIXES:
             self._viewer.setPlainText(

@@ -56,13 +56,13 @@ class FakeDropEvent:
 def test_panel_has_accessible_controls_and_shortcuts(panel):
     from PySide6.QtGui import QShortcut
 
-    assert panel._input.accessibleName() == "Mission message"
+    assert panel._input.accessibleName() == "Chat message"
     assert panel._attach_btn.accessibleName() == "Attach files"
-    assert panel._submit_btn.accessibleName() == "Submit mission"
+    assert panel._submit_btn.accessibleName() == "Send message"
     assert panel._attachments_list.accessibleName() == "Prepared attachments"
     assert "Ctrl+Enter" in panel._hint.text()
     shortcuts = {shortcut.key().toString() for shortcut in panel.findChildren(QShortcut)}
-    assert any("Ctrl+Enter" in item or "Ctrl+Return" in item for item in shortcuts)
+    assert not any("Ctrl+Enter" in item or "Ctrl+Return" in item for item in shortcuts)
     assert panel._project_label.text()  # project root is displayed
 
 
@@ -146,19 +146,16 @@ def test_explicit_submit_emits_once_and_never_auto_submits(panel):
     assert len(received) == 1
 
 
-def test_ctrl_enter_shortcut_is_wired_to_explicit_submit(panel):
-    from PySide6.QtGui import QShortcut
-
+def test_enter_sends_and_ctrl_enter_inserts_newline(panel):
     received = []
     panel.submitted.connect(received.append)
-    panel._input.setPlainText("ctrl enter mission")
-    shortcut = next(
-        item for item in panel.findChildren(QShortcut)
-        if "Ctrl+Enter" in item.key().toString()
-        or "Ctrl+Return" in item.key().toString()
-    )
-    shortcut.activated.emit()
+    panel._input.setPlainText("A question about tests")
+    QTest.keyClick(panel._input, Qt.Key.Key_Return, Qt.KeyboardModifier.ControlModifier)
+    assert received == []
+    assert "\n" in panel._input.toPlainText()
+    QTest.keyClick(panel._input, Qt.Key.Key_Return)
     assert len(received) == 1
+    assert received[0]["action"] == "chat"
 
 
 def test_main_window_integration_persists_mission_and_attachments(services, tmp_path):
@@ -175,13 +172,14 @@ def test_main_window_integration_persists_mission_and_attachments(services, tmp_
     services.check_ollama = lambda: False
     window = MainWindow(services)
     window._on_project_opened(project)
-    window._on_chat_submitted({"text": "Implement the mission",
+    window._on_chat_submitted({"text": "Implement the mission", "action": "coding",
                                "attachment_ids": [attachment["id"]]})
     missions = list_missions(int(project["id"]))
     assert missions and missions[0]["goal"] == "Implement the mission"
     stored = services.list_mission_attachments(mission_id=missions[0]["id"])
     assert len(stored) == 1 and stored[0]["extracted_text"] == "attached context"
-    assert window._stack.currentIndex() == window._page_index["tasks"]
+    assert window._stack.currentWidget() is window._workspace
+    assert window._workspace.docks["tasks"].panel is window._tasks_panel
     window.close()
     app.processEvents()
     from nl_coding_agent.gui.i18n import reset_i18n
@@ -197,13 +195,15 @@ def test_main_window_document_request_opens_plan_without_coding(services, tmp_pa
     (root / "README.md").write_text("# Requirements\n- The system must work offline.\n")
     project = open_project(root)
     services.check_ollama = lambda: False
-    opened = []
-    monkeypatch.setattr(DocumentPlanDialog, "exec", lambda self: opened.append(self._plan_id))
+
     window = MainWindow(services)
     window._on_project_opened(project)
-    window._on_chat_submitted({"text": "Analizza la documentazione e prepara un piano"})
-    assert len(opened) == 1
-    assert services.docs_plan_get(opened[0])["plan"]["status"] == "draft"
+    window._on_chat_submitted({"text": "Analizza la documentazione e prepara un piano", "action": "document_plan"})
+    assert window._document_panel._generation_thread.wait(5000)
+    _app().processEvents()
+    assert window._document_panel._embedded
+    assert window._ide_tabs.currentWidget() is window._document_panel
+    assert services.docs_plan_get(window._document_panel._plan_id)["plan"]["status"] == "draft"
     assert services.list_missions(project["id"]) == []
     window.close()
     _app().processEvents()

@@ -6,6 +6,8 @@ No information is lost: full raw values remain in the diagnostics tree.
 """
 from __future__ import annotations
 
+from nl_coding_agent.gui.i18n import ui_text
+
 import json
 
 from PySide6.QtCore import Qt
@@ -35,8 +37,8 @@ class InspectorPanel(QWidget):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
         layout.addWidget(section_header(
-            tr_for(self._i18n, "inspector.title", "Inspector"),
-            "Summaries first; raw evidence is available below."))
+            tr_for(self._i18n, "inspector.title", ui_text("Inspector")),
+            ui_text("Summaries first; raw evidence is available below.")))
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -54,21 +56,21 @@ class InspectorPanel(QWidget):
             __import__("PySide6.QtWidgets", fromlist=["QLayout"]).QLayout
             .SizeConstraint.SetNoConstraint)
         self._cards: dict[str, QFrame] = {}
-        for key, title in (("project", "Project"), ("mission", "Mission"),
-                           ("agent", "Agent"), ("verification", "Verification"),
-                           ("activity", "Activity")):
-            card = summary_card(title, "—", "No data yet", accessible_name=title)
+        for key, title in (("project", ui_text("Project")), ("mission", ui_text("Mission")),
+                           ("agent", ui_text("Agent")), ("verification", ui_text("Verification")),
+                           ("activity", ui_text("Activity"))):
+            card = summary_card(title, "—", ui_text("No data yet"), accessible_name=title)
             card.setSizePolicy(QSizePolicy.Policy.Expanding,
                                QSizePolicy.Policy.Minimum)
             self._cards[key] = card
             body_layout.addWidget(card)
-        self._status_badge = status_badge("IDLE", "idle")
+        self._status_badge = status_badge(ui_text("IDLE"), "idle")
         body_layout.addWidget(self._status_badge)
-        self._diagnostics_title = QLabel("DIAGNOSTICS (expand for raw/evidence/errors)")
+        self._diagnostics_title = QLabel(ui_text("DIAGNOSTICS (expand for raw/evidence/errors)"))
         self._diagnostics_title.setObjectName("nlCardTitle")
         self._diagnostics_title.setAccessibleName("Expandable inspector diagnostics")
         self._diagnostics = QTreeWidget()
-        self._diagnostics.setHeaderLabels(["Section", "Detail"])
+        self._diagnostics.setHeaderLabels([ui_text("Section"), ui_text("Detail")])
         self._diagnostics.setAccessibleName("Expandable raw diagnostics tree")
         self._diagnostics.setMinimumHeight(220)
         self._diagnostics.setMinimumWidth(0)
@@ -117,13 +119,13 @@ class InspectorPanel(QWidget):
             child = QTreeWidgetItem(["", str(line)[:4000]])
             item.addChild(child)
         self._diagnostics.addTopLevelItem(item)
-        item.setExpanded(section in ("Project", "Mission"))
+        item.setExpanded(section in (ui_text("Project"), ui_text("Mission")))
 
     def _reset(self) -> None:
         self._diagnostics.clear()
         for key in self._cards:
-            self._set_card(key, "—", "No data yet")
-        self._status_badge.setText("IDLE")
+            self._set_card(key, "—", ui_text("No data yet"))
+        self._status_badge.setText(ui_text("IDLE"))
         self._status_badge.setProperty("tone", "idle")
         self._status_badge.style().unpolish(self._status_badge)
         self._status_badge.style().polish(self._status_badge)
@@ -136,7 +138,7 @@ class InspectorPanel(QWidget):
         self._status_badge.setToolTip(detail)
         self._status_badge.style().unpolish(self._status_badge)
         self._status_badge.style().polish(self._status_badge)
-        self._set_card("activity", str(state).title(), detail or "No active mission")
+        self._set_card("activity", str(state).title(), detail or ui_text("No active mission"))
 
     def retranslate(self) -> None:
         last = self._last_render
@@ -160,7 +162,7 @@ class InspectorPanel(QWidget):
                        "Open a mission from Tasks to inspect progress")
         self._set_card("agent", "No agent activity", "Read-only agent/worker summaries")
         self._set_card("verification", "Not loaded", "Evidence appears after a run")
-        self._set_activity("idle", "No active mission")
+        self._set_activity("idle", ui_text("No active mission"))
         lines = ["Name: " + str(project.get("name")),
                  "Root: " + str(project.get("root")),
                  "Opened: " + str(project.get("opened_at") or "?"),
@@ -172,7 +174,7 @@ class InspectorPanel(QWidget):
         elif meta:
             for key, value in meta.items():
                 lines.append("  " + str(key) + ": " + str(value))
-        self._add_diag("Project", lines)
+        self._add_diag(ui_text("Project"), lines)
 
     def show_file(self, rel_path: str, content: str | None = None):
         self._last_render = ("file", rel_path, content)
@@ -209,11 +211,11 @@ class InspectorPanel(QWidget):
             lines.append("Result: " + str(mission["result_summary"]))
         if mission.get("changed_paths"):
             lines.append("Changed paths: " + str(mission["changed_paths"]))
-        self._add_diag("Mission", lines)
+        self._add_diag(ui_text("Mission"), lines)
 
     def show_message(self, msg: str):
         self._set_card("activity", "Message", str(msg)[:300])
-        self._status_badge.setText("MESSAGE")
+        self._status_badge.setText(ui_text("MESSAGE"))
         self._status_badge.setProperty("tone", "error")
         self._status_badge.style().unpolish(self._status_badge)
         self._status_badge.style().polish(self._status_badge)

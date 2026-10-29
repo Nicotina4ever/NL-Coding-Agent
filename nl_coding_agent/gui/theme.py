@@ -41,6 +41,21 @@ def build_qss(tokens: dict) -> str:
 
     return f"""
 /* === NL Coding Agent Theme === */
+QPlainTextEdit#codeEditor {{
+    font-family: "Consolas", "Cascadia Mono", monospace;
+    font-size: 13px;
+}}
+QDockWidget::title {{
+    padding: 5px 8px;
+    background: {sf1};
+    color: {ts};
+}}
+QMainWindow::separator {{
+    width: 5px;
+    height: 5px;
+    background: {bdr};
+}}
+QMainWindow::separator:hover {{ background: {ev}; }}
 QWidget {{
     background-color: {bg};
     color: {tp};

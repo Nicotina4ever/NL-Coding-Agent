@@ -334,6 +334,13 @@ def tr(key: str, default: str | None = None, **values) -> str:
 def translate(key: str, default: str | None = None, **values) -> str:
     return tr(key, default, **values)
 
+
+def ui_text(source: str) -> str:
+    """Translate legacy presentation literals using the existing source catalog."""
+    if _INSTANCE is None or _INSTANCE._services is None:
+        return source
+    return _INSTANCE.tr_source(source)
+
 # Public aliases for consumers that prefer a shorter name.
 I18n = TranslationService
 

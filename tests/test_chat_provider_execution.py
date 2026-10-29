@@ -80,6 +80,30 @@ def test_compatible_generation_uses_chat_completions(context):
     assert calls[-1][1] == "/v1/chat/completions"
 
 
+def test_explicit_chat_route_overrides_default_without_fallback(context, monkeypatch):
+    services, project, calls, _ = context
+    config = services.get_model_config()
+    config["roles"]["chat"]["model"] = "unavailable/other"
+    monkeypatch.setattr(services, "get_model_config", lambda: config)
+    assert services.chat_conversation(project, "Hello", model_spec="local/demo")["ok"]
+    assert [body for method, _, body in calls if method == "POST"][-1]["model"] == "demo"
+
+
+def test_followup_replays_scoped_attachment_context_after_restart(context):
+    services, project, calls, _ = context
+    attachment = services.prepare_attachment_text(project["id"], "def violet_token(): return 47")
+    assert services.chat_conversation(project, "Read this function", [attachment["id"]])["ok"]
+    rebuilt = AppServices()
+    rebuilt.get_model_config = services.get_model_config
+    try:
+        assert rebuilt.chat_conversation(project, "What value did it return?")["ok"]
+        messages = [body for method, _, body in calls if method == "POST"][-1]["messages"]
+        assert "def violet_token(): return 47" in messages[1]["content"]
+        assert "UNTRUSTED attachment" in messages[1]["content"]
+    finally:
+        rebuilt._db.close()
+
+
 def test_unknown_route_never_falls_back_or_performs_io(context, monkeypatch):
     services, project, calls, _ = context
     config = services.get_model_config()

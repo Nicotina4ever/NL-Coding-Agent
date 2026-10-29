@@ -1,10 +1,12 @@
 """F1: multimodal mission chat input (drag/drop, paste, previews, explicit submit)."""
 from __future__ import annotations
 
+from nl_coding_agent.gui.widgets.studio_workspace import studio_settings
+
 from PySide6.QtCore import (QBuffer, QIODevice, QObject, QRunnable, QSize, Qt,
                             QThreadPool, Signal, Slot)
 from PySide6.QtGui import QImage, QKeySequence, QPixmap, QShortcut
-from PySide6.QtWidgets import (QApplication, QCheckBox, QFileDialog, QHBoxLayout,
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QHBoxLayout,
                                QLabel, QListWidget, QListWidgetItem, QPushButton,
                                QTextBrowser, QTextEdit, QVBoxLayout, QWidget)
 
@@ -92,6 +94,7 @@ class ChatPanel(QWidget):
     """Mission chat composer; attachment preparation runs off the UI thread."""
 
     submitted = Signal(dict)
+    context_requested = Signal()
 
     def __init__(self, services, parent=None, *, speech=None) -> None:
         super().__init__(parent)
@@ -109,16 +112,17 @@ class ChatPanel(QWidget):
         self._signals.voice_done.connect(self._on_voice_done)
         self._signals.voice_failed.connect(self._on_voice_failed)
         self.setAcceptDrops(True)
-        self.setAccessibleName("Mission chat input")
+        self.setAccessibleName("Project chat")
         self._build_ui()
         _register_retranslate(self)
+        self.retranslate()
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(8)
         header = QHBoxLayout()
-        self._title = QLabel(_tr("chat.title", "MISSION CHAT"))
+        self._title = QLabel(_tr("chat.title", "CHAT"))
         title = self._title
         title.setObjectName("chatTitle")
         title.setStyleSheet("font-weight: 800; letter-spacing: 1px; color: #7531FE;")
@@ -127,11 +131,12 @@ class ChatPanel(QWidget):
         self._project_label = QLabel(_tr(
             "chat.no_project", "No project open"))
         self._project_label.setObjectName("chatProject")
+        self._project_label.setMaximumWidth(160)
         header.addWidget(self._project_label)
         layout.addLayout(header)
         self._hint = QLabel(
             "Drop files or folders here, or paste with Ctrl+V (text, files, images, "
-            "Windows screenshots). Ctrl+Enter submits.")
+            "Windows screenshots). Enter sends; Ctrl+Enter adds a newline.")
         self._hint.setObjectName("chatHint")
         self._hint.setWordWrap(True)
         self._hint.setStyleSheet("color: #AB83C6;")
@@ -145,25 +150,30 @@ class ChatPanel(QWidget):
         layout.addWidget(self._transcript, 1)
         self._input = ChatInput()
         self._input.setObjectName("chatInput")
+        self.setFocusProxy(self._input)
         self._input.setPlaceholderText(_tr(
             "chat.placeholder",
-            "Describe the mission…  (Ctrl+Enter to submit)"))
-        self._input.setMinimumHeight(120)
-        self._input.setAccessibleName("Mission message")
+            "Ask a question…"))
+        self._input.setMinimumHeight(64)
+        self._input.setMaximumHeight(140)
+        self._input.setAccessibleName("Chat message")
         self._input.setAccessibleDescription(
             "Type the mission goal. Drop files/folders or paste attachments.")
         self._input.attachment_paste.connect(self._paste_attachments)
         self._input.submit_requested.connect(self._submit)
-        layout.addWidget(self._input, 1)
+        layout.addWidget(self._input)
         self._attachments_list = QListWidget()
         self._attachments_list.setObjectName("chatAttachments")
         self._attachments_list.setMaximumHeight(150)
         self._attachments_list.setIconSize(QSize(48, 48))
         self._attachments_list.setAccessibleName("Prepared attachments")
 
+        self._attachments_list.hide()
         layout.addWidget(self._attachments_list)
 
-        voice = QHBoxLayout()
+        self._voice_options = QWidget()
+        voice = QHBoxLayout(self._voice_options)
+        voice.setContentsMargins(0, 0, 0, 0)
         self._mic_btn = QPushButton(_tr("chat.dictate", "Dictate"))
         self._mic_btn.setObjectName("voiceButton")
         self._mic_btn.setAccessibleName("Start or stop dictation")
@@ -188,7 +198,37 @@ class ChatPanel(QWidget):
         self._tts_toggle.setObjectName("ttsToggle")
         self._tts_toggle.setAccessibleName("Read transcript aloud")
         voice.addWidget(self._tts_toggle)
-        layout.addLayout(voice)
+        self._voice_options.setVisible(False)
+        layout.addWidget(self._voice_options)
+        route = QHBoxLayout()
+        self._action = QComboBox()
+        for key, label in (("chat", "Conversation"), ("document_plan", "Document plan"),
+                           ("coding", "Coding task"), ("goal", "Autonomous Goal")):
+            self._action.addItem(_tr("chat.action_" + key, label), key)
+        self._action.setToolTip(_tr("chat.action_hint", "Only explicit actions create plans or tasks"))
+        route.addWidget(self._action)
+        self._model = QComboBox()
+        self._model.setEditable(True)
+        self._model.setMinimumWidth(80)
+        self._model.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self._model.setMinimumContentsLength(12)
+        self._model.setToolTip(_tr("chat.model_hint", "Exact provider/model route; project permissions apply"))
+        self._model.setAccessibleName("Chat provider/model")
+        self._model.addItem(_tr("chat.model_default", "Configured model"), "")
+        config = self._services.get_model_config() if callable(getattr(self._services, "get_model_config", None)) else {}
+        roles = (config or {}).get("roles") or {}
+        self._configured_route = str((roles.get("chat") or roles.get("developer") or {}).get("model") or "")
+        if self._configured_route:
+            self._model.setItemText(0, self._configured_route)
+        for role in roles.values():
+            route_name = str((role or {}).get("model") or "")
+            if route_name and self._model.findText(route_name) < 0:
+                self._model.addItem(route_name, route_name)
+        route.addWidget(self._model, 1)
+        self._discover_btn = QPushButton(_tr("chat.models_refresh", "Models…"))
+        self._discover_btn.clicked.connect(self._discover_models)
+        route.addWidget(self._discover_btn)
+        layout.addLayout(route)
         footer = QHBoxLayout()
         self._attach_btn = QPushButton(_tr(
             "chat.attach_files", "Attach files…"))
@@ -205,38 +245,52 @@ class ChatPanel(QWidget):
             "chat.remove_tooltip", "Remove selected attachment (Delete)"))
         self._remove_btn.clicked.connect(self._remove_selected)
         footer.addWidget(self._remove_btn)
+        self._context_btn = QPushButton(_tr("chat.open_file", "Open file"))
+        self._context_btn.setToolTip(_tr("chat.context_hint", "Attach a snapshot of the active editor file or selection"))
+        self._context_btn.clicked.connect(self.context_requested)
+        footer.addWidget(self._context_btn)
+        self._voice_toggle = QPushButton(_tr("chat.voice_options", "Voice"))
+        self._voice_toggle.setMaximumWidth(55)
+        self._voice_toggle.setCheckable(True)
+        self._voice_toggle.toggled.connect(self._voice_options.setVisible)
+        footer.addWidget(self._voice_toggle)
         footer.addStretch()
         self._status = QLabel(_tr("chat.ready", "Ready"))
         self._status.setObjectName("chatStatus")
         self._status.setStyleSheet("color: #46A3C0;")
         self._status.setAccessibleName("Attachment preparation status")
-        footer.addWidget(self._status)
+        layout.addWidget(self._status)
         self._submit_btn = QPushButton(_tr(
             "chat.send_mission", "Invia"))
         self._submit_btn.setObjectName("primaryButton")
-        self._submit_btn.setAccessibleName("Submit mission")
+        self._submit_btn.setAccessibleName("Send message")
         self._submit_btn.setToolTip(_tr(
-            "chat.submit_tooltip", "Submit the mission (Ctrl+Enter)"))
+            "chat.submit_tooltip", "Send (Enter); newline (Ctrl+Enter)"))
         self._submit_btn.clicked.connect(self._submit)
         footer.addWidget(self._submit_btn)
         layout.addLayout(footer)
-        QShortcut(QKeySequence("Ctrl+Return"), self, activated=self._submit)
-        QShortcut(QKeySequence("Ctrl+Enter"), self, activated=self._submit)
-        QShortcut(QKeySequence("Ctrl+O"), self, activated=self._choose_files)
-        QShortcut(QKeySequence("Ctrl+Shift+M"), self, activated=self._toggle_voice)
+        QShortcut(QKeySequence("Ctrl+O"), self, activated=self._choose_files, context=Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        QShortcut(QKeySequence("Ctrl+Shift+M"), self, activated=self._toggle_voice, context=Qt.ShortcutContext.WidgetWithChildrenShortcut)
         QShortcut(QKeySequence("Delete"), self._attachments_list,
-                  activated=self._remove_selected)
+                  activated=self._remove_selected, context=Qt.ShortcutContext.WidgetWithChildrenShortcut)
 
     # ------------------------------------------------------------- project
     def retranslate(self) -> None:
-        self._title.setText(_tr("chat.title", "MISSION CHAT"))
+        self._title.setText(_tr("chat.title", "CHAT"))
+        if hasattr(self, "_action"):
+            for index, label in enumerate(("Conversation", "Document plan", "Coding task", "Autonomous Goal")):
+                self._action.setItemText(index, _tr("chat.action_" + self._action.itemData(index), label))
+            self._discover_btn.setText(_tr("chat.models_refresh", "Models…"))
+            self._context_btn.setText(_tr("chat.open_file", "Open file"))
+            self._voice_toggle.setText(_tr("chat.voice_options", "Voice"))
+            self._submit_btn.setToolTip(_tr("chat.submit_tooltip", "Send (Enter); newline (Ctrl+Enter)"))
         self._hint.setText(_tr(
             "chat.hint",
             "Drop files or folders here, or paste with Ctrl+V (text, files, images, "
-            "Windows screenshots). Ctrl+Enter submits."))
+            "Windows screenshots). Enter sends; Ctrl+Enter adds a newline."))
         self._input.setPlaceholderText(_tr(
             "chat.placeholder",
-            "Describe the mission…  (Ctrl+Enter to submit)"))
+            "Ask a question…"))
         self._mic_btn.setText(_tr("chat.dictate", "Dictate"))
         self._voice_stop_btn.setText(_tr("chat.stop", "Stop"))
         self._tts_toggle.setText(_tr(
@@ -247,12 +301,46 @@ class ChatPanel(QWidget):
         self.set_project(self._project)
 
     def set_project(self, project) -> None:
+        old_id = (self._project or {}).get("id")
         self._project = dict(project) if project else None
+        if old_id != (self._project or {}).get("id") and hasattr(self, "_model"):
+            route = studio_settings().value(
+                "workspace/chat_model/" + str((self._project or {}).get("id")), "")
+            self._model.setCurrentIndex(0)
+            if route:
+                self._model.setCurrentText(route)
+            self._attachments.clear()
+            self._refresh()
+        self._project_label.setToolTip((self._project or {}).get("root", ""))
         self._project_label.setText(
-            (self._project or {}).get("root") or _tr(
+            (self._project or {}).get("name") or _tr(
                 "chat.no_project", "No project open"))
         self._status.setText(_tr("chat.ready", "Ready") if project else _tr(
             "chat.open_project", "Open a project to submit a mission"))
+
+    def _discover_models(self):
+        from nl_coding_agent.gui.widgets.models_panel import ModelHubFetchThread
+        if getattr(self, "_model_thread", None) and self._model_thread.isRunning():
+            return
+        self._discover_btn.setEnabled(False)
+        self._model_thread = ModelHubFetchThread(self._services, parent=self)
+        def loaded(snapshot):
+            selected = self._model.currentText()
+            for provider in snapshot.providers:
+                for model in provider.models:
+                    route = provider.provider_id + "/" + model.name
+                    if self._model.findText(route) < 0:
+                        self._model.addItem(route, route)
+            self._model.setCurrentText(selected)
+        self._model_thread.snapshot_ready.connect(loaded)
+        self._model_thread.failed.connect(self._set_status)
+        self._model_thread.finished.connect(lambda: self._discover_btn.setEnabled(True))
+        self._model_thread.start()
+
+    def selected_model(self):
+        if self._model.currentIndex() == 0 and self._model.currentText() == self._model.itemText(0):
+            return self._configured_route
+        return self._model.currentText().strip()
 
     @property
     def attachments(self) -> list[dict]:
@@ -266,11 +354,19 @@ class ChatPanel(QWidget):
         self._pending += 1
         self._submit_btn.setEnabled(False)
         self._set_status("Preparing attachment(s)…")
-        self._pool.start(_Prepare(fn, self._signals))
+        project_id = (self._project or {}).get("id")
+        def prepare():
+            result = dict(fn() or {})
+            result["_project_id"] = project_id
+            return result
+        self._pool.start(_Prepare(prepare, self._signals))
 
     @Slot(dict)
     def _on_prepared(self, result: dict) -> None:
         self._pending = max(0, self._pending - 1)
+        if "_project_id" in result and result["_project_id"] != (self._project or {}).get("id"):
+            self._submit_btn.setEnabled(self._pending == 0 and not getattr(self, "_reply_pending", False))
+            return
         items = list(result.get("attachments") or [])
         errors = list(result.get("errors") or [])
         self._attachments.extend(items)
@@ -286,6 +382,7 @@ class ChatPanel(QWidget):
     def set_reply_pending(self, pending: bool) -> None:
         """Keep shortcut submissions and attachment callbacks serialized too."""
         self._reply_pending = bool(pending)
+        self._set_status(_tr("chat.waiting", "Waiting for model…") if pending else _tr("chat.ready", "Ready"))
         self._input.setEnabled(not pending)
         self._submit_btn.setEnabled(not pending and self._pending == 0)
 
@@ -349,11 +446,11 @@ class ChatPanel(QWidget):
 
     def append_user_message(self, text: str) -> None:
         from html import escape
-        self._transcript.append(f"<b>Tu:</b> {escape(str(text))}")
+        self._transcript.append("<b>" + _tr("chat.you", "You") + ":</b><br>" + escape(str(text)).replace("\n", "<br>"))
 
     def append_assistant_message(self, text: str, *, tool_activity: str = "") -> None:
         from html import escape
-        markup = f"<b>Assistente:</b> {escape(str(text))}"
+        markup = "<b>" + _tr("chat.assistant", "Assistant") + ":</b><br>" + escape(str(text)).replace("\n", "<br>")
         if tool_activity:
             markup += f"<br><i>Strumenti: {escape(tool_activity)}</i>"
         self._transcript.append(markup)
@@ -371,6 +468,7 @@ class ChatPanel(QWidget):
 
     def _refresh(self) -> None:
         self._attachments_list.clear()
+        self._attachments_list.setVisible(bool(self._attachments))
         for entry in self._attachments:
             label = (str(entry.get("name") or "attachment") + "  ·  "
                      + str(entry.get("kind") or "?") + "  ·  "
@@ -411,6 +509,9 @@ class ChatPanel(QWidget):
     def _submit(self) -> None:
         if getattr(self, "_reply_pending", False):
             return
+        if not self._project:
+            self._set_status(_tr("chat.open_project", "Open a project to chat"))
+            return
         if self._pending > 0:
             self._set_status("Wait for attachment preparation to finish")
             return
@@ -422,6 +523,8 @@ class ChatPanel(QWidget):
             self.append_user_message(text)
         payload = {
             "text": text,
+            "action": self._action.currentData(),
+            "model": self.selected_model(),
             "project_id": (self._project or {}).get("id"),
             "attachments": [{"id": a.get("id"), "name": a.get("name"),
                              "kind": a.get("kind"), "size_bytes": a.get("size_bytes"),
@@ -429,11 +532,12 @@ class ChatPanel(QWidget):
                             for a in self._attachments],
             "attachment_ids": [a.get("id") for a in self._attachments],
         }
-        self.submitted.emit(payload)
-        self._set_status("Submitted mission with "
-                         + str(len(self._attachments)) + " attachment(s)")
+        studio_settings().setValue(
+            "workspace/chat_model/" + str((self._project or {}).get("id")), self.selected_model())
         self._input.clear()
         self.clear_attachments()
+        self._set_status(_tr("chat.sent", "Message sent"))
+        self.submitted.emit(payload)
 
     # ------------------------------------------------------------------ voice
     def _speech_backend(self):

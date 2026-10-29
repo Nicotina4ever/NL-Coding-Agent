@@ -1477,12 +1477,15 @@ class GoalsPanel(QWidget):
         self._refresh_data(suppress_errors=True)
         self._detail_tabs.setCurrentIndex(0)
 
-    def _create_goal_dialog(self) -> None:
+    def _create_goal_dialog(self, *, objective="", attachment_ids=()) -> bool:
         if not self._project or not self._facade_ready:
             return
         dialog = CreateGoalDialog(self)
+        dialog._objective.setPlainText(objective)
+        dialog._attachments.setText("; ".join("attachment:" + str(i) for i in attachment_ids))
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            self._create_goal(dialog.values())
+            return self._create_goal(dialog.values())
+        return False
 
     def _create_goal(self, payload: dict) -> bool:
         if not self._project or not self._facade_ready:

@@ -27,7 +27,7 @@ def test_file_open_reuses_editor_without_sending_chat_context(window, tmp_path):
     (tmp_path / "sample.py").write_text("value = 1\n", encoding="utf-8")
     window._on_file_opened("sample.py")
     assert window._editor_panel._tabs_widget.currentWidget().toPlainText() == "value = 1\n"
-    assert window._stack.currentWidget() is window._ide_tabs
+    assert window._stack.currentWidget() is window._workspace
     assert window._ide_tabs.currentWidget() is window._editor_panel
     assert window._sidebar._buttons["ide"].isChecked()
     assert window._chat_panel.attachments == []

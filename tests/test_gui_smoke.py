@@ -69,24 +69,25 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
         "goals": 10,
     }
     from nl_coding_agent.gui.widgets.chat_panel import ChatPanel
-    assert isinstance(window._stack.widget(7), ChatPanel)
+    assert isinstance(window._workspace.docks["chat"].widget(), ChatPanel)
     from PySide6.QtWidgets import QTabWidget, QTableWidget
     from nl_coding_agent.gui.widgets.editor_panel import EditorPanel
     from nl_coding_agent.gui.widgets.terminal_panel import TerminalPanel
     from nl_coding_agent.gui.widgets.git_panel import GitPanel
     from nl_coding_agent.gui.widgets.problems_panel import ProblemsPanel
+    from nl_coding_agent.gui.widgets.studio_workspace import StudioWorkspace
     ide = window._stack.widget(8)
-    assert isinstance(ide, QTabWidget) and ide.count() == 4
-    assert isinstance(ide.widget(0), EditorPanel)
-    assert isinstance(ide.widget(1), TerminalPanel)
-    assert isinstance(ide.widget(2), GitPanel)
-    assert isinstance(ide.widget(3), ProblemsPanel)
+    assert isinstance(ide, StudioWorkspace)
+    assert isinstance(ide.tabs.widget(0), EditorPanel)
+    assert isinstance(ide.docks["terminal"].panel, TerminalPanel)
+    assert isinstance(ide.docks["git"].panel, GitPanel)
+    assert isinstance(ide.docks["problems"].panel, ProblemsPanel)
     assert window._editor_panel._tabs_widget.accessibleName() == "Open editor tabs"
     assert window._terminal_panel._output.isReadOnly() is True
     assert window._git_panel._diff.isReadOnly() is True
     assert window._problems_panel._table.rowCount() == 0
     from nl_coding_agent.gui.widgets.research_panel import ResearchPanel
-    research = window._stack.widget(9)
+    research = window._workspace.docks["research"].panel
     assert isinstance(research, ResearchPanel)
     assert research._results_table.rowCount() == 0
     assert research._query.accessibleName() == "Research query"
@@ -94,7 +95,7 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
     assert research._preview_text.isReadOnly() is True
     assert "offline" in research._service_label.text().lower()
     from nl_coding_agent.gui.widgets.goals_panel import GoalsPanel
-    goals = window._stack.widget(10)
+    goals = window._workspace.docks["goals"].panel
     assert isinstance(goals, GoalsPanel)
     assert goals._create_btn.isEnabled() is False
     assert goals._goals_table.rowCount() == 0
@@ -123,7 +124,7 @@ def test_main_window_constructs_and_closes_cleanly(services, tmp_path):
     assert window._chat_panel._voice_stop_btn.isEnabled() is False
     assert window._chat_panel._tts_toggle.accessibleName() == "Read transcript aloud"
     assert "Voce: inattiva" in window._chat_panel._voice_status.text()
-    assert isinstance(window._stack.widget(3), AgentsPanel)
+    assert isinstance(window._workspace.docks["agents"].panel, AgentsPanel)
     assert isinstance(window._stack.widget(4), SettingsPanel)
     assert isinstance(window._stack.widget(6), AutonomyPanel)
     assert window._agents_panel._table.rowCount() == 5
