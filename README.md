@@ -127,11 +127,11 @@ results remain untrusted. Model-driven automatic selection/invocation is not int
 CLI commands: `doctor`, `audit`, `work`, `status`, `roadmap`, `mission`, `mcp`,
 `selfbuild`, `supervisor`, `gui`.
 
-## VS Code frontend (NL Chat)
+## VS Code frontend (NL Chat + missions)
 
-`frontend/` is the first real IDE frontend: a VS Code / VS Code Insiders extension that talks to the
-existing engine over MCP (stdio). It has no models, missions, permissions or persistence of its own.
-The PySide6 Studio remains available and unchanged.
+`frontend/` is the VS Code / VS Code Insiders extension (`0.2.0`): chat plus real mission control over
+MCP. It has no models, missions, permissions or persistence of its own; the Python engine remains the
+single source of truth and the PySide6 Studio is unchanged.
 
 ```powershell
 cd frontend
@@ -140,12 +140,29 @@ npm run compile
 code-insiders --extensionDevelopmentPath="K:\AI\NL Coding Agent\frontend" "K:\path\to\a\project"
 ```
 
-Run **NL Coding Agent: Start Chat**. The extension starts
-`python\python.exe nl_agent.py mcp serve --project <opened folder>` using the engine installation
-resolved from the extension location (override with the `nlCodingAgent.engineRoot` setting), binds the
-active workspace to exactly one backend project, and lists the real engine tools. Architecture,
-protocol contract and the recorded acceptance evidence are in
-`docs/FRONTEND_ARCHITECTURE.md`.
+The **NL** activity-bar view has **Chat / Missions / Engine** tabs. Select a chat model, inspect the
+engine's existing model/agent/permission configuration, and switch the composer to **Mission** (or use
+`/mission <objective>`) to start a real Supervisor mission on the opened project. Missions show
+progress, task/agent handoffs, candidate + oracle verification, reviewer verdict and the candidate or
+retained diff; Stop and Resume use the engine's existing cooperative lifecycle. Mission execution is
+opt-in with `nlCodingAgent.allowExecution` (each start/stop still asks for confirmation); without it
+the engine is read-only. Commands: **Start Chat**, **Start Mission…**, **Show Missions**, **Show
+Engine Settings**, **Toggle Mission Execution**, **Show Backend Status**, **Reconnect Backend**.
+
+A locally installable VSIX is produced with:
+
+```powershell
+cd frontend
+npm run package:vsix      # .workspace\dist\NL-Coding-Agent-0.2.0.vsix
+code-insiders --install-extension ..\.workspace\dist\NL-Coding-Agent-0.2.0.vsix
+```
+
+Set `nlCodingAgent.engineRoot` when installing on a machine where the engine is not resolvable from the
+extension folder. Real acceptance (isolated project mission completed with diff, candidate/oracle tests
+PASS and reviewer `APPROVE`; stop→resume; installed-VSIX acceptance) is recorded in
+`docs/FRONTEND_MISSIONS.md` and `docs/evidence/frontend/`; protocol/architecture details are in
+`docs/FRONTEND_ARCHITECTURE.md`. The NL Code standalone distribution still bundles extension 0.1.0 and
+must be rebuilt to include this mission UI.
 
 ## NL Code standalone (objective 2)
 

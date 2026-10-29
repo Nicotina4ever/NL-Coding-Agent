@@ -1,8 +1,8 @@
 {
   "name": "nl-coding-agent",
   "displayName": "NL Coding Agent",
-  "description": "NL Chat for the local NL Coding Engine. The Python engine remains the single source of truth for models, missions, permissions and persistence.",
-  "version": "0.1.0",
+  "description": "NL Chat and mission control for the local NL Coding Engine: model choice, persistent missions, progress, diffs, candidate/oracle verification and reviewer verdicts. The Python engine remains the single source of truth.",
+  "version": "0.2.0",
   "publisher": "nlcodingagent",
   "engines": {
     "vscode": ">=1.85.0"
@@ -14,6 +14,10 @@
   "activationEvents": [
     "onView:nlCodingAgent.chat",
     "onCommand:nlCodingAgent.startChat",
+    "onCommand:nlCodingAgent.startMission",
+    "onCommand:nlCodingAgent.showMissions",
+    "onCommand:nlCodingAgent.showEngineSettings",
+    "onCommand:nlCodingAgent.toggleMissionExecution",
     "onCommand:nlCodingAgent.showStatus",
     "onCommand:nlCodingAgent.reconnect"
   ],
@@ -24,7 +28,11 @@
     "watch": "tsc -watch -p .",
     "test:integration": "node test/integration.cjs",
     "test:webview": "node test/webview.cjs",
-    "test:extension": "node test/runExtensionTests.cjs"
+    "test:extension": "node test/runExtensionTests.cjs",
+    "test:mission": "node test/runMissionTests.cjs",
+    "test:resume": "node test/runResumeTests.cjs",
+    "test:vsix": "node test/runInstalledVsixTests.cjs",
+    "package:vsix": "vsce package --out ../.workspace/dist/NL-Coding-Agent-0.2.0.vsix"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
@@ -33,6 +41,7 @@
   "devDependencies": {
     "@types/node": "^20.19.43",
     "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "4.1.0",
     "typescript": "^5.5.0"
   },
   "contributes": {
@@ -40,6 +49,22 @@
       {
         "command": "nlCodingAgent.startChat",
         "title": "NL Coding Agent: Start Chat"
+      },
+      {
+        "command": "nlCodingAgent.startMission",
+        "title": "NL Coding Agent: Start Mission…"
+      },
+      {
+        "command": "nlCodingAgent.showMissions",
+        "title": "NL Coding Agent: Show Missions"
+      },
+      {
+        "command": "nlCodingAgent.showEngineSettings",
+        "title": "NL Coding Agent: Show Engine Settings"
+      },
+      {
+        "command": "nlCodingAgent.toggleMissionExecution",
+        "title": "NL Coding Agent: Toggle Mission Execution"
       },
       {
         "command": "nlCodingAgent.showStatus",
@@ -71,6 +96,12 @@
           "minimum": 30,
           "maximum": 600,
           "description": "Timeout for one chat turn. Local models may need to load on the first request."
+        },
+        "nlCodingAgent.allowExecution": {
+          "type": "boolean",
+          "default": false,
+          "scope": "machine-overridable",
+          "markdownDescription": "Start the NL Coding Engine with `--allow-execution`, which permits mission start/cancel from this extension. Missions still require an explicit per-start confirmation and the engine's existing READ/WRITE/EXECUTE permissions. Leave disabled for a read-only assistant."
         }
       }
     },

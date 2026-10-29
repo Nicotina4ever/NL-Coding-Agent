@@ -4,20 +4,28 @@
 
 NL Coding Agent is a local-first, multi-agent software development workstation. It opens existing projects, discovers their structure and documentation, persists missions in SQLite, and runs a real `Developer -> Tester -> Debugger -> Reviewer` cycle using local Ollama models. The current implementation has been exercised end-to-end with a live local model and a real interruption/resume cycle.
 
-## VS Code NL Chat frontend (2026-10-29)
+## VS Code mission control + VSIX (2026-10-29)
 
-The `frontend/` directory now contains an accepted VS Code / VS Code Insiders extension that talks to
-the existing engine over MCP stdio (`@modelcontextprotocol/sdk@1.32.2` against the server's
-`mcp==1.30.0` FastMCP). It owns no models, missions, permissions or persistence; the PySide6 Studio is
-unchanged. Real acceptance in VS Code Insiders 1.145.0-insider: the extension activated, negotiated
-MCP `2025-11-25`, discovered all 8 engine tools, mapped the opened workspace to the correct backend
-project, created the NL Chat webview, delivered a real Ollama reply (`EXT-OK` via the extension-host
-test and `NLCHAT-GUI-OK` in the driven GUI, screenshot
-`docs/evidence/frontend/NL_CHAT_GUI_ACCEPTANCE.png`), refused a cross-project `project_id`, and
-released the Python child on shutdown. Protocol level: real initialize/tools/`project_context`/
-`mission_list`/`nlc_converse` round-trip with project isolation and LLM reply `NLCHAT-OK`.
-Details and exact commands: [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md). Known limits: chat
-only (mission UI not surfaced yet), no streaming, no packaged VSIX yet, single-folder workspace.
+The `frontend/` extension is now **0.2.0**: chat plus real mission control over the existing MCP
+engine. The webview has **Chat / Missions / Engine** sections. It exposes model selection (chat,
+developer, reviewer), the engine's existing model config/agents/permission policy through the
+read-only `engine_settings` tool, and mission start/stop/resume/list through `start_mission` /
+`cancel_mission`, with progress, tasks/agents, handoffs, candidate-oracle verification, reviewer
+verdict and candidate/retained diff from the new read-only `mission_detail` tool. The engine stays
+read-only by default; `nlCodingAgent.allowExecution` adds `--allow-execution`, every mission action has
+a modal confirmation, and the opened workspace is root-checked against the bound project.
+
+Real acceptance in VS Code Insiders 1.145.0-insider on an isolated project: mission #1 `completed`,
+verdict `APPROVE`, promotion `promoted`, candidate and oracle `pytest` suites PASS, live `src/calc.py`
+changed (`def sub`), retained diff `1 file(s), +3/-0`, dashboard received detail+diff, Python child
+released. A separate stop/resume run reached `interrupted` with the live tree untouched, then resumed to
+`completed`/`APPROVE`/`promoted` (`resume_count 1`). The packaged **VSIX 0.2.0** (4.46 MB,
+`nlcodingagent.nl-coding-agent`) installs in an isolated Insiders profile and the same mission
+acceptance passes from the installed payload. Evidence and exact commands:
+[FRONTEND_MISSIONS.md](FRONTEND_MISSIONS.md) and `docs/evidence/frontend/`. Known limits: no streaming,
+no raw tool-call telemetry in the engine (handoffs/attempts/verification are shown instead), single
+folder, reviewer judgment is nondeterministic, legacy missions cannot run, and the NL Code standalone
+still bundles extension 0.1.0 until rebuilt (no standalone build was started for this increment).
 
 ## NL Code standalone distribution (objective 2, 2026-10-29)
 

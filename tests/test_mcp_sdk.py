@@ -139,7 +139,20 @@ def test_real_engine_stdio_readonly_project_binding(tmp_path, monkeypatch):
         spec.pop("type")
         manager = McpManager(config={"servers": {"engine": {**spec, "trusted": True, "timeout": 20}}})
         names = {t["name"] for t in manager.list_tools("engine")}
-        assert {"project_context", "mission_status", "start_mission", "cancel_mission"} <= names
+        assert {"project_context", "mission_status", "start_mission", "cancel_mission",
+                "engine_settings", "mission_detail"} <= names
+        settings = manager.invoke_tool("engine", "engine_settings", {}, human_approved=True)
+        settings_payload = tool_payload(settings)
+        assert settings_payload["project"]["id"] == project["id"]
+        assert "read" in settings_payload["permissions"]["scopes"]
+        assert settings_payload["mission_defaults"]["developer_model"]
+        assert settings_payload["models"]["discovered"] is None
+        detail = manager.invoke_tool("engine", "mission_detail", {"mission_id": own},
+                                     human_approved=True)
+        detail_payload = tool_payload(detail)
+        assert detail_payload["mission"]["id"] == own
+        assert detail_payload["mission"]["status"] == "pending"
+        assert detail_payload["tasks"] == [] and detail_payload["progress"]["total"] == 0
         context = manager.invoke_tool("engine", "project_context", {}, human_approved=True)
         assert tool_payload(context)["project"]["id"] == project["id"]
         assert not tool_payload(context)["execution_enabled"]

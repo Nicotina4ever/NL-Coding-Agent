@@ -9,6 +9,36 @@ from pathlib import Path
 _ATTACHMENT_BUDGET = 8000
 
 
+def _plain_json(value):
+    """Convert dataclass-derived tuples/values into JSON-safe primitives."""
+    if isinstance(value, dict):
+        return {str(key): _plain_json(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain_json(item) for item in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(value)
+
+
+def _bounded_text(value, limit: int = 8000) -> str:
+    text = "" if value is None else str(value)
+    return text if len(text) <= limit else text[:limit] + "\n... [truncated]"
+
+
+def _bounded_payload(value, limit: int = 2000, depth: int = 0):
+    """Bound nested handoff/attempt payloads without changing their shape."""
+    if depth > 4:
+        return "..."
+    if isinstance(value, str):
+        return _bounded_text(value, limit)
+    if isinstance(value, dict):
+        items = list(value.items())[:40]
+        return {str(key): _bounded_payload(item, limit, depth + 1) for key, item in items}
+    if isinstance(value, (list, tuple)):
+        return [_bounded_payload(item, limit, depth + 1) for item in list(value)[:40]]
+    return value
+
+
 def _attachment_context(attachments, budget: int = _ATTACHMENT_BUDGET) -> str:
     """Frame selected-text attachments as untrusted context, never instructions.
 
@@ -82,6 +112,74 @@ def create_engine_server(services, project, *, allow_execution=False):
         return {"project": project, "execution_enabled": allow_execution,
                 "engine": "AppServices/Supervisor", "state": "existing mission SQLite"}
 
+    @server.tool(annotations=read_only)
+    def engine_settings(include_models: bool = False, timeout_s: float = 2.0) -> dict:
+        """Read-only engine state: model config/routes, agent roles, permissions.
+
+        Reuses the existing AppServices model configuration, agent role projection,
+        permission policy and Model Hub discovery. It never writes configuration,
+        loads/unloads a model or persists a model catalog. ``include_models`` runs
+        the same bounded GET-only provider probe the GUI Model Hub uses.
+        """
+        require_read()
+        from dataclasses import asdict
+        config = services.get_model_config() or {}
+        role_config = config.get("roles") or {}
+        chat_role = "chat" if (role_config.get("chat") or {}).get("model") else "developer"
+        chat_default = str((role_config.get(chat_role) or {}).get("model") or "")
+        providers = []
+        for provider_id, entry in (config.get("providers") or {}).items():
+            entry = entry if isinstance(entry, dict) else {}
+            providers.append({
+                "provider_id": str(provider_id),
+                "kind": str(entry.get("kind") or provider_id),
+                "label": str(entry.get("label") or provider_id),
+                "base_url": str(entry.get("base_url") or ""),
+                "enabled": bool(entry.get("enabled", False)),
+                "api_key_env": str(entry.get("api_key_env") or ""),
+            })
+        discovered = None
+        if include_models:
+            timeout = max(0.5, min(float(timeout_s), 5.0))
+            discovered = _plain_json(asdict(services.discover_models(timeout=timeout)))
+        from nl_coding_agent.agents.orchestrator import (
+            DEFAULT_DEBUG_MODEL, DEFAULT_DEVELOPER_MODEL, DEFAULT_REVIEWER_MODEL,
+        )
+        mission_defaults = {
+            "developer_model": str((role_config.get("developer") or {}).get("model") or DEFAULT_DEVELOPER_MODEL),
+            "reviewer_model": str((role_config.get("reviewer") or {}).get("model") or DEFAULT_REVIEWER_MODEL),
+            "debug_model": str((role_config.get("debugger") or {}).get("model") or DEFAULT_DEBUG_MODEL),
+        }
+        return {
+            "schema_version": 1,
+            "project": {"id": bound_project_id, "root": project.get("root", "")},
+            "execution_enabled": allow_execution,
+            "models": {
+                "config_path": str(services.get_model_config_path()),
+                "config_exists": bool(config),
+                "ollama": _plain_json(config.get("ollama") or {}),
+                "providers": providers,
+                "roles": _plain_json(role_config),
+                "chat_role": chat_role,
+                "chat_default_spec": chat_default,
+                "cloud_escalation_enabled": bool(services.is_cloud_escalation_enabled()),
+                "discovered": discovered,
+            },
+            "mission_defaults": mission_defaults,
+            "agents": {
+                "roles": _plain_json(services.get_agent_roles()),
+                "custom_agents": _plain_json(services.list_custom_agents()),
+            },
+            "permissions": _plain_json(services.get_permissions(bound_project_id)),
+            "runtime": {
+                "project_root": project.get("root", ""),
+                "database_path": str(services.get_database_path()),
+                "ollama_base_url": str(services.get_ollama_url()),
+                "model_config_path": str(services.get_model_config_path()),
+                "cloud_escalation_enabled": bool(services.is_cloud_escalation_enabled()),
+            },
+        }
+
     # ---------------------------------------------------------------------
     # Expose chat functionality over MCP for VS Code extension clients.
     @server.tool()
@@ -133,6 +231,57 @@ def create_engine_server(services, project, *, allow_execution=False):
         details = mission(mission_id)
         return {"mission_id": mission_id, "events": details.get("handoffs", [])[-max(1, min(limit, 200)):],
                 "untrusted": True}
+
+    @server.tool(annotations=read_only)
+    def mission_detail(mission_id: int) -> dict:
+        """Read the full persisted mission view: tasks, attempts, handoffs, verification.
+
+        This is a read-only projection of the existing persistence service. Agent
+        roles, verification commands and reviewer notes are the real audit trail;
+        no tool-call telemetry exists in the engine and this tool does not invent it.
+        """
+        details = mission(mission_id)
+        try:
+            changed_paths = json.loads(details.get("changed_paths") or "[]")
+            if not isinstance(changed_paths, list):
+                changed_paths = []
+        except (TypeError, ValueError):
+            changed_paths = []
+        mission_keys = ("id", "project_id", "title", "goal", "status", "created_at",
+                        "updated_at", "started_at", "finished_at", "result_summary",
+                        "review_verdict", "promotion_status", "diff_stat", "staging_dir",
+                        "harness_version", "resume_count", "requirement_id",
+                        "supervisor_run_id", "flow_id")
+        mission_view = {key: details.get(key) for key in mission_keys}
+        mission_view["changed_paths"] = changed_paths
+        tasks = [{key: task.get(key) for key in (
+            "id", "title", "status", "agent_role", "attempts", "last_error",
+            "depends_on", "write_paths", "created_at", "started_at", "finished_at")}
+            for task in details.get("tasks", [])]
+        handoffs = [{
+            "id": item.get("id"), "from_role": item.get("from_role"),
+            "to_role": item.get("to_role"), "summary": item.get("summary"),
+            "created_at": item.get("created_at"),
+            "payload": _bounded_payload(item.get("payload") or {}),
+        } for item in details.get("handoffs", [])]
+        verification_runs = [{
+            "id": item.get("id"), "task_id": item.get("task_id"),
+            "command": item.get("command"), "exit_code": item.get("exit_code"),
+            "passed": bool(item.get("passed")), "created_at": item.get("created_at"),
+            "stdout": _bounded_text(item.get("stdout"), 8000),
+            "stderr": _bounded_text(item.get("stderr"), 8000),
+        } for item in details.get("verification_runs", [])]
+        attempts = [{
+            "id": item.get("id"), "task_id": item.get("task_id"),
+            "task_title": item.get("task_title"), "agent_role": item.get("agent_role"),
+            "status": item.get("status"), "started_at": item.get("started_at"),
+            "finished_at": item.get("finished_at"),
+            "error": _bounded_text(item.get("error"), 2000),
+            "output": _bounded_text(item.get("output"), 12000),
+        } for item in details.get("attempts", [])]
+        return {"mission": mission_view, "tasks": tasks, "handoffs": handoffs,
+                "verification_runs": verification_runs, "attempts": attempts,
+                "progress": details.get("progress") or {}}
 
     @server.tool(annotations=read_only)
     def candidate_diff(mission_id: int) -> dict:

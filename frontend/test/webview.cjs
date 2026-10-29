@@ -1,12 +1,11 @@
 /**
  * Webview security + behaviour tests.
  *
- * 1. The shipped webview script must be valid JavaScript (the previous
- *    implementation put TypeScript casts inside the webview and broke the page).
- * 2. It must render model text with textContent and never with an HTML sink.
+ * 1. The shipped webview script must be valid JavaScript (no TypeScript syntax).
+ * 2. It must render engine text with textContent and never with an HTML sink.
  * 3. The generated HTML must carry a strict CSP with no inline script.
- * 4. Running the script against a minimal DOM must post `ready`, send a message,
- *    and render an assistant reply safely.
+ * 4. Running the script against a minimal DOM must render the dashboard state,
+ *    chat, mission mode, mission detail and send the expected actions.
  *
  * Usage: node test/webview.cjs
  */
@@ -52,8 +51,26 @@ function testHtml() {
     assert(html.includes('<script src="vscode-webview://ext/media/main.js">'), 'external webview script');
     assert(!/<script>[\s\S]*?<\/script>/.test(html.replace(/<script src=[^>]*><\/script>/g, '')), 'no inline script body');
     assert(!/\son[a-z]+\s*=/.test(html), 'no inline event handlers');
+    for (const id of ['mission-banner', 'mission-list', 'mission-detail', 'engine-content',
+        'chat-model', 'dev-model', 'reviewer-model', 'mode', 'exec-toggle']) {
+        assert(html.includes(`id="${id}"`), `markup exposes #${id}`);
+    }
     assert.strictEqual(escapeHtml('<b>&"\'</b>'), '&lt;b&gt;&amp;&quot;&#39;&lt;/b&gt;');
-    console.log('PASS generated HTML has a strict CSP, no inline script and escaped assets');
+    console.log('PASS generated HTML has a strict CSP, no inline script and the dashboard structure');
+}
+
+class FakeClassList {
+    constructor() {
+        this.values = new Set();
+    }
+    add(...names) { names.forEach((name) => this.values.add(name)); }
+    remove(...names) { names.forEach((name) => this.values.delete(name)); }
+    contains(name) { return this.values.has(name); }
+    toggle(name, force) {
+        const next = force === undefined ? !this.values.has(name) : Boolean(force);
+        if (next) { this.values.add(name); } else { this.values.delete(name); }
+        return next;
+    }
 }
 
 class FakeElement {
@@ -61,8 +78,9 @@ class FakeElement {
         this.tagName = tagName;
         this.children = [];
         this.listeners = new Map();
+        this.classList = new FakeClassList();
+        this._className = '';
         this._text = '';
-        this.className = '';
         this.dataset = {};
         this.style = {};
         this.value = '';
@@ -71,9 +89,21 @@ class FakeElement {
         this.scrollHeight = 0;
         this.focused = false;
     }
-    set textContent(value) { this._text = String(value); }
+    set className(value) {
+        this._className = String(value || '');
+        this.classList = new FakeClassList();
+        this._className.split(/\s+/).filter(Boolean).forEach((name) => this.classList.add(name));
+    }
+    get className() { return this._className; }
+    get firstChild() { return this.children[0] || null; }
+    set textContent(value) { this._text = String(value); this.children = []; }
     get textContent() { return this._text; }
     appendChild(child) { this.children.push(child); return child; }
+    removeChild(child) {
+        const index = this.children.indexOf(child);
+        if (index >= 0) { this.children.splice(index, 1); }
+        return child;
+    }
     addEventListener(type, listener) {
         if (!this.listeners.has(type)) { this.listeners.set(type, []); }
         this.listeners.get(type).push(listener);
@@ -84,15 +114,22 @@ class FakeElement {
     focus() { this.focused = true; }
 }
 
+function collectText(element) {
+    if (!element) { return ''; }
+    return String(element.textContent || '') + element.children.map(collectText).join(' ');
+}
+
 function testWebviewBehaviour() {
-    const elements = {
-        status: new FakeElement('span'),
-        messages: new FakeElement('main'),
-        input: new FakeElement('textarea'),
-        send: new FakeElement('button'),
-        composer: new FakeElement('form'),
-        hint: new FakeElement('span')
+    const elements = new Map();
+    const get = (id) => {
+        if (!elements.has(id)) { elements.set(id, new FakeElement('div')); }
+        return elements.get(id);
     };
+    const tabButtons = ['chat', 'missions', 'engine'].map((name) => {
+        const button = new FakeElement('button');
+        button.dataset.tab = name;
+        return button;
+    });
     const posted = [];
     const windowListeners = new Map();
     let savedState;
@@ -104,8 +141,9 @@ function testWebviewBehaviour() {
             setState: (state) => { savedState = state; }
         }),
         document: {
-            getElementById: (id) => elements[id],
-            createElement: (tag) => new FakeElement(tag)
+            getElementById: get,
+            createElement: (tag) => new FakeElement(tag),
+            querySelectorAll: (selector) => selector === '.nl-tab-button' ? tabButtons : []
         },
         window: {
             addEventListener: (type, listener) => {
@@ -117,46 +155,158 @@ function testWebviewBehaviour() {
     };
     vm.runInNewContext(mainScript, sandbox, { filename: 'media/main.js' });
 
-    assert.strictEqual(posted.length > 0 && posted[0].type, 'ready', 'webview posts ready');
-    assert(elements.input.focused, 'input is focused on load');
-    assert.strictEqual(elements.status.dataset.state, 'connecting', 'initial status');
+    assert.strictEqual(posted[0].type, 'ready', 'webview posts ready');
+    assert(get('input').focused, 'input is focused on load');
 
-    // Status + busy messages from the extension.
-    for (const listener of windowListeners.get('message')) {
-        listener({ data: { type: 'status', state: 'ready', label: 'Connected · project #1' } });
-    }
-    assert.strictEqual(elements.status.textContent, 'Connected · project #1');
-    assert.strictEqual(elements.status.dataset.state, 'ready');
+    const settings = {
+        schema_version: 1,
+        project: { id: 7, root: 'K:\\project' },
+        execution_enabled: true,
+        models: {
+            config_path: 'K:\\engine\\config\\models.yaml',
+            config_exists: true,
+            ollama: { base_url: 'http://127.0.0.1:11434' },
+            providers: [{ provider_id: 'ollama', kind: 'ollama', label: 'Ollama', base_url: 'http://127.0.0.1:11434', enabled: true }],
+            roles: { developer: { model: 'ollama/dev' }, reviewer: { model: 'ollama/rev' } },
+            chat_role: 'developer',
+            chat_default_spec: 'ollama/dev',
+            cloud_escalation_enabled: false,
+            discovered: {
+                reachable: true,
+                providers: [{
+                    provider_id: 'ollama', label: 'Ollama', reachable: true,
+                    models: [
+                        { name: 'dev', loaded: true, capabilities: ['completion'] },
+                        { name: 'embed', capabilities: ['embedding'] }
+                    ]
+                }]
+            }
+        },
+        mission_defaults: { developer_model: 'ollama/dev', reviewer_model: 'ollama/rev', debug_model: 'ollama/dev' },
+        agents: { roles: [{ role: 'developer', model: 'ollama/dev', kind: 'llm' }], custom_agents: [] },
+        permissions: {
+            scopes: ['read', 'write', 'execute', 'delete'],
+            policy: { read: true, write: true, execute: true, delete: false },
+            cloud_escalation_enabled: false
+        }
+    };
+    const detail = {
+        mission: {
+            id: 3, project_id: 7, title: 'Add sub', goal: 'Add sub to calc.py',
+            status: 'completed', review_verdict: 'APPROVE', promotion_status: 'promoted',
+            diff_stat: '1 file(s), +2/-0', changed_paths: ['src/calc.py'], harness_version: 2
+        },
+        tasks: [{ id: 1, title: 'Code Implementation', status: 'completed', agent_role: 'developer', attempts: 1 }],
+        handoffs: [
+            { id: 1, from_role: 'developer', to_role: 'tester', summary: 'staged 1 file', payload: { actions: ['Wrote src/calc.py'] } },
+            { id: 2, from_role: 'reviewer', to_role: 'orchestrator', summary: 'APPROVE', payload: { verdict: 'APPROVE', review_notes: 'APPROVE\nLooks correct.' } }
+        ],
+        verification_runs: [
+            { id: 1, command: 'verify:candidate pytest tests', exit_code: 0, passed: true, stdout: '2 passed' },
+            { id: 2, command: 'verify:oracle pytest tests', exit_code: 0, passed: true, stdout: '2 passed' }
+        ],
+        attempts: [{ id: 1, task_title: 'Code Implementation', agent_role: 'developer', status: 'completed', output: '```write:src/calc.py\n...' }],
+        progress: { total: 3, completed: 3, failed: 0, running: 0, pending: 0, percent: 100 }
+    };
+    const state = {
+        connected: true,
+        connectionState: 'ready',
+        project: { id: 7, root: 'K:\\project', name: 'project' },
+        engine: { name: 'NL Coding Engine', version: '1.0' },
+        executionEnabled: true,
+        settings,
+        missions: [{
+            id: 3, project_id: 7, title: 'Add sub', goal: 'Add sub to calc.py', status: 'completed',
+            review_verdict: 'APPROVE', promotion_status: 'promoted', diff_stat: '1 file(s), +2/-0',
+            changed_paths: ['src/calc.py'], harness_version: 2
+        }],
+        selected: { detail, diff: { ok: true, diff: '--- a/src/calc.py\n+++ b/src/calc.py\n@@\n+def sub(a, b):' } },
+        activeMissionId: 3,
+        busyChat: false,
+        busyMission: false,
+        chatModel: 'ollama/dev',
+        missionModels: { developerModel: 'ollama/dev', reviewerModel: 'ollama/rev' },
+        modelOptions: [
+            { value: '', label: 'Engine default', group: 'default', loaded: false },
+            { value: 'ollama/dev', label: 'dev', group: 'Ollama', loaded: true },
+            { value: 'ollama/rev', label: 'rev', group: 'Ollama', loaded: false }
+        ]
+    };
+    const send = (data) => {
+        for (const listener of windowListeners.get('message') || []) { listener({ data }); }
+    };
+    send({ type: 'state', payload: state });
 
-    // Sending through the form.
-    elements.input.value = 'hello engine';
-    elements.composer.dispatch('submit', { preventDefault() {} });
-    const sent = posted.find((message) => message.type === 'send');
-    assert(sent && sent.text === 'hello engine', 'webview sends the typed text');
-    assert.strictEqual(elements.input.value, '', 'input cleared after send');
-    const userMessage = elements.messages.children[elements.messages.children.length - 1];
-    assert.strictEqual(userMessage.className, 'nl-message nl-message-user');
+    assert.strictEqual(get('status').textContent, 'missions enabled · project #7');
+    assert.strictEqual(get('project-badge').textContent, '#7 · project');
+    assert.strictEqual(get('exec-toggle').dataset.enabled, 'true');
+    assert.strictEqual(get('chat-model').value, 'ollama/dev');
+    assert.strictEqual(get('dev-model').value, 'ollama/dev');
+    assert.strictEqual(get('reviewer-model').value, 'ollama/rev');
+    assert.strictEqual(get('mission-list').children.length, 1, 'mission row rendered');
+    assert(!get('mission-banner').classList.contains('hidden'), 'active mission banner visible');
+    assert.strictEqual(get('banner-status').textContent, 'completed');
+    assert.strictEqual(get('banner-progress-bar').style.width, '100%');
+    assert.strictEqual(get('mission-detail').classList.contains('hidden'), false);
+    const detailText = collectText(get('mission-detail'));
+    assert(detailText.includes('Mission #3'), 'detail title rendered');
+    assert(detailText.includes('APPROVE'), 'reviewer verdict rendered');
+    assert(detailText.includes('verify:candidate'), 'verification command rendered');
+    assert(detailText.includes('Tool activity'), 'persisted tool activity rendered');
+    assert(detailText.includes('Wrote src/calc.py'), 'recorded write action rendered');
+    assert(detailText.includes('def sub'), 'diff rendered');
+    const engineText = collectText(get('engine-content'));
+    assert(engineText.includes('Permissions'), 'engine permissions rendered');
+    assert(engineText.includes('ollama/dev'), 'model routes rendered');
+    assert(engineText.includes('dev'), 'discovered model rendered');
 
-    // Busy state while the engine is answering.
-    for (const listener of windowListeners.get('message')) {
-        listener({ data: { type: 'busy', value: true } });
-    }
-    assert.strictEqual(elements.send.disabled, true, 'send disabled while busy');
+    // Tab navigation.
+    tabButtons[1].dispatch('click', {});
+    assert(get('tab-missions').classList.contains('active'), 'missions tab active after click');
+    assert(!get('tab-chat').classList.contains('active'), 'chat tab inactive after click');
 
-    // Model output containing markup is rendered as text, never as HTML.
+    // Mission mode: switch, fill objective, submit -> startMission action.
+    get('mode').value = 'mission';
+    get('mode').dispatch('change', {});
+    assert(!get('mission-fields').classList.contains('hidden'), 'mission fields visible');
+    assert.strictEqual(get('send').textContent, 'Start mission');
+    get('input').value = 'Add sub to src/calc.py';
+    get('composer').dispatch('submit', { preventDefault() {} });
+    const missionAction = posted.find((message) => message.type === 'action' && message.action === 'startMission');
+    assert(missionAction, 'mission action posted');
+    assert.strictEqual(missionAction.payload.goal, 'Add sub to src/calc.py');
+    assert.strictEqual(missionAction.payload.developerModel, 'ollama/dev');
+    assert.strictEqual(missionAction.payload.reviewerModel, 'ollama/rev');
+
+    // Chat mode: real send action.
+    get('mode').value = 'chat';
+    get('mode').dispatch('change', {});
+    get('input').value = 'hello engine';
+    get('composer').dispatch('submit', { preventDefault() {} });
+    const chatAction = posted.find((message) => message.type === 'action' && message.action === 'sendChat');
+    assert(chatAction && chatAction.payload.text === 'hello engine', 'chat action posted');
+
+    // Hostile model text stays text.
     const hostile = '<img src=x onerror="globalThis.__pwned=1"> & <script>alert(1)</script>';
-    for (const listener of windowListeners.get('message')) {
-        listener({ data: { type: 'message', role: 'assistant', text: hostile } });
-    }
-    const assistantMessage = elements.messages.children[elements.messages.children.length - 1];
-    assert.strictEqual(assistantMessage.className, 'nl-message nl-message-assistant');
-    const label = assistantMessage.children[0];
-    const body = assistantMessage.children[1];
-    assert.strictEqual(label.textContent, 'NL');
-    assert.strictEqual(body.textContent, hostile, 'model text is stored verbatim, not interpreted');
-    assert.strictEqual(body.children.length, 0, 'no HTML elements were created from model text');
-    assert.strictEqual(sandbox.__pwned, undefined, 'no script executed from model text');
-    console.log('PASS webview behaviour: ready, status, busy, send, safe text rendering');
+    send({ type: 'chat', role: 'assistant', text: hostile });
+    const messages = get('messages').children;
+    const last = messages[messages.length - 1];
+    assert(last.className.includes('nl-message-assistant'), 'assistant message class');
+    assert.strictEqual(last.children[1].textContent, hostile, 'model text rendered verbatim');
+    assert.strictEqual(last.children[1].children.length, 0, 'no elements created from model text');
+    assert.strictEqual(sandbox.__pwned, undefined, 'no script executed');
+
+    // Busy state disables sending.
+    send({ type: 'state', payload: { ...state, busyChat: true } });
+    assert.strictEqual(get('send').disabled, true, 'send disabled while busy');
+    assert.strictEqual(get('hint').textContent, 'Waiting for the engine…');
+
+    // Error notice.
+    send({ type: 'state', payload: { ...state, error: 'engine is read-only' } });
+    assert(!get('notice').classList.contains('hidden'), 'error notice visible');
+    assert.strictEqual(get('notice').textContent, 'engine is read-only');
+
+    console.log('PASS webview behaviour: state, chat, mission mode/detail, safe text rendering');
 }
 
 testScriptSyntax();

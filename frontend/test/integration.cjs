@@ -117,20 +117,45 @@ async function main() {
         const tools = await first.listTools();
         const names = tools.map((tool) => tool.name);
         for (const required of ['project_context', 'nlc_converse', 'mission_list', 'mission_status',
-            'mission_events', 'candidate_diff', 'start_mission', 'cancel_mission']) {
+            'mission_events', 'mission_detail', 'candidate_diff', 'start_mission', 'cancel_mission',
+            'engine_settings']) {
             assert(names.includes(required), `missing tool ${required}`);
         }
         log(`PASS tools discovered (${tools.length}): ${names.join(', ')}`);
 
-        // 4. Safe read-only tool with a real result.
+        // 4. Safe read-only tools with real results.
         const context = await first.projectContext();
         assert(Number.isInteger(context.project.id) && context.project.id > 0, 'project id');
         assertPathEqual(context.project.root, projectA, 'project A root');
         assert.strictEqual(context.execution_enabled, false, 'engine is read-only by default');
+        const settings = await first.engineSettings(false);
+        assert.strictEqual(settings.project.id, context.project.id, 'engine_settings project');
+        assert(settings.permissions.scopes.includes('read'), 'permission scopes');
+        assert(settings.mission_defaults.developer_model, 'mission developer default');
+        assert(settings.mission_defaults.reviewer_model, 'mission reviewer default');
+        assert.strictEqual(settings.models.discovered, null, 'no probe without explicit request');
         const missions = await first.callJson('mission_list', {});
         assert(Array.isArray(missions.missions), 'mission_list shape');
         log(`PASS project_context: project #${context.project.id} root=${context.project.root} (read-only)`);
-        log(`PASS read-only tool result: mission_list -> ${JSON.stringify(missions)}`);
+        log(`PASS engine_settings: ${settings.models.chat_default_spec} / ` +
+            `${settings.mission_defaults.developer_model} -> ${settings.mission_defaults.reviewer_model}`);
+
+        // 4b. A read-only server must refuse mission start before creating anything.
+        let deniedStart = null;
+        try {
+            await first.startMission({
+                goal: 'This must never start',
+                developerModel: settings.mission_defaults.developer_model,
+                reviewerModel: settings.mission_defaults.reviewer_model
+            });
+        } catch (error) {
+            deniedStart = error;
+        }
+        assert(deniedStart && /read-only|approved/i.test(deniedStart.message),
+            'read-only mission start refused: ' + (deniedStart && deniedStart.message));
+        const missionsAfterDenial = await first.callJson('mission_list', {});
+        assert.deepStrictEqual(missionsAfterDenial.missions, [], 'denied start created no mission');
+        log('PASS read-only engine refused start_mission and created no mission');
 
         // 5. Real Ollama chat turn.
         const reply = await first.converse(context.project.id, 'Reply with exactly: NLCHAT-OK');

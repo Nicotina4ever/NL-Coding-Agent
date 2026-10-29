@@ -46,6 +46,8 @@ export interface EngineConnectionOptions {
     extensionPath?: string;
     /** Active workspace folder; the engine binds exactly one project per process. */
     projectRoot?: string;
+    /** Start the MCP server with --allow-execution so mission start/cancel is permitted. */
+    allowExecution?: boolean;
     /** Extra environment values merged over the inherited process environment. */
     env?: Record<string, string>;
     requestTimeoutMs?: number;
@@ -84,6 +86,156 @@ export interface ConverseResult {
 export interface AttachmentInput {
     name?: string;
     extracted_text?: string;
+}
+
+export interface EngineSettings {
+    schema_version: number;
+    project: { id: number; root: string };
+    execution_enabled: boolean;
+    models: {
+        config_path: string;
+        config_exists: boolean;
+        ollama: Record<string, unknown>;
+        providers: Array<{
+            provider_id: string;
+            kind: string;
+            label: string;
+            base_url: string;
+            enabled: boolean;
+            api_key_env?: string;
+        }>;
+        roles: Record<string, { model?: string; temperature?: number; enabled?: boolean }>;
+        chat_role: string;
+        chat_default_spec: string;
+        cloud_escalation_enabled: boolean;
+        discovered: null | {
+            reachable?: boolean;
+            errors?: string[];
+            providers: Array<{
+                provider_id: string;
+                label: string;
+                reachable: boolean;
+                error?: string;
+                elapsed_ms?: number;
+                models: Array<{
+                    name: string;
+                    size_gb?: number;
+                    loaded?: boolean;
+                    family?: string;
+                    capabilities?: string[];
+                }>;
+            }>;
+        };
+    };
+    mission_defaults: { developer_model: string; reviewer_model: string; debug_model: string };
+    agents: {
+        roles: Array<{ role: string; model: string; kind: string; note?: string }>;
+        custom_agents: Array<Record<string, unknown>>;
+    };
+    permissions: {
+        scopes: string[];
+        policy: Record<string, boolean>;
+        cloud_escalation_enabled?: boolean;
+        error?: string;
+    };
+    runtime: Record<string, unknown>;
+}
+
+export interface MissionRow {
+    id: number;
+    project_id: number;
+    title: string;
+    goal: string;
+    status: string;
+    created_at?: string;
+    updated_at?: string;
+    started_at?: string | null;
+    finished_at?: string | null;
+    result_summary?: string | null;
+    review_verdict?: string | null;
+    diff_stat?: string | null;
+    changed_paths?: string | string[] | null;
+    staging_dir?: string | null;
+    harness_version?: number | null;
+    promotion_status?: string | null;
+    resume_count?: number;
+}
+
+export interface MissionProgress {
+    total: number;
+    completed: number;
+    failed: number;
+    running: number;
+    pending: number;
+    percent: number;
+}
+
+export interface MissionTask {
+    id: number;
+    title: string;
+    status: string;
+    agent_role: string;
+    attempts?: number;
+    last_error?: string | null;
+    depends_on?: number[];
+    write_paths?: string[];
+    created_at?: string;
+    started_at?: string | null;
+    finished_at?: string | null;
+}
+
+export interface MissionHandoff {
+    id: number;
+    from_role: string;
+    to_role: string;
+    summary: string;
+    created_at?: string;
+    payload: Record<string, unknown>;
+}
+
+export interface VerificationRun {
+    id: number;
+    task_id?: number | null;
+    command: string;
+    exit_code: number;
+    passed: boolean;
+    created_at?: string;
+    stdout?: string;
+    stderr?: string;
+}
+
+export interface MissionAttempt {
+    id: number;
+    task_id?: number;
+    task_title?: string;
+    agent_role?: string;
+    status?: string;
+    started_at?: string;
+    finished_at?: string;
+    error?: string;
+    output?: string;
+}
+
+export interface MissionDetail {
+    mission: MissionRow;
+    tasks: MissionTask[];
+    handoffs: MissionHandoff[];
+    verification_runs: VerificationRun[];
+    attempts: MissionAttempt[];
+    progress: MissionProgress;
+}
+
+export interface CandidateDiff {
+    ok: boolean;
+    mission_id?: number;
+    diff?: string;
+    changed_paths?: string[];
+    stat?: string;
+    status?: string;
+    verdict?: string | null;
+    promotion_status?: string | null;
+    retained?: boolean;
+    error?: string;
 }
 
 interface ToolCallPayload {
@@ -231,6 +383,16 @@ export class EngineConnection {
         return this.serverInfo;
     }
 
+    /** Whether the spawned server is allowed to start/cancel missions. */
+    get executionAllowed(): boolean {
+        return Boolean(this.options.allowExecution);
+    }
+
+    /** Update the execution flag; call restart() to spawn the server with the new arg. */
+    setAllowExecution(value: boolean): void {
+        this.options.allowExecution = Boolean(value);
+    }
+
     get lastErrorMessage(): string | undefined {
         return this.lastError;
     }
@@ -279,13 +441,17 @@ export class EngineConnection {
         this.lastError = undefined;
         const location = resolveEngineLocation({ ...this.options, projectRoot: this.projectRoot });
         const env = collectEnvironment(this.options.env);
-        this.log(`starting engine: "${location.pythonPath}" "${location.nlAgentPath}" mcp serve --project "${this.projectRoot}"`);
+        const args = [location.nlAgentPath, 'mcp', 'serve', '--project', this.projectRoot];
+        if (this.options.allowExecution) {
+            args.push('--allow-execution');
+        }
+        this.log(`starting engine: "${location.pythonPath}" ${args.join(' ')}`);
         let client: Client | undefined;
         let transport: StdioClientTransport | undefined;
         try {
             transport = new StdioClientTransport({
                 command: location.pythonPath,
-                args: [location.nlAgentPath, 'mcp', 'serve', '--project', this.projectRoot],
+                args,
                 cwd: location.engineRoot,
                 env,
                 stderr: 'pipe'
@@ -431,7 +597,8 @@ export class EngineConnection {
         projectId: number,
         text: string,
         attachments: AttachmentInput[] = [],
-        timeoutMs?: number
+        timeoutMs?: number,
+        modelSpec?: string
     ): Promise<ConverseResult> {
         if (!Number.isInteger(projectId) || projectId <= 0) {
             throw new EngineError('invalid-project', 'A valid project id from project_context is required.');
@@ -440,16 +607,97 @@ export class EngineConnection {
         if (!message) {
             throw new EngineError('empty-message', 'The message is empty.');
         }
-        const result = await this.callJson<ConverseResult>(
-            'nlc_converse',
-            { project_id: projectId, text: message, attachments, history: [] },
-            timeoutMs || this.timeoutMs
-        );
+        const params: Record<string, unknown> = {
+            project_id: projectId,
+            text: message,
+            attachments,
+            history: []
+        };
+        if (modelSpec && modelSpec.trim()) {
+            params.model_spec = modelSpec.trim();
+        }
+        const result = await this.callJson<ConverseResult>('nlc_converse', params, timeoutMs || this.timeoutMs);
         if (!result || result.ok !== true || typeof result.reply !== 'string') {
             const detail = (result && (result.reply || (result.error && result.error.message))) ||
                 'The engine could not produce a reply.';
             throw new EngineError('chat-failed', detail);
         }
         return result;
+    }
+
+    /** Read-only engine model/agent/permission configuration (optionally probe local models). */
+    async engineSettings(includeModels = false, timeoutS = 2.5): Promise<EngineSettings> {
+        return this.callJson<EngineSettings>(
+            'engine_settings',
+            { include_models: includeModels, timeout_s: timeoutS },
+            30_000
+        );
+    }
+
+    /** Persisted missions of the bound project, newest first. */
+    async missionList(): Promise<MissionRow[]> {
+        const result = await this.callJson<{ missions?: MissionRow[] }>('mission_list', {}, 30_000);
+        return Array.isArray(result.missions) ? result.missions : [];
+    }
+
+    async missionStatus(missionId: number): Promise<MissionRow> {
+        return this.callJson<MissionRow>('mission_status', { mission_id: missionId }, 30_000);
+    }
+
+    /** Full persisted mission view (tasks, handoffs, attempts, verification runs). */
+    async missionDetail(missionId: number): Promise<MissionDetail> {
+        const detail = await this.callJson<MissionDetail>('mission_detail', { mission_id: missionId }, 30_000);
+        if (!detail || typeof detail !== 'object' || !detail.mission) {
+            throw new EngineError('invalid-mission', 'mission_detail returned an unexpected shape.');
+        }
+        return detail;
+    }
+
+    /** Candidate/staged or retained historical diff. `ok:false` is a real answer. */
+    async candidateDiff(missionId: number): Promise<CandidateDiff> {
+        return this.callJson<CandidateDiff>('candidate_diff', { mission_id: missionId }, 30_000);
+    }
+
+    /**
+     * Start (or resume) a mission through the existing Supervisor/staging engine.
+     * The server only accepts this when it was started with --allow-execution and
+     * the explicit approval flag is set, so callers must confirm with the human.
+     */
+    async startMission(input: {
+        goal: string;
+        developerModel: string;
+        reviewerModel: string;
+        resumeMissionId?: number;
+    }): Promise<{ mission_id: number; dispatch?: string; task_id?: string }> {
+        const goal = String(input.goal || '').trim();
+        if (!goal) {
+            throw new EngineError('empty-goal', 'The mission objective is empty.');
+        }
+        if (!input.developerModel || !input.reviewerModel) {
+            throw new EngineError('missing-model', 'Exact developer and reviewer model routes are required.');
+        }
+        const params: Record<string, unknown> = {
+            goal,
+            developer_model: input.developerModel,
+            reviewer_model: input.reviewerModel,
+            approved: true
+        };
+        if (input.resumeMissionId !== undefined) {
+            params.resume_mission_id = input.resumeMissionId;
+        }
+        const result = await this.callJson<{ mission_id?: number; dispatch?: string; task_id?: string }>(
+            'start_mission', params, 60_000
+        );
+        if (!result || typeof result.mission_id !== 'number') {
+            throw new EngineError('mission-not-started', 'The engine did not return a mission id.');
+        }
+        return { ...result, mission_id: result.mission_id };
+    }
+
+    /** Request a durable cooperative stop at the next safe checkpoint. */
+    async cancelMission(missionId: number): Promise<Record<string, unknown>> {
+        return this.callJson<Record<string, unknown>>(
+            'cancel_mission', { mission_id: missionId, approved: true }, 30_000
+        );
     }
 }

@@ -67,10 +67,18 @@ async function run() {
     assert.strictEqual(api.connection.state, 'ready', 'connection ready');
     const tools = await api.connection.listTools();
     const names = tools.map((tool) => tool.name);
-    for (const required of ['project_context', 'nlc_converse', 'mission_list']) {
+    for (const required of ['project_context', 'nlc_converse', 'mission_list', 'mission_detail',
+        'candidate_diff', 'start_mission', 'cancel_mission', 'engine_settings']) {
         assert(names.includes(required), 'missing tool ' + required);
     }
+    assert.strictEqual(api.connection.executionAllowed, false, 'engine session is read-only by default');
+    const settings = await api.connection.engineSettings(false);
+    assert(Number.isInteger(settings.project.id), 'engine_settings project id');
+    assert(settings.permissions.scopes.includes('read'), 'engine_settings permissions');
+    assert(settings.mission_defaults.developer_model, 'engine_settings mission defaults');
     console.log('PASS MCP initialize + tools: ' + names.join(', '));
+    console.log('PASS engine settings: ' + settings.models.chat_default_spec + ' / missions ' +
+        settings.mission_defaults.developer_model + ' -> ' + settings.mission_defaults.reviewer_model);
 
     // 2. Active workspace maps to the bound backend project.
     const folders = vscode.workspace.workspaceFolders || [];
@@ -97,17 +105,21 @@ async function run() {
     assert(html.includes("default-src 'none'"), 'webview HTML has a CSP');
     assert(/media\/main\.js/.test(html), 'webview script points at the extension media resource');
     const systemMessage = api.chat.debugState.posted.find((message) =>
-        message.type === 'message' && message.role === 'system');
+        message.type === 'chat' && message.role === 'system');
     assert(systemMessage, 'webview received the project/tool system message');
     assert(systemMessage.text.includes('#' + context.project.id), 'system message shows the project id');
-    assert(systemMessage.text.includes('project_context'), 'system message lists real tools');
+    assert(systemMessage.text.includes('Project:'), 'system message lists the bound project');
+    const stateMessage = api.chat.debugState.posted.filter((message) => message.type === 'state').pop();
+    assert(stateMessage && stateMessage.payload && stateMessage.payload.settings,
+        'webview received engine settings in the dashboard state');
+    assert.strictEqual(stateMessage.payload.project.id, context.project.id, 'dashboard project id');
     console.log('PASS NL Chat webview created; it received project #' + context.project.id +
-        ' and the discovered tools');
+        ' and the engine settings/model catalog');
 
     // 4. A real user turn reaches a configured Ollama model and is displayed.
     await api.chat.handleUserMessage('Reply with exactly: EXT-OK');
     const assistant = api.chat.debugState.posted.filter((message) =>
-        message.type === 'message' && message.role === 'assistant').pop();
+        message.type === 'chat' && message.role === 'assistant').pop();
     assert(assistant, 'webview received an assistant message');
     assert(/EXT-OK/.test(assistant.text), 'assistant reply text: ' + JSON.stringify(assistant.text));
     console.log('PASS real Ollama reply delivered to NL Chat: ' + JSON.stringify(assistant.text));

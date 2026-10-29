@@ -1,0 +1,44 @@
+== NL Coding Agent frontend integration acceptance ==
+PASS engine location: K:\AI\NL Coding Agent
+PASS invalid engine root rejected
+PASS missing workspace rejected before spawning
+    [engine] starting engine: "K:\AI\NL Coding Agent\python\python.exe" K:\AI\NL Coding Agent\nl_agent.py mcp serve --project K:\AI\NL Coding Agent\.workspace\temp\frontend-accept\integration\project-a
+    [engine] engine: [10/29/26 22:22:52] 
+    [engine] engine: INFO     Processing request of type           server.py:733
+    [engine] engine:                              ListToolsRequest                                  
+    [engine] engine ready: NL Coding Engine 1.30.0 · 10 tools · pid 10812
+PASS MCP initialize: NL Coding Engine 1.30.0 (pid 10812)
+PASS tools discovered (10): project_context, engine_settings, nlc_converse, mission_list, mission_status, mission_events, mission_detail, candidate_diff, start_mission, cancel_mission
+    [engine] engine:  INFO     Processing request of type           server.py:733
+    [engine] engine:                              CallToolRequest                                   
+    [engine] engine:  INFO     Processing request of type           server.py:733
+    [engine] engine:                              CallToolRequest                                   
+    [engine] engine:  INFO     Processing request of type           
+    [engine] engine: server.py:733
+    [engine] engine:                              CallToolRequest                                   
+PASS project_context: project #1 root=K:\AI\NL Coding Agent\.workspace\temp\frontend-accept\integration\project-a (read-only)
+PASS engine_settings: ollama/qwen2.5-coder:7b-instruct-q4_K_M / ollama/qwen2.5-coder:7b-instruct-q4_K_M -> ollama/qwen3.5:9b
+    [engine] engine:  INFO     Processing request of type           server.py:733
+    [engine] engine:                              CallToolRequest                                   
+    [engine] engine: INFO     Processing request of type           server.py:733
+    [engine] engine:                              CallToolRequest                                   
+PASS read-only engine refused start_mission and created no mission
+    [engine] engine: INFO     Processing request of type           server.py:733
+    [engine] engine:                              CallToolRequest                                   
+PASS real Ollama chat reply: "NLCHAT-OK"
+    [engine] engine: [10/29/26 22:22:53]
+    [engine] engine:  INFO     Processing request of type           server.py:733
+    [engine] engine:                              CallToolRequest                                   
+PASS cross-project project_id rejected by the engine
+    [engine] starting engine: "K:\AI\NL Coding Agent\python\python.exe" K:\AI\NL Coding Agent\nl_agent.py mcp serve --project K:\AI\NL Coding Agent\.workspace\temp\frontend-accept\integration\project-b
+    [engine] engine: [10/29/26 22:22:56] 
+    [engine] engine: INFO     Processing request of type           server.py:733
+    [engine] engine:                              ListToolsRequest                                  
+    [engine] engine ready: NL Coding Engine 1.30.0 · 10 tools · pid 46972
+    [engine] engine:  INFO     Processing request of type           server.py:733
+    [engine] engine:                              CallToolRequest                                   
+    [engine] engine:  INFO     Processing request of type           server.py:733
+    [engine] engine:                              CallToolRequest                                   
+PASS workspace isolation: project A #1, project B #2
+PASS shutdown released child processes 10812, 46972
+== INTEGRATION-ACCEPTANCE-PASS ==

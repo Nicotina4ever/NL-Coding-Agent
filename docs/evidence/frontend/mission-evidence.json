@@ -1,0 +1,207 @@
+{
+  "mission": {
+    "id": 1,
+    "project_id": 1,
+    "title": "In src/calc.py add sub(a, b) returning a - b. Preserve add and all existing test",
+    "goal": "In src/calc.py add sub(a, b) returning a - b. Preserve add and all existing tests. Change only src/calc.py.",
+    "status": "completed",
+    "created_at": "2026-10-29T22:27:22",
+    "updated_at": "2026-10-29T22:27:39",
+    "result_summary": "Reviewer APPROVED; promoted 1 file(s).",
+    "review_verdict": "APPROVE",
+    "diff_stat": "1 file(s), +3/-0",
+    "changed_paths": [
+      "src/calc.py"
+    ],
+    "resume_count": 0,
+    "started_at": "2026-10-29T22:27:30",
+    "finished_at": "2026-10-29T22:27:39",
+    "harness_version": 2,
+    "staging_dir": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\frontend-accept\\vsix-1793309234147\\project\\data\\staging\\mission-1-xi_rrwmd",
+    "promotion_status": "promoted",
+    "requirement_id": null,
+    "supervisor_run_id": null,
+    "flow_id": null
+  },
+  "tasks": [
+    {
+      "id": 1,
+      "title": "Code Implementation",
+      "status": "completed",
+      "agent_role": "developer",
+      "attempts": 1,
+      "last_error": null,
+      "depends_on": [],
+      "write_paths": [
+        "src/calc.py"
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Test & Verification",
+      "status": "completed",
+      "agent_role": "tester",
+      "attempts": 1,
+      "last_error": null,
+      "depends_on": [
+        1
+      ],
+      "write_paths": []
+    },
+    {
+      "id": 3,
+      "title": "Code Review",
+      "status": "completed",
+      "agent_role": "reviewer",
+      "attempts": 1,
+      "last_error": null,
+      "depends_on": [
+        2
+      ],
+      "write_paths": []
+    }
+  ],
+  "handoffs": [
+    {
+      "id": 1,
+      "from_role": "orchestrator",
+      "to_role": "developer",
+      "summary": "Candidate stage created: mission-1-xi_rrwmd",
+      "payload": {
+        "stage_dir": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\frontend-accept\\vsix-1793309234147\\project\\data\\staging\\mission-1-xi_rrwmd",
+        "scope": [
+          "src/calc.py"
+        ]
+      },
+      "created_at": "2026-10-29T22:27:30"
+    },
+    {
+      "id": 2,
+      "from_role": "developer",
+      "to_role": "tester",
+      "summary": "Developer staged 1 file(s): src/calc.py. Actions: 1.",
+      "payload": {
+        "model": "ollama/qwen2.5-coder:7b-instruct-q4_K_M",
+        "changed_paths": [
+          "src/calc.py"
+        ],
+        "actions": [
+          "Wrote src/calc.py via code block"
+        ],
+        "diff_sample": "--- a/src/calc.py\n+++ b/src/calc.py\n@@ -1,2 +1,5 @@\n def add(a, b):\n     return a + b\n+\n+def sub(a, b):\n+    return a - b",
+        "output_sample": "```write:src/calc.py\ndef add(a, b):\n    return a + b\n\ndef sub(a, b):\n    return a - b\n```\n\nSummary of files actually modified in the staged workspace and the changes made:\n- `src/calc.py`: Added the `sub(a, b)` function that returns `a - b`."
+      },
+      "created_at": "2026-10-29T22:27:33"
+    },
+    {
+      "id": 3,
+      "from_role": "tester",
+      "to_role": "reviewer",
+      "summary": "Candidate and oracle suites PASSED (candidate 1.37s, oracle 1.61s)",
+      "payload": {
+        "candidate": true,
+        "oracle": true,
+        "report": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\frontend-accept\\vsix-1793309234147\\project\\data\\staging\\mission-1-xi_rrwmd\\verification\\evidence\\report.json"
+      },
+      "created_at": "2026-10-29T22:27:36"
+    },
+    {
+      "id": 4,
+      "from_role": "reviewer",
+      "to_role": "orchestrator",
+      "summary": "Review completed with verdict: APPROVE",
+      "payload": {
+        "model": "ollama/qwen2.5-coder:7b-instruct-q4_K_M",
+        "verdict": "APPROVE",
+        "review_notes": "APPROVE\n\nThe candidate diff correctly adds the `sub(a, b)` function to `src/calc.py`, which returns `a - b`. This function adheres to the mission objective of adding a subtraction function while preserving the existing `add` function and tests. The diff is within the authorized write scope and does not introduce any new imports or files. The validation runs indicate that both the candidate and oracle tests passed, ensuring the correctness and safety of the changes. There are no blocking issues, and the candidate meets all the criteria outlined in the instructions.",
+        "changed_paths": [
+          "src/calc.py"
+        ],
+        "candidate": true
+      },
+      "created_at": "2026-10-29T22:27:39"
+    },
+    {
+      "id": 5,
+      "from_role": "orchestrator",
+      "to_role": "user",
+      "summary": "Promoted 1 file(s) to the live tree",
+      "payload": {
+        "promoted": [
+          "src/calc.py"
+        ],
+        "hashes": {
+          "src/calc.py": "840012ec066e46c565dafc36d2e36822f76a624dc3cc8a274ac95e62f62103e4"
+        }
+      },
+      "created_at": "2026-10-29T22:27:39"
+    },
+    {
+      "id": 6,
+      "from_role": "orchestrator",
+      "to_role": "user",
+      "summary": "Reviewer APPROVED; promoted 1 file(s).",
+      "payload": {
+        "status": "completed",
+        "verdict": "APPROVE",
+        "changed_paths": [
+          "src/calc.py"
+        ],
+        "diff_stat": "1 file(s), +3/-0",
+        "promotion_status": "promoted"
+      },
+      "created_at": "2026-10-29T22:27:39"
+    }
+  ],
+  "verification_runs": [
+    {
+      "id": 1,
+      "task_id": 2,
+      "command": "verify:candidate K:\\AI\\NL Coding Agent\\python\\python.exe K:\\AI\\NL Coding Agent\\.workspace\\temp\\frontend-accept\\vsix-1793309234147\\project\\data\\staging\\mission-1-xi_rrwmd\\verification\\candidate\\_pytest_runner.py -q -p no:cacheprovider --no-header --junitxml=K:\\AI\\NL Coding Agent\\.workspace\\temp\\frontend-accept\\vsix-1793309234147\\project\\data\\staging\\mission-1-xi_rrwmd\\verification\\evidence\\junit-candidate.xml tests",
+      "exit_code": 0,
+      "passed": 1,
+      "stdout": "..                                                                       [100%]\r\n2 passed in 0.08s\r\n",
+      "stderr": ""
+    },
+    {
+      "id": 2,
+      "task_id": 2,
+      "command": "verify:oracle K:\\AI\\NL Coding Agent\\python\\python.exe K:\\AI\\NL Coding Agent\\.workspace\\temp\\frontend-accept\\vsix-1793309234147\\project\\data\\staging\\mission-1-xi_rrwmd\\verification\\oracle\\_pytest_runner.py -q -p no:cacheprovider --no-header --junitxml=K:\\AI\\NL Coding Agent\\.workspace\\temp\\frontend-accept\\vsix-1793309234147\\project\\data\\staging\\mission-1-xi_rrwmd\\verification\\evidence\\junit-oracle.xml tests",
+      "exit_code": 0,
+      "passed": 1,
+      "stdout": "..                                                                       [100%]\r\n2 passed in 0.08s\r\n",
+      "stderr": ""
+    }
+  ],
+  "attempts": [
+    {
+      "id": 1,
+      "task_id": 1,
+      "status": "completed",
+      "agent_role": "developer",
+      "task_title": "Code Implementation",
+      "output": "```write:src/calc.py\ndef add(a, b):\n    return a + b\n\ndef sub(a, b):\n    return a - b\n```\n\nSummary of files actually modified in the staged workspace and the changes made:\n- `src/calc.py`: Added the `sub(a, b)` function that returns `a - b`.",
+      "error": ""
+    },
+    {
+      "id": 2,
+      "task_id": 2,
+      "status": "completed",
+      "agent_role": "tester",
+      "task_title": "Test & Verification",
+      "output": "Candidate and oracle suites PASSED (candidate 1.37s, oracle 1.61s)",
+      "error": ""
+    },
+    {
+      "id": 3,
+      "task_id": 3,
+      "status": "completed",
+      "agent_role": "reviewer",
+      "task_title": "Code Review",
+      "output": "APPROVE\n\nThe candidate diff correctly adds the `sub(a, b)` function to `src/calc.py`, which returns `a - b`. This function adheres to the mission objective of adding a subtraction function while preserving the existing `add` function and tests. The diff is within the authorized write scope and does not introduce any new imports or files. The validation runs indicate that both the candidate and oracle tests passed, ensuring the correctness and safety of the changes. There are no blocking issues, and the candidate meets all the criteria outlined in the instructions.",
+      "error": ""
+    }
+  ],
+  "project_root": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\frontend-accept\\vsix-1793309234147\\project",
+  "src_calc_py": "def add(a, b):\n    return a + b\n\ndef sub(a, b):\n    return a - b\n"
+}

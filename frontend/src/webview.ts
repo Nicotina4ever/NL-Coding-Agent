@@ -46,18 +46,93 @@ export function buildChatHtml(assets: WebviewAssets): string {
 </head>
 <body>
     <header class="nl-header">
-        <span class="nl-brand">NL Chat</span>
-        <span id="status" class="nl-status" role="status" aria-live="polite">Starting…</span>
-    </header>
-    <main id="messages" class="nl-messages" role="log" aria-live="polite" aria-label="Conversation"></main>
-    <form id="composer" class="nl-composer" autocomplete="off">
-        <label class="nl-visually-hidden" for="input">Message NL Coding Agent</label>
-        <textarea id="input" rows="3" placeholder="Ask NL Coding Agent… (Enter to send, Shift+Enter for a new line)"></textarea>
-        <div class="nl-composer-actions">
-            <span id="hint" class="nl-hint"></span>
-            <button id="send" type="submit">Send</button>
+        <div class="nl-header-row">
+            <span class="nl-brand">NL Chat</span>
+            <span id="status" class="nl-status" role="status" aria-live="polite">Starting…</span>
         </div>
-    </form>
+        <div class="nl-header-row nl-header-meta">
+            <span id="project-badge" class="nl-chip">no project</span>
+            <button id="exec-toggle" class="nl-chip nl-chip-button" type="button" title="Toggle mission execution for this engine session">read-only</button>
+        </div>
+        <nav class="nl-tabs" aria-label="Sections">
+            <button type="button" class="nl-tab-button active" data-tab="chat">Chat</button>
+            <button type="button" class="nl-tab-button" data-tab="missions">Missions</button>
+            <button type="button" class="nl-tab-button" data-tab="engine">Engine</button>
+        </nav>
+    </header>
+
+    <div id="notice" class="nl-notice hidden" role="alert"></div>
+
+    <main class="nl-main">
+        <section id="tab-chat" class="nl-tab-panel active">
+            <div id="mission-banner" class="nl-mission-banner hidden">
+                <div class="nl-mission-banner-head">
+                    <span id="banner-title" class="nl-mission-title">Mission</span>
+                    <span id="banner-status" class="nl-status-chip">—</span>
+                </div>
+                <div class="nl-progress" aria-hidden="true"><div id="banner-progress-bar" class="nl-progress-bar"></div></div>
+                <div id="banner-counts" class="nl-muted"></div>
+                <div class="nl-actions">
+                    <button id="btn-banner-stop" type="button">Stop</button>
+                    <button id="btn-banner-resume" type="button" class="hidden">Resume</button>
+                    <button id="btn-banner-details" type="button">Details</button>
+                </div>
+            </div>
+
+            <div id="messages" class="nl-messages" role="log" aria-live="polite" aria-label="Conversation"></div>
+
+            <form id="composer" class="nl-composer" autocomplete="off">
+                <label class="nl-visually-hidden" for="input">Message NL Coding Agent</label>
+                <textarea id="input" rows="3" placeholder="Ask NL Coding Agent…  (/mission &lt;objective&gt; starts a mission)"></textarea>
+                <div class="nl-field-row">
+                    <label class="nl-field">Mode
+                        <select id="mode">
+                            <option value="chat">Chat</option>
+                            <option value="mission">Mission</option>
+                        </select>
+                    </label>
+                    <label class="nl-field">Chat model
+                        <select id="chat-model"></select>
+                    </label>
+                </div>
+                <div id="mission-fields" class="nl-field-row hidden">
+                    <label class="nl-field">Developer model
+                        <select id="dev-model"></select>
+                    </label>
+                    <label class="nl-field">Reviewer model
+                        <select id="reviewer-model"></select>
+                    </label>
+                </div>
+                <p id="mission-note" class="nl-hint hidden">The mission runs through the existing Supervisor, staging and verification gates and requires explicit confirmation.</p>
+                <div class="nl-composer-actions">
+                    <span id="hint" class="nl-hint"></span>
+                    <button id="send" type="submit">Send</button>
+                </div>
+            </form>
+        </section>
+
+        <section id="tab-missions" class="nl-tab-panel">
+            <div class="nl-section-head">
+                <strong>Persistent missions</strong>
+                <span class="nl-actions">
+                    <button id="refresh-missions" type="button">Refresh</button>
+                </span>
+            </div>
+            <div id="mission-list" class="nl-list"></div>
+            <div id="mission-detail" class="nl-detail hidden"></div>
+        </section>
+
+        <section id="tab-engine" class="nl-tab-panel">
+            <div class="nl-section-head">
+                <strong>Engine</strong>
+                <span class="nl-actions">
+                    <button id="refresh-models" type="button">Probe models</button>
+                    <button id="refresh-engine" type="button">Refresh</button>
+                </span>
+            </div>
+            <div id="engine-content" class="nl-detail"></div>
+        </section>
+    </main>
     <script src="${escapeHtml(assets.scriptUri)}"></script>
 </body>
 </html>`;
