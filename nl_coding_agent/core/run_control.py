@@ -44,6 +44,7 @@ class RunControl:
         self._pause = pause_event if pause_event is not None else threading.Event()
         self._reason = ""
         self._checkpoint_hook = on_checkpoint
+        self._checkpoint_hooks = []
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------ flags
@@ -87,10 +88,19 @@ class RunControl:
 
     # ------------------------------------------------------------ checkpoints
 
+    def add_checkpoint_hook(self, hook: Callable[[str], None]) -> None:
+        """Compose backend policy hooks with caller-supplied stop/pause control."""
+        with self._lock:
+            if hook not in self._checkpoint_hooks:
+                self._checkpoint_hooks.append(hook)
+
     def checkpoint(self, stage: str) -> None:
         """Call at safe stage boundaries; raises RunStopped when stop is requested."""
-        hook = self._checkpoint_hook
-        if hook is not None:
+        with self._lock:
+            hooks = list(self._checkpoint_hooks)
+        if self._checkpoint_hook is not None:
+            self._checkpoint_hook(str(stage))
+        for hook in hooks:
             hook(str(stage))
         if self._stop.is_set():
             raise RunStopped(stage, self.stop_reason)

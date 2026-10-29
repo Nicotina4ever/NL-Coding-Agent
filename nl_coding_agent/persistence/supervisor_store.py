@@ -790,6 +790,47 @@ def enqueue_mission(project_id: int, *, requirement_id: str | None, goal: str,
             return int(row["id"])
 
 
+def bind_goal_mission(queue_id: int, *, project_id: int, claim_token: str,
+                      supervisor_run_id: int | None) -> int:
+    """Atomically create/link a goal mission and bind it to the claimed queue row.
+
+    Repeated calls after a crash return the same mission. Core owns eligibility;
+    this transaction enforces project/goal/milestone identity and claim ownership.
+    """
+    from nl_coding_agent.persistence.missions import insert_mission
+    with _db() as conn, conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT * FROM mission_queue WHERE id=?", (queue_id,)).fetchone()
+        if (row is None or row["project_id"] != project_id
+                or row["claim_token"] != claim_token or row["state"] != "CLAIMED"):
+            raise StoreError("Goal queue claim was lost")
+        item = _queue_row(row)
+        payload = item["payload"]
+        goal_id, milestone_id = int(payload["goal_id"]), int(payload["milestone_id"])
+        target = conn.execute(
+            "SELECT m.id FROM milestones m JOIN goals g ON g.id=m.goal_id "
+            "WHERE m.id=? AND g.id=? AND g.project_id=?",
+            (milestone_id, goal_id, project_id)).fetchone()
+        if target is None:
+            raise StoreError("Goal queue target belongs to another project or is missing")
+        if item.get("mission_id"):
+            linked = conn.execute(
+                "SELECT m.id FROM missions m JOIN goal_missions l ON l.mission_id=m.id "
+                "WHERE m.id=? AND m.project_id=? AND l.goal_id=? AND l.milestone_id=?",
+                (item["mission_id"], project_id, goal_id, milestone_id)).fetchone()
+            if linked is None:
+                raise StoreError("Queue mission is not linked to the expected goal/project")
+            return int(item["mission_id"])
+        mission_id = insert_mission(
+            conn, project_id, str(payload.get("title") or "Goal milestone")[:200],
+            str(item["goal"]), supervisor_run_id=supervisor_run_id)
+        conn.execute("INSERT INTO goal_missions (goal_id,milestone_id,mission_id,role,created_at) "
+                     "VALUES (?,?,?,'primary',?)", (goal_id,milestone_id,mission_id,_now()))
+        conn.execute("UPDATE mission_queue SET mission_id=?,updated_at=? WHERE id=?",
+                     (mission_id, _now(), queue_id))
+        return mission_id
+
+
 def get_queue_item(queue_id: int) -> dict | None:
     with _db() as conn:
         row = conn.execute(

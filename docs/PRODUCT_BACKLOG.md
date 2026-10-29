@@ -76,8 +76,8 @@ Publication/push remains forbidden without explicit owner authorization.
 | Status | P0 | P1 | P2 | P3 | Total |
 |---|---|---|---|---|---|
 | verified | 27 | 13 | 0 | 0 | 40 |
-| partial | 44 | 28 | 11 | 1 | 84 |
-| planned | 37 | 19 | 9 | 1 | 66 |
+| partial | 45 | 28 | 11 | 1 | 85 |
+| planned | 36 | 19 | 9 | 1 | 65 |
 | blocked | 3 | 0 | 0 | 0 | 3 |
 | **Total** | 111 | 60 | 20 | 2 | 193 |
 
@@ -85,7 +85,7 @@ Publication/push remains forbidden without explicit owner authorization.
 |---|---|---|---|---|---|
 | Area 1 - CrewAI + CrewAI Flows first-class integration | 24 | 6 | 7 | 11 | 0 |
 | Area 2 - Studio GUI + multimodal chat | 40 | 3 | 25 | 12 | 0 |
-| Area 3 - Universal autonomous development | 60 | 17 | 21 | 21 | 1 |
+| Area 3 - Universal autonomous development | 60 | 17 | 22 | 20 | 1 |
 | Area 4 - Repository hygiene | 9 | 3 | 5 | 1 | 0 |
 | Area 5 - Lightweight installation + portable distribution | 27 | 2 | 12 | 13 | 0 |
 | Area 6 - Release acceptance criteria | 33 | 3 | 12 | 16 | 2 |
@@ -2196,7 +2196,7 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
 <a id="nl-bp-214"></a>
 ### NL-BP-214 - Goal continuation scheduler: cross-goal eligible-task execution
 
-- **Area:** AUTONOMY - **Priority:** P0 - **Status:** planned
+- **Area:** AUTONOMY - **Priority:** P0 - **Status:** partial
 - **Blueprint priority:** new (user directives 2026-10-28: Universal Goal Mode + document-driven planning)
 - **Dependencies:** NL-BP-212, NL-BP-061, NL-BP-062, NL-BP-064
 - **Acceptance gates:**
@@ -2206,8 +2206,9 @@ _Persistent goals/milestones/tasks/missions, dynamic teams, model competence evi
 - **Evidence:**
   - not started - queued only by task-68 from the user directives; read-only capability audit in docs/GOAL_MODE_CAPABILITY_AUDIT.md; no code, mission or network run started
   - capability evidence: audit sections 3-4 (SQLite has no goals/milestones tables; supervisor/queue/lease/Flow substrate exists; no Goals GUI/CLI; local-only document ingestion; GOAL_TEMPLATE is advisory only)
+  - Goal continuation increment (2026-10-29): existing Supervisor supports work_source=goals, selects across active goals by priority, pins current approved plan/work snapshots, persists selection/defer reasons, and reuses mission_queue idempotency/claims, project/machine leases, permissions and staged candidate/oracle/review/promotion. Goal mission binding/link/queue attachment is atomic; only durable completed+APPROVE+promoted missions with latest passing candidate and oracle runs advance milestones. Manual dependency checkmarks cannot authorize work. Safe-boundary goal pause/replan rechecks compose with caller RunControl; crash recovery reclaims the same mission and tolerates removed historical milestones. CLI supervisor run/start --work-source goals and AppServices background/preview surfaces are wired; resume/status retain the source. Tests: tests/test_goal_execution.py, tests/test_crew_backend.py and existing supervisor/orchestrator/goal regression tests. Real local Ollama qwen2.5-coder:7b-instruct-q4_K_M acceptance implemented subtraction in an isolated project: candidate 2 passed, oracle 2 passed, reviewer APPROVE, promoted, milestone completed, goal still active; evidence .workspace/temp/goal-execution-live-20261029-retry/result.json. Remains partial: broad cross-project execution acceptance, GUI execution controls, document-plan-to-goal bootstrap and automatic original-objective completion are not established by this increment.
 - **Sources:** user directives 2026-10-28: Universal Goal Mode + Document-Driven Goal Bootstrap & Planning (task-68; audited in docs/GOAL_MODE_CAPABILITY_AUDIT.md); docs/GOAL_MODE_CAPABILITY_AUDIT.md; NL-BP-212; NL-BP-061; NL-BP-062; NL-BP-064
-- **Note:** Cross-goal extension of the verified single-sequence supervisor (061/062); does not relax staged/independent gates.
+- **Note:** Opt-in Goal-source execution reuses the existing supervisor and independent gates; local-model arithmetic acceptance passed. Partial: GUI execution controls, document-to-goal bootstrap, broader cross-project acceptance and objective-driven adaptive continuation remain open.
 - **Program stage:** 8 - Universal Goal Mode and document-driven planning
 
 <a id="nl-bp-215"></a>

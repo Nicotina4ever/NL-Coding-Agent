@@ -924,3 +924,47 @@ Document-driven plan loop verified (2026-10-29)
   (end-to-end document-driven acceptance scenario) remain planned.
 - Full integration suite 1153 passed in 183.0 s measured wall time. Counts: 193 requirements,
   40 verified / 84 partial / 66 planned / 3 blocked.
+
+Goal continuation through the existing supervisor (2026-10-29)
+
+- Independent stage-8 integration increment under the owner's development handoff;
+  the ten-stage order and existing requirement IDs are preserved. NL-BP-214 remains
+  partial: this is integration evidence, not final product/stage acceptance.
+- `supervisor run/start --project <folder> --work-source goals` selects approved
+  active Goal milestones through the same queue, leases, resource gate, permissions
+  and candidate/oracle/review/promotion pipeline. Backlog remains the default source.
+  Approvals/previews never start runs. AppServices exposes background source selection
+  and `goal_execution_preview(project_id)`; GUI execution controls are not added here.
+- Atomic idempotent mission/link/queue binding, priority selection and durable defer
+  reasons are implemented. Stage/promotion checkpoints recheck goal state and approved
+  work, including externally supplied RunControl. Recovery reclaims the same mission
+  and tolerates historical milestones removed by replanning.
+- Milestones advance only after durable candidate AND oracle passes, reviewer APPROVE
+  and promotion. Manual dependency checkmarks cannot authorize execution. Goal completion
+  remains a separate verification against the original objective.
+- Real local Ollama `qwen2.5-coder:7b-instruct-q4_K_M` acceptance implemented subtraction
+  in an isolated arithmetic project: candidate 2 passed, oracle 2 passed, reviewer
+  APPROVE, promoted, milestone completed, Goal still active. Evidence:
+  `.workspace/temp/goal-execution-live-20261029-retry/result.json` (39-second run).
+  This is a synthetic project with real inference, not unfamiliar-project acceptance.
+- The first smoke failed before inference because CrewAI's AppData SQLite was
+  inaccessible. CrewAIBackend now defaults kickoff storage to `.workspace/state/crewai`,
+  honors explicit overrides and is tested with the actual CrewAI SQLite storage class.
+  No live user mission or external project was run/changed. Restart the desktop app
+  to load backend changes. Remaining work/validation: NEXT_SELF_BUILD_MISSION.md.
+
+Integration validation (2026-10-29): 179 targeted regression tests passed; the final
+Goal/Supervisor core/CLI group passed 70 tests after interface/restart corrections.
+Full suite: 1,166 passed / 10 failed. Seven failures result from the parallel removal
+of the tracked DocumentPlanDialog (one Chat test and six packaging/rehearsal tests);
+three reproduce pre-existing Problems-panel expectations and Windows POSIX-shell
+WinError 1920. No fully green regression or release-readiness claim. Evidence:
+`.workspace/temp/goal-execution-full-regression.txt`,
+`.workspace/temp/goal-execution-interface-final-2.txt`.
+Gatekeeper review approved the diff and inspected real-model evidence directly.
+
+Final storage isolation hardening: candidate/oracle subprocesses receive separate
+NL_WORKSPACE_DIR and CREWAI_STORAGE_DIR beneath their suite data directory. Parent
+state remains unchanged. Targeted verification/backend/Goal batch: 42 passed;
+final candidate verification batch (including real state-isolation subprocesses):
+11 passed. Gatekeeper approved this additional isolation diff.

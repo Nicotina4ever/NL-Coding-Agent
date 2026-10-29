@@ -199,6 +199,7 @@ class SupervisorMissionExecutor:
     def promote(self, state) -> StepResult:
         try:
             self.prepare()
+            self._checkpoint("before-promotion")
             result = self.orchestrator._promote_candidate(self.stage)
             payload = self._candidate_payload()
             payload.update({

@@ -67,7 +67,8 @@ class SupervisorService:
         thread = self._thread
         return bool(thread is not None and thread.is_alive())
 
-    def start(self, *, mode: str | None = None, max_missions: int | None = None) -> dict:
+    def start(self, *, mode: str | None = None, max_missions: int | None = None,
+              work_source: str | None = None) -> dict:
         with self._lock:
             if self.is_running():
                 return {"ok": False, "reason": "Supervisor is already running.",
@@ -76,7 +77,7 @@ class SupervisorService:
             self._last_error = ""
             self._stop_requested = False
             thread = threading.Thread(
-                target=self._run, kwargs={"mode": mode, "max_missions": max_missions},
+                target=self._run, kwargs={"mode": mode, "max_missions": max_missions, "work_source": work_source},
                 name="supervisor-service", daemon=True,
             )
             self._thread = thread
@@ -85,14 +86,17 @@ class SupervisorService:
         return {"ok": True, "state": "starting", "project_id": self.project_id,
                 "thread": thread.name}
 
-    def _run(self, *, mode: str | None, max_missions: int | None) -> None:
+    def _run(self, *, mode: str | None, max_missions: int | None,
+             work_source: str | None = None) -> None:
         self._emit("info", "Supervisor run started.",
                    {"project_id": self.project_id, "mode": mode,
                     "max_missions": max_missions})
         try:
             runner = self._runner()
+            source_override = {"work_source": work_source} if work_source is not None else {}
             result = runner(
                 self.root,
+                **source_override,
                 project_id=self.project_id,
                 mode=mode,
                 max_missions=max_missions,

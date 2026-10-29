@@ -51,19 +51,25 @@ def create_mission(
     Stage-3 supervisor fields (requirement_id / supervisor_run_id) are additive and
     optional; existing callers keep the previous behaviour.
     """
-    now = _now()
     with _db() as conn, conn:
-        cur = conn.execute(
-            """
-            INSERT INTO missions (project_id, title, goal, status, created_at, updated_at,
-                                  harness_version, requirement_id, supervisor_run_id)
-            VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?)
-            """,
-            (project_id, title, goal, now, now, int(harness_version),
-             str(requirement_id) if requirement_id else None,
-             int(supervisor_run_id) if supervisor_run_id is not None else None),
-        )
-        return cur.lastrowid
+        return insert_mission(conn, project_id, title, goal,
+                              harness_version=harness_version,
+                              requirement_id=requirement_id,
+                              supervisor_run_id=supervisor_run_id)
+
+
+def insert_mission(conn, project_id, title, goal, *, harness_version=HARNESS_VERSION,
+                   requirement_id=None, supervisor_run_id=None) -> int:
+    """Insert inside the caller's transaction (queue/link creation must be atomic)."""
+    now = _now()
+    cur = conn.execute(
+        "INSERT INTO missions (project_id, title, goal, status, created_at, updated_at, "
+        "harness_version, requirement_id, supervisor_run_id) "
+        "VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?)",
+        (project_id, title, goal, now, now, int(harness_version),
+         str(requirement_id) if requirement_id else None,
+         int(supervisor_run_id) if supervisor_run_id is not None else None))
+    return int(cur.lastrowid)
 
 
 def set_mission_staging(mission_id: int, staging_dir: str | None) -> None:

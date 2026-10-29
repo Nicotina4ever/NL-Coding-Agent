@@ -112,6 +112,7 @@ class SupervisorConfig:
     reviewer_model: str | None = None
     debug_model: str | None = None
     pipeline: str = "sequential"
+    work_source: str = "backlog"
 
     @classmethod
     def load(cls, project_id: int | None, *, overrides: dict | None = None) -> "SupervisorConfig":
@@ -151,6 +152,8 @@ class SupervisorConfig:
         return data
 
     def validate(self) -> None:
+        if self.work_source not in ("backlog", "goals"):
+            raise SupervisorError("work_source must be backlog or goals")
         if self.mode not in store.RUN_MODES:
             raise SupervisorError("Invalid supervisor mode: " + repr(self.mode))
         if not 1 <= int(self.max_missions_per_run) <= 5:
@@ -231,7 +234,7 @@ class LeaseConflict(SupervisorError):
 # --------------------------------------------------------------------------- #
 
 def resume_command(project_root: str | Path, *, mode: str | None = None,
-                   max_missions: int | None = None) -> str:
+                   max_missions: int | None = None, work_source: str | None = None) -> str:
     command = (
         'python\\python.exe nl_agent.py supervisor run '
         '--project "' + str(Path(project_root).resolve()) + '"'
@@ -240,6 +243,8 @@ def resume_command(project_root: str | Path, *, mode: str | None = None,
         command += " --mode " + str(mode)
     if max_missions is not None:
         command += " --max-missions " + str(int(max_missions))
+    if work_source is not None:
+        command += " --work-source " + str(work_source)
     return command
 
 
@@ -297,7 +302,8 @@ class Supervisor:
             self.config.validate()
         self.orchestrator_factory = orchestrator_factory
         self.event_sink = event_sink
-        self.control = control or RunControl(on_checkpoint=self._on_checkpoint)
+        self.control = control or RunControl()
+        self.control.add_checkpoint_hook(self._on_checkpoint)
         self._resource_decider = resource_decider or resource_gate.decide
         self._clock = clock or time.monotonic
 
@@ -323,11 +329,18 @@ class Supervisor:
         self._results: list[dict] = []
         self._executors: dict[int, object] = {}
         self._flow_runner = None
+        self._active_goal_item = None
 
     # ------------------------------------------------------------ diagnostics
 
     def _on_checkpoint(self, stage: str) -> None:
         self._checkpoints.append(str(stage))
+        if self._active_goal_item is not None:
+            from nl_coding_agent.core.goals import GoalService
+            allowed, reason = GoalService().execution_context(
+                self._active_goal_item["payload"], int(self.project_id))
+            if not allowed:
+                raise RunStopped(str(stage), reason)
 
     @property
     def checkpoints(self) -> list[str]:
@@ -374,6 +387,7 @@ class Supervisor:
         return resume_command(
             self.root, mode=self.config.mode,
             max_missions=self.config.max_missions_per_run,
+            work_source=self.config.work_source,
         )
 
     # ---------------------------------------------------------------- lease
@@ -538,6 +552,19 @@ class Supervisor:
             raise SupervisorBlocked("Backlog selection failed: " + str(exc)) from exc
 
     def enqueue_next(self) -> int | None:
+        if self.config.work_source == "goals":
+            from nl_coding_agent.core.goals import GoalService
+            decision = GoalService().select_execution(int(self.project_id))
+            self._event("Goal continuation selection", kind="goal-selection", payload=decision)
+            selected = decision["selected"]
+            if selected is None:
+                return None
+            return store.enqueue_mission(
+                int(self.project_id), requirement_id=None, goal=selected["goal"],
+                priority=selected["priority"], idempotency_key=selected["idempotency_key"],
+                max_attempts=self.config.max_attempts_per_requirement,
+                budget={"wall_time_s": self.config.mission_wall_time_s},
+                payload=selected["payload"])
         selected = self.select_next()
         if selected is None:
             return None
@@ -641,7 +668,8 @@ class Supervisor:
             report.blockers.append("Unresolved candidate promotion state: " + str(message))
         if blocking:
             report.resume_command = resume_command(
-                self.root, mode=self.config.mode, max_missions=1
+                self.root, mode=self.config.mode, max_missions=1,
+                work_source=self.config.work_source
             )
 
         # 4. stale stage sweep (never journals, never non-terminal missions)
@@ -690,27 +718,32 @@ class Supervisor:
                 "harness and is excluded."
             )
 
-        # 7. backlog index load + sync (fail-closed; never roadmap fallback)
-        try:
-            backlog_report = self.sync_backlog()
-            stage = self._current_stage()
-            report.program_stage = stage.stage if stage is not None else None
-            report.backlog = {
-                "source": str(self._index.source_path if self._index is not None else ""),
-                "fingerprint": str(self._index.source_fingerprint if self._index is not None else ""),
-                "requirements": len(self._index.requirements) if self._index is not None else 0,
-                "program_stage": report.program_stage,
-                "report": backlog_report,
-            }
-            if backlog_report.get("changed_since_last_sync"):
-                report.warnings.append("Backlog index changed since the last sync; mirror updated.")
-            if stage is None:
-                report.warnings.append(
-                    "No selectable program stage remains; use supervisor advance-stage with evidence."
-                )
-        except (SupervisorBlocked, backlog.BacklogError) as exc:
-            report.blockers.append(str(exc))
-            report.backlog = {"error": str(exc)}
+        if self.config.work_source == "goals":
+            from nl_coding_agent.core.goals import GoalService
+            report.backlog = {"work_source": "goals",
+                              "selection": GoalService().select_execution(project_id)}
+        else:
+            # 7. backlog index load + sync (fail-closed; never roadmap fallback)
+            try:
+                backlog_report = self.sync_backlog()
+                stage = self._current_stage()
+                report.program_stage = stage.stage if stage is not None else None
+                report.backlog = {
+                    "source": str(self._index.source_path if self._index is not None else ""),
+                    "fingerprint": str(self._index.source_fingerprint if self._index is not None else ""),
+                    "requirements": len(self._index.requirements) if self._index is not None else 0,
+                    "program_stage": report.program_stage,
+                    "report": backlog_report,
+                }
+                if backlog_report.get("changed_since_last_sync"):
+                    report.warnings.append("Backlog index changed since the last sync; mirror updated.")
+                if stage is None:
+                    report.warnings.append(
+                        "No selectable program stage remains; use supervisor advance-stage with evidence."
+                    )
+            except (SupervisorBlocked, backlog.BacklogError) as exc:
+                report.blockers.append(str(exc))
+                report.backlog = {"error": str(exc)}
 
         # 8. permissions
         try:
@@ -912,6 +945,13 @@ class Supervisor:
                 active_requirements.add(str(requirement_id))
             mission_id = int(mission["id"])
             status = str(mission.get("status") or "pending")
+            if status == "completed" and (item.get("payload") or {}).get("work_source") == "goals":
+                from nl_coding_agent.core.goals import GoalService
+                if not GoalService.mission_verified(mission_id):
+                    self._transition(queue_id, "BLOCKED", token=token, mission_id=mission_id,
+                                     failure_class="HARD_BLOCK")
+                    actions.append("blocked goal mission without verification evidence")
+                    continue
             if status == "completed":
                 self._transition(queue_id, "VERIFIED", token=token, mission_id=mission_id)
                 self._set_backlog(requirement_id, "VERIFIED", mission_id)
@@ -940,15 +980,16 @@ class Supervisor:
                 self._set_backlog(requirement_id, "IN_FLIGHT", mission_id)
                 actions.append("queue #" + str(queue_id) + " -> INTERRUPTED")
             else:
-                # pending/running mission: adopt it for resume on the next tick
-                if str(item["state"]) != "RUNNING":
-                    self._transition(queue_id, "RUNNING", token=token, mission_id=mission_id)
-                else:
-                    store.update_queue_item(queue_id, claim_token=token, mission_id=mission_id)
+                # A recovered owner must re-claim this mission, not select an
+                # unclaimable RUNNING row forever. The durable mission is reused.
+                self._transition(queue_id, "INTERRUPTED", token=token, mission_id=mission_id)
                 self._set_backlog(requirement_id, "IN_FLIGHT", mission_id)
                 actions.append("adopted resumable queue #" + str(queue_id))
 
+        from nl_coding_agent.core.goals import GoalService
         for item in store.list_queue(project_id):
+            if item["state"] == "VERIFIED" and (item.get("payload") or {}).get("work_source") == "goals":
+                GoalService().accept_execution(item)
             if item.get("state") not in store.QUEUE_TERMINAL_STATES and item.get("requirement_id"):
                 active_requirements.add(str(item["requirement_id"]))
         try:
@@ -976,7 +1017,7 @@ class Supervisor:
                 ).fetchone()
                 if row is None:
                     return None
-                return dict(row)
+                return store.get_run(int(row["id"]))
             finally:
                 conn.close()
         except Exception:
@@ -986,18 +1027,20 @@ class Supervisor:
         self._ensure_project()
         project_id = int(self.project_id)
         run = store.get_active_run(project_id) or self._latest_run()
+        effective_source = ((run or {}).get("config") or {}).get("work_source", self.config.work_source)
         queue = store.list_queue(project_id, limit=100)
         counts: dict[str, int] = {}
         for item in queue:
             counts[str(item["state"])] = counts.get(str(item["state"]), 0) + 1
         stage = None
-        try:
-            if self._index is None:
-                self.sync_backlog()
-            current = self._current_stage()
-            stage = current.stage if current is not None else None
-        except Exception:
-            stage = None
+        if effective_source == "backlog":
+            try:
+                if self._index is None:
+                    self.sync_backlog()
+                current = self._current_stage()
+                stage = current.stage if current is not None else None
+            except Exception:
+                stage = None
         return {
             "status": str((run or {}).get("status") or "idle"),
             "mode": self.config.mode,
@@ -1010,9 +1053,12 @@ class Supervisor:
             "program_stage": stage,
             "config": self.config.to_dict(),
             "pipeline": self.config.pipeline,
+            "work_source": effective_source,
             "flow_runs": store.list_flow_runs(project_id=project_id)[:20],
             "approvals": store.pending_approvals(project_id),
-            "resume_command": self._resume_command(),
+            "resume_command": resume_command(
+                self.root, mode=self.config.mode,
+                max_missions=self.config.max_missions_per_run, work_source=effective_source),
         }
 
     # ------------------------------------------------------------ approvals
@@ -1294,6 +1340,10 @@ class Supervisor:
 
     def _ensure_mission(self, item: dict, token: str) -> int:
         queue_id = int(item["id"])
+        if (item.get("payload") or {}).get("work_source") == "goals":
+            return store.bind_goal_mission(
+                queue_id, project_id=int(self.project_id), claim_token=token,
+                supervisor_run_id=self.run_id)
         mission_id = item.get("mission_id")
         if mission_id:
             mission = get_mission(int(mission_id))
@@ -1325,6 +1375,21 @@ class Supervisor:
     def _next_queue_item(self) -> dict | None:
         project_id = int(self.project_id)
         items = store.list_queue(project_id)
+        filtered = []
+        for item in items:
+            source = (item.get("payload") or {}).get("work_source", "backlog")
+            if source != self.config.work_source:
+                continue
+            if source == "goals":
+                from nl_coding_agent.core.goals import GoalService
+                allowed, reason = GoalService().execution_context(item["payload"], project_id)
+                if not allowed:
+                    if item["state"] not in store.QUEUE_TERMINAL_STATES:
+                        self._event("Goal execution deferred: " + reason, kind="goal-deferred",
+                                    payload={"queue_id": item["id"], "reason": reason})
+                    continue
+            filtered.append(item)
+        items = filtered
         for state in RESUMABLE_QUEUE_STATES:
             for item in items:
                 if str(item["state"]) == state:
@@ -1354,6 +1419,11 @@ class Supervisor:
             return Outcome(None, "NOT_CLAIMABLE", None, None,
                            {"state": str(fresh["state"])})
 
+        if (fresh.get("payload") or {}).get("work_source") == "goals":
+            from nl_coding_agent.core.goals import GoalService
+            allowed, reason = GoalService().execution_context(fresh["payload"], project_id)
+            if not allowed:
+                return Outcome("BLOCKED", "HARD_BLOCK", None, None, {"error": reason})
         decision = self._resource_decider(self.config, project_id=project_id)
         if decision.action == "wait":
             return Outcome("WAIT_RESOURCE", "WAIT_RESOURCE", None,
@@ -1390,9 +1460,17 @@ class Supervisor:
                 kind="mission", mission_id=mission_id,
                 payload={"requirement_id": fresh.get("requirement_id")},
             )
+            self._active_goal_item = (fresh if (fresh.get("payload") or {}).get("work_source") == "goals"
+                                      else None)
             result = self._invoke_mission(mission_id, str(fresh.get("goal") or ""))
+            if self._active_goal_item is not None and result.get("status") == "completed":
+                from nl_coding_agent.core.goals import GoalService
+                if not GoalService.mission_verified(mission_id):
+                    return Outcome("BLOCKED", "HARD_BLOCK", None, None,
+                                   {"status": "blocked", "error": "Goal mission lacks independent harness evidence"})
             return self.classify(result)
         finally:
+            self._active_goal_item = None
             resource_gate.release_inference_slot(self.owner_id)
             self.machine_lease = None
 
@@ -1576,6 +1654,10 @@ class Supervisor:
         if outcome.queue_state == "VERIFIED":
             self._transition(queue_id, "VERIFIED", token=token, mission_id=mission_id)
             self._set_backlog(requirement_id, "VERIFIED", mission_id)
+            if (fresh.get("payload") or {}).get("work_source") == "goals":
+                from nl_coding_agent.core.goals import GoalService
+                accepted = GoalService().accept_execution(fresh)
+                notification["milestone_verified"] = accepted
             self._completed += 1
             store.update_run(int(self.run_id), missions_completed=self._completed)
             if mission_id:
@@ -1696,7 +1778,8 @@ class Supervisor:
             return {"status": "blocked", "reason": decision.reason}
         queue_item = self._next_queue_item()
         if queue_item is None:
-            return {"status": "completed", "reason": "No READY backlog work remains."}
+            return {"status": "idle" if self.config.work_source == "goals" else "completed",
+                    "reason": "No eligible approved work remains."}
         remaining = self._remaining_backoff(queue_item)
         if remaining > 0:
             time.sleep(min(remaining, 5.0))
@@ -1797,8 +1880,8 @@ class Supervisor:
                     break
                 queue_item = self._next_queue_item()
                 if queue_item is None:
-                    status = "completed"
-                    reason = "No READY backlog work remains for the current program stage."
+                    status = "idle" if self.config.work_source == "goals" else "completed"
+                    reason = "No eligible approved work remains for " + self.config.work_source
                     break
                 remaining = self._remaining_backoff(queue_item)
                 if remaining > 0:
@@ -1903,6 +1986,7 @@ class Supervisor:
             "resume_command": self._resume_command(),
             "queue": store.list_queue(int(self.project_id), limit=20),
             "pipeline": self.config.pipeline,
+            "work_source": self.config.work_source,
             "flow_runs": store.list_flow_runs(project_id=int(self.project_id))[:20],
             "checkpoints": self.checkpoints,
         }
@@ -1931,6 +2015,7 @@ def run_supervisor(
     control: RunControl | None = None,
     resource_decider: Callable | None = None,
     pipeline: str | None = None,
+    work_source: str | None = None,
 ) -> dict:
     root = Path(project_root).resolve()
     if project_id is None:
@@ -1947,6 +2032,8 @@ def run_supervisor(
                        ("debug_model", debug_model)):
         if value is not None:
             overrides[key] = value
+    if work_source is not None:
+        overrides["work_source"] = str(work_source)
     if pipeline is not None:
         overrides["pipeline"] = str(pipeline)
     config = SupervisorConfig.load(project_id, overrides=overrides)

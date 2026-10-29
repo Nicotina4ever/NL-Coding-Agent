@@ -789,10 +789,12 @@ class AppServices:
             return service
 
     def supervisor_start(self, project_id: int, *, mode: str | None = None,
-                         max_missions: int | None = None) -> dict:
+                         max_missions: int | None = None,
+                         work_source: str | None = None) -> dict:
         """Start the persistent supervisor in a background thread (non-blocking)."""
         return self._supervisor_service(project_id).start(
             mode=mode, max_missions=max_missions,
+            **({"work_source": work_source} if work_source is not None else {}),
         )
 
     def supervisor_stop(self, project_id: int, *, reason: str = "") -> dict:
@@ -2255,6 +2257,12 @@ class AppServices:
         except Exception as exc:
             return self._goal_error(exc)
         return {"ok": True, "deleted": bool(deleted)}
+
+    def goal_execution_preview(self, project_id: int) -> dict:
+        try:
+            return {"ok": True, **self._goal_service().select_execution(project_id)}
+        except Exception as exc:
+            return self._goal_error(exc)
 
     def goal_next_work(self, *, goal_id: int | None = None,
                        project_id: int | None = None, limit: int = 20) -> dict:

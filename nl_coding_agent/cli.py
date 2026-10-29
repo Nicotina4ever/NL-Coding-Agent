@@ -421,9 +421,13 @@ def _cmd_supervisor_run(args, *, detach: bool = False) -> int:
         ]
         for flag, value in (("--dev-model", getattr(args, "dev_model", None)),
                             ("--reviewer-model", getattr(args, "reviewer_model", None)),
-                            ("--debug-model", getattr(args, "debug_model", None))):
+                            ("--debug-model", getattr(args, "debug_model", None)),
+                            ("--pipeline", getattr(args, "pipeline", None)),
+                            ("--work-source", getattr(args, "work_source", None))):
             if value:
                 command.extend([flag, value])
+        if mode == "assisted":
+            command.append("--confirm-assisted")
         log_path = logs_root() / "supervisor.log"
         try:
             pid = _launch_detached(command, log_path)
@@ -448,6 +452,7 @@ def _cmd_supervisor_run(args, *, detach: bool = False) -> int:
             reviewer_model=getattr(args, "reviewer_model", None),
             debug_model=getattr(args, "debug_model", None),
             pipeline=getattr(args, "pipeline", None),
+            work_source=getattr(args, "work_source", None),
         )
     except Exception as exc:  # noqa: BLE001 - CLI boundary
         print(f"ERROR: supervisor run failed: {exc}", file=sys.stderr)
@@ -1587,6 +1592,9 @@ def main(argv: list[str] | None = None) -> int:
     run_p.add_argument("--pipeline", choices=["sequential", "flow"], default=None,
                        help="Execution pipeline (default: persisted/sequential)")
 
+    run_p.add_argument("--work-source", choices=["backlog", "goals"], default=None,
+                       help="Select repository backlog or approved active goals")
+
     start_p = svs.add_parser("start", help="Persist the mode and start a detached supervisor process")
     _add_common(start_p)
     start_p.add_argument("--mode", choices=["off", "assisted", "automatic"], default="automatic")
@@ -1597,6 +1605,9 @@ def main(argv: list[str] | None = None) -> int:
     start_p.add_argument("--debug-model", help="Override the debugger model")
     start_p.add_argument("--pipeline", choices=["sequential", "flow"], default=None,
                          help="Execution pipeline (default: persisted/sequential)")
+
+    start_p.add_argument("--work-source", choices=["backlog", "goals"], default=None,
+                         help="Select repository backlog or approved active goals")
 
     stop_p = svs.add_parser("stop", help="Request a graceful supervisor stop")
     _add_common(stop_p)

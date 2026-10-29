@@ -7,6 +7,7 @@ made. No Flow runtime and no safety flag live here yet (C4b+).
 """
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -275,6 +276,10 @@ class CrewAIBackend:
     def __init__(self, *, base_url: str = DEFAULT_BASE_URL, temperature: float = 0.1,
                  project_id: int | None = None, llm_factory=None,
                  verbose: bool = True) -> None:
+        # CrewAI persists kickoff outputs even with memory disabled. Keep these
+        # databases in our managed workspace instead of the process user's AppData.
+        from nl_coding_agent.core.workspace import state_root
+        os.environ.setdefault("CREWAI_STORAGE_DIR", str((state_root() / "crewai").resolve()))
         self.base_url = str(base_url or DEFAULT_BASE_URL)
         self.temperature = float(temperature)
         self.project_id = int(project_id) if project_id is not None else None

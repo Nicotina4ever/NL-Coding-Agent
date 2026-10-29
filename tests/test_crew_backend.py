@@ -476,3 +476,21 @@ def test_orchestrator_call_model_is_still_monkeypatchable():
         assert orch._call_model("developer", "m", "p", goal="g", backstory="b",
                                 expected_output="e") == "scripted"
     assert calls == {"role": "developer", "prompt": "p", "tools": None}
+
+
+def test_kickoff_storage_is_contained_without_inference(tmp_path, monkeypatch):
+    monkeypatch.setenv("NL_WORKSPACE_DIR", str(tmp_path / "generated"))
+    monkeypatch.delenv("CREWAI_STORAGE_DIR", raising=False)
+    CrewAIBackend()
+    from crewai.memory.storage.kickoff_task_outputs_storage import KickoffTaskOutputsSQLiteStorage
+    storage = KickoffTaskOutputsSQLiteStorage()
+    assert Path(storage.db_path).is_relative_to(tmp_path / "generated/state/crewai")
+    assert Path(storage.db_path).is_file()
+
+
+def test_explicit_crewai_storage_override_is_preserved(tmp_path, monkeypatch):
+    import os
+    target = str(tmp_path / "explicit-state")
+    monkeypatch.setenv("CREWAI_STORAGE_DIR", target)
+    CrewAIBackend()
+    assert os.environ["CREWAI_STORAGE_DIR"] == target

@@ -2,8 +2,8 @@
 
 Thin service layer over nl_coding_agent.persistence.goal_store. It reuses the
 existing supervisor/SQLite/Flow substrate (missions/tasks/goal_missions links) and
-does not create a competing scheduler: no mission is created, started or executed
-here, no model/network/GUI is touched.
+does not create a competing scheduler: execution selection feeds the existing
+supervisor queue. No model/network/GUI is touched here.
 
 Durable lifecycle is explicit:
   planned -> active -> paused -> active ...; explicit block/unblock/cancel;
@@ -1053,6 +1053,139 @@ class GoalService:
     def list_goal_links(self, goal_id: int) -> list[dict]:
         self.get_goal(goal_id)
         return goal_store.list_goal_links(goal_id)
+
+    # --------------------------------------------- supervised goal execution
+    @staticmethod
+    def _execution_snapshot(milestone: Mapping) -> dict:
+        # Status is runtime progress; every approved work/acceptance field is pinned.
+        return {key: value for key, value in
+                GoalService._plan_milestone_snapshot(milestone).items()
+                if key != "status"}
+
+    def execution_context(self, payload: Mapping, project_id: int) -> tuple[bool, str]:
+        """Recheck approval, immutable inputs and dependencies at execution boundaries."""
+        try:
+            goal = self.get_goal(int(payload["goal_id"]))
+            milestone = self.get_milestone(int(payload["milestone_id"]))
+        except (GoalError, KeyError, TypeError, ValueError) as exc:
+            return False, "Goal execution input is missing: " + str(exc)
+        if goal.get("project_id") != project_id or milestone["goal_id"] != goal["id"]:
+            return False, "Goal/milestone belongs to another project"
+        if goal["status"] != "active":
+            return False, "Goal is " + goal["status"]
+        if milestone["status"] not in ("pending", "active"):
+            return False, "Milestone is " + milestone["status"]
+        plan = self.current_plan(goal["id"])
+        if not plan.get("approved") or plan.get("version") != payload.get("plan_version"):
+            return False, "Current plan version is not the approved execution version"
+        if plan.get("objective_snapshot") != goal["objective"]:
+            return False, "Goal objective changed after plan approval"
+        current = self.list_milestones(goal["id"])
+        approved = {int(item["id"]): self._execution_snapshot(item)
+                    for item in plan.get("milestones") or []}
+        actual = {item["id"]: self._execution_snapshot(item) for item in current}
+        if approved != actual or payload.get("milestone_snapshot") != actual.get(milestone["id"]):
+            return False, "Milestone work changed after plan approval; replan and approve again"
+        if not self._goal_dependencies_met(
+                goal, {item["id"]: item for item in goal_store.list_goals(limit=500)}):
+            return False, "Goal dependencies are not completed"
+        by_id = {item["id"]: item for item in current}
+        for dep in milestone.get("dependencies") or []:
+            if by_id.get(dep, {}).get("status") != "completed" or not self.milestone_verified(dep):
+                return False, "Milestone dependency lacks independent execution evidence: " + str(dep)
+        if not milestone.get("mission_intent", "").strip():
+            return False, "Milestone has no executable mission intent"
+        if not milestone.get("acceptance_criteria") or not milestone.get("validation_strategy", "").strip():
+            return False, "Milestone requires acceptance criteria and validation strategy"
+        return True, "Active goal, current approved plan and verified dependencies"
+
+    @staticmethod
+    def mission_verified(mission_id: int) -> bool:
+        """Require durable harness/review/promotion evidence, never a model claim."""
+        from nl_coding_agent.persistence.missions import get_mission, get_verification_runs
+        mission = get_mission(mission_id) or {}
+        if (mission.get("status") != "completed" or mission.get("review_verdict") != "APPROVE"
+                or mission.get("promotion_status") != "promoted"):
+            return False
+        runs = get_verification_runs(mission_id)
+        latest = {}
+        for run in runs:
+            for suite in ("candidate", "oracle"):
+                if str(run.get("command") or "").startswith("verify:" + suite + " "):
+                    latest[suite] = run
+        return all(latest.get(suite, {}).get("passed")
+                   and latest[suite].get("exit_code") == 0
+                   for suite in ("candidate", "oracle"))
+
+    def milestone_verified(self, milestone_id: int) -> bool:
+        milestone = self.get_milestone(milestone_id)
+        from nl_coding_agent.persistence import supervisor_store
+        queues = supervisor_store.list_queue(int(self.get_goal(milestone["goal_id"])["project_id"]),
+                                            states=("VERIFIED",), limit=10000)
+        for item in queues:
+            payload = item.get("payload") or {}
+            if (payload.get("work_source") == "goals"
+                    and payload.get("milestone_id") == milestone_id
+                    and payload.get("milestone_snapshot") == self._execution_snapshot(milestone)
+                    and item.get("mission_id") and self.mission_verified(int(item["mission_id"]))):
+                return True
+        return False
+
+    def select_execution(self, project_id: int) -> dict:
+        """Explain selection across active goals without creating/running any mission."""
+        from nl_coding_agent.persistence import supervisor_store
+        deferred = []
+        for candidate in self.next_work(project_id=project_id, limit=200):
+            goal_id, milestone_id = candidate["goal_id"], candidate["milestone_id"]
+            plan = self.current_plan(goal_id)
+            milestone = self.get_milestone(milestone_id)
+            payload = {"work_source": "goals", "goal_id": goal_id,
+                       "milestone_id": milestone_id, "plan_version": plan.get("version"),
+                       "milestone_snapshot": self._execution_snapshot(milestone),
+                       "title": milestone["title"]}
+            allowed, reason = self.execution_context(payload, project_id)
+            key = f"goal:{goal_id}:plan:{plan.get('version')}:milestone:{milestone_id}"
+            existing = supervisor_store.find_queue_item(project_id, key)
+            if allowed and existing is not None:
+                allowed, reason = False, "Execution already queued: #" + str(existing["id"])
+            if not allowed:
+                deferred.append({**candidate, "reason": reason})
+                continue
+            intent = (milestone["mission_intent"] + "\n\nAcceptance criteria:\n- "
+                      + "\n- ".join(milestone["acceptance_criteria"])
+                      + "\nValidation strategy: " + milestone["validation_strategy"])
+            return {"selected": {**candidate, "goal": intent,
+                                 "idempotency_key": key, "payload": payload},
+                    "deferred": deferred}
+        return {"selected": None, "deferred": deferred}
+
+    def accept_execution(self, item: Mapping) -> bool:
+        """Advance one milestone only from a verified, linked mission. Goal stays active."""
+        payload = item.get("payload") or {}
+        mission_id = item.get("mission_id")
+        if not mission_id or not self.mission_verified(int(mission_id)):
+            return False
+        try:
+            milestone = self.get_milestone(int(payload["milestone_id"]))
+        except (GoalNotFoundError, KeyError, TypeError, ValueError):
+            # Historical execution rows outlive milestones removed by replanning.
+            return False
+        if self.milestone_verified(milestone["id"]) and milestone["status"] == "completed":
+            return True
+        allowed, reason = self.execution_context(payload, int(item["project_id"]))
+        if not allowed:
+            _audit("goal_execution_deferred", reason, dict(payload),
+                   project_id=int(item["project_id"]))
+            return False
+        links = goal_store.list_goal_missions(int(payload["goal_id"]))
+        if not any(link["mission_id"] == int(mission_id)
+                   and link["milestone_id"] == milestone["id"] for link in links):
+            return False
+        goal_store.set_milestone_status(milestone["id"], "completed")
+        _audit("milestone_execution_verified", "Milestone verified through staged mission",
+               {**dict(payload), "mission_id": mission_id, "queue_id": item["id"]},
+               project_id=int(item["project_id"]))
+        return True
 
     # ------------------------------------------------------------- progress
     def _goal_dependencies_met(self, goal: dict, all_goals: Mapping[int, dict]) -> bool:

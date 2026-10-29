@@ -102,6 +102,8 @@ def scrubbed_env(data_dir: Path) -> dict[str, str]:
     env = {key: value for key, value in os.environ.items() if key not in ENV_DROP}
     env.update({
         "NL_DATA_DIR": str(Path(data_dir).resolve()),
+        "NL_WORKSPACE_DIR": str((Path(data_dir) / "workspace").resolve()),
+        "CREWAI_STORAGE_DIR": str((Path(data_dir) / "crewai").resolve()),
         "QT_QPA_PLATFORM": "offscreen",
         "PYTHONDONTWRITEBYTECODE": "1",
         "PYTHONUTF8": "1",

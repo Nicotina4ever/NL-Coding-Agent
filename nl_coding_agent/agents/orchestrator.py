@@ -284,8 +284,8 @@ class MultiAgentOrchestrator:
     def _checkpoint(control: RunControl | None, stage: str) -> None:
         """Call a supervisor checkpoint at a safe stage boundary only.
 
-        There is deliberately no checkpoint between the reviewer APPROVE decision and
-        the promotion write: a stop must never interrupt a journaled promotion.
+        The final checkpoint runs before entering promotion. No checkpoint may
+        interrupt the journaled CAS/promotion operation itself.
         """
         if control is not None:
             control.checkpoint(stage)
@@ -1054,7 +1054,8 @@ class MultiAgentOrchestrator:
                     code="review-rejected",
                 )
 
-            # 4. Promotion is the last gate: only here does the live tree change.
+            # 4. Recheck cancellation/goal policy after review, before any live write.
+            self._checkpoint(control, "before-promotion")
             promotion_result = self._promote_candidate(stage)
             result = self._finalize_completed(
                 mission_id,

@@ -94,6 +94,32 @@ class CandidateVerificationTests(unittest.TestCase):
         self.assertTrue(report.candidate.infrastructure_failure)
         self.assertIn("runner startup failed", report.candidate.error)
 
+    def test_subprocess_runtime_state_is_isolated_from_parent(self):
+        import os
+        from unittest.mock import patch
+        source = ("import os\nfrom pathlib import Path\n"
+                  "def test_state():\n"
+                  "    data = Path(os.environ['NL_DATA_DIR'])\n"
+                  "    for key in ('NL_WORKSPACE_DIR', 'CREWAI_STORAGE_DIR'):\n"
+                  "        target = Path(os.environ[key])\n"
+                  "        assert target.is_relative_to(data)\n"
+                  "        target.mkdir(parents=True, exist_ok=True)\n"
+                  "        (target / 'state.txt').write_text('isolated')\n")
+        rel = "tests/test_state.py"
+        self.baseline[rel] = source
+        (self.workspace / rel).write_text(source)
+        parent = self.tmp / "parent-state"
+        parent.mkdir()
+        marker = parent / "state.txt"
+        marker.write_text("parent unchanged")
+        with patch.dict(os.environ, {"CREWAI_STORAGE_DIR": str(parent),
+                                     "NL_WORKSPACE_DIR": str(parent)}):
+            report = self.verify()
+        self.assertTrue(report.passed, report.error)
+        self.assertEqual(marker.read_text(), "parent unchanged")
+        for suite in ("candidate", "oracle"):
+            self.assertTrue((report.verify_dir / "data" / suite / "crewai/state.txt").is_file())
+
     def test_candidate_without_tests_fails(self):
         shutil.rmtree(self.workspace / "tests")
         report = self.verify()
@@ -112,6 +138,8 @@ class CandidateVerificationTests(unittest.TestCase):
         self.assertNotIn("PYTHONPATH", env)
         self.assertNotIn("PYTHONHOME", env)
         self.assertTrue(str(env["NL_DATA_DIR"]).endswith("data"))
+        self.assertEqual(Path(env["NL_WORKSPACE_DIR"]), self.tmp / "data" / "workspace")
+        self.assertEqual(Path(env["CREWAI_STORAGE_DIR"]), self.tmp / "data" / "crewai")
         self.assertEqual(env["QT_QPA_PLATFORM"], "offscreen")
         self.assertEqual(env["PYTHONDONTWRITEBYTECODE"], "1")
 
