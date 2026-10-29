@@ -14,6 +14,9 @@ dependencies = [
     "PyYAML",
 ]
 
+[project.optional-dependencies]
+mcp = ["mcp>=1.30,<2", "jsonschema>=4.18"]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["nl_coding_agent*"]

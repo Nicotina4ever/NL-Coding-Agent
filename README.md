@@ -96,7 +96,35 @@ mission completed. Independently inspect the diff and evidence; test execution u
 your OS privileges. Cloud routes still require explicit project permission. Resume
 with `--resume <id>` and the same project instead of supplying a new goal.
 
-CLI commands: `doctor`, `audit`, `work`, `status`, `roadmap`, `mission`,
+External clients can inspect this same engine through MCP (optional dependencies
+`mcp>=1.30,<2` and `jsonschema`; already present in the development runtime):
+
+```powershell
+python\python.exe nl_agent.py mcp serve --project "C:\path\to\project"
+python\python.exe nl_agent.py mcp vscode-config --project "C:\path\to\project"
+```
+
+`serve` uses stdio and defaults to read-only mission/context/diff access. The second
+command prints a VS Code configuration example with actual installation paths;
+it never edits another application's configuration. Owner opt-in `--allow-execution`
+enables start/cancel tools, whose calls still require approval and project permissions.
+Clients must keep the server connection open while a mission runs; disconnect requests
+a cooperative stop. Stop is observed at safe checkpoints, not by killing model requests.
+Status, events, candidate diff and verification evidence refer to the existing SQLite
+missions and Supervisor, including rejected candidates. No additional editor or engine
+is installed. Pinned upstream source findings: [external references](docs/EXTERNAL_SOURCE_REFERENCES.md).
+
+For external tools, `mcp tools --project <folder> --server <name>` discovers and
+`mcp invoke --project <folder> --server <name> --tool <name> --arguments '{}' --approve`
+invokes a configured server. Configuration is `data/mcp_servers.json` or explicit
+`--config`; entries need `trusted: true`. Stdio entries specify `command`/`args`, HTTP
+entries `transport: "http"`/`url`. Optional `allowed_tools` restricts exact tool names.
+Startup requires READ/EXECUTE; invocation also WRITE; HTTP requires NETWORK and remote
+HTTP also CLOUD. Arguments are schema-validated without fetching remote schemas.
+External servers run with OS user privileges: trust is not an OS sandbox, and their
+results remain untrusted. Model-driven automatic selection/invocation is not integrated.
+
+CLI commands: `doctor`, `audit`, `work`, `status`, `roadmap`, `mission`, `mcp`,
 `selfbuild`, `supervisor`, `gui`.
 
 ## Repository layout

@@ -60,7 +60,7 @@ def test_config_validation_and_discovery(tmp_path):
 
 
 def test_tool_listing_and_gated_invocation_with_fake_transport():
-    config = {"servers": {"files": {"command": "mcp-files"}}}
+    config = {"servers": {"files": {"command": "mcp-files", "trusted": True}}}
     tools = []
     transports = []
 
@@ -82,7 +82,7 @@ def test_tool_listing_and_gated_invocation_with_fake_transport():
 
 
 def test_network_server_requires_grant(tmp_path, monkeypatch):
-    config = {"servers": {"remote": {"command": "mcp-remote", "network": True}}}
+    config = {"servers": {"remote": {"command": "mcp-remote", "network": True, "trusted": True}}}
     transports = []
     manager = mcp.McpManager(config=config,
                              transport_factory=lambda server: transports.append(FakeMcpTransport()) or FakeMcpTransport())

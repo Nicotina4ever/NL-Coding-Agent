@@ -727,6 +727,39 @@ def _cmd_supervisor_advance_stage(args) -> int:
     return 0
 
 
+def _dispatch_mcp(args) -> int:
+    """Thin protocol/client adapter; execution remains in AppServices/Supervisor."""
+    from nl_coding_agent.app.services import AppServices
+    from nl_coding_agent.app.mcp import McpManager, load_mcp_config
+    services = AppServices()
+    try:
+        project = services.open_project(args.project)
+        if args.mcp_command == "serve":
+            from nl_coding_agent.app.mcp_engine import create_engine_server
+            create_engine_server(services, project, allow_execution=args.allow_execution).run(transport="stdio")
+            return 0
+        if args.mcp_command == "vscode-config":
+            from nl_coding_agent.app.mcp_engine import vscode_configuration
+            result = vscode_configuration(project["root"], allow_execution=args.allow_execution)
+        else:
+            manager = McpManager(project["id"], config=load_mcp_config(args.config))
+            if args.mcp_command == "tools":
+                result = {"tools": manager.list_tools(args.server)}
+                if not args.schemas:
+                    result["tools"] = [{"name": t["qualified_name"], "description": t["description"]}
+                                       for t in result["tools"]]
+            else:
+                arguments = json.loads(args.arguments)
+                if not isinstance(arguments, dict):
+                    raise ValueError("Tool arguments must be a JSON object")
+                result = manager.invoke_tool(args.server, args.tool, arguments,
+                                             human_approved=args.approve)
+        print(json.dumps(result, ensure_ascii=False, default=str))
+        return 0
+    finally:
+        services._db.close()
+
+
 def _dispatch_json_mission(args) -> int:
     """Structured client for the existing resource-gated mission executor."""
     from contextlib import redirect_stderr, redirect_stdout
@@ -766,6 +799,8 @@ def _dispatch_json_mission(args) -> int:
                     raise ValueError("Mission does not belong to the requested project; resume denied")
                 if args.goal and args.goal != mission.get("goal"):
                     raise ValueError("Resume preserves the persisted mission goal")
+                from nl_coding_agent.core.run_control import acknowledge_mission_resume
+                acknowledge_mission_resume(mission_id, project_id=project["id"])
             else:
                 mission_id = create_mission(project["id"], args.goal[:50], args.goal)
             config = SupervisorConfig.load(project["id"], overrides={
@@ -1979,10 +2014,30 @@ def main(argv: list[str] | None = None) -> int:
     reject_p.add_argument("--reason", required=True)
     reject_p.add_argument("--rejected-by", default="user")
     reject_p.add_argument("--json", action="store_true")
+    mcp_p = sub.add_parser("mcp", help="Project-bound MCP engine and trusted tool integration")
+    mcp_sub = mcp_p.add_subparsers(dest="mcp_command", required=True)
+    for command in ("serve", "vscode-config", "tools", "invoke"):
+        cmd = mcp_sub.add_parser(command)
+        cmd.add_argument("--project", default=".")
+        if command in ("serve", "vscode-config"):
+            cmd.add_argument("--allow-execution", action="store_true",
+                             help="Owner opt-in; calls also require approval and project permissions")
+        else:
+            cmd.add_argument("--config", default=None)
+            cmd.add_argument("--server", required=True)
+        if command == "tools":
+            cmd.add_argument("--schemas", action="store_true")
+        if command == "invoke":
+            cmd.add_argument("--tool", required=True)
+            cmd.add_argument("--arguments", default="{}")
+            cmd.add_argument("--approve", action="store_true")
     # GUI subcommand
     sub.add_parser("gui")
 
     args = parser.parse_args(argv)
+
+    if args.command == "mcp":
+        return _dispatch_mcp(args)
 
     if args.command == "goal":
         return _dispatch_goal(args)
@@ -2045,6 +2100,8 @@ def main(argv: list[str] | None = None) -> int:
                 set_mission_project(m_id, project["id"])
             elif mission["project_id"] != project["id"]:
                 raise SystemExit("Error: mission belongs to a different project; resume denied")
+            from nl_coding_agent.core.run_control import acknowledge_mission_resume
+            acknowledge_mission_resume(m_id, project_id=project["id"])
         else:
             if not args.goal:
                 raise SystemExit("Error: --goal is required for new missions")

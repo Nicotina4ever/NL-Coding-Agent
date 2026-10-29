@@ -468,6 +468,7 @@ def evidence_payload(
         "status": status,
         "changed_paths": changed,
         "diff_stat": stat,
+        "diff": diff,
         "generated_at": datetime.now().isoformat(timespec="seconds"),
     }
     if verification is not None:

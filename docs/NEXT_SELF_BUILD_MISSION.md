@@ -1,5 +1,20 @@
 # Development continuation — Goal execution integration
 
+Latest verified increment (2026-10-29): the shared engine MCP bridge and official-SDK
+client are implemented; see CURRENT_STATE.md and README commands. Real REA introspection
+and real Ollama MCP mission #49 were exercised. #49 was review-rejected despite passing
+candidate/oracle tests: preserve that evidence, do not mark it complete. Code - OSS was
+actually inspected at a pinned revision; EXTERNAL_SOURCE_REFERENCES.md records the
+comparison and dependencies. No editor replacement, clone or external configuration
+installation is necessary. Remaining natural-language capability routing, automatic
+MCP use and broader external-client acceptance are limitations, not a new roadmap.
+This checkpoint ends the current increment; no further large development run is started.
+Follow-up: #49 exposed missing original-objective context in the reviewer prompt;
+after repairing it, real MCP mission #50 passed review, verification and promotion.
+The independent reviewer also reran its promoted-project tests. Retained evidence now
+keeps candidate diffs for future terminal stages; older records missing a full diff
+report that limitation explicitly. Details and exact test evidence are in CURRENT_STATE.
+
 Studio checkpoint: the 2026-10-29 dock workspace and native VoiceBridge acceptance
 are recorded at the top of CURRENT_STATE.md. The GUI arithmetic mission was rejected
 by its reviewer despite passing tests; preserve that evidence and do not mark it

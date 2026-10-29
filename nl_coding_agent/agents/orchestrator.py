@@ -926,8 +926,9 @@ class MultiAgentOrchestrator:
                 promotion_status=mission.get("promotion_status"),
             )
 
+        control = control or RunControl()
         try:
-            with mission_lock(mission_id):
+            with control.observe_mission_stop(mission_id), mission_lock(mission_id):
                 return self._run_locked(
                     mission_id,
                     goal,
@@ -1473,6 +1474,8 @@ INSTRUCTIONS:
             f"({'PASS' if run.get('passed') else 'FAIL'})"
             for run in get_verification_runs(mission_id)
         ) or "- No verification run recorded."
+        mission = get_mission(mission_id) or {}
+        objective = str(mission.get("goal") or "(missing persisted objective)")
         self._emit(
             "reviewer", "info",
             f"Reviewer inspecting the staged candidate ({stat}) on task #{task_id}",
@@ -1482,6 +1485,12 @@ INSTRUCTIONS:
 PROJECT ROOT: {self.root}
 CANDIDATE STAGE: {stage.stage_dir}
 CANDIDATE CHANGED FILES: {', '.join(changed) or '(none)'}
+
+PERSISTED MISSION OBJECTIVE:
+{objective}
+
+AUTHORIZED CANDIDATE WRITE SCOPE:
+{json.dumps(list(stage.scope), ensure_ascii=False)}
 
 VALIDATION RESULT:
 {validation_text}
@@ -1496,7 +1505,7 @@ INSTRUCTIONS:
 1. This candidate is NOT yet applied to the live project. Review only the candidate diff above.
 2. An APPROVE verdict leads to promotion; a REJECT verdict keeps the candidate unapplied.
 3. Check correctness, safety, scope adherence, and missing tests.
-4. Base every claim on the candidate diff, changed-file list, validation result and verification runs above. Do not invent imports, files, or failures that are not present in that evidence.
+4. Assess the diff against the persisted mission objective and authorized write scope above. Base every claim on that objective, scope, diff, changed-file list, validation result and verification runs. Do not invent imports, files, or failures that are not present in that evidence.
 5. Start your response with exactly 'APPROVE' or 'REJECT' on the first line.
 6. Follow the verdict with concise review notes and blocking issues.
 """

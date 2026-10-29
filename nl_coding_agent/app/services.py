@@ -148,18 +148,18 @@ class AppServices:
                              "path": uri, "line": item.get("line")})
         return rows
 
-    def mcp_servers(self) -> list[dict]:
+    def mcp_servers(self, *, project_id=None) -> list[dict]:
         from nl_coding_agent.app.mcp import McpManager
-        return McpManager(getattr(self, "_current_project_id", None)).servers()
+        return McpManager(project_id).servers()
 
-    def mcp_tools(self, server_name: str) -> list[dict]:
+    def mcp_tools(self, server_name: str, *, project_id=None) -> list[dict]:
         from nl_coding_agent.app.mcp import McpManager
-        return McpManager(getattr(self, "_current_project_id", None)).list_tools(server_name)
+        return McpManager(project_id).list_tools(server_name)
 
     def mcp_invoke_tool(self, server_name: str, tool_name: str, arguments=None, *,
-                        human_approved: bool = False) -> dict:
+                        project_id=None, human_approved: bool = False) -> dict:
         from nl_coding_agent.app.mcp import McpManager
-        return McpManager(getattr(self, "_current_project_id", None)).invoke_tool(
+        return McpManager(project_id).invoke_tool(
             server_name, tool_name, arguments or {}, human_approved=human_approved)
 
     def debug_status(self) -> dict:
@@ -1072,6 +1072,23 @@ class AppServices:
         stage_path = Path(mission["staging_dir"]).resolve()
         if not stage_path.is_relative_to(root / "data" / "staging"):
             raise ValueError("Candidate directory is outside project staging")
+        if not stage_path.exists():
+            # Successful promotion normally removes the disposable stage. Read
+            # retained evidence, never substitute the current working-tree diff.
+            from nl_coding_agent.persistence.database import db_path
+            evidence_path = db_path().parent / "verification" / f"mission-{mission_id}.json"
+            evidence = json.loads(evidence_path.read_text(encoding="utf-8")) if evidence_path.is_file() else {}
+            if evidence and (evidence.get("mission_id") != mission_id or
+                             Path(evidence.get("project_root", "")).resolve() != root):
+                raise ValueError("Retained candidate evidence belongs to another project or mission")
+            if "diff" not in evidence:
+                return {"ok": False, "mission_id": mission_id,
+                        "error": "Candidate stage was removed; this historical record has no retained diff"}
+            return {"ok": True, "mission_id": mission_id, "diff": evidence["diff"],
+                    "changed_paths": evidence.get("changed_paths", []),
+                    "stat": evidence.get("diff_stat", ""), "status": mission["status"],
+                    "verdict": mission.get("review_verdict"),
+                    "promotion_status": mission.get("promotion_status"), "retained": True}
         stage = promotion.load_stage(stage_path)
         if stage.project_root != root or stage.mission_id != mission_id:
             raise ValueError("Candidate manifest belongs to another project or mission")
@@ -1114,21 +1131,33 @@ class AppServices:
         """Schedule autonomous multi-agent mission execution on the sequential scheduler."""
         task_id = f"mission-{mission_id}"
         root = Path(project_root).resolve()
+        from nl_coding_agent.persistence.missions import get_mission
+        mission = get_mission(mission_id)
+        project = self.get_project(mission["project_id"]) if mission else None
+        if not project or Path(project["root"]).resolve() != root:
+            raise ValueError("Mission does not belong to the requested project")
+        if mission and mission["status"] == "interrupted":
+            from nl_coding_agent.core.run_control import acknowledge_mission_resume
+            acknowledge_mission_resume(mission_id, project_id=mission["project_id"])
 
         def _do_mission():
+            from functools import partial
+            from nl_coding_agent.core.supervisor import Supervisor, SupervisorConfig
             from nl_coding_agent.agents.orchestrator import MultiAgentOrchestrator
             from nl_coding_agent.persistence.missions import get_mission
             mission = get_mission(mission_id) or {}
-            orch = MultiAgentOrchestrator(root, project_id=mission.get("project_id"))
             try:
-                res = orch.run_mission(
-                    mission_id=mission_id,
-                    goal=goal,
-                    developer_model=developer_model,
-                    reviewer_model=reviewer_model,
-                    debug_model=debug_model,
-                    stop_after=stop_after,
-                )
+                overrides = {key: value for key, value in {
+                    "developer_model": developer_model, "reviewer_model": reviewer_model,
+                    "debug_model": debug_model}.items() if value is not None}
+                config = SupervisorConfig.load(mission.get("project_id"), overrides=overrides)
+                def factory(project_root):
+                    orchestrator = MultiAgentOrchestrator(project_root, project_id=mission.get("project_id"))
+                    if stop_after:
+                        orchestrator.run_mission = partial(orchestrator.run_mission, stop_after=stop_after)
+                    return orchestrator
+                res = Supervisor(root, project_id=mission.get("project_id"), config=config,
+                                 orchestrator_factory=factory).execute_mission(mission_id)
                 if on_done:
                     on_done(res)
                 return res
@@ -1142,8 +1171,27 @@ class AppServices:
                 raise
 
         scheduler = get_scheduler()
-        scheduler.submit(task_id, _do_mission, label=f"Mission #{mission_id}: {goal[:30]}")
+        scheduler.submit(task_id, _do_mission, label=f"Mission #{mission_id}: {(goal or '')[:30]}")
         return task_id
+
+    def cancel_mission(self, mission_id: int, *, project_id: int, reason="User cancellation") -> dict:
+        """Request a durable cooperative stop; never kill a promotion write."""
+        from nl_coding_agent.core import permissions
+        from nl_coding_agent.persistence.database import set_setting
+        from nl_coding_agent.persistence.missions import get_mission
+        permissions.require(permissions.READ, project_id=project_id)
+        mission = get_mission(mission_id)
+        if not mission or mission.get("project_id") != project_id:
+            raise ValueError("Mission does not belong to the selected project")
+        if mission["status"] not in ("pending", "running"):
+            return {"ok": True, "accepted": False, "status": mission["status"], "mission_id": mission_id}
+        set_setting("mission.stop." + str(int(mission_id)), str(reason or "User cancellation")[:500])
+        payload = {"mission_id": mission_id, "project_id": project_id, "cooperative": True}
+        log_event(self._db, "Mission stop requested at the next safe checkpoint", source="missions",
+                  event_kind="mission-stop-requested", project_id=project_id, mission_id=mission_id,
+                  payload=json.dumps(payload))
+        self._bus.emit(Event("missions", "info", "Stop requested; waiting for a safe checkpoint", payload))
+        return {"ok": True, "accepted": True, "status": "stop_requested", **payload}
 
     # --- Persistent supervisor (stage 3) ---
 

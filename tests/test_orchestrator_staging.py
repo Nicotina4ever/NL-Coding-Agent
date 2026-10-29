@@ -261,6 +261,9 @@ def test_reviewer_reject_blocks_and_leaves_live_unchanged(project, mission_env):
     review_prompt = model.prompts_for(MODEL_REVIEWER)[0]
     assert "NOT yet applied" in review_prompt
     assert "CANDIDATE DIFF TO REVIEW" in review_prompt
+    assert "PERSISTED MISSION OBJECTIVE:\n" + GOAL in review_prompt
+    assert "AUTHORIZED CANDIDATE WRITE SCOPE:" in review_prompt
+    assert '"src/calc.py"' in review_prompt
     assert not (mission_env / "recovery" / f"{mission_id}.json").exists()
 
     mission = get_mission(mission_id)

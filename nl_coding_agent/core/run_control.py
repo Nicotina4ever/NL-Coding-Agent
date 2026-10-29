@@ -8,9 +8,30 @@ interrupts a promotion write or a journaled CAS operation.
 from __future__ import annotations
 
 import threading
+from contextlib import contextmanager
 from typing import Callable
 
-__all__ = ["RunStopped", "RunControl"]
+__all__ = ["RunStopped", "RunControl", "acknowledge_mission_resume"]
+
+
+def acknowledge_mission_resume(mission_id: int, *, project_id: int) -> None:
+    """Consume a cancellation only at an explicit GUI/CLI/client resume boundary.
+
+    Automatic supervisor recovery must not erase the owner's durable stop request.
+    The existing writer lock prevents clearing a flag while a mission is running.
+    """
+    from nl_coding_agent.core import permissions
+    from nl_coding_agent.core.mission_lock import mission_lock
+    from nl_coding_agent.persistence import database
+    from nl_coding_agent.persistence.missions import get_mission
+    for scope in (permissions.READ, permissions.WRITE, permissions.EXECUTE):
+        permissions.require(scope, project_id=project_id)
+    with mission_lock(mission_id):
+        mission = get_mission(mission_id)
+        if not mission or mission.get("project_id") != project_id:
+            raise ValueError("Mission does not belong to the selected project")
+        if mission["status"] == "interrupted":
+            database.set_setting("mission.stop." + str(int(mission_id)), "")
 
 
 class RunStopped(RuntimeError):
@@ -93,6 +114,25 @@ class RunControl:
         with self._lock:
             if hook not in self._checkpoint_hooks:
                 self._checkpoint_hooks.append(hook)
+
+    @contextmanager
+    def observe_mission_stop(self, mission_id: int):
+        """Translate the existing durable settings flag into a safe-point stop.
+
+        GUI, CLI and external clients refer to the same mission id. Remove the
+        hook afterward because a Supervisor reuses this control across missions.
+        """
+        from nl_coding_agent.persistence.database import get_setting
+        def poll(stage):
+            reason = get_setting("mission.stop." + str(int(mission_id)), "")
+            if reason:
+                self.request_stop(reason)
+        self.add_checkpoint_hook(poll)
+        try:
+            yield self
+        finally:
+            with self._lock:
+                self._checkpoint_hooks = [hook for hook in self._checkpoint_hooks if hook is not poll]
 
     def checkpoint(self, stage: str) -> None:
         """Call at safe stage boundaries; raises RunStopped when stop is requested."""

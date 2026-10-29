@@ -1223,9 +1223,10 @@ class Supervisor:
 
     def _invoke_mission(self, mission_id: int, goal: str | None) -> dict:
         """Dispatch to the configured pipeline (sequential default remains untouched)."""
-        if str(self.config.pipeline) == "flow":
-            return self._invoke_flow_mission(mission_id, goal)
-        return self._invoke_orchestrator(mission_id, goal)
+        with self.control.observe_mission_stop(mission_id):
+            if str(self.config.pipeline) == "flow":
+                return self._invoke_flow_mission(mission_id, goal)
+            return self._invoke_orchestrator(mission_id, goal)
 
     def _invoke_flow_mission(self, mission_id: int, goal: str | None) -> dict:
         """Execute one mission through MissionFlow; the supervisor finalizes status."""

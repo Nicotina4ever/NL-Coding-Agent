@@ -4,6 +4,78 @@
 
 NL Coding Agent is a local-first, multi-agent software development workstation. It opens existing projects, discovers their structure and documentation, persists missions in SQLite, and runs a real `Developer -> Tester -> Debugger -> Reviewer` cycle using local Ollama models. The current implementation has been exercised end-to-end with a live local model and a real interruption/resume cycle.
 
+## Shared engine MCP interoperability (2026-10-29)
+
+The existing MCP facade now uses official Python SDK 1.x sessions for stdio and
+Streamable HTTP instead of custom framing/blocking pipe reads. Explicit server trust,
+project READ/EXECUTE, invocation WRITE, HTTP NETWORK/remote CLOUD, namespaced tool
+allowlists and local schema validation precede operations. Tool/resource results are
+untrusted; annotations do not authorize operations. Server stderr is retained under
+managed logs and audit events omit argument values. Existing AppServices MCP methods
+now take explicit project identity rather than reading a nonexistent current-project field.
+
+`mcp serve --project <folder>` exposes existing AppServices/Supervisor missions through
+official FastMCP, bound to one registered project. Read-only by default; owner flag
+`--allow-execution` plus explicit call approval/permissions permits start/cancel.
+`mcp vscode-config` prints an example, never changes another application's settings.
+The Studio background dispatch now uses Supervisor's machine inference resource gate.
+Cancellation persists in the existing settings table, is observed at safe checkpoints,
+and survives automatic recovery. Only explicit project-bound resume under the mission
+writer lock consumes the stop flag. No duplicated mission state or execution engine.
+
+Actual protocol acceptance:
+
+- Real SDK subprocess tool/resource exchange, stderr isolation, read-only engine,
+  cross-project refusal and schema/trust/permission/cancellation tests are committed.
+  A real loopback Streamable HTTP server also passed invocation after NETWORK grant;
+  denied NETWORK prevented connection. Focused execution/Flow/CLI/planning regression:
+  121 passed in 78.25s (`.workspace/temp/mcp-final-regression2.txt`); independent gatekeeper
+  batch: 16 passed (`.workspace/temp/mcp-gate-sdk-final.txt`).
+  Final SDK/cancellation batch after adopting the non-deprecated HTTP API: 14 passed
+  (`.workspace/temp/mcp-sdk-final4.txt`). The preceding full Studio
+  checkpoint remains 1,243 passed / one external Windows POSIX-shell failure; it is
+  not a full-suite result for this later increment.
+- Installed REA 6.5.0 started directly using existing Node 24.16.0 and its installed
+  script, without installation/setup/other-agent configuration changes. SDK discovery
+  returned 207 tools. NL's manager invoked allowlisted `rea::binary_session` successfully;
+  evidence `.workspace/temp/mcp-engine-rea/invocation.json`. This is server/capability
+  introspection, not acceptance of native reverse-engineering engines or hardware.
+- A persistent SDK client started real local Ollama mission #49 in the isolated GUI
+  acceptance project's SQLite snapshot. Candidate and oracle each passed two tests;
+  reviewer REJECT blocked promotion. Status, events, historical #48 and both staged
+  diffs were retrieved over MCP. This is real delegation with a blocked outcome,
+  **not successful autonomous coding**. Evidence:
+  `.workspace/temp/mcp-engine-acceptance/result.json`, `stderr.log`, `vscode.mcp.json`.
+- Investigation found the reviewer was asked to assess scope without receiving the
+  original mission objective. The prompt now includes the persisted objective and
+  exact authorized stage scope; strict verdict/promotion gates are unchanged.
+  A new mission #50 through the same MCP/local-model path completed with APPROVE,
+  candidate/oracle two tests each and one promoted file. The gatekeeper independently
+  read the promoted file and reran its two tests successfully. #49 remains rejected.
+  Evidence `.workspace/temp/mcp-engine-acceptance-context/result.json`.
+  That run also exposed post-promotion diff access assuming a disposable stage still
+  existed. Existing retained evidence now includes the diff; the reader validates
+  project/mission identity and reads it after cleanup. Older records including #50
+  truthfully report that the full historical diff was not retained, instead of raising
+  a missing-manifest error or substituting a live working-tree diff. Follow-up MCP
+  inspection succeeded with this explicit limitation. Reviewer-context batch: 26 passed;
+  retained-diff/staging: 15 passed; promotion/adversarial/evidence: 22 passed
+  (`mcp-review-context.txt`, `mcp-retained-diff2.txt`, `mcp-stage-final.txt` under managed temp).
+
+Official Code - OSS source was inspected through GitHub API at pinned revision
+`aaf0914f8bafb3d011b9f13b8ec0123d81cef5fe`; exact paths/dependencies and four reuse
+categories are in [EXTERNAL_SOURCE_REFERENCES.md](EXTERNAL_SOURCE_REFERENCES.md).
+The finding supports existing Qt docks/editor and public MCP/extension interfaces;
+no clone, Electron embedding, VS Code extension or dependency build was performed.
+
+Limits: no external server OS sandbox, remote authentication/cloud acceptance,
+automatic model-to-MCP tool routing, VS Code extension acceptance or complete natural
+language capability routing. Disconnect requests cooperative cancellation; forceful
+process termination still relies on existing crash recovery. The corrected reviewer
+context and successful isolated #50 are evidence for that workflow, not general
+unfamiliar-project acceptance or a guarantee of model review quality.
+Restart Studio to load changed dispatch/services.
+
 ## Unified Studio acceptance (2026-10-29)
 
 Studio now composes its existing editor, explorer and persistent Chat into a native
