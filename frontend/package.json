@@ -1,9 +1,10 @@
 {
   "name": "nl-coding-agent",
-  "displayName": "NL Coding Agent",
-  "description": "NL Chat and mission control for the local NL Coding Engine: model choice, persistent missions, progress, diffs, candidate/oracle verification and reviewer verdicts. The Python engine remains the single source of truth.",
-  "version": "0.2.0",
+  "displayName": "NL Coder",
+  "description": "NL Coder — NL Chat and mission control for the local NL Coding Engine: provider/model selection, project-scoped attachments, editor context, authorized URL research, persisted history, persistent missions, diffs, candidate/oracle verification and reviewer verdicts. The Python engine remains the single source of truth.",
+  "version": "0.3.0",
   "publisher": "nlcodingagent",
+  "icon": "assets/icon.png",
   "engines": {
     "vscode": ">=1.85.0"
   },
@@ -32,7 +33,9 @@
     "test:mission": "node test/runMissionTests.cjs",
     "test:resume": "node test/runResumeTests.cjs",
     "test:vsix": "node test/runInstalledVsixTests.cjs",
-    "package:vsix": "vsce package --out ../.workspace/dist/NL-Coding-Agent-0.2.0.vsix"
+    "test:chat-features": "node test/runChatFeatureTests.cjs",
+    "test:installed-chat": "node test/runInstalledChatFeatureTests.cjs",
+    "package:vsix": "vsce package --out ../.workspace/dist/NL-Coding-Agent-0.3.0.vsix"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
@@ -48,35 +51,35 @@
     "commands": [
       {
         "command": "nlCodingAgent.startChat",
-        "title": "NL Coding Agent: Start Chat"
+        "title": "NL Coder: Start Chat"
       },
       {
         "command": "nlCodingAgent.startMission",
-        "title": "NL Coding Agent: Start Mission…"
+        "title": "NL Coder: Start Mission…"
       },
       {
         "command": "nlCodingAgent.showMissions",
-        "title": "NL Coding Agent: Show Missions"
+        "title": "NL Coder: Show Missions"
       },
       {
         "command": "nlCodingAgent.showEngineSettings",
-        "title": "NL Coding Agent: Show Engine Settings"
+        "title": "NL Coder: Show Engine Settings"
       },
       {
         "command": "nlCodingAgent.toggleMissionExecution",
-        "title": "NL Coding Agent: Toggle Mission Execution"
+        "title": "NL Coder: Toggle Mission Execution"
       },
       {
         "command": "nlCodingAgent.showStatus",
-        "title": "NL Coding Agent: Show Backend Status"
+        "title": "NL Coder: Show Backend Status"
       },
       {
         "command": "nlCodingAgent.reconnect",
-        "title": "NL Coding Agent: Reconnect Backend"
+        "title": "NL Coder: Reconnect Backend"
       }
     ],
     "configuration": {
-      "title": "NL Coding Agent",
+      "title": "NL Coder",
       "properties": {
         "nlCodingAgent.engineRoot": {
           "type": "string",
@@ -102,6 +105,16 @@
           "default": false,
           "scope": "machine-overridable",
           "markdownDescription": "Start the NL Coding Engine with `--allow-execution`, which permits mission start/cancel from this extension. Missions still require an explicit per-start confirmation and the engine's existing READ/WRITE/EXECUTE permissions. Leave disabled for a read-only assistant."
+        },
+        "nlCodingAgent.researchProfile": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "trusted-auto-review"
+          ],
+          "default": "manual",
+          "scope": "machine-overridable",
+          "markdownDescription": "Research auto-review profile passed to the engine (`--research-profile`). `manual` reports needs_approval for external fetches; `trusted-auto-review` can auto-approve a granted web-fetch. Both still require the backend NETWORK and web-fetch grants; the extension never grants permissions."
         }
       }
     },
@@ -109,7 +122,7 @@
       "activitybar": [
         {
           "id": "nlCodingAgent",
-          "title": "NL",
+          "title": "NL Coder",
           "icon": "assets/icon.png"
         }
       ]
@@ -118,7 +131,7 @@
       "nlCodingAgent": [
         {
           "id": "nlCodingAgent.chat",
-          "name": "NL Chat",
+          "name": "NL Coder",
           "type": "webview"
         }
       ]

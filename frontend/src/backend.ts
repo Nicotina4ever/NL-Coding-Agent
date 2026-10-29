@@ -48,6 +48,8 @@ export interface EngineConnectionOptions {
     projectRoot?: string;
     /** Start the MCP server with --allow-execution so mission start/cancel is permitted. */
     allowExecution?: boolean;
+    /** Owner-selected research auto-review profile (manual | trusted-auto-review). */
+    researchProfile?: string;
     /** Extra environment values merged over the inherited process environment. */
     env?: Record<string, string>;
     requestTimeoutMs?: number;
@@ -80,12 +82,106 @@ export interface ConverseResult {
     messages?: ConverseMessage[];
     error?: { type?: string; message?: string };
     tool_activity?: string;
+    route?: ChatRoute;
     [key: string]: unknown;
 }
 
 export interface AttachmentInput {
     name?: string;
     extracted_text?: string;
+}
+
+export interface AttachmentView {
+    id: number;
+    project_id: number;
+    name: string;
+    kind: string;
+    mime: string;
+    size_bytes: number;
+    sha256?: string;
+    source?: string;
+    extraction_status: string;
+    text_chars: number;
+    has_text: boolean;
+    metadata: Record<string, unknown>;
+    error?: string | null;
+    created_at?: string;
+    preview?: string;
+    preview_truncated?: boolean;
+}
+
+export interface AttachmentIngestResult {
+    ok: boolean;
+    attachments: AttachmentView[];
+    errors: Array<{ name?: string; error?: string; code?: string }>;
+    total_bytes: number;
+    limits: Record<string, number>;
+}
+
+export interface HistoryAttachment {
+    id: number;
+    name: string;
+    kind: string;
+    mime: string;
+    size_bytes: number;
+    extraction_status: string;
+    text_chars: number;
+    has_text: boolean;
+    error?: string | null;
+}
+
+export interface HistoryMessage {
+    index: number;
+    role: string;
+    content: string;
+    content_truncated?: boolean;
+    created_at?: string;
+    attachments?: HistoryAttachment[];
+    model?: string;
+    provider_id?: string;
+    automatic?: boolean;
+    run_id?: string;
+    tool_activity?: boolean;
+}
+
+export interface ChatHistoryResult {
+    ok: boolean;
+    project_id: number;
+    thread: string;
+    count: number;
+    offset: number;
+    returned: number;
+    has_more: boolean;
+    messages: HistoryMessage[];
+}
+
+export interface ResearchFetchResult {
+    ok: boolean;
+    outcome?: string;
+    capability?: string;
+    reason?: string;
+    url?: string;
+    title?: string;
+    text?: string;
+    text_truncated?: boolean;
+    metadata?: Record<string, unknown>;
+    provenance?: Record<string, unknown>;
+    redirects?: string[];
+    source_id?: number;
+    citation_id?: number;
+    untrusted: boolean;
+    injection_warnings?: unknown[];
+    offline?: boolean;
+    permission_needed?: unknown;
+    denied?: boolean;
+    error?: unknown;
+}
+
+export interface ChatRoute {
+    provider_id: string;
+    model: string;
+    requested_spec: string;
+    automatic: boolean;
 }
 
 export interface EngineSettings {
@@ -128,6 +224,14 @@ export interface EngineSettings {
         };
     };
     mission_defaults: { developer_model: string; reviewer_model: string; debug_model: string };
+    research?: {
+        profile: string;
+        status?: string;
+        offline?: boolean;
+        network_configured?: boolean;
+        network_granted?: boolean;
+        permission_guidance?: string;
+    };
     agents: {
         roles: Array<{ role: string; model: string; kind: string; note?: string }>;
         custom_agents: Array<Record<string, unknown>>;
@@ -393,6 +497,14 @@ export class EngineConnection {
         this.options.allowExecution = Boolean(value);
     }
 
+    get researchProfile(): string {
+        return this.options.researchProfile === 'trusted-auto-review' ? 'trusted-auto-review' : 'manual';
+    }
+
+    setResearchProfile(value: string): void {
+        this.options.researchProfile = value === 'trusted-auto-review' ? 'trusted-auto-review' : 'manual';
+    }
+
     get lastErrorMessage(): string | undefined {
         return this.lastError;
     }
@@ -434,7 +546,7 @@ export class EngineConnection {
         if (!this.projectRoot) {
             throw new EngineError(
                 'no-workspace',
-                'Open a folder before using NL Chat: the engine binds one project per connection.'
+                'Open a folder before using NL Coder: the engine binds one project per connection.'
             );
         }
         this.state = 'connecting';
@@ -445,6 +557,9 @@ export class EngineConnection {
         if (this.options.allowExecution) {
             args.push('--allow-execution');
         }
+        const researchProfile = this.options.researchProfile === 'trusted-auto-review'
+            ? 'trusted-auto-review' : 'manual';
+        args.push('--research-profile', researchProfile);
         this.log(`starting engine: "${location.pythonPath}" ${args.join(' ')}`);
         let client: Client | undefined;
         let transport: StdioClientTransport | undefined;
@@ -598,7 +713,8 @@ export class EngineConnection {
         text: string,
         attachments: AttachmentInput[] = [],
         timeoutMs?: number,
-        modelSpec?: string
+        modelSpec?: string,
+        attachmentIds: number[] = []
     ): Promise<ConverseResult> {
         if (!Number.isInteger(projectId) || projectId <= 0) {
             throw new EngineError('invalid-project', 'A valid project id from project_context is required.');
@@ -610,9 +726,12 @@ export class EngineConnection {
         const params: Record<string, unknown> = {
             project_id: projectId,
             text: message,
-            attachments,
+            attachments: attachmentIds.length ? [] : attachments,
             history: []
         };
+        if (attachmentIds.length) {
+            params.attachment_ids = attachmentIds.map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0);
+        }
         if (modelSpec && modelSpec.trim()) {
             params.model_spec = modelSpec.trim();
         }
@@ -623,6 +742,37 @@ export class EngineConnection {
             throw new EngineError('chat-failed', detail);
         }
         return result;
+    }
+
+    /** Ingest explicit files (or text) through the engine attachment pipeline. */
+    async attachmentIngest(input: { paths?: string[]; text?: string; name?: string }): Promise<AttachmentIngestResult> {
+        const params: Record<string, unknown> = {};
+        if (input.paths && input.paths.length) {
+            params.paths = input.paths;
+        }
+        if (input.text) {
+            params.text = input.text;
+            params.name = input.name || 'pasted-context.txt';
+        }
+        const result = await this.callJson<AttachmentIngestResult>('attachment_ingest', params, 60_000);
+        if (!result || typeof result !== 'object') {
+            throw new EngineError('attachment-failed', 'attachment_ingest returned an unexpected shape.');
+        }
+        return result;
+    }
+
+    /** Read the engine's persisted conversation thread for this project. */
+    async chatHistory(limit = 200, beforeIndex?: number): Promise<ChatHistoryResult> {
+        const params: Record<string, unknown> = { limit };
+        if (beforeIndex !== undefined) {
+            params.before_index = beforeIndex;
+        }
+        return this.callJson<ChatHistoryResult>('chat_history', params, 30_000);
+    }
+
+    /** Fetch one URL through the existing Research service/permissions. */
+    async researchFetch(url: string): Promise<ResearchFetchResult> {
+        return this.callJson<ResearchFetchResult>('research_fetch_url', { url }, 120_000);
     }
 
     /** Read-only engine model/agent/permission configuration (optionally probe local models). */

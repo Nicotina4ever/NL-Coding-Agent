@@ -1,5 +1,5 @@
 /**
- * Activation for the NL Coding Agent VS Code frontend.
+ * Activation for the NL Coder VS Code frontend.
  *
  * The extension is a thin client: it locates the existing engine installation,
  * opens one MCP stdio session bound to the active workspace folder, exposes the
@@ -42,6 +42,11 @@ export interface NlCodingAgentApi {
     getCandidateDiff(missionId: number): Promise<CandidateDiff>;
     cancelMission(missionId: number): Promise<boolean>;
     resumeMission(missionId: number): Promise<boolean>;
+    attachPaths(paths: string[]): Promise<void>;
+    attachText(text: string, name: string): Promise<unknown>;
+    fetchUrl(url: string, confirmed?: boolean): Promise<unknown>;
+    loadHistory(): Promise<void>;
+    setChatModel(route: string): void;
 }
 
 let connection: EngineConnection | undefined;
@@ -113,7 +118,7 @@ async function pickModel(
             route: option.route
         })),
         {
-            title: `NL Coding Agent — ${role} model`,
+            title: `NL Coder — ${role} model`,
             placeHolder: fallback || 'Select an exact provider/model route',
             matchOnDescription: true,
             matchOnDetail: true
@@ -123,9 +128,9 @@ async function pickModel(
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<NlCodingAgentApi> {
-    output = vscode.window.createOutputChannel('NL Coding Agent');
+    output = vscode.window.createOutputChannel('NL Coder');
     context.subscriptions.push(output);
-    output.appendLine('NL Coding Agent extension activated.');
+    output.appendLine('NL Coder extension activated.');
 
     const config = vscode.workspace.getConfiguration('nlCodingAgent');
     const timeoutSeconds = Math.max(30, config.get<number>('requestTimeoutSeconds', 180));
@@ -133,6 +138,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
     const engineRoot = config.get<string>('engineRoot', '') || process.env.NL_ENGINE_ROOT || '';
     const pythonPath = config.get<string>('pythonPath', '') || process.env.NL_PYTHON_PATH || '';
     const allowExecution = config.get<boolean>('allowExecution', false);
+    const researchProfile = config.get<string>('researchProfile', 'manual');
     const projectRoot = workspaceRoot();
 
     connection = new EngineConnection({
@@ -141,11 +147,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
         extensionPath: context.extensionUri.fsPath,
         projectRoot,
         allowExecution,
+        researchProfile,
         env: engineEnvironment(),
         requestTimeoutMs: timeoutMs,
         log: (line: string) => output?.appendLine(line)
     });
-    chat = new ChatProvider(context.extensionUri, connection, output, timeoutMs);
+    chat = new ChatProvider(context.extensionUri, connection, output, timeoutMs, context);
 
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(ChatProvider.viewType, chat, {
@@ -196,7 +203,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
         getMissionDetail: (missionId: number) => connection!.missionDetail(missionId),
         getCandidateDiff: (missionId: number) => connection!.candidateDiff(missionId),
         cancelMission: (missionId: number) => chat!.cancelMission(missionId, true),
-        resumeMission: (missionId: number) => chat!.resumeMission(missionId, true)
+        resumeMission: (missionId: number) => chat!.resumeMission(missionId, true),
+        attachPaths: (paths: string[]) => chat!.attachPaths(paths),
+        attachText: (text: string, name: string) => chat!.attachText(text, name),
+        fetchUrl: (url: string, confirmed = true) => chat!.fetchUrl(url, confirmed),
+        loadHistory: () => chat!.loadHistory(),
+        setChatModel: (route: string) => chat!.setChatModel(route)
     };
 
     context.subscriptions.push(
@@ -226,7 +238,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
                 await connection!.connect();
                 const settings = await connection!.engineSettings(true);
                 const goal = await vscode.window.showInputBox({
-                    title: 'NL Coding Agent — new mission',
+                    title: 'NL Coder — new mission',
                     prompt: 'Describe the code change. Include exact file paths so the engine can scope the candidate.',
                     placeHolder: 'In src/calc.py add sub(a, b) returning a - b. Preserve add and all existing tests.',
                     ignoreFocusOut: true
@@ -250,7 +262,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 output?.appendLine('[start-mission] ' + message);
-                void vscode.window.showErrorMessage('NL Coding Agent: ' + message);
+                void vscode.window.showErrorMessage('NL Coder: ' + message);
             }
         })
     );
@@ -266,7 +278,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
             try {
                 const status = await api.getStatus();
                 output!.show(true);
-                output!.appendLine('=== NL Coding Agent backend status ===');
+                output!.appendLine('=== NL Coder backend status ===');
                 output!.appendLine(`state: ${status.state}${status.pid ? ` (pid ${status.pid})` : ''}`);
                 if (status.engineName) {
                     output!.appendLine(`engine: ${status.engineName} ${status.engineVersion || ''}`.trim());
@@ -284,7 +296,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
                 }
                 if (status.error) {
                     output!.appendLine(`error: ${status.error}`);
-                    void vscode.window.showErrorMessage(`NL Coding Agent: ${status.error}`);
+                    void vscode.window.showErrorMessage(`NL Coder: ${status.error}`);
                 } else {
                     void vscode.window.showInformationMessage(
                         `NL Coding Engine ready — project #${status.projectId}, ${status.tools?.length ?? 0} tools, ` +
@@ -295,7 +307,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 output?.appendLine('[status-error] ' + message);
-                void vscode.window.showErrorMessage('NL Coding Agent status failed: ' + message);
+                void vscode.window.showErrorMessage('NL Coder status failed: ' + message);
             }
         })
     );
@@ -306,17 +318,31 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
                 await connection!.restart();
                 await chat!.refreshAll(false);
                 await chat!.announceStatus();
-                void vscode.window.showInformationMessage('NL Coding Agent backend reconnected.');
+                void vscode.window.showInformationMessage('NL Coder backend reconnected.');
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 output?.appendLine('[reconnect-error] ' + message);
-                void vscode.window.showErrorMessage('NL Coding Agent reconnection failed: ' + message);
+                void vscode.window.showErrorMessage('NL Coder reconnection failed: ' + message);
             }
         })
     );
 
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(async (event) => {
+            if (event.affectsConfiguration('nlCodingAgent.researchProfile')) {
+                const profile = vscode.workspace.getConfiguration('nlCodingAgent')
+                    .get<string>('researchProfile', 'manual');
+                if (connection!.researchProfile !== profile) {
+                    connection!.setResearchProfile(profile);
+                    output?.appendLine(`researchProfile changed to ${profile}; restarting engine session`);
+                    try {
+                        await connection!.restart();
+                        await chat!.refreshAll(false);
+                    } catch (error) {
+                        output?.appendLine('[config-change] ' + String(error));
+                    }
+                }
+            }
             if (!event.affectsConfiguration('nlCodingAgent.allowExecution')) {
                 return;
             }
@@ -365,7 +391,7 @@ export async function deactivate(): Promise<void> {
             await connection.close();
         }
     } catch (error) {
-        console.error('NL Coding Agent shutdown failed', error);
+        console.error('NL Coder shutdown failed', error);
     } finally {
         connection = undefined;
         chat = undefined;

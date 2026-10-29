@@ -132,6 +132,7 @@ function testWebviewBehaviour() {
     });
     const posted = [];
     const windowListeners = new Map();
+    const documentListeners = new Map();
     let savedState;
     const sandbox = {
         console,
@@ -143,7 +144,11 @@ function testWebviewBehaviour() {
         document: {
             getElementById: get,
             createElement: (tag) => new FakeElement(tag),
-            querySelectorAll: (selector) => selector === '.nl-tab-button' ? tabButtons : []
+            querySelectorAll: (selector) => selector === '.nl-tab-button' ? tabButtons : [],
+            addEventListener: (type, listener) => {
+                if (!documentListeners.has(type)) { documentListeners.set(type, []); }
+                documentListeners.get(type).push(listener);
+            }
         },
         window: {
             addEventListener: (type, listener) => {
@@ -185,9 +190,16 @@ function testWebviewBehaviour() {
         mission_defaults: { developer_model: 'ollama/dev', reviewer_model: 'ollama/rev', debug_model: 'ollama/dev' },
         agents: { roles: [{ role: 'developer', model: 'ollama/dev', kind: 'llm' }], custom_agents: [] },
         permissions: {
-            scopes: ['read', 'write', 'execute', 'delete'],
-            policy: { read: true, write: true, execute: true, delete: false },
+            scopes: ['read', 'write', 'execute', 'delete', 'network'],
+            policy: { read: true, write: true, execute: true, delete: false, network: true },
             cloud_escalation_enabled: false
+        },
+        research: {
+            profile: 'trusted-auto-review',
+            status: 'available',
+            offline: false,
+            network_configured: true,
+            network_granted: true
         }
     };
     const detail = {
@@ -227,10 +239,34 @@ function testWebviewBehaviour() {
         chatModel: 'ollama/dev',
         missionModels: { developerModel: 'ollama/dev', reviewerModel: 'ollama/rev' },
         modelOptions: [
-            { value: '', label: 'Engine default', group: 'default', loaded: false },
-            { value: 'ollama/dev', label: 'dev', group: 'Ollama', loaded: true },
-            { value: 'ollama/rev', label: 'rev', group: 'Ollama', loaded: false }
-        ]
+            { value: '', label: 'Automatic — ollama/dev (developer)', group: 'automatic', loaded: false, provider: '', model: '', automatic: true },
+            { value: 'ollama/dev', label: 'dev', group: 'Ollama', loaded: true, provider: 'ollama', model: 'dev' },
+            { value: 'ollama/rev', label: 'rev', group: 'Ollama', loaded: false, provider: 'ollama', model: 'rev' }
+        ],
+        providers: [{ id: 'ollama', label: 'Ollama', kind: 'ollama', enabled: true }],
+        defaultChatSpec: 'ollama/dev',
+        chatRole: 'developer',
+        busyPhase: 'idle',
+        attachments: [{
+            id: 41, project_id: 7, name: 'notes.txt', kind: 'text', mime: 'text/plain',
+            size_bytes: 29, extraction_status: 'extracted', text_chars: 29, has_text: true,
+            metadata: { truncated: false }, preview: 'hello attachment\nsecond line\n'
+        }],
+        editor: {
+            path: 'K:\\project\\src\\calc.py', relativePath: 'src/calc.py',
+            languageId: 'python', hasSelection: true, selectionLines: 3, dirty: false
+        },
+        research: {
+            ok: true, outcome: 'allowed', capability: 'web-fetch',
+            url: 'https://example.com/', title: 'Example Domain',
+            text: 'Example Domain\n\nThis domain is for use in examples.',
+            text_truncated: false, untrusted: true, source_id: 1,
+            provenance: { content_type: 'text/html', size: 577 },
+            injection_warnings: []
+        },
+        researchProfile: 'trusted-auto-review',
+        historyCount: 2,
+        historyLoaded: true
     };
     const send = (data) => {
         for (const listener of windowListeners.get('message') || []) { listener({ data }); }
@@ -241,8 +277,18 @@ function testWebviewBehaviour() {
     assert.strictEqual(get('project-badge').textContent, '#7 · project');
     assert.strictEqual(get('exec-toggle').dataset.enabled, 'true');
     assert.strictEqual(get('chat-model').value, 'ollama/dev');
+    assert.strictEqual(get('provider-select').value, 'ollama');
+    assert.strictEqual(get('auto-model').checked, false);
+    assert(collectText(get('model-current')).includes('Explicit'));
     assert.strictEqual(get('dev-model').value, 'ollama/dev');
     assert.strictEqual(get('reviewer-model').value, 'ollama/rev');
+    assert.strictEqual(get('attachment-chips').children.length, 1, 'attachment chip rendered');
+    assert(collectText(get('attachment-chips')).includes('notes.txt'));
+    assert(collectText(get('editor-context')).includes('src/calc.py'));
+    assert(!get('research-card').classList.contains('hidden'), 'research card visible');
+    assert.strictEqual(get('research-title').textContent, 'Example Domain');
+    assert(get('research-text').textContent.includes('This domain is for use'));
+    assert.strictEqual(get('research-use').disabled, false);
     assert.strictEqual(get('mission-list').children.length, 1, 'mission row rendered');
     assert(!get('mission-banner').classList.contains('hidden'), 'active mission banner visible');
     assert.strictEqual(get('banner-status').textContent, 'completed');
@@ -257,8 +303,36 @@ function testWebviewBehaviour() {
     assert(detailText.includes('def sub'), 'diff rendered');
     const engineText = collectText(get('engine-content'));
     assert(engineText.includes('Permissions'), 'engine permissions rendered');
+    assert(engineText.includes('Research / URL fetch'), 'research settings rendered');
+    assert(engineText.includes('Trusted auto review'), 'research profile options rendered');
     assert(engineText.includes('ollama/dev'), 'model routes rendered');
     assert(engineText.includes('dev'), 'discovered model rendered');
+
+    // Engine history is rendered from the engine's persisted thread, not local storage.
+    send({
+        type: 'history',
+        payload: {
+            messages: [
+                { role: 'user', content: 'first question', created_at: '2026-10-29T10:00:00', attachments: [{ name: 'notes.txt', kind: 'text', size_bytes: 29, has_text: true }] },
+                { role: 'assistant', content: 'see https://example.com/', created_at: '2026-10-29T10:00:05', model: 'dev' }
+            ]
+        }
+    });
+    assert.strictEqual(get('messages').children.length, 2, 'history rendered');
+    const assistantHistory = get('messages').children[1];
+    assert(collectText(assistantHistory).includes('via dev'), 'assistant route rendered from history');
+    const link = (function find(node) {
+        if (node.className && String(node.className).includes('nl-link')) { return node; }
+        for (const child of node.children) {
+            const found = find(child);
+            if (found) { return found; }
+        }
+        return null;
+    })(assistantHistory);
+    assert(link && link.tagName === 'a', 'URL recognised and rendered as a link');
+    link.dispatch('click', { preventDefault() {} });
+    assert(posted.some((message) => message.type === 'action' && message.action === 'fetchUrl' &&
+        message.payload.url === 'https://example.com/'), 'link click requests a real research fetch');
 
     // Tab navigation.
     tabButtons[1].dispatch('click', {});
@@ -292,8 +366,9 @@ function testWebviewBehaviour() {
     const messages = get('messages').children;
     const last = messages[messages.length - 1];
     assert(last.className.includes('nl-message-assistant'), 'assistant message class');
-    assert.strictEqual(last.children[1].textContent, hostile, 'model text rendered verbatim');
-    assert.strictEqual(last.children[1].children.length, 0, 'no elements created from model text');
+    const body = last.children[1];
+    assert.strictEqual(collectText(body), hostile, 'model text rendered verbatim');
+    assert(body.children.every((child) => child.tagName === 'span'), 'only text spans created from model text');
     assert.strictEqual(sandbox.__pwned, undefined, 'no script executed');
 
     // Busy state disables sending.

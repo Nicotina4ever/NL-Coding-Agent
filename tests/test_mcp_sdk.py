@@ -140,13 +140,43 @@ def test_real_engine_stdio_readonly_project_binding(tmp_path, monkeypatch):
         manager = McpManager(config={"servers": {"engine": {**spec, "trusted": True, "timeout": 20}}})
         names = {t["name"] for t in manager.list_tools("engine")}
         assert {"project_context", "mission_status", "start_mission", "cancel_mission",
-                "engine_settings", "mission_detail"} <= names
+                "engine_settings", "mission_detail", "attachment_ingest",
+                "chat_history", "research_fetch_url"} <= names
         settings = manager.invoke_tool("engine", "engine_settings", {}, human_approved=True)
         settings_payload = tool_payload(settings)
         assert settings_payload["project"]["id"] == project["id"]
         assert "read" in settings_payload["permissions"]["scopes"]
         assert settings_payload["mission_defaults"]["developer_model"]
         assert settings_payload["models"]["discovered"] is None
+        assert settings_payload["research"]["profile"] == "manual"
+        assert settings_payload["research"]["network_granted"] is False
+        notes = root / "notes.txt"
+        notes.write_bytes(b"hello attachment\nsecond line\n")
+        ingest = manager.invoke_tool("engine", "attachment_ingest",
+                                     {"paths": ["notes.txt"]}, human_approved=True)
+        ingest_payload = tool_payload(ingest)
+        assert ingest_payload["ok"] and len(ingest_payload["attachments"]) == 1
+        attachment = ingest_payload["attachments"][0]
+        assert attachment["name"] == "notes.txt"
+        assert attachment["kind"] == "text"
+        assert attachment["has_text"] is True
+        assert attachment["preview"] == "hello attachment\nsecond line\n"
+        assert "stored_path" not in attachment
+        outside = tmp_path / "outside.txt"
+        outside.write_text("outside", encoding="utf-8")
+        rejected_path = manager.invoke_tool("engine", "attachment_ingest",
+                                            {"paths": [str(outside)]}, human_approved=True)
+        assert rejected_path["isError"]
+        assert "outside the bound project" in rejected_path["content"][0]["text"]
+        history = manager.invoke_tool("engine", "chat_history", {}, human_approved=True)
+        history_payload = tool_payload(history)
+        assert history_payload["ok"] is True
+        assert history_payload["messages"] == []
+        denied_research = manager.invoke_tool("engine", "research_fetch_url",
+                                              {"url": "https://example.com/"},
+                                              human_approved=True)
+        assert denied_research["isError"]
+        assert "NETWORK" in denied_research["content"][0]["text"]
         detail = manager.invoke_tool("engine", "mission_detail", {"mission_id": own},
                                      human_approved=True)
         detail_payload = tool_payload(detail)

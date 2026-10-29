@@ -1,8 +1,10 @@
-# Frontend Architecture — VS Code / NL Chat
+# NL Coder — VS Code extension architecture
 
-**Status:** extended on 2026-10-29 (extension `0.2.0`) from chat-only to **chat + model choice + real
-mission control + diff/verification review**, packaged as an installable VSIX and accepted against a
-real **VS Code Insiders 1.145.0-insider** extension host and the existing Python engine. This document
+**Status:** extended on 2026-10-29 (extension **NL Coder** `0.3.0`) from chat-only to **complete NL Chat
+(model selection, project-scoped attachments, editor context, authorized URL research, persisted
+history) + real mission control + diff/verification review**, packaged as an installable VSIX and
+accepted against a real **VS Code Insiders 1.145.0-insider** extension host and the existing Python
+engine. The detailed chat operator guide is [FRONTEND_CHAT.md](FRONTEND_CHAT.md). This document
 replaces the earlier draft that described a `vscode-languageclient`/LSP connection; that draft was
 wrong and its code was removed.
 
@@ -24,19 +26,19 @@ sees it. The Studio is untouched and remains the compatibility UI.
 
 | File | Responsibility |
 |---|---|
-| `frontend/src/backend.ts` | `EngineConnection`: engine-location resolution, official MCP SDK client, stdio transport, idempotent connect, tool calls, project context, chat turn, **engine settings/model catalog, mission list/status/detail/diff, mission start/cancel**, execution flag, close/restart. No `vscode` import, so the same code is reusable by the future Code - OSS build and by plain-Node tests. |
-| `frontend/src/chatProvider.ts` | Webview controller for `nlCodingAgent.chat`: dashboard state, chat, model choice, mission start/resume/stop, progress polling, diff/verification rendering, approvals and errors. |
-| `frontend/src/webview.ts` | Pure HTML builder with a strict CSP and HTML escaping (Chat / Missions / Engine tabs). |
-| `frontend/src/extension.ts` | Activation, commands, configuration (`allowExecution`), workspace-folder rebinding, webview registration, deactivation, public test/automation API. |
-| `frontend/media/main.js` | Plain browser JavaScript: transcript, mission composer, mission list/detail, verification/diff views, engine settings; all engine text via `textContent`. |
+| `frontend/src/backend.ts` | `EngineConnection`: engine-location resolution, official MCP SDK client, stdio transport, idempotent connect, tool calls, project context, chat turn with attachments/route, **engine settings/model catalog, chat history, attachment ingestion, research fetch, mission list/status/detail/diff, mission start/cancel**, execution flag, close/restart. No `vscode` import, so the same code is reusable by the future Code - OSS build and by plain-Node tests. |
+| `frontend/src/chatProvider.ts` | Webview controller for `nlCodingAgent.chat`: dashboard state, chat, provider/model selection, project-scoped attachments, editor context, URL research, persisted history, mission start/resume/stop, progress polling, diff/verification rendering, approvals and errors. |
+| `frontend/src/webview.ts` | Pure HTML builder with a strict CSP and HTML escaping (Chat / Missions / Engine tabs, modern composer, context strip, research card). |
+| `frontend/src/extension.ts` | Activation, commands, configuration (`allowExecution`, `researchProfile`), workspace-folder rebinding, webview registration, deactivation, public test/automation API. |
+| `frontend/media/main.js` | Plain browser JavaScript: engine-history rendering, composer/model bar, context/attachments, research card, mission composer/list/detail, verification/diff views, engine settings; all engine text via `textContent`. |
 | `frontend/media/style.css` | Theme-aware layout using `--vscode-*` variables; brand accent `#7531FE` as a restrained rule/progress accent. |
 
 ## Protocol contract (verified against the live server)
 
 Python side: `FastMCP` from the installed `mcp==1.30.0`, started with
-`python\python.exe nl_agent.py mcp serve --project <folder>` (read-only by default; `--allow-execution`
-is owner-gated). Negotiated protocol in testing: `2025-11-25`. Stdout carries only JSON-RPC; engine
-logging is redirected to stderr.
+`python\python.exe nl_agent.py mcp serve --project <folder> --research-profile manual|trusted-auto-review`
+(read-only by default; `--allow-execution` is owner-gated). Negotiated protocol in testing:
+`2025-11-25`. Stdout carries only JSON-RPC; engine logging is redirected to stderr.
 
 The extension uses the official **`@modelcontextprotocol/sdk@1.32.2`** client (`Client` +
 `StdioClientTransport`), imported by subpath:
@@ -56,7 +58,10 @@ Discovered tools and contracts:
 |---|---|---|
 | `project_context` | none | Returns the bound project (`id`, `root`, `name`, …) and `execution_enabled`. |
 | `engine_settings` | optional `include_models` (default `false`), `timeout_s` (0.5–5 s) | Read-only projection of the existing model config, configured providers/roles, chat default, agent roles/custom agents, effective permissions, runtime paths and mission route defaults. `include_models` runs the same bounded GET-only Model Hub probe as the Studio; it never loads a model. |
-| `nlc_converse` | `project_id` (required, must equal the bound project), `text`, `attachments` (array of `{name, extracted_text}`), `history` (accepted, ignored), optional `model_spec` | Runs the existing `AppServices.chat_conversation` and returns `{ok, reply, messages, ...}`. |
+| `nlc_converse` | `project_id` (required, must equal the bound project), `text`, `attachments` (legacy `{name, extracted_text}`), `attachment_ids` (ids from `attachment_ingest`), `history` (accepted, ignored), optional `model_spec` | Runs the existing `AppServices.chat_conversation` and returns `{ok, reply, messages, route, ...}`. The route is the provider/model actually used (`automatic` when `model_spec` was omitted). |
+| `attachment_ingest` | `paths` (workspace-contained files) and/or `text` + `name` | Copies through the existing attachment store; rejects symlinks/directories/outside paths; returns ids, bounded preview and extraction status; never exposes `stored_path`. |
+| `chat_history` | `limit` (1–1000), optional `before_index` | Reads the existing per-project chat JSON; returns messages, attachment metadata, assistant `model`/`provider_id` and counts. |
+| `research_fetch_url` | `url` (http/https) | Requires `READ` + `NETWORK`; calls the existing Research service/policy and returns bounded untrusted text, title, provenance, source/citation ids and warnings. Raw HTML is not returned. |
 | `mission_list` | none | Read-only. |
 | `mission_status` | `mission_id` | Read-only; rejects foreign missions. |
 | `mission_detail` | `mission_id` | Read-only persisted view: tasks, task attempts, handoffs, verification runs, progress, timestamps, parsed `changed_paths`. |
@@ -96,20 +101,26 @@ point the bundled extension at the existing engine installation, so no per-machi
 - Changing workspace folders restarts the session and rebinds; the client also compares the
   announced root with the open folder and refuses to chat on a mismatch.
 
-## Mission and settings surface (`0.2.0`)
+## Chat, mission and settings surface (`0.3.0`)
 
 The webview has three sections:
 
-- **Chat:** existing chat turn with a model selector. Model options are the configured role models plus
-  live discovered local models (embedding-only models are filtered out). "Engine default" omits
-  `model_spec`, so the engine's own `roles.chat`/`roles.developer` fallback remains authoritative.
+- **Chat:** engine-persisted conversation history; provider/model picker with an **Automatic** mode;
+  project-scoped file attachments (picker, drag & drop, current file, selection) with previews and
+  removal; visible editor/selection context; URL links that fetch only on explicit confirmation via
+  the Research service; a fetched-page card with "Use as chat context"; model route badges. The
+  history shown comes from `chat_history`, not a second webview transcript.
 - **Missions:** the project's persisted missions with status/verdict/diff stat, Open/Stop/Resume
   actions, and a detail view containing the objective, progress, tasks/agents, handoffs, candidate and
   oracle verification runs, reviewer notes, attempts and the candidate/retained diff. Mission mode in
   the chat composer starts a mission through `start_mission`; `/mission <objective>` is a shortcut.
 - **Engine:** project identity, execution mode, read-only permission policy, agent roles,
-  providers/models, configured mission route defaults and a "Probe models" action. Configuration is
+  providers/models, configured mission route defaults, a **Research** section with the effective
+  auto-review profile and read-only NETWORK status, and a "Probe models" action. Configuration is
   **read-only here**; the extension never writes `config/models.yaml`, permissions or the engine DB.
+
+The complete chat contract, permission requirements and evidence are in
+[FRONTEND_CHAT.md](FRONTEND_CHAT.md).
 
 ### Mission lifecycle and approvals
 
@@ -138,13 +149,21 @@ handoff payload. See [FRONTEND_MISSIONS.md](FRONTEND_MISSIONS.md).
 
 
 
+## Webview security
+
 - `default-src 'none'`, `script-src`/`style-src` limited to the webview CSP source, no
   `'unsafe-inline'`, no inline script, no inline event handlers.
 - The script is an external extension media file.
-- Model and project text is inserted with `textContent`; a hostile `<img onerror>`/`<script>` sample
-  is rendered verbatim as text and executes nothing (covered by `test/webview.cjs`).
-- Selected editor text is capped at 8,000 chars and framed as `UNTRUSTED attachment` context by the
-  server; history supplied by the client is ignored because the backend persists the real history.
+- Model/project/link text is inserted with `textContent`; hostile HTML is rendered verbatim and
+  executes nothing (covered by `test/webview.cjs`). Link clicks post an explicit fetch action; they do
+  not navigate the webview.
+- Attachments are path-filtered in the extension and re-validated by the engine: workspace containment,
+  no symlinks, no directories, size/type limits from the existing attachment store. The UI never
+  receives `stored_path`.
+- URL fetch is real HTTP through the existing Research service only; raw HTML is never returned and
+  page content is framed/marked as untrusted. The extension cannot grant permissions and does not retry
+  through another transport.
+- Client-supplied history remains ignored; the engine persists and replays the real history.
 
 ## Lifecycle
 
@@ -160,11 +179,11 @@ output channel.
 cd frontend
 npm install
 npm run compile
-npm run package:vsix        # -> ..\.workspace\dist\NL-Coding-Agent-0.2.0.vsix
+npm run package:vsix        # -> ..\.workspace\dist\NL-Coding-Agent-0.3.0.vsix
 
 # local install in an isolated Insiders profile (does not touch the default profile)
 & "$env:LOCALAPPDATA\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd" `
-  --install-extension "..\.workspace\dist\NL-Coding-Agent-0.2.0.vsix" --force `
+  --install-extension "..\.workspace\dist\NL-Coding-Agent-0.3.0.vsix" --force `
   --user-data-dir "$PWD\..\.workspace\temp\frontend-accept\vsix-profile\user-data" `
   --extensions-dir "$PWD\..\.workspace\temp\frontend-accept\vsix-profile\extensions"
 ```
@@ -177,34 +196,45 @@ Acceptance harnesses:
 
 | Script | Purpose |
 |---|---|
-| `npm run test:integration` | Node-only real MCP + Ollama + project isolation + read-only refusal. |
-| `npm run test:webview` | CSP, no HTML sink, dashboard state/chat/mission rendering. |
+| `npm run test:integration` | Node-only real MCP + Ollama + attachment + history + project isolation + read-only refusal. |
+| `npm run test:webview` | CSP, no HTML sink, model/attachment/editor/research/history UI, mission rendering. |
 | `npm run test:extension` | Real Insiders extension host: activation, tools, settings, chat, shutdown. |
+| `node test/runChatFeatureTests.cjs` | Real Insiders chat acceptance: model → conversation, file/editor attachments, authorized URL → context, history, automatic mode. |
 | `node test/runMissionTests.cjs` | Real isolated-project mission: complete change, diff, candidate/oracle tests, reviewer verdict, promotion. |
 | `node test/runResumeTests.cjs` | Real stop→interrupted→resume→completed lifecycle. |
 | `node test/runInstalledVsixTests.cjs` | Installs the VSIX in an isolated profile and runs the mission acceptance from the installed payload. |
+| `node test/runInstalledChatFeatureTests.cjs` | Installs the VSIX in an isolated profile and runs the chat feature acceptance from the installed payload. |
 
-## Acceptance evidence (2026-10-29, `0.2.0`)
+## Acceptance evidence (2026-10-29, `0.3.0`)
 
 | Gate | Command | Result |
 |---|---|---|
 | TypeScript build | `npm run compile` | exit 0, no diagnostics |
-| Webview safety/behaviour | `node test/webview.cjs` | `WEBVIEW-TESTS-PASS`, exit 0 (state, chat, mission mode/detail, CSP/no HTML sink) |
-| Real MCP + Ollama | `node test/integration.cjs` | `INTEGRATION-ACCEPTANCE-PASS`, exit 0: initialize `NL Coding Engine 1.30.0`, **10 tools**, `engine_settings`, project #1/#2 isolation, read-only `start_mission` refused with no mission row, reply `NLCHAT-OK`, children released |
-| Real mission (dev host) | `node test/runMissionTests.cjs` | `MISSION-ACCEPTANCE-PASS`, exit 0: mission #1 completed, verdict `APPROVE`, promotion `promoted`, candidate+oracle passed, live `src/calc.py` changed, retained diff returned, dashboard got detail+diff, child released |
-| Stop + resume | `node test/runResumeTests.cjs` | `STOP-RESUME-ACCEPTANCE-PASS`, exit 0: stop accepted → `interrupted` with live tree untouched → resume → completed/APPROVE/promoted, `resume_count 1` |
-| VSIX package/install | `npm run package:vsix` + Insiders CLI | `NL-Coding-Agent-0.2.0.vsix` (4.46 MB) installed and listed as `nlcodingagent.nl-coding-agent` in an isolated profile |
-| Installed VSIX mission | `node test/runInstalledVsixTests.cjs` | `VSIX-INSTALLED-MISSION-PASS`, exit 0: same real mission, diff, verification and dashboard checks from the **installed** VSIX payload |
-| Python binding | `pytest tests/test_mcp_sdk.py::test_real_engine_stdio_readonly_project_binding tests/test_mcp_engine_converse.py` | 5 passed (includes `engine_settings`/`mission_detail`) |
+| Webview safety/behaviour | `node test/webview.cjs` | `WEBVIEW-TESTS-PASS`: CSP/no HTML sink, model/attachment/editor/research/history UI, link fetch action, hostile text verbatim |
+| Real MCP + Ollama | `node test/integration.cjs` | `INTEGRATION-ACCEPTANCE-PASS`: `NL Coding Engine 1.30.0`, **13 tools**, explicit `granite4.2:3b` route, attachment token echoed, history metadata, outside-path rejection, research denied without NETWORK, project #1/#2 isolation |
+| Real Insiders chat | `node test/runChatFeatureTests.cjs` | `CHAT-FEATURE-ACCEPTANCE-PASS`: model → conversation, file + editor-selection attachments, authorized `https://example.com/` → context, 6-message persisted history, automatic route |
+| Real mission (dev host) | `node test/runMissionTests.cjs` | `MISSION-ACCEPTANCE-PASS`: mission #1 completed, verdict `APPROVE`, promotion `promoted`, candidate+oracle passed, live `src/calc.py` changed, retained diff returned, dashboard got detail+diff |
+| Stop + resume | `node test/runResumeTests.cjs` | `STOP-RESUME-ACCEPTANCE-PASS`: stop accepted → `interrupted` with live tree untouched → resume → completed/APPROVE/promoted |
+| VSIX package/install | `npm run package:vsix` + Insiders CLI | `NL-Coding-Agent-0.3.0.vsix` (4.48 MB, SHA-256 `41941f94…`) installed as `nlcodingagent.nl-coding-agent` in an isolated profile; display name **NL Coder**, real `assets/icon.png` |
+| Installed VSIX chat | `node test/runInstalledChatFeatureTests.cjs` | `VSIX-CHAT-FEATURE-PASS`: same model/attachment/editor/URL/history/automatic checks from the installed payload |
+| Installed VSIX mission | `node test/runInstalledVsixTests.cjs …0.3.0.vsix` | `VSIX-INSTALLED-MISSION-PASS`: same real mission/diff/verification from the installed payload |
+| Python focused | 11 relevant test modules | 140 passed |
 
-Logs and the exported mission record are under `docs/evidence/frontend/` (`MISSION_ACCEPTANCE_DEV.log`,
-`STOP_RESUME_ACCEPTANCE.log`, `VSIX_INSTALLED_MISSION_ACCEPTANCE.log`, `INTEGRATION_ACCEPTANCE.log`,
-`WEBVIEW_TESTS.log`, `mission-evidence.json`). The earlier chat-only GUI screenshot is
+Logs and machine-readable evidence are under `docs/evidence/frontend/`: `chat-features-evidence.json`,
+`CHAT_FEATURES_ACCEPTANCE_DEV.log`, `VSIX_CHAT_FEATURE_ACCEPTANCE.log`,
+`MISSION_ACCEPTANCE_DEV_V030.log`, `VSIX_INSTALLED_MISSION_ACCEPTANCE_V030.log`,
+`STOP_RESUME_ACCEPTANCE_V030.log`, `EXTENSION_ACCEPTANCE_V030.log`,
+`INTEGRATION_ACCEPTANCE_V030.log`, `WEBVIEW_TESTS.log`. The earlier chat-only GUI screenshot is
 `docs/evidence/frontend/NL_CHAT_GUI_ACCEPTANCE.png`.
 
 ## Known limits / next increments
 
 - No streaming: a chat turn is one request/response; mission progress is polled every 2 s.
+- URL research is permission-gated by design: without an owner `NETWORK` + `web-fetch` grant and an
+  approving research profile, the UI reports `denied`/`needs_approval`/`offline`; it never grants
+  permissions or retries through another transport. DNS/peer-IP verification remains a Research limit.
+- Attachments are text/context, not vision; images are metadata-only and unsupported formats are
+  reported honestly.
 - No per-tool-call telemetry exists in the engine, so the dashboard shows persisted task/handoff/
   attempt/verification evidence rather than fabricated tool calls.
 - Single-folder workspaces; changing folders restarts and rebinds the engine.
@@ -216,9 +246,9 @@ Logs and the exported mission record are under `docs/evidence/frontend/` (`MISSI
 - Mission detail strings are bounded by the MCP tool (attempt output 12k, verification 8k, handoff
   payload 2k) to keep the webview responsive.
 - The NL Code standalone distribution built earlier still bundles extension 0.1.0 (chat-only); it must
-  be rebuilt to include this mission UI when objective-2 packaging resumes.
+  be rebuilt to include this chat/mission UI when objective-2 packaging resumes.
 - The Studio (PySide6) and all existing user data remain the compatibility path.
 - `vscode/` in the repository root is a local Code - OSS reference checkout; it is not part of this
   extension and is not shipped.
 
-*Last updated: 2026-10-29, after mission control, VSIX packaging and installed-VSIX acceptance.*
+*Last updated: 2026-10-29, after chat features, mission control, VSIX packaging and installed-VSIX acceptance.*

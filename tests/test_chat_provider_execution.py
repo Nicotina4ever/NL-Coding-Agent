@@ -58,7 +58,11 @@ def context(tmp_path, monkeypatch):
 
 def test_chat_uses_actual_provider_and_history_survives_restart(context):
     services, project, calls, _ = context
-    assert services.chat_conversation(project, "Remember violet")["reply"] == "Ollama response"
+    first = services.chat_conversation(project, "Remember violet")
+    assert first["reply"] == "Ollama response"
+    assert first["route"]["model"] == "demo"
+    assert first["route"]["provider_id"] == "local"
+    assert first["route"]["automatic"] is True
     rebuilt = AppServices()
     rebuilt.get_model_config = services.get_model_config
     try:
@@ -68,6 +72,9 @@ def test_chat_uses_actual_provider_and_history_survives_restart(context):
         assert [m["role"] for m in posts[-1]["messages"]] == ["system", "user", "assistant", "user"]
         assert posts[-1]["messages"][1]["content"] == "Remember violet"
         assert len(result["messages"]) == 4
+        assistant = [item for item in result["messages"] if item["role"] == "assistant"]
+        assert assistant and assistant[-1]["model"] == "demo"
+        assert assistant[-1]["provider_id"] == "local"
         assert services.list_missions(project["id"]) == []
     finally:
         rebuilt._db.close()
@@ -85,7 +92,10 @@ def test_explicit_chat_route_overrides_default_without_fallback(context, monkeyp
     config = services.get_model_config()
     config["roles"]["chat"]["model"] = "unavailable/other"
     monkeypatch.setattr(services, "get_model_config", lambda: config)
-    assert services.chat_conversation(project, "Hello", model_spec="local/demo")["ok"]
+    result = services.chat_conversation(project, "Hello", model_spec="local/demo")
+    assert result["ok"]
+    assert result["route"]["automatic"] is False
+    assert result["route"]["model"] == "demo"
     assert [body for method, _, body in calls if method == "POST"][-1]["model"] == "demo"
 
 

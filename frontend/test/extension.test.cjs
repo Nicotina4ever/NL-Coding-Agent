@@ -9,6 +9,7 @@
 'use strict';
 
 const assert = require('assert');
+const fs = require('fs');
 const path = require('path');
 const vscode = require('vscode');
 
@@ -58,6 +59,9 @@ async function run() {
     assert(extension, 'extension not found; loaded extensions: ' +
         vscode.extensions.all.map((item) => item.packageJSON && item.packageJSON.name).join(', '));
     console.log('extension: ' + extension.id + ' at ' + extension.extensionPath);
+    assert.strictEqual(extension.packageJSON.displayName, 'NL Coder', 'extension display name');
+    assert.strictEqual(extension.packageJSON.icon, 'assets/icon.png', 'extension icon manifest');
+    assert(fs.existsSync(path.join(extension.extensionPath, 'assets', 'icon.png')), 'real icon asset exists');
 
     const api = await extension.activate();
     assert(api && api.connection && api.chat, 'activate() must return the testable API');
@@ -68,7 +72,8 @@ async function run() {
     const tools = await api.connection.listTools();
     const names = tools.map((tool) => tool.name);
     for (const required of ['project_context', 'nlc_converse', 'mission_list', 'mission_detail',
-        'candidate_diff', 'start_mission', 'cancel_mission', 'engine_settings']) {
+        'candidate_diff', 'start_mission', 'cancel_mission', 'engine_settings',
+        'attachment_ingest', 'chat_history', 'research_fetch_url']) {
         assert(names.includes(required), 'missing tool ' + required);
     }
     assert.strictEqual(api.connection.executionAllowed, false, 'engine session is read-only by default');

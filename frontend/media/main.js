@@ -8,6 +8,7 @@
 
     const statusEl = $('status');
     const projectBadge = $('project-badge');
+    const modelBadge = $('model-badge');
     const execToggle = $('exec-toggle');
     const noticeEl = $('notice');
     const tabButtons = Array.prototype.slice.call(document.querySelectorAll('.nl-tab-button'));
@@ -22,11 +23,32 @@
     const bannerResume = $('btn-banner-resume');
     const bannerDetails = $('btn-banner-details');
 
+    const researchCard = $('research-card');
+    const researchOutcome = $('research-outcome');
+    const researchTitle = $('research-title');
+    const researchUrl = $('research-url');
+    const researchMeta = $('research-meta');
+    const researchText = $('research-text');
+    const researchWarnings = $('research-warnings');
+    const researchUse = $('research-use');
+    const researchDismiss = $('research-dismiss');
+
     const messagesEl = $('messages');
     const composer = $('composer');
     const inputEl = $('input');
     const modeEl = $('mode');
+    const providerSelectEl = $('provider-select');
     const chatModelEl = $('chat-model');
+    const autoModelEl = $('auto-model');
+    const modelCurrentEl = $('model-current');
+    const modelBar = $('model-bar');
+    const contextStrip = $('context-strip');
+    const editorContextEl = $('editor-context');
+    const attachmentChipsEl = $('attachment-chips');
+    const attachFilesEl = $('attach-files');
+    const attachCurrentEl = $('attach-current');
+    const attachSelectionEl = $('attach-selection');
+    const dropOverlay = $('drop-overlay');
     const missionFields = $('mission-fields');
     const devModelEl = $('dev-model');
     const reviewerModelEl = $('reviewer-model');
@@ -43,9 +65,11 @@
     let state = null;
     let mode = 'chat';
     let tab = 'chat';
+    let rendering = false;
+    let dragDepth = 0;
 
     function persist() {
-        vscode.setState({ transcript: transcript.slice(-120), mode: mode, tab: tab });
+        vscode.setState({ mode: mode, tab: tab });
     }
 
     function setStatus(text, stateName) {
@@ -88,21 +112,96 @@
         return '';
     }
 
-    function append(role, text) {
-        const item = { role: role, text: String(text == null ? '' : text) };
+    function append(role, text, extra) {
+        const item = Object.assign({ role: role, text: String(text == null ? '' : text) }, extra || {});
         transcript.push(item);
-        if (transcript.length > 120) { transcript.shift(); }
-        persist();
+        if (transcript.length > 400) { transcript.shift(); }
         renderMessage(item);
         return item;
     }
 
+    function renderLinks(container, text) {
+        const pattern = /https?:\/\/[^\s<>"']+/g;
+        let last = 0;
+        let match;
+        while ((match = pattern.exec(text)) !== null) {
+            const raw = match[0].replace(/[),.;!?]+$/, '');
+            if (!raw) { continue; }
+            if (match.index > last) {
+                container.appendChild(el('span', '', text.slice(last, match.index)));
+            }
+            const link = el('a', 'nl-link', raw);
+            link.href = raw;
+            link.title = 'Fetch this page through Research (explicit action, permissions apply)';
+            link.addEventListener('click', function (event) {
+                event.preventDefault();
+                postAction('fetchUrl', { url: raw });
+            });
+            container.appendChild(link);
+            last = match.index + raw.length;
+        }
+        if (last < text.length) {
+            container.appendChild(el('span', '', text.slice(last)));
+        }
+    }
+
+    function attachmentLine(item) {
+        const kind = item.kind || 'file';
+        const size = item.size_bytes ? ' · ' + Math.max(1, Math.round(item.size_bytes / 1024)) + ' KB' : '';
+        return kind + size;
+    }
+
     function renderMessage(item) {
         const wrap = el('div', 'nl-message nl-message-' + item.role);
-        wrap.appendChild(el('span', 'nl-message-label', labels[item.role] || item.role));
-        wrap.appendChild(el('div', 'nl-message-body', item.text));
+        const head = el('div', 'nl-message-head');
+        head.appendChild(el('span', 'nl-message-label', labels[item.role] || item.role));
+        if (item.created_at) {
+            head.appendChild(el('span', 'nl-muted', String(item.created_at).replace('T', ' ').slice(0, 16)));
+        }
+        if (item.model) {
+            head.appendChild(el('span', 'nl-message-model', 'via ' + item.model));
+        }
+        wrap.appendChild(head);
+        const body = el('div', 'nl-message-body');
+        renderLinks(body, item.text);
+        wrap.appendChild(body);
+        const attachments = item.attachments || [];
+        if (attachments.length) {
+            const chips = el('div', 'nl-message-attachments');
+            attachments.forEach(function (attachment) {
+                const chip = el('span', 'nl-attachment-history');
+                chip.appendChild(el('span', '', attachment.name || 'attachment'));
+                chip.appendChild(el('span', 'nl-muted', attachmentLine(attachment)));
+                if (!attachment.has_text) {
+                    chip.appendChild(el('span', 'nl-warning-inline', 'no text'));
+                }
+                chips.appendChild(chip);
+            });
+            wrap.appendChild(chips);
+        }
         messagesEl.appendChild(wrap);
         messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function renderHistory(messages) {
+        clear(messagesEl);
+        transcript.length = 0;
+        (messages || []).forEach(function (message) {
+            renderMessage({
+                role: message.role,
+                text: message.content,
+                created_at: message.created_at,
+                attachments: message.attachments,
+                model: message.model || message.provider_id,
+                tool_activity: message.tool_activity
+            });
+        });
+        if (!messages || !messages.length) {
+            renderMessage({
+                role: 'system',
+                text: 'No saved conversation for this project yet. Messages are persisted by the engine.'
+            });
+        }
     }
 
     function postAction(action, payload) {
@@ -125,7 +224,10 @@
         modeEl.value = mode;
         missionFields.classList.toggle('hidden', mode !== 'mission');
         missionNote.classList.toggle('hidden', mode !== 'mission');
+        if (modelBar) { modelBar.classList.toggle('hidden', mode === 'mission'); }
+        if (contextStrip) { contextStrip.classList.toggle('hidden', mode === 'mission'); }
         sendEl.textContent = mode === 'mission' ? 'Start mission' : 'Send';
+        if (state) { renderContext(state); }
         persist();
     }
 
@@ -162,7 +264,6 @@
         execToggle.dataset.enabled = current.executionEnabled ? 'true' : 'false';
         showNotice(current.error || null);
     }
-
     function renderBanner(current) {
         const mission = current.activeMissionId
             ? (current.selected && current.selected.detail && current.selected.detail.mission.id === current.activeMissionId
@@ -194,17 +295,176 @@
         bannerStop.disabled = Boolean(current.busyMission);
     }
 
-    function renderModelSelectors(current) {
+    function routeProvider(route) {
+        const slash = String(route || '').indexOf('/');
+        return slash > 0 ? route.slice(0, slash) : '';
+    }
+
+    function routeModel(route) {
+        const slash = String(route || '').indexOf('/');
+        return slash > 0 ? route.slice(slash + 1) : String(route || '');
+    }
+
+    function renderModelBar(current) {
         const options = current.modelOptions || [];
-        populateSelect(chatModelEl, options, current.chatModel || '');
         populateSelect(devModelEl, options, current.missionModels ? current.missionModels.developerModel : '');
         populateSelect(reviewerModelEl, options, current.missionModels ? current.missionModels.reviewerModel : '');
+        const auto = !current.chatModel;
+        autoModelEl.checked = auto;
+
+        const providers = [];
+        const seenProviders = {};
+        function addProvider(id, label) {
+            if (!id || seenProviders[id]) { return; }
+            seenProviders[id] = true;
+            providers.push({ value: id, label: label || id });
+        }
+        (current.providers || []).filter(function (provider) { return provider.enabled; })
+            .forEach(function (provider) { addProvider(provider.id, provider.label); });
+        options.forEach(function (option) {
+            if (option.value) { addProvider(option.provider, option.provider); }
+        });
+        const selectedProvider = auto ? '' : (routeProvider(current.chatModel) || (providers[0] && providers[0].value) || '');
+        if (auto) {
+            populateSelect(providerSelectEl, [{ value: '', label: 'Automatic' }], '');
+        } else {
+            populateSelect(providerSelectEl, providers, selectedProvider);
+        }
+        providerSelectEl.disabled = auto;
+        chatModelEl.disabled = auto;
+        if (auto) {
+            populateSelect(chatModelEl, [{
+                value: '',
+                label: 'Automatic — ' + (current.defaultChatSpec || 'engine default')
+                    + (current.chatRole ? ' (' + current.chatRole + ')' : '')
+            }], '');
+        } else {
+            const models = options.filter(function (option) {
+                return option.value && option.provider === selectedProvider;
+            });
+            if (!models.some(function (option) { return option.value === current.chatModel; })) {
+                models.push({ value: current.chatModel, label: current.chatModel });
+            }
+            populateSelect(chatModelEl, models, current.chatModel);
+        }
+        modelCurrentEl.textContent = auto
+            ? 'Automatic · ' + (current.defaultChatSpec || 'engine default')
+            : 'Explicit · ' + current.chatModel;
+        modelBadge.textContent = auto
+            ? 'auto: ' + (current.defaultChatSpec || 'engine default')
+            : 'model: ' + current.chatModel;
+        modelBadge.title = current.lastRoute
+            ? 'Last reply via ' + current.lastRoute.provider_id + '/' + current.lastRoute.model
+            : '';
+        const phaseText = {
+            thinking: 'Waiting for the model…',
+            attaching: 'Preparing attachment…',
+            fetching: 'Fetching page through Research…',
+            mission: 'Mission running…'
+        }[current.busyPhase] || '';
+        hintEl.textContent = phaseText || (current.busyChat ? 'Waiting for the engine…' : current.busyMission ? 'Dispatching mission…' : '');
         sendEl.disabled = Boolean(current.busyChat || current.busyMission);
-        hintEl.textContent = current.busyChat
-            ? 'Waiting for the engine…'
-            : current.busyMission
-                ? 'Dispatching mission…'
-                : '';
+        sendEl.textContent = mode === 'mission' ? 'Start mission' : 'Send';
+    }
+
+    function renderEditorContext(current) {
+        clear(editorContextEl);
+        const editor = current.editor;
+        if (!editor) {
+            editorContextEl.appendChild(el('span', 'nl-muted', 'No active editor context'));
+            return;
+        }
+        const label = el('span', 'nl-editor-label');
+        label.appendChild(el('span', '', editor.relativePath || editor.path || 'editor'));
+        if (editor.hasSelection) {
+            label.appendChild(el('span', 'nl-muted', ' · ' + editor.selectionLines + ' selected line(s)'));
+        }
+        if (editor.dirty) {
+            label.appendChild(el('span', 'nl-warning-inline', ' · unsaved'));
+        }
+        editorContextEl.appendChild(label);
+    }
+
+    function renderAttachments(current) {
+        clear(attachmentChipsEl);
+        const attachments = current.attachments || [];
+        if (!attachments.length) {
+            attachmentChipsEl.appendChild(el('span', 'nl-muted', 'No attachments'));
+            return;
+        }
+        attachments.forEach(function (attachment) {
+            const chip = el('span', 'nl-attachment-chip');
+            chip.appendChild(el('span', 'nl-attachment-name', attachment.name || 'attachment'));
+            chip.appendChild(el('span', 'nl-muted', attachmentLine(attachment)));
+            if (!attachment.has_text) {
+                chip.appendChild(el('span', 'nl-warning-inline', 'no text'));
+            }
+            if (attachment.preview) {
+                const details = el('details', 'nl-attachment-preview');
+                details.appendChild(el('summary', 'nl-muted', 'preview'));
+                details.appendChild(el('pre', 'nl-output', attachment.preview));
+                chip.appendChild(details);
+            }
+            const remove = el('button', 'nl-chip-remove', '×');
+            remove.type = 'button';
+            remove.title = 'Remove from this message';
+            remove.addEventListener('click', function (event) {
+                event.stopPropagation();
+                postAction('removeAttachment', { attachmentId: attachment.id });
+            });
+            chip.appendChild(remove);
+            attachmentChipsEl.appendChild(chip);
+        });
+    }
+
+    function renderContext(current) {
+        const missionMode = mode === 'mission';
+        contextStrip.classList.toggle('hidden', missionMode);
+        modelBar.classList.toggle('hidden', missionMode);
+        missionFields.classList.toggle('hidden', !missionMode);
+        missionNote.classList.toggle('hidden', !missionMode);
+        if (missionMode) {
+            return;
+        }
+        renderEditorContext(current);
+        renderAttachments(current);
+        const busy = Boolean(current.busyChat || current.busyMission || current.busyPhase !== 'idle');
+        attachFilesEl.disabled = busy;
+        attachCurrentEl.disabled = busy || !current.editor;
+        attachSelectionEl.disabled = busy || !current.editor || !current.editor.hasSelection;
+    }
+
+    function renderResearch(current) {
+        const research = current.research;
+        if (!research) {
+            researchCard.classList.add('hidden');
+            return;
+        }
+        researchCard.classList.remove('hidden');
+        researchOutcome.textContent = research.outcome || (research.ok ? 'allowed' : 'not fetched');
+        researchOutcome.dataset.kind = research.ok ? 'ok' : (research.outcome === 'needs_approval' ? 'warn' : 'bad');
+        researchTitle.textContent = research.title || research.url || 'Fetched page';
+        researchUrl.textContent = research.url || '';
+        const meta = [];
+        if (research.provenance && research.provenance.content_type) {
+            meta.push(String(research.provenance.content_type));
+        }
+        if (research.provenance && research.provenance.size) {
+            meta.push(String(research.provenance.size) + ' bytes');
+        }
+        if (research.text_truncated) {
+            meta.push('text truncated');
+        }
+        if (research.source_id) {
+            meta.push('research source #' + research.source_id);
+        }
+        researchMeta.textContent = meta.join(' · ');
+        researchText.textContent = research.text || research.reason || '';
+        researchWarnings.classList.toggle('hidden', !(research.injection_warnings && research.injection_warnings.length));
+        researchWarnings.textContent = (research.injection_warnings && research.injection_warnings.length)
+            ? 'Injection warnings (advisory): ' + research.injection_warnings.length
+            : '';
+        researchUse.disabled = !(research.ok && research.text);
     }
 
     function renderMissionList(current) {
@@ -505,6 +765,35 @@
         });
         engineContent.appendChild(agents);
 
+        const researchSection = el('div', 'nl-engine-section');
+        researchSection.appendChild(el('h3', '', 'Research / URL fetch'));
+        const researchRow = el('div', 'nl-field');
+        researchRow.appendChild(el('span', 'nl-muted', 'Auto-review profile'));
+        const profileSelect = el('select');
+        [{ value: 'manual', label: 'Manual (fetch reports needs_approval)' },
+         { value: 'trusted-auto-review', label: 'Trusted auto review (granted web-fetch can run)' }]
+            .forEach(function (option) {
+                const node = el('option', '', option.label);
+                node.value = option.value;
+                profileSelect.appendChild(node);
+            });
+        profileSelect.value = current.researchProfile || 'manual';
+        profileSelect.addEventListener('change', function () {
+            postAction('setResearchProfile', { profile: profileSelect.value });
+        });
+        researchRow.appendChild(profileSelect);
+        researchSection.appendChild(researchRow);
+        const researchInfo = (settings.research || {});
+        researchSection.appendChild(el('div', 'nl-muted',
+            'Engine status: ' + (researchInfo.status || 'unknown') +
+            ' · network configured: ' + (researchInfo.network_configured ? 'yes' : 'no')));
+        researchSection.appendChild(el('div', 'nl-muted',
+            'NETWORK grant: ' + (settings.permissions.policy.network ? 'granted' : 'denied') +
+            ' · extension never grants permissions'));
+        researchSection.appendChild(el('div', 'nl-muted',
+            'A successful fetch also needs a web-fetch capability grant; the backend returns the exact reason when denied or awaiting approval.'));
+        engineContent.appendChild(researchSection);
+
         const providers = el('div', 'nl-engine-section');
         providers.appendChild(el('h3', '', 'Providers and live models'));
         (settings.models.providers || []).forEach(function (provider) {
@@ -536,16 +825,18 @@
 
     function renderState() {
         if (!state) { return; }
-        renderHeader(state);
-        renderBanner(state);
-        renderModelSelectors(state);
-        renderMissionList(state);
-        renderMissionDetail(state);
-        renderEngine(state);
-        if (mode === 'mission') {
-            missionFields.classList.remove('hidden');
-            missionNote.classList.remove('hidden');
-            sendEl.textContent = 'Start mission';
+        rendering = true;
+        try {
+            renderHeader(state);
+            renderBanner(state);
+            renderModelBar(state);
+            renderContext(state);
+            renderResearch(state);
+            renderMissionList(state);
+            renderMissionDetail(state);
+            renderEngine(state);
+        } finally {
+            rendering = false;
         }
     }
 
@@ -569,7 +860,16 @@
             });
             append('user', text);
         } else {
-            append('user', text);
+            append('user', text, {
+                attachments: (state && state.attachments || []).map(function (attachment) {
+                    return {
+                        name: attachment.name,
+                        kind: attachment.kind,
+                        size_bytes: attachment.size_bytes,
+                        has_text: attachment.has_text
+                    };
+                })
+            });
             postAction('sendChat', { text: text });
         }
         inputEl.value = '';
@@ -589,9 +889,46 @@
     });
 
     modeEl.addEventListener('change', function () { setMode(modeEl.value); });
-    chatModelEl.addEventListener('change', function () {
-        postAction('setChatModel', { value: chatModelEl.value });
+
+    function stateModelOptions() {
+        return (state && state.modelOptions) || [];
+    }
+
+    function postModelRoute(route) {
+        postAction('setChatModel', { value: route || '' });
+    }
+
+    providerSelectEl.addEventListener('change', function () {
+        if (!state || autoModelEl.checked) { return; }
+        const provider = providerSelectEl.value;
+        const candidate = stateModelOptions().filter(function (option) {
+            return option.value && option.provider === provider;
+        })[0];
+        if (candidate) {
+            postModelRoute(candidate.value);
+        }
     });
+
+    chatModelEl.addEventListener('change', function () {
+        if (!state || autoModelEl.checked) { return; }
+        if (chatModelEl.value) {
+            postModelRoute(chatModelEl.value);
+        }
+    });
+
+    autoModelEl.addEventListener('change', function () {
+        if (autoModelEl.checked) {
+            postModelRoute('');
+            return;
+        }
+        const candidate = stateModelOptions().filter(function (option) { return option.value; })[0];
+        if (candidate) {
+            postModelRoute(candidate.value);
+        } else {
+            postModelRoute('');
+        }
+    });
+
     function missionModelsChanged() {
         postAction('setMissionModels', {
             developerModel: devModelEl.value,
@@ -600,6 +937,53 @@
     }
     devModelEl.addEventListener('change', missionModelsChanged);
     reviewerModelEl.addEventListener('change', missionModelsChanged);
+
+    attachFilesEl.addEventListener('click', function () { postAction('attachFiles', {}); });
+    attachCurrentEl.addEventListener('click', function () { postAction('attachEditor', { kind: 'file' }); });
+    attachSelectionEl.addEventListener('click', function () { postAction('attachEditor', { kind: 'selection' }); });
+    researchUse.addEventListener('click', function () { postAction('useResearch', {}); });
+    researchDismiss.addEventListener('click', function () { postAction('dismissResearch', {}); });
+
+    function hasFileDrag(event) {
+        const types = event.dataTransfer && event.dataTransfer.types;
+        return Boolean(types && (Array.prototype.indexOf.call(types, 'Files') >= 0 ||
+            Array.prototype.indexOf.call(types, 'text/uri-list') >= 0));
+    }
+    document.addEventListener('dragenter', function (event) {
+        if (!hasFileDrag(event) || mode === 'mission') { return; }
+        event.preventDefault();
+        dragDepth += 1;
+        dropOverlay.classList.remove('hidden');
+    });
+    document.addEventListener('dragover', function (event) {
+        if (!hasFileDrag(event) || mode === 'mission') { return; }
+        event.preventDefault();
+    });
+    document.addEventListener('dragleave', function (event) {
+        if (!hasFileDrag(event) || mode === 'mission') { return; }
+        dragDepth = Math.max(0, dragDepth - 1);
+        if (!dragDepth) { dropOverlay.classList.add('hidden'); }
+    });
+    document.addEventListener('drop', function (event) {
+        if (!hasFileDrag(event) || mode === 'mission') { return; }
+        event.preventDefault();
+        dragDepth = 0;
+        dropOverlay.classList.add('hidden');
+        let text = '';
+        try {
+            text = event.dataTransfer.getData('text/uri-list') || event.dataTransfer.getData('text/plain') || '';
+        } catch (error) {
+            text = '';
+        }
+        const uris = text.split(/\r?\n/).map(function (line) {
+            return line.trim();
+        }).filter(function (line) {
+            return line && line.charAt(0) !== '#';
+        });
+        if (uris.length) {
+            postAction('dropUris', { uris: uris });
+        }
+    });
 
     tabButtons.forEach(function (button) {
         button.addEventListener('click', function () { switchTab(button.dataset.tab); });
@@ -627,6 +1011,9 @@
         if (message.type === 'state') {
             state = message.payload;
             renderState();
+        } else if (message.type === 'history') {
+            const payload = message.payload || {};
+            renderHistory(payload.messages || []);
         } else if (message.type === 'chat') {
             append(message.role || 'system', message.text);
         } else if (message.type === 'navigate' && message.tab) {
@@ -639,14 +1026,6 @@
     });
 
     const saved = vscode.getState();
-    if (saved && Array.isArray(saved.transcript)) {
-        saved.transcript.forEach(function (item) {
-            if (item && item.role && typeof item.text === 'string' && transcript.length < 120) {
-                transcript.push(item);
-                renderMessage(item);
-            }
-        });
-    }
     if (saved && saved.tab && panels[saved.tab]) {
         switchTab(saved.tab);
     }
@@ -654,7 +1033,7 @@
         setMode(saved.mode);
     }
 
-    setStatus('Connecting to NL Coding Agent…', 'connecting');
+    setStatus('Connecting to NL Coder…', 'connecting');
     setTimeout(function () { inputEl.focus(); }, 50);
     vscode.postMessage({ type: 'ready' });
 })();

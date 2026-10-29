@@ -42,16 +42,17 @@ export function buildChatHtml(assets: WebviewAssets): string {
     <meta http-equiv="Content-Security-Policy" content="${escapeHtml(contentSecurityPolicy)}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="${escapeHtml(assets.styleUri)}">
-    <title>NL Chat</title>
+    <title>NL Coder</title>
 </head>
 <body>
     <header class="nl-header">
         <div class="nl-header-row">
-            <span class="nl-brand">NL Chat</span>
+            <span class="nl-brand">NL Coder</span>
             <span id="status" class="nl-status" role="status" aria-live="polite">Starting…</span>
         </div>
         <div class="nl-header-row nl-header-meta">
             <span id="project-badge" class="nl-chip">no project</span>
+            <span id="model-badge" class="nl-chip nl-chip-soft">model: —</span>
             <button id="exec-toggle" class="nl-chip nl-chip-button" type="button" title="Toggle mission execution for this engine session">read-only</button>
         </div>
         <nav class="nl-tabs" aria-label="Sections">
@@ -79,34 +80,74 @@ export function buildChatHtml(assets: WebviewAssets): string {
                 </div>
             </div>
 
+            <div id="research-card" class="nl-research-card hidden">
+                <div class="nl-research-head">
+                    <span class="nl-chip nl-chip-soft">UNTRUSTED web page</span>
+                    <span id="research-outcome" class="nl-status-chip"></span>
+                    <span id="research-title" class="nl-research-title"></span>
+                </div>
+                <div id="research-url" class="nl-research-url"></div>
+                <div id="research-meta" class="nl-muted"></div>
+                <pre id="research-text" class="nl-output"></pre>
+                <div id="research-warnings" class="nl-warning hidden"></div>
+                <div class="nl-actions">
+                    <button id="research-use" type="button">Use as chat context</button>
+                    <button id="research-dismiss" type="button">Dismiss</button>
+                </div>
+            </div>
+
             <div id="messages" class="nl-messages" role="log" aria-live="polite" aria-label="Conversation"></div>
 
+            <div id="drop-overlay" class="nl-drop-overlay hidden">Drop workspace files to attach them</div>
+
             <form id="composer" class="nl-composer" autocomplete="off">
-                <label class="nl-visually-hidden" for="input">Message NL Coding Agent</label>
-                <textarea id="input" rows="3" placeholder="Ask NL Coding Agent…  (/mission &lt;objective&gt; starts a mission)"></textarea>
-                <div class="nl-field-row">
-                    <label class="nl-field">Mode
-                        <select id="mode">
-                            <option value="chat">Chat</option>
-                            <option value="mission">Mission</option>
-                        </select>
-                    </label>
-                    <label class="nl-field">Chat model
-                        <select id="chat-model"></select>
-                    </label>
+                <div id="context-strip" class="nl-context-strip">
+                    <div id="editor-context" class="nl-editor-context"></div>
+                    <div id="attachment-chips" class="nl-chips"></div>
+                    <div class="nl-context-actions">
+                        <button id="attach-files" type="button" title="Attach workspace files">＋ File</button>
+                        <button id="attach-current" type="button" title="Attach the active editor content">Current file</button>
+                        <button id="attach-selection" type="button" title="Attach the active editor selection">Selection</button>
+                    </div>
                 </div>
-                <div id="mission-fields" class="nl-field-row hidden">
-                    <label class="nl-field">Developer model
-                        <select id="dev-model"></select>
-                    </label>
-                    <label class="nl-field">Reviewer model
-                        <select id="reviewer-model"></select>
-                    </label>
-                </div>
-                <p id="mission-note" class="nl-hint hidden">The mission runs through the existing Supervisor, staging and verification gates and requires explicit confirmation.</p>
-                <div class="nl-composer-actions">
-                    <span id="hint" class="nl-hint"></span>
-                    <button id="send" type="submit">Send</button>
+
+                <div class="nl-composer-shell">
+                    <div id="model-bar" class="nl-model-bar">
+                        <label class="nl-field nl-field-small">Provider
+                            <select id="provider-select"></select>
+                        </label>
+                        <label class="nl-field nl-field-small">Model
+                            <select id="chat-model"></select>
+                        </label>
+                        <label class="nl-check"><input id="auto-model" type="checkbox"> Automatic</label>
+                        <span id="model-current" class="nl-muted"></span>
+                    </div>
+
+                    <label class="nl-visually-hidden" for="input">Message NL Coder</label>
+                    <textarea id="input" rows="3" placeholder="Ask NL Coder…  (/mission &lt;objective&gt; starts a mission)"></textarea>
+
+                    <div id="mission-fields" class="nl-field-row hidden">
+                        <label class="nl-field">Developer model
+                            <select id="dev-model"></select>
+                        </label>
+                        <label class="nl-field">Reviewer model
+                            <select id="reviewer-model"></select>
+                        </label>
+                    </div>
+                    <p id="mission-note" class="nl-hint hidden">The mission runs through the existing Supervisor, staging and verification gates and requires explicit confirmation.</p>
+
+                    <div class="nl-composer-actions">
+                        <div class="nl-composer-left">
+                            <label class="nl-field nl-field-small">Mode
+                                <select id="mode">
+                                    <option value="chat">Chat</option>
+                                    <option value="mission">Mission</option>
+                                </select>
+                            </label>
+                            <span id="hint" class="nl-hint"></span>
+                        </div>
+                        <button id="send" type="submit">Send</button>
+                    </div>
                 </div>
             </form>
         </section>

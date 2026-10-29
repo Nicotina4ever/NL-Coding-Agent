@@ -1,4 +1,4 @@
-/* NL Chat webview styles. Uses VS Code theme variables so light/dark/high-contrast
+/* NL Coder webview styles. Uses VS Code theme variables so light/dark/high-contrast
    follow the active theme. Brand accent: electric violet #7531FE. */
 :root {
     color-scheme: light dark;
@@ -607,4 +607,269 @@ select option[data-kind='loaded'] {
     align-items: center;
     flex-wrap: wrap;
     padding: 1px 0;
+}
+
+/* ---- modern composer ---- */
+.nl-chip-soft {
+    border-color: transparent;
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+}
+
+.nl-context-strip {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 6px 0 4px;
+    border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
+}
+
+.nl-editor-context {
+    min-height: 1.3em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nl-editor-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    max-width: 100%;
+    font-size: 0.88em;
+    color: var(--vscode-foreground);
+}
+
+.nl-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: flex-start;
+}
+
+.nl-context-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.nl-context-actions button,
+.nl-chip-remove {
+    padding: 2px 7px;
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+    background: var(--vscode-button-secondaryBackground, transparent);
+    border: 1px solid var(--vscode-panel-border, transparent);
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.82em;
+}
+
+.nl-context-actions button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.nl-attachment-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    max-width: 100%;
+    padding: 2px 5px;
+    border: 1px solid var(--vscode-panel-border, transparent);
+    border-left: 2px solid #7531FE;
+    border-radius: 3px;
+    background: var(--vscode-editor-background);
+    font-size: 0.82em;
+}
+
+.nl-attachment-name {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nl-attachment-preview {
+    max-width: 220px;
+}
+
+.nl-attachment-preview .nl-output {
+    max-height: 120px;
+}
+
+.nl-chip-remove {
+    padding: 0 5px;
+    line-height: 1.2;
+    border: 0;
+    font-size: 0.95em;
+}
+
+.nl-composer-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 6px;
+    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, transparent));
+    border-radius: 5px;
+    background: var(--vscode-input-background);
+}
+
+.nl-composer-shell:focus-within {
+    border-color: var(--vscode-focusBorder);
+}
+
+.nl-composer-shell #input {
+    border: 0;
+    background: transparent;
+    min-height: 48px;
+    max-height: 40vh;
+    resize: vertical;
+    padding: 2px 2px 0;
+}
+
+.nl-model-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding-bottom: 2px;
+}
+
+.nl-field-small {
+    flex: 0 1 150px;
+    min-width: 100px;
+}
+
+.nl-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding-bottom: 4px;
+    font-size: 0.82em;
+    color: var(--vscode-descriptionForeground);
+    white-space: nowrap;
+}
+
+.nl-composer-actions {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 8px;
+    padding-top: 3px;
+}
+
+.nl-composer-left {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.nl-composer-left .nl-field {
+    flex: 0 0 auto;
+}
+
+#send {
+    min-width: 74px;
+}
+
+.nl-drop-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed #7531FE;
+    background: color-mix(in srgb, var(--vscode-editor-background) 82%, transparent);
+    color: var(--vscode-foreground);
+    font-weight: 600;
+    pointer-events: none;
+}
+
+/* ---- research card ---- */
+.nl-research-card {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 4px 0 8px;
+    padding: 7px 8px;
+    border: 1px solid var(--vscode-panel-border, transparent);
+    border-left: 3px solid #46A3C0;
+    border-radius: 3px;
+    background: var(--vscode-editorWidget-background);
+}
+
+.nl-research-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.nl-research-title {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nl-research-url {
+    color: var(--vscode-textLink-foreground);
+    font-size: 0.85em;
+    overflow-wrap: anywhere;
+}
+
+.nl-warning {
+    color: var(--vscode-editorWarning-foreground, #d7a600);
+    font-size: 0.85em;
+}
+
+.nl-warning-inline {
+    color: var(--vscode-editorWarning-foreground, #d7a600);
+    font-size: 0.85em;
+}
+
+/* ---- message metadata/links/attachments ---- */
+.nl-message-head {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    flex-wrap: wrap;
+}
+
+.nl-message-model {
+    font-size: 0.72em;
+    color: var(--vscode-descriptionForeground);
+    border: 1px solid var(--vscode-panel-border, transparent);
+    border-radius: 8px;
+    padding: 0 6px;
+}
+
+.nl-message-body .nl-link {
+    color: var(--vscode-textLink-foreground);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+}
+
+.nl-message-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 3px;
+}
+
+.nl-attachment-history {
+    display: inline-flex;
+    gap: 5px;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--vscode-panel-border, transparent);
+    font-size: 0.8em;
 }

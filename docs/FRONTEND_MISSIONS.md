@@ -1,8 +1,9 @@
-# VS Code mission control (`frontend/` 0.2.0)
+# NL Coder — VS Code Chat + mission control (`frontend/` 0.3.0)
 
-This document is the operator and verification guide for the mission surface added to the NL Coding
-Agent VS Code extension. It complements [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md); the
-architecture document owns the protocol and lifecycle invariants, this one owns usage and evidence.
+This document is the operator and verification guide for the mission surface. The completed chat
+surface (model selection, attachments, editor context, authorized URL research, persisted history) is
+documented in [FRONTEND_CHAT.md](FRONTEND_CHAT.md); both complement
+[FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md).
 
 The extension remains a thin client. Missions are created, scheduled, staged, verified, reviewed and
 promoted by the existing Python engine (`AppServices` + `Supervisor` + orchestrator + SQLite). The
@@ -43,8 +44,9 @@ Commands contributed: **Start Chat**, **Start Mission…**, **Show Missions**, *
 
 ## MCP surface used (no duplicates)
 
-Existing tools: `project_context`, `nlc_converse`, `mission_list`, `mission_status`, `mission_events`,
-`candidate_diff`, `start_mission`, `cancel_mission`.
+Existing/added tools: `project_context`, `engine_settings`, `nlc_converse`, `attachment_ingest`,
+`chat_history`, `research_fetch_url`, `mission_list`, `mission_status`, `mission_events`,
+`mission_detail`, `candidate_diff`, `start_mission`, `cancel_mission` (**13 tools**).
 
 Read-only additions in `nl_coding_agent/app/mcp_engine.py`:
 
@@ -108,13 +110,17 @@ node test/runMissionTests.cjs          # dev extension host, isolated project
 node test/runResumeTests.cjs           # stop -> interrupted -> resume
 npm run package:vsix
 node test/runInstalledVsixTests.cjs    # installs VSIX in isolated profile, mission from installed payload
+node test/runChatFeatureTests.cjs      # real chat: model/attachment/editor/URL/history
+node test/runInstalledChatFeatureTests.cjs  # same chat flows from the installed VSIX
 ```
 
 ## VSIX
 
-- Package: `.workspace\dist\NL-Coding-Agent-0.2.0.vsix` (4.46 MB; includes runtime deps
-  `@modelcontextprotocol/sdk` + `zod`, compiled `out/`, media, icon).
-- Normal local install: `code-insiders --install-extension .workspace\dist\NL-Coding-Agent-0.2.0.vsix`.
+- Package: `.workspace\dist\NL-Coding-Agent-0.3.0.vsix` (4,699,027 bytes; SHA-256
+  `41941f945c14df53f0ad2842f202afa1fc4d3ad5929d4e356ab006010984c625`; includes the real product icon at
+  `assets/icon.png`, display name **NL Coder**, runtime deps `@modelcontextprotocol/sdk` + `zod`,
+  compiled `out/`, media).
+- Normal local install: `code-insiders --install-extension .workspace\dist\NL-Coding-Agent-0.3.0.vsix`.
   The isolated acceptance used the official CLI wrapper
   (`…\Microsoft VS Code Insiders\bin\code-insiders.cmd`) with `--user-data-dir/--extensions-dir` so the
   default profile was not modified. (Direct `Code - Insiders.exe --install-extension` may be intercepted
@@ -123,6 +129,9 @@ node test/runInstalledVsixTests.cjs    # installs VSIX in isolated profile, miss
 - Engine resolution when installed: set `nlCodingAgent.engineRoot` (or `NL_ENGINE_ROOT`); the installed
   extension cannot infer the repository path from its own folder.
 - `nlCodingAgent.allowExecution` is a user setting; keep it `false` for a read-only assistant.
+- URL fetch additionally needs owner-created `NETWORK` + `web-fetch` grants and
+  `nlCodingAgent.researchProfile` set to `trusted-auto-review` to auto-approve (otherwise the backend
+  reports `needs_approval`). The extension never grants permissions.
 
 ## Honest limits
 
@@ -136,4 +145,4 @@ node test/runInstalledVsixTests.cjs    # installs VSIX in isolated profile, miss
   the resumed run to start (`resume_count`/status transition) before declaring a terminal state.
 - Legacy missions without `harness_version == 2` are listed but cannot run/resume.
 - The standalone NL Code distribution still contains extension 0.1.0 and must be rebuilt to include this
-  UI. No standalone build was started for this increment.
+  chat/mission UI. No standalone build was started for this increment.

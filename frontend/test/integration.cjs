@@ -42,7 +42,10 @@ function prepare() {
     fs.mkdirSync(workspaceDir, { recursive: true });
     fs.writeFileSync(path.join(projectA, 'README.md'), '# Project A\nIntegration acceptance fixture.\n');
     fs.writeFileSync(path.join(projectA, 'hello.py'), 'def hello():\n    return "hello"\n');
+    fs.writeFileSync(path.join(projectA, 'notes.txt'),
+        'The secret token is NLATTACH-47.\nSecond line for extraction.\n');
     fs.writeFileSync(path.join(projectB, 'notes.txt'), 'Project B fixture.\n');
+    fs.writeFileSync(path.join(scratch, 'outside.txt'), 'outside the project root\n');
 }
 
 function engineOptions(projectRoot) {
@@ -118,7 +121,7 @@ async function main() {
         const names = tools.map((tool) => tool.name);
         for (const required of ['project_context', 'nlc_converse', 'mission_list', 'mission_status',
             'mission_events', 'mission_detail', 'candidate_diff', 'start_mission', 'cancel_mission',
-            'engine_settings']) {
+            'engine_settings', 'attachment_ingest', 'chat_history', 'research_fetch_url']) {
             assert(names.includes(required), `missing tool ${required}`);
         }
         log(`PASS tools discovered (${tools.length}): ${names.join(', ')}`);
@@ -134,11 +137,40 @@ async function main() {
         assert(settings.mission_defaults.developer_model, 'mission developer default');
         assert(settings.mission_defaults.reviewer_model, 'mission reviewer default');
         assert.strictEqual(settings.models.discovered, null, 'no probe without explicit request');
+        assert(settings.research && settings.research.profile === 'manual', 'research profile settings');
         const missions = await first.callJson('mission_list', {});
         assert(Array.isArray(missions.missions), 'mission_list shape');
         log(`PASS project_context: project #${context.project.id} root=${context.project.root} (read-only)`);
         log(`PASS engine_settings: ${settings.models.chat_default_spec} / ` +
             `${settings.mission_defaults.developer_model} -> ${settings.mission_defaults.reviewer_model}`);
+
+        // 4b. Attachment ingestion is project-scoped and returns a bounded preview.
+        const ingested = await first.attachmentIngest({ paths: [path.join(projectA, 'notes.txt')] });
+        assert(ingested.ok && ingested.attachments.length === 1, 'attachment ingested');
+        const attachment = ingested.attachments[0];
+        assert.strictEqual(attachment.name, 'notes.txt');
+        assert.strictEqual(attachment.has_text, true);
+        assert(/NLATTACH-47/.test(attachment.preview), 'attachment preview contains extracted text');
+        assert(!('stored_path' in attachment), 'attachment view does not expose host path');
+        let outsideRejected = null;
+        try {
+            await first.attachmentIngest({ paths: [path.join(scratch, 'outside.txt')] });
+        } catch (error) {
+            outsideRejected = error;
+        }
+        assert(outsideRejected && /outside the bound project/i.test(outsideRejected.message),
+            'outside-project attachment rejected');
+        log('PASS attachment ingestion + project containment');
+
+        // 4c. Research is permission-gated by default (no NETWORK grant).
+        let researchDenied = null;
+        try {
+            await first.researchFetch('https://example.com/');
+        } catch (error) {
+            researchDenied = error;
+        }
+        assert(researchDenied && /NETWORK/i.test(researchDenied.message), 'research denied without NETWORK');
+        log('PASS research fetch denied without NETWORK permission');
 
         // 4b. A read-only server must refuse mission start before creating anything.
         let deniedStart = null;
@@ -157,13 +189,32 @@ async function main() {
         assert.deepStrictEqual(missionsAfterDenial.missions, [], 'denied start created no mission');
         log('PASS read-only engine refused start_mission and created no mission');
 
-        // 5. Real Ollama chat turn.
-        const reply = await first.converse(context.project.id, 'Reply with exactly: NLCHAT-OK');
+        // 5. Real Ollama turn with an explicit non-default model and a real attachment.
+        const explicitModel = 'ollama/granite4.2:3b';
+        const reply = await first.converse(
+            context.project.id,
+            'Read the attached notes. Reply with exactly the secret token and nothing else.',
+            [],
+            240000,
+            explicitModel,
+            [attachment.id]
+        );
         assert.strictEqual(reply.ok, true, 'converse ok');
-        assert(/NLCHAT-OK/.test(reply.reply), 'model reply: ' + JSON.stringify(reply.reply));
+        assert(reply.route && reply.route.model === 'granite4.2:3b', 'route model: ' + JSON.stringify(reply.route));
+        assert.strictEqual(reply.route.automatic, false, 'explicit route marked non-automatic');
+        assert(/NLATTACH-47/.test(reply.reply), 'model used the attachment context: ' + JSON.stringify(reply.reply));
         const last = reply.messages[reply.messages.length - 1];
-        assert(last && last.role === 'assistant' && /NLCHAT-OK/.test(last.content), 'persisted assistant message');
-        log(`PASS real Ollama chat reply: ${JSON.stringify(reply.reply)}`);
+        assert(last && last.role === 'assistant' && /NLATTACH-47/.test(last.content), 'persisted assistant message');
+        assert.strictEqual(last.model, 'granite4.2:3b', 'assistant history records the model');
+        const history = await first.chatHistory(50);
+        assert(history.count >= 2 && history.messages.length >= 2, 'persisted history returned');
+        const persistedUser = history.messages.filter((item) => item.role === 'user').pop();
+        assert(persistedUser && Array.isArray(persistedUser.attachment_ids) &&
+            persistedUser.attachment_ids.includes(attachment.id), 'history stores the attachment id');
+        assert(persistedUser.attachments && persistedUser.attachments[0].name === 'notes.txt',
+            'history resolves attachment metadata');
+        log(`PASS real model route ${explicitModel} + attachment context: ${JSON.stringify(reply.reply)}`);
+        log(`PASS engine history: ${history.count} messages, model recorded, attachment metadata resolved`);
 
         // 6. The server refuses another project's id (cross-project isolation).
         let refused = null;

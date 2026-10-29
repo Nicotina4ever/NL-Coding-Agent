@@ -736,7 +736,8 @@ def _dispatch_mcp(args) -> int:
         project = services.open_project(args.project)
         if args.mcp_command == "serve":
             from nl_coding_agent.app.mcp_engine import create_engine_server
-            create_engine_server(services, project, allow_execution=args.allow_execution).run(transport="stdio")
+            create_engine_server(services, project, allow_execution=args.allow_execution,
+                                 research_profile=args.research_profile).run(transport="stdio")
             return 0
         if args.mcp_command == "vscode-config":
             from nl_coding_agent.app.mcp_engine import vscode_configuration
@@ -2022,6 +2023,10 @@ def main(argv: list[str] | None = None) -> int:
         if command in ("serve", "vscode-config"):
             cmd.add_argument("--allow-execution", action="store_true",
                              help="Owner opt-in; calls also require approval and project permissions")
+            if command == "serve":
+                cmd.add_argument("--research-profile", default="manual",
+                                 choices=("manual", "trusted-auto-review"),
+                                 help="Owner-selected research auto-review profile; grants are still required")
         else:
             cmd.add_argument("--config", default=None)
             cmd.add_argument("--server", required=True)

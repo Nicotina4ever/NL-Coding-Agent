@@ -1,0 +1,97 @@
+{
+  "package": {
+    "name": "NL Coder",
+    "displayName": "NL Coder",
+    "version": "0.3.0",
+    "vsix": ".workspace/dist/NL-Coding-Agent-0.3.0.vsix",
+    "icon": "assets/icon.png",
+    "bytes": 4699027,
+    "sha256": "41941f945c14df53f0ad2842f202afa1fc4d3ad5929d4e356ab006010984c625",
+    "extension_id": "nlcodingagent.nl-coding-agent"
+  },
+  "verified_at": "2026-10-29",
+  "environment": {
+    "vscode": "1.145.0-insider",
+    "engine": "NL Coding Engine 1.30.0 (mcp==1.30.0)",
+    "python": "embedded python\\python.exe",
+    "explicit_test_model": "ollama/granite4.2:3b",
+    "automatic_route": "ollama/qwen2.5-coder:7b-instruct-q4_K_M",
+    "backend_data": "isolated NL_DATA_DIR/NL_WORKSPACE_DIR; no live data/ modified"
+  },
+  "gates": [
+    {
+      "name": "TypeScript build",
+      "command": "npm run compile",
+      "result": "exit 0, no diagnostics"
+    },
+    {
+      "name": "Webview structure/CSP/behaviour",
+      "command": "node test/webview.cjs",
+      "result": "WEBVIEW-TESTS-PASS: CSP, no HTML sink, model/attachment/editor/research/history UI, link fetch action, verbatim hostile text"
+    },
+    {
+      "name": "Real MCP + Ollama + attachment + history",
+      "command": "node test/integration.cjs",
+      "result": "INTEGRATION-ACCEPTANCE-PASS: 13 tools; explicit granite4.2:3b route; NLATTACH-47 echoed from a real ingested attachment; history 2 messages with model/attachment metadata; outside-project attachment rejected; research denied without NETWORK; project #1/#2 isolation"
+    },
+    {
+      "name": "Real Insiders chat feature acceptance",
+      "command": "node test/runChatFeatureTests.cjs",
+      "result": "CHAT-FEATURE-ACCEPTANCE-PASS: model selector route granite4.2:3b; file attachment token echoed; editor selection captured (notes.txt selection 1-1); authorized https://example.com fetch (allowed) used as context (Example Domain echoed); 6 persisted messages; automatic mode -> qwen2.5-coder:7b"
+    },
+    {
+      "name": "Installed VSIX identity",
+      "command": "code-insiders --install-extension .workspace/dist/NL-Coding-Agent-0.3.0.vsix",
+      "result": "Installed from the final NL Coder VSIX: displayName=NL Coder, icon=assets/icon.png (file present), version=0.3.0, extension id nlcodingagent.nl-coding-agent"
+    },
+    {
+      "name": "Installed VSIX chat feature acceptance",
+      "command": "node test/runInstalledChatFeatureTests.cjs .workspace/dist/NL-Coding-Agent-0.3.0.vsix",
+      "result": "VSIX-CHAT-FEATURE-PASS from the installed final NL Coder payload; same model/attachment/editor/URL/history/automatic checks"
+    },
+    {
+      "name": "Real mission acceptance (dev host)",
+      "command": "node test/runMissionTests.cjs",
+      "result": "MISSION-ACCEPTANCE-PASS: mission #1 completed, APPROVE, promoted, candidate+oracle PASS, diff 1 file(s) +3/-0, live src/calc.py contains sub"
+    },
+    {
+      "name": "Stop/resume",
+      "command": "node test/runResumeTests.cjs",
+      "result": "STOP-RESUME-ACCEPTANCE-PASS: stop -> interrupted with live tree untouched -> resume -> completed/promoted"
+    },
+    {
+      "name": "Installed VSIX mission acceptance",
+      "command": "node test/runInstalledVsixTests.cjs .workspace/dist/NL-Coding-Agent-0.3.0.vsix",
+      "result": "VSIX-INSTALLED-MISSION-PASS from the installed 0.3.0 payload"
+    },
+    {
+      "name": "Focused Python regressions",
+      "command": "pytest tests/test_mcp_sdk.py tests/test_mcp_engine_converse.py tests/test_chat_provider_execution.py tests/test_attachments.py tests/test_chat_panel.py tests/test_chat_tools.py tests/test_research_service.py tests/test_research_fetch.py tests/test_research_transport.py tests/test_permissions_taxonomy.py tests/test_auto_review.py",
+      "result": "140 passed"
+    }
+  ],
+  "research_evidence": {
+    "probe": "https://example.com/ through AppServices.research_fetch_read with explicit StdlibHttpTransport and owner grants",
+    "outcome": "allowed",
+    "title": "Example Domain",
+    "source_id": 1,
+    "persistence": "research_sources + research_citations in the isolated engine DB",
+    "permission_model": "NETWORK required; web-fetch capability grant required; manual profile returns needs_approval; trusted-auto-review can auto-approve. The extension never grants permissions."
+  },
+  "evidence_logs": [
+    "CHAT_FEATURES_ACCEPTANCE_DEV.log",
+    "VSIX_CHAT_FEATURE_ACCEPTANCE.log",
+    "MISSION_ACCEPTANCE_DEV_V030.log",
+    "VSIX_INSTALLED_MISSION_ACCEPTANCE_V030.log",
+    "STOP_RESUME_ACCEPTANCE_V030.log",
+    "EXTENSION_ACCEPTANCE_V030.log",
+    "INTEGRATION_ACCEPTANCE_V030.log",
+    "WEBVIEW_TESTS.log"
+  ],
+  "limitations": [
+    "No streaming; a chat turn is one request/response.",
+    "The extension does not grant permissions or write engine configuration; a working URL fetch requires an owner-created NETWORK grant, a web-fetch capability grant, and an explicit research profile.",
+    "Attachments are project-scoped prompt context; images are metadata-only and unsupported Office formats are reported honestly.",
+    "Fetched content is untrusted text; raw HTML/JS is not executed and is not exposed by the tool."
+  ]
+}

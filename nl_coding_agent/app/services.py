@@ -551,12 +551,19 @@ class AppServices:
             history = self.list_chat_messages(project_id=project_id)
             self._append_chat_message(project_id, "user", text,
                                       attachment_ids=[item["id"] for item in attachments])
-            reply = self._chat_reply(project=project, text=text, attachments=attachments,
-                                     tool_activity="", history=history, model_spec=model_spec)
-            self._append_chat_message(project_id, "assistant", reply)
+            reply_info = self._chat_reply(project=project, text=text, attachments=attachments,
+                                          tool_activity="", history=history,
+                                          model_spec=model_spec)
+            reply = reply_info["reply"]
+            route = reply_info.get("route") or {}
+            self._append_chat_message(project_id, "assistant", reply,
+                                      model=route.get("model"),
+                                      provider_id=route.get("provider_id"),
+                                      automatic=route.get("automatic"))
             self._bus.emit(Event(source="chat", level="info", message="Chat reply",
                                  payload={"project_id": project_id, "role": "assistant"}))
             return {"ok": True, "reply": reply, "tool_activity": "",
+                    "route": route,
                     "messages": self.list_chat_messages(project_id=project_id)}
         except Exception as exc:
             return {"ok": False, "reply": str(exc),
@@ -565,7 +572,7 @@ class AppServices:
             turn_lock.release()
 
     def _chat_reply(self, *, project: dict, text: str, attachments, tool_activity: str,
-                    history=None, model_spec=None) -> str:
+                    history=None, model_spec=None) -> dict:
         config = self.get_model_config() or {}
         roles = config.get("roles") or {}
         spec = model_spec or str(((roles.get("chat") or roles.get("developer") or {}).get("model")) or "").strip()
@@ -612,7 +619,13 @@ class AppServices:
                                   project_id=project_id, messages=messages).strip()
         if not reply:
             raise ValueError("Model returned no response")
-        return reply
+        route = {
+            "provider_id": str(getattr(provider, "provider_id", "") or ""),
+            "model": str(model or ""),
+            "requested_spec": str(spec or ""),
+            "automatic": not bool(str(model_spec or "").strip()),
+        }
+        return {"reply": reply, "route": route}
 
     @staticmethod
     def chat_workflow(text: str) -> str:
@@ -674,10 +687,11 @@ class AppServices:
             paths, source=source, project_id=project_id, mission_id=mission_id)
 
     def prepare_attachment_text(self, project_id: int | None, text: str,
-                                *, mission_id: int | None = None) -> dict:
+                                *, mission_id: int | None = None,
+                                name: str = "pasted-text.txt") -> dict:
         from nl_coding_agent.app import attachments
         return attachments.AttachmentStore().prepare_text(
-            text, project_id=project_id, mission_id=mission_id)
+            text, name=name, project_id=project_id, mission_id=mission_id)
 
     def prepare_attachment_clipboard_image(self, project_id: int | None,
                                            image_bytes: bytes,
