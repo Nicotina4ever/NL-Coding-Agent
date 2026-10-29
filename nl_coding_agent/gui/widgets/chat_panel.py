@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 from nl_coding_agent.gui.widgets.studio_workspace import studio_settings
+# Expose ModelHubFetchThread at module scope for test monkey‑patching and runtime use.
+from nl_coding_agent.gui.widgets.models_panel import ModelHubFetchThread
 
 from PySide6.QtCore import (QBuffer, QIODevice, QObject, QRunnable, QSize, Qt,
                             QThreadPool, Signal, Slot)
 from PySide6.QtGui import QImage, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QHBoxLayout,
                                QLabel, QListWidget, QListWidgetItem, QPushButton,
-                               QTextBrowser, QTextEdit, QVBoxLayout, QWidget)
+                               QTextBrowser, QTextEdit, QVBoxLayout, QWidget,
+                               QInputDialog)
 
 
 from nl_coding_agent.gui import i18n as _i18n
@@ -319,22 +322,74 @@ class ChatPanel(QWidget):
             "chat.open_project", "Open a project to submit a mission"))
 
     def _discover_models(self):
-        from nl_coding_agent.gui.widgets.models_panel import ModelHubFetchThread
+        """Refresh the model list and let the user pick a model.
+
+        The existing UI only refreshed the combo; we now present a modal
+        selection dialog (QInputDialog) populated with the discovered routes.
+        The chosen model is set as the current combo entry, persisted via
+        ``studio_settings`` and reflected in the payload sent to the backend.
+        """
+        # Use the module‑level ModelHubFetchThread and QInputDialog for model selection.
+        from PySide6.QtWidgets import QInputDialog
+
         if getattr(self, "_model_thread", None) and self._model_thread.isRunning():
             return
         self._discover_btn.setEnabled(False)
         self._model_thread = ModelHubFetchThread(self._services, parent=self)
+
         def loaded(snapshot):
-            selected = self._model.currentText()
+            # Build a flat list of provider/model routes.
+            routes = []
             for provider in snapshot.providers:
                 for model in provider.models:
-                    route = provider.provider_id + "/" + model.name
+                    route = f"{provider.provider_id}/{model.name}"
+                    routes.append(route)
                     if self._model.findText(route) < 0:
                         self._model.addItem(route, route)
-            self._model.setCurrentText(selected)
+            # If no routes are available, just restore UI state.
+            if not routes:
+                self._model.setCurrentIndex(0)
+                self._discover_btn.setEnabled(True)
+                return
+            # Show selection dialog – in tests this can be monkey‑patched.
+            current = self._model.currentText()
+            selected, ok = QInputDialog.getItem(
+                self,
+                _tr("chat.select_model", "Select Model"),
+                _tr("chat.select_model_prompt", "Choose a model:"),
+                routes,
+                editable=False,
+                current=routes.index(current) if current in routes else 0,
+            )
+            if ok and selected:
+                # Update combo and persist selection. Use index to ensure the selection changes
+                # even when the combo is not editable.
+                idx = self._model.findText(selected)
+                if idx >= 0:
+                    self._model.setCurrentIndex(idx)
+                project_id = (self._project or {}).get("id")
+                if project_id:
+                    studio_settings().setValue(
+                        f"workspace/chat_model/{project_id}", selected
+                    )
+            else:
+                # Restore previous selection if cancelled.
+                idx = self._model.findText(current)
+                if idx >= 0:
+                    self._model.setCurrentIndex(idx)
+
         self._model_thread.snapshot_ready.connect(loaded)
         self._model_thread.failed.connect(self._set_status)
-        self._model_thread.finished.connect(lambda: self._discover_btn.setEnabled(True))
+        # Re‑enable the button when the thread finishes.
+        # Some thread implementations (e.g., test dummies) may not provide a ``finished`` signal.
+        # Guard against AttributeError by checking before connecting.
+        if hasattr(self._model_thread, "finished"):
+            self._model_thread.finished.connect(lambda: self._discover_btn.setEnabled(True))
+        else:
+            # If no finished signal, re‑enable the button immediately after start.
+            self._model_thread.start()
+            self._discover_btn.setEnabled(True)
+            return
         self._model_thread.start()
 
     def selected_model(self):

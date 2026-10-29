@@ -14,10 +14,12 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
+    QCheckBox,
 )
 
 
 from nl_coding_agent.gui import i18n as _i18n
+from nl_coding_agent.persistence import database
 
 
 def _tr(key, default=None, **values):
@@ -235,6 +237,12 @@ class ModelsPanel(QWidget):
         self._thread.failed.connect(self._on_error)
         self._thread.finished.connect(self._on_thread_finished)
         self._thread.start()
+        # Refresh speech UI if the tab exists
+        try:
+            self._refresh_speech_tab()
+        except Exception:
+            # Non‑critical – UI may not be fully initialized yet
+            pass
 
     def _on_thread_finished(self):
         self._thread = None

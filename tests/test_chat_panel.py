@@ -207,3 +207,107 @@ def test_main_window_document_request_opens_plan_without_coding(services, tmp_pa
     assert services.list_missions(project["id"]) == []
     window.close()
     _app().processEvents()
+
+
+def test_model_selector_updates_payload_and_settings(services, tmp_path):
+    """Selecting a model in the chat panel should be reflected in the
+    submitted payload and persisted in workspace settings.
+
+    The test creates a ChatPanel, injects a dummy model entry into the
+    combo, selects it, and verifies that the emitted payload contains the
+    chosen model. It also checks that the model string is stored via
+    ``studio_settings`` under the ``workspace/chat_model/<project_id>`` key.
+    """
+    from nl_coding_agent.gui.widgets.chat_panel import ChatPanel
+    from nl_coding_agent.gui.widgets.studio_workspace import studio_settings
+
+    _app()
+    widget = ChatPanel(services)
+    # Simulate opening a project with a known ID.
+    widget.set_project({"id": 42, "root": str(tmp_path), "name": "demo"})
+
+    # Ensure the combo is editable and add a dummy model entry.
+    dummy_route = "ollama/qwen3.5:9b"
+    widget._model.addItem(dummy_route, dummy_route)
+    # Select the dummy model explicitly.
+    widget._model.setCurrentText(dummy_route)
+
+    # Capture the submitted payload.
+    received = []
+    widget.submitted.connect(received.append)
+
+    # Provide a simple message and submit.
+    widget._input.setPlainText("Test model selection")
+    widget._submit()
+
+    assert len(received) == 1, "ChatPanel should emit exactly one payload"
+    payload = received[0]
+    assert payload["model"] == dummy_route, "Payload should contain the selected model"
+
+    # Verify the model was persisted in workspace settings.
+    stored = studio_settings().value(f"workspace/chat_model/{widget._project['id']}")
+    assert stored == dummy_route, "Selected model must be saved in settings"
+
+    # Clean up the widget.
+    widget.deleteLater()
+    _app().processEvents()
+
+
+def test_model_button_opens_selection_and_persists(monkeypatch, services, tmp_path):
+    """Pressing the *Models…* button should open a selection dialog, update the combo
+    and persist the choice via ``studio_settings``.
+    """
+    from nl_coding_agent.gui.widgets.chat_panel import ChatPanel
+    from nl_coding_agent.gui.widgets.studio_workspace import studio_settings
+    from nl_coding_agent.gui.widgets.models_panel import ModelHubFetchThread
+
+    # Stub the thread to emit a deterministic snapshot.
+    class DummySignal:
+        def __init__(self):
+            self._cb = None
+        def connect(self, cb):
+            self._cb = cb
+        def emit(self, *args):
+            if self._cb:
+                self._cb(*args)
+
+    class DummyThread:
+        def __init__(self, services, parent=None):
+            self.services = services
+            self.parent = parent
+            self.snapshot_ready = DummySignal()
+            self.failed = DummySignal()
+        def isRunning(self):
+            return False
+        def start(self):
+            # Simple snapshot with one local model.
+            class Model:
+                def __init__(self, name):
+                    self.name = name
+            class Provider:
+                def __init__(self, pid, models):
+                    self.provider_id = pid
+                    self.models = models
+            snapshot = type('Snap', (), {'providers': [Provider('local', [Model('demo')])]} )()
+            self.snapshot_ready.emit(snapshot)
+
+    monkeypatch.setattr('nl_coding_agent.gui.widgets.chat_panel.ModelHubFetchThread', DummyThread)
+
+    # Stub QInputDialog to auto‑select the offered model.
+    from PySide6.QtWidgets import QInputDialog
+    monkeypatch.setattr(QInputDialog, 'getItem', lambda *args, **kwargs: ('local/demo', True))
+
+    _app()
+    widget = ChatPanel(services)
+    widget.set_project({"id": 99, "root": str(tmp_path), "name": "demo"})
+    # Ensure no prior setting.
+    settings = studio_settings()
+    settings.remove(f"workspace/chat_model/99")
+    # Click the discover button which triggers the dialog.
+    widget._discover_btn.click()
+    # The combo should now reflect the chosen model.
+    assert widget._model.currentText() == "local/demo"
+    # And the setting should be persisted.
+    assert settings.value(f"workspace/chat_model/99") == "local/demo"
+    widget.deleteLater()
+    _app().processEvents()

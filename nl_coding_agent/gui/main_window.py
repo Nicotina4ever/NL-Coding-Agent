@@ -449,9 +449,6 @@ class MainWindow(QMainWindow):
         self._ide_tabs.setObjectName("ideTabs")
         self._ide_tabs.setAccessibleName("Studio IDE tabs")
         self._ide_tabs.addTab(self._editor_panel, "Editor")
-        self._ide_tabs.addTab(self._terminal_panel, "Terminal")
-        self._ide_tabs.addTab(self._git_panel, "Git")
-        self._ide_tabs.addTab(self._problems_panel, "Problems")
         self._stack.addWidget(self._ide_tabs)  # index 8 = IDE
 
         # Studio Research workspace (R5): explicit search/intake only.

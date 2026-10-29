@@ -17,10 +17,24 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def _workspace_dock_has(name: str, window) -> bool:
+    """A Terminal / Git / Problems panel must live inside a StudioWorkspace dock,
+    never reparented into the IDE tab widget."""
+    try:
+        workspace = getattr(window, "_workspace", None)
+        if workspace is None:
+            return False
+        return workspace.docks.get(name) is not None
+    except Exception:
+        return False
+
+
 def run(report_dir: Path | None = None) -> dict:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     os.environ.setdefault("QT_OPENGL", "software")
     os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+    # Point Qt to a known font directory to silence QFontDatabase warnings.
+    os.environ.setdefault("QT_QPA_FONTDIR", r"C:\\Windows\\Fonts")
     sys.path.insert(0, str(_repo_root()))
     data_dir = tempfile.TemporaryDirectory(prefix="nl-ci-gui-")
     os.environ["NL_DATA_DIR"] = str(Path(data_dir.name) / "data")
@@ -32,8 +46,16 @@ def run(report_dir: Path | None = None) -> dict:
         from nl_coding_agent.app.services import AppServices
         from nl_coding_agent.gui.main_window import MainWindow
         from PySide6.QtWidgets import QApplication
+        from PySide6.QtGui import QFontDatabase
 
         app = QApplication.instance() or QApplication([])
+        # After the QApplication exists, ensure a system font is loaded to silence QFontDatabase warnings.
+        try:
+            arial_path = r"C:\\Windows\\Fonts\\arial.ttf"
+            if os.path.exists(arial_path):
+                QFontDatabase.addApplicationFont(arial_path)
+        except Exception:
+            pass
         # The smoke must not touch Ollama/network; the status prober is a local check only.
         services = AppServices()
         services.check_ollama = lambda: False
@@ -57,7 +79,12 @@ def run(report_dir: Path | None = None) -> dict:
             "goals_actions": bool(window._goals_panel._verify_btn.accessibleName())
                               and bool(window._goals_panel._replan_btn.accessibleName())
                               and bool(window._goals_panel._complete_btn.accessibleName()),
-            "ide_tabs_4": window._ide_tabs.count() == 4,
+# IDE tabs only hold the Editor (Terminal / Git / Problems live in StudioWorkspace docks).
+"ide_tabs_editor_only": window._ide_tabs.count() == 1 and window._ide_tabs.widget(0) is window._editor_panel,
+# Terminal / Git / Problems are managed by the dock-based StudioWorkspace, never reparented into IDE tabs.
+"terminal_in_dock": _workspace_dock_has("terminal", window),
+"git_in_dock": _workspace_dock_has("git", window),
+"problems_in_dock": _workspace_dock_has("problems", window),
             "terminal_read_only": window._terminal_panel._output.isReadOnly(),
             "git_read_only": window._git_panel._diff.isReadOnly(),
             "command_palette_actions": len(window._command_palette_actions()) >= 5,
