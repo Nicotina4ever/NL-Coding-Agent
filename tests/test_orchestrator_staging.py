@@ -446,3 +446,30 @@ def test_documentation_only_candidate_is_blocked_for_requirement_mission(project
     mission = get_mission(mission_id)
     assert mission["status"] == "blocked"
     assert Path(mission["staging_dir"]).is_dir()
+
+
+def test_document_plan_mission_blocks_before_any_model_or_stage(project, monkeypatch):
+    mission_id = new_mission(project, "Analizza la documentazione e prepara un piano")
+    orch = MultiAgentOrchestrator(project)
+    monkeypatch.setattr(orch, "_call_model", lambda *a, **kw: pytest.fail("Model started"))
+    result = orch.run_mission(mission_id)
+    assert result["status"] == "blocked"
+    assert "document planning service" in result["error"]
+    assert get_tasks(mission_id) == []
+    assert stage_dirs(project) == []
+
+
+def test_harness_failure_never_calls_debugger(project, monkeypatch):
+    mission_id = new_mission(project)
+    orch = MultiAgentOrchestrator(project)
+    # Real subprocess startup failure before pytest; the package is baseline-pinned.
+    (project / "nl_coding_agent/__init__.py").write_text(
+        "raise RuntimeError('broken harness startup')")
+    model = ScriptedModel({MODEL_DEVELOPER: [write_block("src/calc.py", CALC_WITH_SUB)]})
+    monkeypatch.setattr(orch, "_call_model", model)
+    result = orch.run_mission(mission_id)
+    assert result["status"] == "blocked"
+    assert "broken harness startup" in result["error"]
+    assert len(get_verification_runs(mission_id)) == 2
+    assert all(call["role"] != "Software Debugger" for call in model.calls)
+    assert read_text(project / "src/calc.py") == CALC_SOURCE

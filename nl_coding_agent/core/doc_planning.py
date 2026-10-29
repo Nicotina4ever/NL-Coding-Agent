@@ -16,6 +16,22 @@ from typing import Any, Iterable, Mapping
 from nl_coding_agent.core.doc_reconciliation import reconcile as _reconcile
 from nl_coding_agent.core.requirement_extraction import extract_requirements
 
+
+def is_document_plan_request(text: str) -> bool:
+    """Recognize explicit document analysis/plan requests without model inference.
+
+    Mixed requests still stay in planning: execution needs a separate coding task.
+    This predicate never authorizes writes or treats document contents as commands.
+    """
+    text = str(text or "").casefold()
+    documents = re.search(r"\b(documentazione|documenti|documentation|documents|docs)\b", text)
+    plan = re.search(r"\b(piano|pianifica|pianificazione|plan|planning)\b", text)
+    planning_action = re.search(
+        r"\b(analizza|analizzare|analyze|analyse|analys[ei]s|leggi|read|"
+        r"prepara|preparare|prepare|genera|generate|pianifica|pianificare|planning)\b", text)
+    return bool(documents and plan and planning_action)
+
+
 PLAN_STATUSES = ("draft", "approved", "rejected")
 PRIORITIES = ("P0", "P1", "P2", "P3")
 DEFAULT_DB = None

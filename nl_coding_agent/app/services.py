@@ -288,6 +288,27 @@ class AppServices:
 
     # --- Audit ---
 
+    @staticmethod
+    def chat_workflow(text: str) -> str:
+        from nl_coding_agent.core.doc_planning import is_document_plan_request
+        return "document_plan" if is_document_plan_request(text) else "coding"
+
+    def chat_document_plan(self, project: dict, text: str, attachment_ids=None) -> dict:
+        """Use the existing corpus/plan lifecycle; never create a coding mission."""
+        from nl_coding_agent.app.attachments import get_attachment
+        paths = []
+        for attachment_id in attachment_ids or []:
+            item = get_attachment(int(attachment_id))
+            if item.get("project_id") != project["id"]:
+                return self._document_plan_error(ValueError("Attachment belongs to another project"))
+            if not item.get("has_text"):
+                return self._document_plan_error(ValueError(
+                    "Document planning requires readable text attachments"))
+            paths.append(item["stored_path"])
+        return self.docs_plan_generate(
+            project_root=project["root"], project_id=project["id"],
+            objective=text, paths=paths, consent=True)
+
     def create_mission(self, project_id: int | None, title: str, goal: str) -> int:
         from nl_coding_agent.persistence.missions import create_mission as _create_m
         m_id = _create_m(project_id, title, goal)

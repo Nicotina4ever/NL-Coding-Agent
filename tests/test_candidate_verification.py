@@ -68,6 +68,32 @@ class CandidateVerificationTests(unittest.TestCase):
         self.assertIn("oracle suite failed", str(report.error))
         self.assertTrue(report.oracle.failures)
 
+    def test_external_python_project_needs_no_agent_package(self):
+        shutil.rmtree(self.workspace / "nl_coding_agent")
+        baseline = {k: v for k, v in self.baseline.items()
+                    if not k.startswith("nl_coding_agent/")}
+        report = verify_candidate(self.workspace, self.stage, baseline, timeout_s=60)
+        self.assertTrue(report.passed, report.error)
+        (self.workspace / "demo" / "calc.py").write_text(CALC_BROKEN)
+        report = verify_candidate(self.workspace, self.stage, baseline, timeout_s=60)
+        self.assertFalse(report.passed)
+        self.assertTrue(report.oracle.failures)
+
+    def test_project_collection_error_can_still_be_repaired(self):
+        (self.workspace / "tests/test_calc.py").write_text("def broken syntax\n")
+        report = self.verify()
+        self.assertFalse(report.passed)
+        self.assertTrue(report.candidate.failures)
+        self.assertFalse(report.candidate.infrastructure_failure)
+
+    def test_runner_error_retains_cause_and_is_infrastructure_failure(self):
+        (self.workspace / "nl_coding_agent" / "__init__.py").write_text(
+            "raise RuntimeError('runner startup failed')")
+        report = self.verify()
+        self.assertFalse(report.passed)
+        self.assertTrue(report.candidate.infrastructure_failure)
+        self.assertIn("runner startup failed", report.candidate.error)
+
     def test_candidate_without_tests_fails(self):
         shutil.rmtree(self.workspace / "tests")
         report = self.verify()

@@ -4,6 +4,42 @@
 
 NL Coding Agent is a local-first, multi-agent software development workstation. It opens existing projects, discovers their structure and documentation, persists missions in SQLite, and runs a real `Developer -> Tester -> Debugger -> Reviewer` cycle using local Ollama models. The current implementation has been exercised end-to-end with a live local model and a real interruption/resume cycle.
 
+## Mission #47 incident correction (2026-10-29)
+
+Persisted verification runs 59–64 show that VoiceBridge failed before pytest:
+the generic runner imported `nl_coding_agent` unconditionally. The missing JUnit
+message concealed that `ModuleNotFoundError`. The tester then asked the debugger
+to repair harness startup; its handoffs show an unrelated staged
+`packages/nl_coding_agent/__init__.py`. Chat always created coding missions and
+the empty path scope expanded to project top-level directories.
+
+Chat now routes explicit document-analysis/plan requests through the existing
+corpus and document-plan services and opens the existing draft review dialog.
+The coding orchestrator blocks such requests before staging or model calls,
+including old missions resumed from Tasks. Execution of an existing plan still
+uses coding. Routing is deterministic lexical recognition, not general language
+understanding. Attachments remain local document inputs.
+
+The verification runner retains the baseline-selected self-build resolution guard;
+external Python projects no longer import the orchestrator package. Both candidate
+and baseline-test oracle remain mandatory. Startup/timeout/unsupported-suite
+failures stop without debugger retries and retain diagnostics; reported test and
+collection failures remain repairable.
+
+Validation: 40 targeted tests passed, including real candidate/oracle subprocesses,
+GUI Chat routing, baseline regression detection and no-debugger startup failure.
+Broader regression: 1,154 passed and 8 failed. The same eight failures were
+reproduced against archived HEAD source: five GUI English-text expectations with
+an active Italian translator, two existing Problems-panel expectations and the
+Windows POSIX-shell access error (WinError 1920). Evidence is retained under
+`.workspace/temp/mission47-*-output.txt`; no all-green suite claim is made.
+Gatekeeper review approved the code diff. A read-only run over the real VoiceBridge
+documents with isolated app state produced a draft with 83 milestones and 141
+provenance entries, no missions; extraction reported its finding cap, so this is
+not evidence of exhaustive analysis. Mission #47 remains blocked and its live DB,
+candidate and external source tree were not changed. Restart the desktop app to
+load the corrected modules. No live Ollama mission was rerun or claimed successful.
+
 ## Verified Operational Capabilities
 
 ### 1. Dedicated Runtime

@@ -186,3 +186,24 @@ def test_main_window_integration_persists_mission_and_attachments(services, tmp_
     app.processEvents()
     from nl_coding_agent.gui.i18n import reset_i18n
     reset_i18n()
+
+
+def test_main_window_document_request_opens_plan_without_coding(services, tmp_path, monkeypatch):
+    from nl_coding_agent.gui.main_window import MainWindow
+    from nl_coding_agent.gui.dialogs.document_plan import DocumentPlanDialog
+    from nl_coding_agent.projects.registry import open_project
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "README.md").write_text("# Requirements\n- The system must work offline.\n")
+    project = open_project(root)
+    services.check_ollama = lambda: False
+    opened = []
+    monkeypatch.setattr(DocumentPlanDialog, "exec", lambda self: opened.append(self._plan_id))
+    window = MainWindow(services)
+    window._on_project_opened(project)
+    window._on_chat_submitted({"text": "Analizza la documentazione e prepara un piano"})
+    assert len(opened) == 1
+    assert services.docs_plan_get(opened[0])["plan"]["status"] == "draft"
+    assert services.list_missions(project["id"]) == []
+    window.close()
+    _app().processEvents()

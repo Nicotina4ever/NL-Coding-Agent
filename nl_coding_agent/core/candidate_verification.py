@@ -37,12 +37,7 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parent
 sys.path.insert(0, str(root))
-import nl_coding_agent
-
-package = Path(nl_coding_agent.__file__).resolve()
-if not package.is_relative_to(root):
-    print("FATAL: imported package outside verification copy: " + str(package), file=sys.stderr)
-    raise SystemExit(86)
+# SELF_BUILD_GUARD
 
 import pytest
 
@@ -68,6 +63,14 @@ class SuiteResult:
     failures: list[str]
     junit_path: str | None
     error: str | None = None
+
+    @property
+    def infrastructure_failure(self) -> bool:
+        # Only reported test/collection failures are candidates for source repair.
+        return not self.passed and (
+            self.timed_out or self.exit_code not in (0, 1, 2)
+            or not self.failures
+        )
 
 
 @dataclass
@@ -135,8 +138,17 @@ def prepare_copies(
     for suite in ("candidate", "oracle"):
         (verify_dir / "data" / suite).mkdir(parents=True, exist_ok=True)
     (verify_dir / "evidence").mkdir(parents=True, exist_ok=True)
-    _write_text(candidate / RUNNER_NAME, RUNNER_SOURCE)
-    _write_text(oracle / RUNNER_NAME, RUNNER_SOURCE)
+    runner = RUNNER_SOURCE
+    # Pin harness selection to the baseline, never to agent-controlled staged files.
+    if "nl_coding_agent/__init__.py" in baseline:
+        runner = runner.replace("# SELF_BUILD_GUARD", '''import nl_coding_agent
+package = Path(nl_coding_agent.__file__).resolve()
+if not package.is_relative_to(root):
+    print("FATAL: imported package outside verification copy: " + str(package), file=sys.stderr)
+    raise SystemExit(86)
+''')
+    _write_text(candidate / RUNNER_NAME, runner)
+    _write_text(oracle / RUNNER_NAME, runner)
     return candidate, oracle, overlay_ops
 
 
@@ -252,7 +264,7 @@ def run_suite(
         if exit_code == RESOLUTION_GUARD_EXIT:
             error = "resolution guard: package imported outside the verification copy"
         elif not junit_path.is_file():
-            error = "missing junit report"
+            error = "missing junit report (runner exit " + str(exit_code) + "): " + (stderr or stdout)[-2000:]
         elif tests == 0:
             error = "suite collected zero tests"
         elif failed:
@@ -368,6 +380,7 @@ def report_to_dict(report: VerificationReport) -> dict:
             "failures": suite.failures,
             "junit_path": suite.junit_path,
             "error": suite.error,
+            "infrastructure_failure": suite.infrastructure_failure,
             "stdout_tail": suite.stdout_tail,
             "stderr_tail": suite.stderr_tail,
         }

@@ -903,6 +903,12 @@ class MultiAgentOrchestrator:
         stage: promotion.Stage | None = None
         baseline: dict[str, str] = {}
         try:
+            from nl_coding_agent.core.doc_planning import is_document_plan_request
+            if is_document_plan_request(goal):
+                raise GateFailure(
+                    "Document analysis/plan requests require the document planning service; "
+                    "submit through Chat or open Document plan. No coding agents were started.",
+                    code="document-planning-required")
             self._assert_harness_mission(mission)
 
             if existing_tasks:
@@ -1280,6 +1286,9 @@ INSTRUCTIONS:
                 return {"report": report}
 
             last_error = report.error or "candidate/oracle suite failed"
+            if any(suite.infrastructure_failure for suite in (report.candidate, report.oracle)):
+                # A broken/unsupported harness cannot be repaired by editing project source.
+                break
             if attempt >= max_attempts:
                 break
             error_msg = (
@@ -1312,7 +1321,7 @@ INSTRUCTIONS:
             if not report.oracle.passed:
                 failures.append("oracle: " + str(report.oracle.failures or report.oracle.error))
         raise VerificationError(
-            f"Verification failed after {max_attempts + 1} attempt(s): "
+            f"Verification failed after {attempt + 1} attempt(s): "
             + ("; ".join(failures) if failures else error_summary)
         )
 

@@ -774,7 +774,7 @@ class MainWindow(QMainWindow):
 
     @Slot(dict)
     def _on_chat_submitted(self, payload: dict):
-        """Persist a chat mission + attachment provenance; never starts a model run."""
+        """Route document plans to the planning facade; persist other chat missions."""
         if not self._current_project:
             self._log_panel.append_log(
                 "chat", "warning",
@@ -784,6 +784,23 @@ class MainWindow(QMainWindow):
         text = str(payload.get("text") or "").strip()
         attachment_ids = [int(item) for item in payload.get("attachment_ids") or []
                           if item is not None]
+        if self._services.chat_workflow(text) == "document_plan":
+            try:
+                result = self._services.chat_document_plan(
+                    self._current_project, text, attachment_ids)
+            except Exception as exc:  # noqa: BLE001 - GUI boundary
+                self._log_panel.append_log("chat", "error", str(exc))
+                return
+            if not result.get("ok"):
+                self._log_panel.append_log(
+                    "chat", "error", str(result.get("error", {}).get("message", result)))
+                return
+            from nl_coding_agent.gui.dialogs.document_plan import DocumentPlanDialog
+            dialog = DocumentPlanDialog(
+                self._services, self._current_project, self,
+                plan_id=result["plan_id"])
+            dialog.exec()
+            return
         title = (text[:60] if text else "Mission with attachments") or "Mission"
         goal = text or "Review the attached files and describe the requested change."
         try:

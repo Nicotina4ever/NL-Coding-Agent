@@ -94,3 +94,43 @@ def test_structured_errors_and_validation(services,tmp_path):
     assert not services.docs_plan_approve(plan_id,reason="")["ok"]
     assert not services.docs_plan_reject(plan_id,reason="")["ok"]
     assert not services.docs_plan_generate()["ok"]
+
+
+@pytest.mark.parametrize("text", [
+    "Analizza la documentazione e prepara un piano",
+    "Analyze the documentation and prepare a plan",
+    "Leggi i documenti e pianifica il lavoro",
+])
+def test_chat_routes_to_existing_plan_service_without_missions(services, tmp_path, text):
+    from nl_coding_agent.projects.registry import open_project
+    root = _root(tmp_path)
+    project = open_project(root)
+    assert services.chat_workflow(text) == "document_plan"
+    result = services.chat_document_plan(project, text)
+    assert result["ok"], result
+    assert result["status"] == "draft" and result["executed"] is False
+    assert result["plan"]["objective"] == text
+    assert services.list_missions(project["id"]) == []
+    assert (root / "src/app.py").read_text() == "print('ok')\n"
+
+
+@pytest.mark.parametrize("text", [
+    "Implement the feature in src/app.py",
+    "Implement the plan described in docs",
+    "Implementa il piano descritto nella documentazione",
+    "Fix docs/plan.md",
+])
+def test_coding_chat_route_preserved(services, text):
+    assert services.chat_workflow(text) == "coding"
+
+
+def test_chat_plan_includes_text_attachment_without_mission(services, tmp_path):
+    from nl_coding_agent.projects.registry import open_project
+    project = open_project(_root(tmp_path))
+    item = services.prepare_attachment_text(
+        project["id"], "# Requirements\n- The system must preserve attached context.\n")
+    result = services.chat_document_plan(
+        project, "Analizza la documentazione e prepara un piano", [item["id"]])
+    assert result["ok"], result
+    assert "attached context" in json.dumps(result["plan"])
+    assert services.list_missions(project["id"]) == []
