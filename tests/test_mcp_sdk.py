@@ -155,5 +155,15 @@ def test_real_engine_stdio_readonly_project_binding(tmp_path, monkeypatch):
         assert get_mission(own)["status"] == "pending"
         resource = manager.read_resource("engine", "nl-engine://project", human_approved=True)
         assert json.loads(resource["contents"][0]["text"])["project"]["id"] == project["id"]
+        # A client may not converse as another project or as the unregistered id 0.
+        for rejected_id in (foreign["id"], 0):
+            rejected = manager.invoke_tool("engine", "nlc_converse", {
+                "project_id": rejected_id, "text": "never reaches a model",
+                "attachments": [], "history": []}, human_approved=True)
+            assert rejected["isError"], rejected
+            assert "bound to this server" in rejected["content"][0]["text"]
+        chat_dir = tmp_path / "data" / "chat"
+        assert not (chat_dir / ("project-" + str(foreign["id"]) + ".json")).exists()
+        assert not (chat_dir / "project-0.json").exists()
     finally:
         services._db.close()

@@ -6,6 +6,34 @@ import sys
 from contextlib import asynccontextmanager, redirect_stdout
 from pathlib import Path
 
+_ATTACHMENT_BUDGET = 8000
+
+
+def _attachment_context(attachments, budget: int = _ATTACHMENT_BUDGET) -> str:
+    """Frame selected-text attachments as untrusted context, never instructions.
+
+    The MCP client sends ``[{name, extracted_text}]``. Anything else is ignored,
+    and the total size is bounded so a client cannot grow the prompt without
+    limit. The backend only ever treats this text as quoted user context.
+    """
+    if not isinstance(attachments, list):
+        return ""
+    chunks: list[str] = []
+    remaining = max(0, int(budget))
+    for item in attachments:
+        if remaining <= 0:
+            break
+        if not isinstance(item, dict):
+            continue
+        body = item.get("extracted_text")
+        if not isinstance(body, str) or not body.strip():
+            continue
+        name = str(item.get("name") or "selection")[:200]
+        text = body[:remaining]
+        remaining -= len(text)
+        chunks.append("UNTRUSTED attachment " + name + ":\n" + text)
+    return ("\n\n" + "\n".join(chunks)) if chunks else ""
+
 
 def create_engine_server(services, project, *, allow_execution=False):
     from mcp.server.fastmcp import FastMCP
@@ -13,24 +41,24 @@ def create_engine_server(services, project, *, allow_execution=False):
     from nl_coding_agent.core import permissions
 
     project = dict(project)
-    project_id = int(project["id"])
+    bound_project_id = int(project["id"])
     active = set()
 
     def require_read():
-        permissions.require(permissions.READ, project_id=project_id)
+        permissions.require(permissions.READ, project_id=bound_project_id)
 
     def mission(mission_id):
         require_read()
         details = services.get_mission_details(int(mission_id))
-        if not details or details.get("project_id") != project_id:
+        if not details or details.get("project_id") != bound_project_id:
             raise ValueError("Mission does not belong to this server's project")
         return details
 
     def require_execution(approved):
         if not allow_execution or not approved:
             raise PermissionError("Server is read-only or this operation was not explicitly approved")
-        permissions.require(permissions.EXECUTE, project_id=project_id)
-        permissions.require(permissions.WRITE, project_id=project_id)
+        permissions.require(permissions.EXECUTE, project_id=bound_project_id)
+        permissions.require(permissions.WRITE, project_id=bound_project_id)
 
     @asynccontextmanager
     async def lifespan(server):
@@ -41,7 +69,7 @@ def create_engine_server(services, project, *, allow_execution=False):
                 yield
             finally:
                 for mission_id in list(active):
-                    services.cancel_mission(mission_id, project_id=project_id,
+                    services.cancel_mission(mission_id, project_id=bound_project_id,
                                             reason="MCP client disconnected")
 
     server = FastMCP("NL Coding Engine", lifespan=lifespan)
@@ -54,11 +82,41 @@ def create_engine_server(services, project, *, allow_execution=False):
         return {"project": project, "execution_enabled": allow_execution,
                 "engine": "AppServices/Supervisor", "state": "existing mission SQLite"}
 
+    # ---------------------------------------------------------------------
+    # Expose chat functionality over MCP for VS Code extension clients.
+    @server.tool()
+    def nlc_converse(project_id: int, text: str, attachments: list, history: list, *, model_spec: str | None = None) -> dict:
+        """Forward a chat request to the backend AppServices implementation.
+
+        *project_id* must be the id reported by ``project_context`` for this
+        server; any other id is rejected. *text* is the user message.
+        *attachments* is a list of ``{name, extracted_text}`` selected-text
+        dicts, framed as untrusted context. *history* is accepted for protocol
+        compatibility but ignored: the backend persists and replays the real
+        conversation history itself. *model_spec* optionally selects a model.
+        Returns the full conversation dict from ``services.chat_conversation``.
+        """
+        require_read()
+        try:
+            requested = int(project_id)
+        except (TypeError, ValueError):
+            raise ValueError("project_id must be an integer") from None
+        if requested != bound_project_id:
+            # The server is bound to exactly one registered project. A client may
+            # not read or write another project's conversation through it.
+            raise ValueError("project_id does not match the project bound to this server")
+        message = str(text or "").strip()
+        if not message:
+            raise ValueError("Message text is required")
+        prompt = message + _attachment_context(attachments)
+        proj = {"id": bound_project_id, "root": project.get("root", "")}
+        return services.chat_conversation(proj, prompt, attachment_ids=None, model_spec=model_spec)
+
     @server.tool(annotations=read_only)
     def mission_list() -> dict:
         """List persisted missions for the bound project without starting work."""
         require_read()
-        return {"missions": services.list_missions(project_id)}
+        return {"missions": services.list_missions(bound_project_id)}
 
     @server.tool(annotations=read_only)
     def mission_status(mission_id: int) -> dict:
@@ -80,7 +138,7 @@ def create_engine_server(services, project, *, allow_execution=False):
     def candidate_diff(mission_id: int) -> dict:
         """Inspect a staged candidate, including rejected candidates; never promote."""
         mission(mission_id)
-        return services.mission_candidate_diff(mission_id, project_id=project_id)
+        return services.mission_candidate_diff(mission_id, project_id=bound_project_id)
 
     @server.tool()
     def start_mission(goal: str, developer_model: str, reviewer_model: str,
@@ -99,7 +157,7 @@ def create_engine_server(services, project, *, allow_execution=False):
                 raise ValueError("Resume preserves the original objective")
             mission_id = int(resume_mission_id)
         else:
-            mission_id = services.create_mission(project_id, goal[:80], goal)
+            mission_id = services.create_mission(bound_project_id, goal[:80], goal)
         active.add(mission_id)
         try:
             task_id = services.run_mission(mission_id, project["root"], goal,
@@ -120,7 +178,7 @@ def create_engine_server(services, project, *, allow_execution=False):
         if not allow_execution or not approved:
             raise PermissionError("Cancellation requires owner-enabled execution and approval")
         mission(mission_id)
-        return services.cancel_mission(mission_id, project_id=project_id, reason="MCP cancellation")
+        return services.cancel_mission(mission_id, project_id=bound_project_id, reason="MCP cancellation")
 
     @server.resource("nl-engine://project", mime_type="application/json")
     def project_resource() -> str:
