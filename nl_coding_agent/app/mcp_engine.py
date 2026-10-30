@@ -611,8 +611,29 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
             "output": _bounded_text(item.get("output"), 12000),
             "metadata": _bounded_payload(_json_mapping(item.get("metadata_json"))),
         } for item in details.get("attempts", [])]
+        execution_errors = []
+        for item in details.get("execution_errors", []):
+            payload = item.get("payload") or {}
+            execution_errors.append({
+                "id": item.get("id"), "kind": item.get("kind"),
+                "record_key": item.get("record_key"),
+                "created_at": item.get("created_at"),
+                "source": payload.get("source"),
+                "method": payload.get("method"),
+                "flow_id": payload.get("flow_id"),
+                "task_id": payload.get("task_id"),
+                "exception_type": payload.get("exception_type"),
+                "message": _bounded_text(payload.get("message"), 4000),
+                "traceback": _bounded_text(payload.get("traceback"), 16000),
+                "traceback_truncated": bool(payload.get("traceback_truncated")),
+                "pid": payload.get("pid"),
+                "reason": payload.get("reason"),
+                "previous_status": payload.get("previous_status"),
+                "new_status": payload.get("new_status"),
+            })
         return {"mission": mission_view, "tasks": tasks, "handoffs": handoffs,
                 "verification_runs": verification_runs, "attempts": attempts,
+                "execution_errors": execution_errors,
                 "model_bindings": services.mission_model_bindings(mission_id),
                 "progress": details.get("progress") or {}}
 

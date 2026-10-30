@@ -43,7 +43,8 @@ _MAX_PIPELINE_ITERATIONS = 8
 _PROJECTION_KEYS = (
     "stage_dir", "baseline_sha256", "changed_paths", "diff_stat",
     "promotion_status", "verification_ref", "review_verdict", "review_ref",
-    "approval_id", "approval_action",
+    "approval_id", "approval_action", "failure_stage", "error_traceback",
+    "exception_type",
 )
 
 
@@ -152,10 +153,19 @@ class MissionFlow(Flow[MissionState]):
     def _apply(self, *, phase: str | None = None,
                result: StepResult | None = None,
                error: str | None = None,
-               error_code: str | None = None) -> None:
+               error_code: str | None = None,
+               failure_stage: str | None = None,
+               error_traceback: str | None = None,
+               exception_type: str | None = None) -> None:
         updates: dict[str, Any] = {}
         if phase is not None:
             updates["phase"] = phase
+        if failure_stage is not None:
+            updates["failure_stage"] = failure_stage
+        if error_traceback is not None:
+            updates["error_traceback"] = error_traceback
+        if exception_type is not None:
+            updates["exception_type"] = exception_type
         if result is not None:
             for key in _PROJECTION_KEYS:
                 if key in result.payload:
@@ -201,11 +211,13 @@ class MissionFlow(Flow[MissionState]):
                 )
         except RunStopped as exc:
             self._interrupt(exc)
+        except Exception as exc:  # noqa: BLE001 - persisted before finalization
+            self._record_unexpected_exception(exc, "run")
 
     @router(run, emit=["run_develop", "run_verify", "run_repair", "run_review",
                        "run_promote", "run_finish"])
     def route_start(self) -> str:
-        return self._route_phase()
+        return self._safe_route(self._route_phase)
 
     @listen("run_develop")
     def develop(self) -> None:
@@ -213,7 +225,7 @@ class MissionFlow(Flow[MissionState]):
 
     @router(develop, emit=["run_verify", "run_finish"])
     def route_develop(self) -> str:
-        return self._route_phase()
+        return self._safe_route(self._route_phase)
 
     @listen("run_verify")
     def verify(self) -> None:
@@ -221,7 +233,7 @@ class MissionFlow(Flow[MissionState]):
 
     @router(verify, emit=["run_review", "run_repair", "run_finish"])
     def route_verify(self) -> str:
-        return self._route_phase()
+        return self._safe_route(self._route_phase)
 
     @listen("run_repair")
     def repair(self) -> None:
@@ -229,7 +241,7 @@ class MissionFlow(Flow[MissionState]):
 
     @router(repair, emit=["run_verify", "run_finish"])
     def route_repair(self) -> str:
-        return self._route_phase()
+        return self._safe_route(self._route_phase)
 
     @listen("run_review")
     def review(self) -> None:
@@ -237,7 +249,7 @@ class MissionFlow(Flow[MissionState]):
 
     @router(review, emit=["run_promote", "run_finish"])
     def route_review(self) -> str:
-        return self._route_phase()
+        return self._safe_route(self._route_phase)
 
     @listen("run_promote")
     def promote(self) -> None:
@@ -245,7 +257,7 @@ class MissionFlow(Flow[MissionState]):
 
     @router(promote, emit=["run_finish"])
     def route_promote(self) -> str:
-        return self._route_phase()
+        return self._safe_route(self._route_phase)
 
     @listen("run_finish")
     def finish(self) -> dict:
@@ -273,14 +285,62 @@ class MissionFlow(Flow[MissionState]):
             phase="interrupted",
             error=str(exc) or "stopped",
             error_code="run_stopped",
+            failure_stage="checkpoint",
+            exception_type=type(exc).__name__,
         )
         self._save("interrupted")
 
+    def _record_unexpected_exception(self, exc: Exception, method: str) -> None:
+        """Persist an executor/router crash before the flow finalizes as failed."""
+        from nl_coding_agent.core.failure_evidence import (
+            capture_exception,
+            record_exception,
+            record_running_task_failures,
+        )
+
+        payload = capture_exception(
+            exc, source="flow", method=method, flow_id=self.state.flow_id,
+            mission_id=int(self.state.mission_id), phase=str(self.state.phase),
+            extra={"last_method": method},
+        )
+        record_exception(
+            int(self.state.mission_id), exc, source="flow", method=method,
+            flow_id=self.state.flow_id, phase=str(self.state.phase),
+            extra={"last_method": method},
+        )
+        record_running_task_failures(
+            int(self.state.mission_id), exc, source="flow",
+            traceback_text=payload.get("traceback") or "",
+        )
+        self._apply(
+            phase="blocked",
+            error=type(exc).__name__ + ": " + str(exc),
+            error_code="executor_exception",
+            failure_stage=method,
+            error_traceback=(payload.get("traceback") or "")[:64000],
+            exception_type=type(exc).__name__,
+        )
+        self._save("exception")
+
     def _safe_step(self, step) -> None:
+        method = str(getattr(step, "__name__", "step") or "step")
         try:
             step()
         except RunStopped as exc:
             self._interrupt(exc)
+        except Exception as exc:  # noqa: BLE001 - persisted and finalized as failed
+            self._record_unexpected_exception(exc, method)
+
+    def _safe_route(self, route) -> str:
+        method = str(getattr(route, "__name__", "route") or "route")
+        try:
+            return str(route())
+        except RunStopped as exc:
+            self._interrupt(exc)
+            return "run_finish"
+        except Exception as exc:  # noqa: BLE001
+            self._record_unexpected_exception(exc, method)
+            return "run_finish"
 
     def _drive(self, phase: str) -> dict:
         """Compatibility fallback for callers that still drive the old loop directly."""
@@ -422,9 +482,12 @@ class MissionFlow(Flow[MissionState]):
         self._apply(phase=target)
         self._save("finish")
         state = self.state
+        status = _PHASE_TO_STATUS.get(target, "blocked")
+        if target == "blocked" and state.error_code == "executor_exception":
+            status = "failed"
         return {
             "flow_id": state.flow_id,
-            "status": _PHASE_TO_STATUS.get(target, "blocked"),
+            "status": status,
             "phase": target,
             "mission_id": state.mission_id,
             "project_id": state.project_id,
@@ -434,5 +497,8 @@ class MissionFlow(Flow[MissionState]):
             "review_verdict": state.review_verdict,
             "error": state.last_error,
             "error_code": state.error_code,
+            "failure_stage": state.failure_stage,
+            "exception_type": state.exception_type,
+            "error_traceback": state.error_traceback,
             **(payload or {}),
         }

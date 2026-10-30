@@ -189,6 +189,110 @@ def clean_file_content(content: str, rel_path: str) -> str:
     return cleaned
 
 
+def _apply_unified_diff(project_root: Path, rel_path: str, diff_text: str) -> None:
+    """Apply a model-emitted unified diff through the existing scoped writer.
+
+    This is deliberately a small parser for the exact patch shape local models
+    emit (git-style headers plus @@ hunks); it never executes model code.
+    """
+    current = (Path(project_root).resolve() / rel_path).read_text(encoding="utf-8")
+    source = current.splitlines(keepends=True)
+    hunk_re = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+    output: list[str] = []
+    cursor = 0
+    matched = False
+
+    def find_context(expected: str, start: int) -> int:
+        """Tolerate off-by-a-few hunk headers from small local models."""
+        wanted = expected.rstrip("\r\n")
+        for distance in range(0, 41):
+            for candidate in (start + distance, start - distance):
+                if 0 <= candidate < len(source):
+                    if source[candidate].rstrip("\r\n") == wanted:
+                        return candidate
+        return -1
+
+    for raw in str(diff_text or "").splitlines(keepends=True):
+        if raw.startswith(("--- ", "+++ ", "diff ", "index ")):
+            continue
+        match = hunk_re.match(raw)
+        if match:
+            matched = True
+            old_start = max(0, int(match.group(1)) - 1)
+            output.extend(source[cursor:old_start])
+            cursor = old_start
+            continue
+        if not matched:
+            continue
+        if raw.startswith("\\ No newline"):
+            continue
+        if raw.startswith(" "):
+            expected = raw[1:]
+            located = find_context(expected, cursor)
+            if located < 0:
+                raise ValueError("unified diff context mismatch in " + rel_path)
+            output.extend(source[cursor:located])
+            output.append(source[located])
+            cursor = located + 1
+        elif raw.startswith("-"):
+            expected = raw[1:]
+            located = find_context(expected, cursor)
+            if located < 0:
+                raise ValueError("unified diff deletion mismatch in " + rel_path)
+            output.extend(source[cursor:located])
+            cursor = located + 1
+        elif raw.startswith("+"):
+            output.append(raw[1:] + ("\n" if not raw[1:].endswith(("\n", "\r")) else ""))
+    if not matched:
+        raise ValueError("no unified-diff hunk found for " + rel_path)
+    output.extend(source[cursor:])
+    scoped_write_file(project_root, rel_path, "".join(output))
+
+
+def _apply_python_tool_calls(project_root: Path, text: str) -> list[str]:
+    """Recover model-emitted Python calls such as patch_file('p', '''diff''')."""
+    import ast
+
+    actions: list[str] = []
+    root = Path(project_root).resolve()
+    for block in re.findall(r"```(?:python|py)\r?\n(.*?)```", text, re.DOTALL):
+        try:
+            tree = ast.parse(block)
+        except SyntaxError:
+            # A fenced block may contain prose around one call; try each line
+            # independently only when the whole block is not valid Python.
+            calls = []
+        else:
+            calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)]
+        for call in calls:
+            func = call.func
+            name = func.id if isinstance(func, ast.Name) else None
+            if name not in ("patch_file", "write_file"):
+                continue
+            values: list[str] = []
+            for arg in call.args[:2]:
+                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                    values.append(arg.value)
+            for keyword in call.keywords:
+                if (keyword.arg in ("path", "content", "diff", "patch")
+                        and isinstance(keyword.value, ast.Constant)
+                        and isinstance(keyword.value.value, str)):
+                    values.append(keyword.value.value)
+            if len(values) < 2:
+                continue
+            rel_path, content = values[0], values[1]
+            try:
+                if name == "write_file":
+                    scoped_write_file(root, rel_path, clean_file_content(content, rel_path))
+                    actions.append(f"Wrote {rel_path} via Python tool call")
+                else:
+                    _apply_unified_diff(root, rel_path, content)
+                    actions.append(f"Patched {rel_path} via Python unified diff")
+            except Exception as exc:
+                actions.append(f"Python tool call rejected for {rel_path}: {exc}")
+    return actions
+
+
 def _apply_text_actions(project_root: Path, text: str) -> list[str]:
     """Execute write/patch actions emitted as text by a local model.
 
@@ -258,6 +362,7 @@ def _apply_text_actions(project_root: Path, text: str) -> list[str]:
         except Exception as exc:
             actions.append(f"Failed to patch {rel_path}: {exc}")
 
+    actions.extend(_apply_python_tool_calls(root, text))
     return actions
 
 
@@ -1258,10 +1363,80 @@ class MultiAgentOrchestrator:
 
     def _failed_result(self, mission_id: int, exc: Exception) -> dict:
         message = f"Mission #{mission_id} failed: {exc}"
+        try:
+            from nl_coding_agent.core.failure_evidence import (
+                capture_exception,
+                record_exception,
+                record_running_task_failures,
+            )
+
+            payload = capture_exception(
+                exc, source="orchestrator", method="_run_locked",
+                mission_id=int(mission_id),
+            )
+            record_exception(
+                int(mission_id), exc, source="orchestrator", method="_run_locked",
+            )
+            record_running_task_failures(
+                int(mission_id), exc, source="orchestrator",
+                traceback_text=payload.get("traceback") or "",
+            )
+        except Exception:
+            pass
         self._emit("orchestrator", "error", message, mission_id=mission_id)
         record_handoff(mission_id, "orchestrator", "user", message, {"error": str(exc)})
         update_mission_status(mission_id, "failed")
         return self._result_payload(mission_id, status="failed", error=str(exc))
+
+    def _finalize_execution_failed(self, mission_id: int, *, error: str,
+                                   code: str = "executor_exception",
+                                   stage: promotion.Stage | None = None,
+                                   failure_stage: str | None = None,
+                                   traceback_text: str = "",
+                                   exception_type: str = "") -> dict:
+        """Single writer for an unexpected executor/Flow crash.
+
+        The staged candidate and every handoff/attempt remain on disk for resume
+        and post-mortem; the live tree is untouched.  This is deliberately a
+        terminal `failed` state, not a normal `blocked` policy decision.
+        """
+        stage_dir = str(stage.stage_dir) if stage is not None else None
+        staged_paths: list[str] = []
+        if stage is not None:
+            try:
+                staged_paths = sorted(
+                    (promotion.read_manifest(stage).get("changed") or {}).keys()
+                )
+            except Exception:
+                staged_paths = []
+        summary = "Mission failed during execution: " + str(error)[:8000]
+        update_mission_result(
+            mission_id, "failed", result_summary=summary, review_verdict=None,
+            diff_stat="", changed_paths=[],
+        )
+        payload = {
+            "status": "failed",
+            "code": code,
+            "failure_stage": failure_stage,
+            "exception_type": exception_type,
+            "traceback_sample": (traceback_text or "")[-8000:],
+            "staged_paths": staged_paths,
+            "stage_dir": stage_dir,
+            "live_changes": "none",
+        }
+        record_handoff(mission_id, "orchestrator", "user", summary, payload)
+        try:
+            self._emit("orchestrator", "error", summary, mission_id=mission_id)
+        except Exception:
+            pass
+        result = self._result_payload(
+            mission_id, status="failed", error=summary,
+            promotion_status=None,
+        )
+        result["code"] = code
+        result["failure_stage"] = failure_stage
+        result["stage_dir"] = stage_dir
+        return result
 
     # ---------------------------------------------------------------- public API
 
@@ -1847,45 +2022,109 @@ INSTRUCTIONS:
 9. Do NOT claim success without actually writing the files.
 10. Finish with a concise summary of the files changed, decisions made and any open problem.
 """
-        output = self._call_model_with_textual_tools(
-            "Implementation Developer", model_name, prompt,
-            workspace=stage.workspace, goal=f"Implement the requested code change in the staged candidate: {goal}",
-            backstory=(
-                "You are an expert autonomous software engineer. You inspect existing code using read_file "
-                "or list_dir, and you write the necessary files or patches using write_file or patch_file. "
-                "You can also use ```write:<file_path>\n<content>``` blocks. "
-                "You must produce real file changes in the staged workspace, not only a plan."
-            ),
-            expected_output="Summary of files actually modified in the staged workspace and the changes made.",
-            tools=tools,
-        )
-        actions = _apply_text_actions(stage.workspace, output)
-        promotion.normalize_staged_newlines(stage)
-        after_files = snapshot_workspace(stage.workspace)
-        allowed = {str(path).replace("\\", "/") for path in write_paths}
-        unauthorized = [
-            path for path in set(before_files) | set(after_files)
-            if before_files.get(path) != after_files.get(path)
-            and allowed and path.replace("\\", "/") not in allowed
-        ]
-        if unauthorized:
-            # Revert this subtask's out-of-scope edits instead of corrupting the work
-            # of a previous developer stage. The task only owns its declared paths.
-            for path in unauthorized:
-                target = stage.workspace / path
-                if path in before_files:
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_text(before_files[path], encoding="utf-8")
-                else:
-                    target.unlink(missing_ok=True)
-            self._emit(
-                "developer", "warning",
-                "Reverted out-of-scope subtask edits: " + ", ".join(sorted(unauthorized)),
-                mission_id=mission_id, task_id=task_id,
-            )
+        base_prompt = prompt
+        output = ""
+        actions = {}
+        verdict: dict = {}
+        changed: list[str] = []
+        after_files: dict[str, str] = {}
+        first_verdict: dict | None = None
+        first_changed: list[str] = []
+        first_output = ""
+        for attempt_index in range(2):
+            model_prompt = base_prompt
+            if attempt_index:
+                model_prompt += (
+                    "\n\nPREVIOUS ATTEMPT WAS REJECTED BY THE VALIDATION GATE:\n"
+                    + _truncate(validation_feedback, 4000)
+                    + "\nThe staged files have been restored to their pre-attempt state. "
+                      "Use patch_file to preserve every existing class/function; do not rewrite "
+                      "an existing file and do not remove or rename existing definitions."
+                )
+            try:
+                output = self._call_model_with_textual_tools(
+                    "Implementation Developer", model_name, model_prompt,
+                    workspace=stage.workspace,
+                    goal=f"Implement the requested code change in the staged candidate: {goal}",
+                    backstory=(
+                        "You are an expert autonomous software engineer. You inspect existing code "
+                        "using read_file or list_dir, and you write precise patches using patch_file. "
+                        "You must produce real file changes in the staged workspace, not only a plan, "
+                        "and you must preserve every existing public function and class."
+                    ),
+                    expected_output="Summary of files actually modified in the staged workspace and the changes made.",
+                    tools=tools,
+                )
+            except Exception:
+                # A fake/constrained model may not provide a second response. The
+                # first validation verdict is still authoritative and blocked.
+                if first_verdict is not None:
+                    verdict = first_verdict
+                    changed = list(first_changed)
+                    # Preserve the rejected candidate for diagnosis instead of
+                    # leaving only the restored baseline.
+                    if first_output:
+                        _apply_text_actions(stage.workspace, first_output)
+                        promotion.normalize_staged_newlines(stage)
+                    output = first_output
+                    break
+                raise
+            actions = _apply_text_actions(stage.workspace, output)
             promotion.normalize_staged_newlines(stage)
-        verdict = self._validate_stage(stage)
+            after_files = snapshot_workspace(stage.workspace)
+            allowed = {str(path).replace("\\", "/") for path in write_paths}
+            unauthorized = [
+                path for path in set(before_files) | set(after_files)
+                if before_files.get(path) != after_files.get(path)
+                and allowed and path.replace("\\", "/") not in allowed
+            ]
+            if unauthorized:
+                # Revert this subtask's out-of-scope edits instead of corrupting the work
+                # of a previous developer stage. The task only owns its declared paths.
+                for path in unauthorized:
+                    target = stage.workspace / path
+                    if path in before_files:
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_text(before_files[path], encoding="utf-8")
+                    else:
+                        target.unlink(missing_ok=True)
+                self._emit(
+                    "developer", "warning",
+                    "Reverted out-of-scope subtask edits: " + ", ".join(sorted(unauthorized)),
+                    mission_id=mission_id, task_id=task_id,
+                )
+                promotion.normalize_staged_newlines(stage)
+            verdict = self._validate_stage(stage)
+            diff, changed, _stat = promotion.candidate_diff(stage)
+            if changed and verdict["valid"]:
+                break
+            validation_feedback = (
+                "; ".join(verdict.get("errors") or [])
+                or "No file change was produced."
+            )
+            if attempt_index == 0:
+                first_verdict = dict(verdict)
+                first_changed = list(changed)
+                first_output = str(output or "")                # A destructive rewrite is not retried against the corrupted file:
+                # restore the exact pre-attempt snapshot and give the model one
+                # bounded corrective attempt with the actual gate feedback.
+                for path in set(before_files) | set(after_files):
+                    target = stage.workspace / path
+                    if path in before_files:
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_text(before_files[path], encoding="utf-8")
+                    else:
+                        target.unlink(missing_ok=True)
+                promotion.normalize_staged_newlines(stage)
+                self._emit(
+                    "developer", "warning",
+                    "Developer attempt rejected; retrying once with validation feedback: "
+                    + validation_feedback[:1000],
+                    mission_id=mission_id, task_id=task_id,
+                )
         diff, changed, _stat = promotion.candidate_diff(stage)
+        if not changed and first_changed:
+            changed = list(first_changed)
         metadata = self._agent_metadata(model_name)
         metadata.update({
             "task_id": task_id,

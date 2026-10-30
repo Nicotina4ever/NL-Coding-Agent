@@ -38,6 +38,7 @@ __all__ = [
     "sync_backlog", "get_backlog_item", "list_backlog", "set_backlog_progress",
     "record_evidence", "list_evidence",
     "create_approval", "decide_approval", "get_approval", "list_approvals",
+    "finish_flow_run", "reconcile_flow_runs",
     "pending_approvals",
     "create_flow_approval", "get_approval_by_flow", "decide_flow_approval",
     "flow_approval_outcome", "pending_flow_approvals",
@@ -575,7 +576,9 @@ def start_flow_run(flow_id: str, project_id: int, *, mission_id: int | None = No
                    queue_id: int | None = None,
                    supervisor_run_id: int | None = None,
                    pipeline: str = "mission",
-                   status: str = "RUNNING") -> dict:
+                   status: str = "RUNNING",
+                   owner_pid: int | None = None,
+                   owner_id: str | None = None) -> dict:
     """Create or re-open one durable flow run row (idempotent by flow_id)."""
     flow_key = _require_text(flow_id, "flow_id")
     project_value = int(project_id)
@@ -589,21 +592,28 @@ def start_flow_run(flow_id: str, project_id: int, *, mission_id: int | None = No
             """
             INSERT INTO flow_runs
                 (flow_id, project_id, mission_id, queue_id, supervisor_run_id,
-                 pipeline, status, created_at, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?)
+                 pipeline, status, created_at, updated_at, owner_pid, owner_id,
+                 heartbeat_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(flow_id) DO UPDATE SET
                 status=excluded.status,
                 updated_at=excluded.updated_at,
                 mission_id=COALESCE(excluded.mission_id, flow_runs.mission_id),
                 queue_id=COALESCE(excluded.queue_id, flow_runs.queue_id),
                 supervisor_run_id=COALESCE(excluded.supervisor_run_id,
-                                           flow_runs.supervisor_run_id)
+                                           flow_runs.supervisor_run_id),
+                owner_pid=COALESCE(excluded.owner_pid, flow_runs.owner_pid),
+                owner_id=COALESCE(excluded.owner_id, flow_runs.owner_id),
+                heartbeat_at=COALESCE(excluded.heartbeat_at, flow_runs.heartbeat_at)
             """,
             (flow_key, project_value,
              int(mission_id) if mission_id is not None else None,
              int(queue_id) if queue_id is not None else None,
              int(supervisor_run_id) if supervisor_run_id is not None else None,
-             pipeline_text, status_text, now, now),
+             pipeline_text, status_text, now, now,
+             int(owner_pid) if owner_pid is not None else None,
+             str(owner_id) if owner_id else None,
+             now),
         )
     return get_flow_run(flow_key)
 
@@ -612,7 +622,10 @@ def update_flow_run(flow_id: str, *, status: str | None = None,
                     last_method: str | None = None,
                     state_sha256: str | None = None,
                     finished_at: str | None = None,
-                    mission_id: int | None = None) -> bool:
+                    mission_id: int | None = None,
+                    heartbeat_at: str | None = None,
+                    error_code: str | None = None,
+                    error_message: str | None = None) -> bool:
     """Update selected flow-run columns; terminal status stamps finished_at once."""
     flow_key = _require_text(flow_id, "flow_id")
     values: dict[str, object] = {}
@@ -626,6 +639,12 @@ def update_flow_run(flow_id: str, *, status: str | None = None,
         values["finished_at"] = str(finished_at)
     if mission_id is not None:
         values["mission_id"] = int(mission_id)
+    if heartbeat_at is not None:
+        values["heartbeat_at"] = str(heartbeat_at)
+    if error_code is not None:
+        values["error_code"] = str(error_code)
+    if error_message is not None:
+        values["error_message"] = str(error_message)[:8000]
     if not values:
         return False
     values["updated_at"] = _now()
@@ -665,6 +684,130 @@ def list_flow_runs(*, project_id: int | None = None,
     query += " ORDER BY updated_at DESC, flow_id DESC"
     with _db() as conn:
         return [dict(row) for row in conn.execute(query, params).fetchall()]
+
+
+def finish_flow_run(flow_id: str, status: str, *, error_code: str | None = None,
+                    error_message: str | None = None,
+                    last_method: str | None = None) -> bool:
+    """Finalize one flow row with its diagnostic fields (idempotent by callers)."""
+    return update_flow_run(
+        flow_id, status=status, error_code=error_code,
+        error_message=error_message, last_method=last_method,
+        finished_at=_now(),
+    )
+
+
+def _pid_alive(pid: int | None) -> bool:
+    if not pid or int(pid) <= 0:
+        return False
+    try:
+        import psutil
+
+        return bool(psutil.pid_exists(int(pid)))
+    except Exception:
+        pass
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except OSError:
+        return False
+
+
+def reconcile_flow_runs(*, project_id: int, active_flow_ids=(),
+                        exclude_mission_ids=(), now: str | None = None) -> list[str]:
+    """Finalize provably abandoned Flow rows without touching a live execution.
+
+    A RUNNING row is only changed when its owning process is known to be dead or
+    when the mission already reached a terminal status.  A row owned by a live
+    PID is never modified, even if its heartbeat is old: it may be inside a long
+    model call.  Legacy rows with no owner are left untouched unless the mission
+    itself is terminal.  No row is resumed automatically.
+    """
+    from nl_coding_agent.persistence.missions import (
+        get_mission, get_tasks, record_handoff, update_mission_result,
+        update_task_status,
+    )
+
+    actions: list[str] = []
+    stamp = str(now or _now())
+    active = {str(item) for item in active_flow_ids or ()}
+    excluded = {int(item) for item in exclude_mission_ids or ()}
+    try:
+        rows = list_flow_runs(project_id=int(project_id), status="RUNNING")
+    except StoreError:
+        return actions
+    for row in rows:
+        flow_id = str(row.get("flow_id") or "")
+        if not flow_id or flow_id in active:
+            continue
+        mission_id = row.get("mission_id")
+        if mission_id is not None and int(mission_id) in excluded:
+            continue
+        mission = get_mission(int(mission_id)) if mission_id else None
+        mission_status = str((mission or {}).get("status") or "")
+        owner_pid = row.get("owner_pid")
+        alive = _pid_alive(int(owner_pid) if owner_pid else None)
+        terminal_targets = {
+            "completed": "COMPLETED", "failed": "FAILED",
+            "blocked": "BLOCKED", "interrupted": "INTERRUPTED",
+        }
+        if mission_status in terminal_targets:
+            target = terminal_targets[mission_status]
+            reason = ("mission already " + mission_status
+                      + "; flow row finalized during reconciliation")
+        elif alive:
+            # A live owner may be blocked in a long model call; never rewrite it.
+            continue
+        elif owner_pid is None:
+            # Cannot prove abandonment.  Preserve the row for explicit diagnosis.
+            continue
+        else:
+            target = "INTERRUPTED"
+            reason = ("Flow owner pid " + str(owner_pid)
+                      + " is no longer alive; execution was abandoned")
+        try:
+            update_flow_run(
+                flow_id, status=target, finished_at=stamp,
+                last_method="reconcile", error_code="abandoned",
+                error_message=reason,
+            )
+        except StoreError:
+            continue
+        if mission is not None:
+            if mission_status in ("pending", "running"):
+                update_mission_result(
+                    int(mission_id), "interrupted",
+                    result_summary="Recovered abandoned Flow run: " + reason,
+                    diff_stat="", changed_paths=[],
+                )
+                for task in get_tasks(int(mission_id)):
+                    if str(task.get("status") or "") == "running":
+                        update_task_status(
+                            int(task["id"]), "failed",
+                            error="Abandoned Flow owner process; task interrupted",
+                        )
+            try:
+                record_handoff(
+                    int(mission_id), "system", "user",
+                    "Flow run reconciled: " + reason,
+                    {"kind": "flow_reconciliation", "flow_id": flow_id,
+                     "previous_owner_pid": owner_pid, "status": target},
+                )
+            except Exception:
+                pass
+            try:
+                record_evidence(
+                    int(mission_id), kind="reconciliation",
+                    record_key="flow:" + flow_id + ":abandoned",
+                    payload={"flow_id": flow_id, "previous_status": "RUNNING",
+                             "new_status": target, "owner_pid": owner_pid,
+                             "previous_owner_pid": owner_pid,
+                             "reason": reason, "at": stamp},
+                )
+            except Exception:
+                pass
+        actions.append("flow " + flow_id + " -> " + target + " (" + reason + ")")
+    return actions
 
 
 def set_run_flags(run_id: int, *, pause: bool | None = None,

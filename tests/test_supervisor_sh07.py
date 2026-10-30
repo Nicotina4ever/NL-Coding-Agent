@@ -444,7 +444,8 @@ class SH07FailClosedTests(SH07Base):
         )
         self.assertTrue(self.stage_dirs())
         self.assertEqual(
-            [call["role"] for call in self.fake.calls], ["Implementation Developer"]
+            [call["role"] for call in self.fake.calls],
+            ["Implementation Developer", "Implementation Developer"],
         )
 
     def test_oracle_red_candidate_is_blocked(self):

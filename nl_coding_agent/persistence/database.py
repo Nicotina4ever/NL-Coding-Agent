@@ -517,6 +517,12 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("events", "event_kind", "TEXT"),
     # Stage-4 Flow run link (C4b, additive; NULL for sequential missions).
     ("missions", "flow_id", "TEXT"),
+    # Flow recovery ownership / terminal diagnostics (additive; old rows NULL).
+    ("flow_runs", "owner_pid", "INTEGER"),
+    ("flow_runs", "owner_id", "TEXT"),
+    ("flow_runs", "heartbeat_at", "TEXT"),
+    ("flow_runs", "error_code", "TEXT"),
+    ("flow_runs", "error_message", "TEXT"),
     # Stage-8 G6 milestone replan metadata (additive; existing rows default empty).
     ("milestones", "risk", "TEXT NOT NULL DEFAULT ''"),
     ("milestones", "validation_strategy", "TEXT NOT NULL DEFAULT ''"),

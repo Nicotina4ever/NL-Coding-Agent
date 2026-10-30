@@ -225,7 +225,7 @@ def test_stub_candidate_blocks_without_promotion(project, mission_env):
     assert "validation gate" in result["error"]
     assert result["changed_paths"] == []
     assert read_text(live_path) == live_before
-    assert model.roles == [MODEL_DEVELOPER]  # reviewer/tester never reached
+    assert model.roles == [MODEL_DEVELOPER, MODEL_DEVELOPER]  # one bounded corrective retry, no reviewer/tester
     assert get_verification_runs(mission_id) == []
     assert not (mission_env / "recovery" / f"{mission_id}.json").exists()
 

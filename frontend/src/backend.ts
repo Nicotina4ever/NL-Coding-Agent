@@ -355,12 +355,32 @@ export interface MissionModelBinding {
     [key: string]: unknown;
 }
 
+export interface MissionExecutionError {
+    id?: number;
+    kind?: string;
+    record_key?: string;
+    created_at?: string;
+    source?: string | null;
+    method?: string | null;
+    flow_id?: string | null;
+    task_id?: number | null;
+    exception_type?: string | null;
+    message?: string | null;
+    traceback?: string | null;
+    traceback_truncated?: boolean;
+    pid?: number | null;
+    reason?: string | null;
+    previous_status?: string | null;
+    new_status?: string | null;
+}
+
 export interface MissionDetail {
     mission: MissionRow;
     tasks: MissionTask[];
     handoffs: MissionHandoff[];
     verification_runs: VerificationRun[];
     attempts: MissionAttempt[];
+    execution_errors?: MissionExecutionError[];
     model_bindings?: Record<string, MissionModelBinding>;
     progress: MissionProgress;
 }

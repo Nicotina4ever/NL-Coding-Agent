@@ -103,6 +103,17 @@ class AppServices:
             payload={"project_id": result["id"], "root": result["root"]},
         ))
         log_event(self._db, f"Opened project: {result['name']}", source="app")
+        # If a previous engine process died mid-Flow, finalize its abandoned row
+        # now.  reconcile_flow_runs only touches rows whose owner PID is dead or
+        # whose mission is already terminal; a live owner is never modified.
+        try:
+            from nl_coding_agent.persistence import supervisor_store
+
+            supervisor_store.reconcile_flow_runs(
+                project_id=int(result["id"]), active_flow_ids=(),
+            )
+        except Exception:
+            pass
         return result
 
     def list_recent_projects(self, limit: int = 20) -> list[dict]:
@@ -1156,6 +1167,20 @@ class AppServices:
         m["verification_runs"] = get_verification_runs(mission_id)
         m["attempts"] = get_task_attempts(mission_id)
         m["progress"] = mission_progress(mission_id)
+        try:
+            from nl_coding_agent.persistence import supervisor_store
+
+            rows = supervisor_store.list_evidence(mission_id)
+            m["execution_errors"] = [
+                {"id": row.get("id"), "kind": row.get("kind"),
+                 "record_key": row.get("record_key"),
+                 "created_at": row.get("created_at"),
+                 "payload": row.get("payload")}
+                for row in rows
+                if str(row.get("kind") or "") in ("execution_error", "reconciliation")
+            ]
+        except Exception:
+            m["execution_errors"] = []
         return m
 
     def next_roadmap_mission(self, project_root: str | Path) -> dict:

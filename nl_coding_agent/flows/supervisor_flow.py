@@ -7,6 +7,7 @@ state for status APIs. The supervisor decides whether this path is enabled.
 """
 from __future__ import annotations
 
+import os
 import uuid
 from typing import Any
 
@@ -57,6 +58,10 @@ class SupervisorRunFlow:
     def flow_for(self, mission_id: int) -> MissionFlow | None:
         return self._flows.get(int(mission_id))
 
+    def active_flow_ids(self) -> list[str]:
+        """Flows currently owned by this live runner (never reconciled away)."""
+        return [str(flow_id) for flow_id in list(self._flows)]
+
     # ------------------------------------------------------------------ run
 
     def run_mission(self, mission_id: int, goal: str | None = None) -> dict:
@@ -77,6 +82,8 @@ class SupervisorRunFlow:
         store.start_flow_run(
             flow_id, int(self.supervisor.project_id), mission_id=mission_id,
             pipeline="mission", status="RUNNING",
+            owner_pid=int(getattr(self.supervisor, "owner_pid", os.getpid())),
+            owner_id=str(getattr(self.supervisor, "owner_id", "") or ""),
         )
         initial = MissionState(
             id=flow_id, project_id=int(self.supervisor.project_id),
@@ -91,8 +98,45 @@ class SupervisorRunFlow:
             suppress_flow_events=True, tracing=False,
         )
         self._flows[mission_id] = flow
-        result = flow.kickoff(inputs={"id": flow_id})
+        try:
+            result = flow.kickoff(inputs={"id": flow_id})
+        except Exception as exc:  # noqa: BLE001 - persist before finalizing
+            from nl_coding_agent.core.failure_evidence import record_exception
+
+            payload = record_exception(
+                mission_id, exc, source="flow_kickoff", method="kickoff",
+                flow_id=flow_id, phase=str(getattr(flow.state, "phase", "") or ""),
+            )
+            try:
+                store.finish_flow_run(
+                    flow_id, "FAILED", error_code="executor_exception",
+                    error_message=payload["exception_type"] + ": " + payload["message"],
+                    last_method="exception",
+                )
+            except Exception:
+                pass
+            self._flows.pop(mission_id, None)
+            raise
         self.record_evidence(mission_id, flow_id, result)
+        try:
+            result_status = str(result.get("status") or "blocked").lower()
+            if str(result.get("error_code") or "") == "executor_exception":
+                result_status = "failed"
+            target = {
+                "completed": "COMPLETED", "failed": "FAILED", "blocked": "BLOCKED",
+                "interrupted": "INTERRUPTED",
+                "waiting_approval": "PAUSED_WAITING_APPROVAL",
+            }.get(result_status, "BLOCKED")
+            store.finish_flow_run(
+                flow_id, target,
+                error_code=str(result.get("error_code") or "") or None,
+                error_message=(str(result.get("error") or "")[:8000] or None),
+                last_method=str(result.get("phase") or "finish"),
+            )
+        except Exception:
+            pass
+        finally:
+            self._flows.pop(mission_id, None)
         return {
             "status": str(result.get("status") or "blocked"),
             "mission_id": mission_id, "executor": executor, "flow_id": flow_id,

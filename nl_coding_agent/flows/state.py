@@ -81,6 +81,9 @@ class MissionState(FlowState):
     review_ref: str | None = None
     last_error: str | None = None
     error_code: str | None = None
+    failure_stage: str | None = None
+    error_traceback: str | None = None
+    exception_type: str | None = None
     approval_id: int | None = None
     approval_action: str | None = None
     model_bindings: list[dict] = Field(default_factory=list)

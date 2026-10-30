@@ -918,6 +918,7 @@ class Supervisor:
         self._ensure_project()
         project_id = int(self.project_id)
         actions: list[str] = []
+        actions.extend(self._reconcile_flow_runs())
 
         previous = store.get_active_run(project_id)
         if previous is not None and int(previous["id"]) != int(self.run_id or -1):
@@ -1202,6 +1203,92 @@ class Supervisor:
 
         return MultiAgentOrchestrator(self.root, project_id=self.project_id)
 
+    def _reconcile_flow_runs(self, *, exclude_mission_ids=()) -> list[str]:
+        """Finalize provably abandoned Flow rows; never touch a live owner."""
+        project_id = int(self.project_id)
+        active: list[str] = []
+        runner = self._flow_runner
+        if runner is not None:
+            try:
+                active = list(runner.active_flow_ids())
+            except Exception:
+                active = []
+        try:
+            actions = store.reconcile_flow_runs(
+                project_id=project_id, active_flow_ids=active,
+                exclude_mission_ids=exclude_mission_ids,
+            )
+        except Exception as exc:
+            self._event("Flow reconciliation failed: " + str(exc), level="warning",
+                        kind="flow-reconciliation")
+            return []
+        for action in actions:
+            self._event(action, kind="flow-reconciliation")
+        return actions
+
+    def _finalize_unexpected_failure(self, mission_id: int, exc: Exception,
+                                     *, source: str, method: str,
+                                     flow_id: str | None = None) -> dict:
+        """Persist traceback + fail mission coherently after an escaped exception."""
+        from nl_coding_agent.core.failure_evidence import (
+            capture_exception,
+            record_exception,
+            record_running_task_failures,
+        )
+
+        payload = capture_exception(
+            exc, source=source, method=method, mission_id=mission_id,
+            flow_id=flow_id, phase="supervisor",
+        )
+        record_exception(
+            mission_id, exc, source=source, method=method,
+            flow_id=flow_id, phase="supervisor",
+        )
+        record_running_task_failures(
+            mission_id, exc, source=source,
+            traceback_text=payload.get("traceback") or "",
+        )
+        executor = self._executors.get(int(mission_id))
+        result: dict | None = None
+        if executor is not None:
+            try:
+                result = executor.finalize({
+                    "status": "failed",
+                    "error": payload["exception_type"] + ": " + payload["message"],
+                    "error_code": "executor_exception",
+                    "failure_stage": method,
+                    "exception_type": payload["exception_type"],
+                    "error_traceback": payload["traceback"],
+                })
+            except Exception:
+                result = None
+        if result is None:
+            from nl_coding_agent.persistence.missions import (
+                update_mission_result,
+            )
+            summary = ("Mission failed during " + source + "/" + method + ": "
+                       + payload["exception_type"] + ": " + payload["message"])
+            try:
+                update_mission_result(
+                    mission_id, "failed", result_summary=summary,
+                    review_verdict=None, diff_stat="", changed_paths=[],
+                )
+            except Exception:
+                pass
+            result = {"status": "failed", "mission_id": int(mission_id),
+                      "error": summary, "code": "executor_exception",
+                      "flow_id": flow_id}
+        if flow_id:
+            try:
+                store.finish_flow_run(
+                    flow_id, "FAILED", error_code="executor_exception",
+                    error_message=payload["exception_type"] + ": " + payload["message"],
+                    last_method="exception",
+                )
+            except Exception:
+                pass
+        return result
+
     def _build_executor(self, mission_id: int, goal: str):
         """Return the MissionStageExecutor for flow mode, or None (sequential)."""
         if self.config.pipeline == "sequential":
@@ -1239,6 +1326,7 @@ class Supervisor:
         executor = None
         result = None
         try:
+            self._reconcile_flow_runs(exclude_mission_ids=(int(mission_id),))
             mark_mission_started(int(mission_id))
             with mission_lock(int(mission_id)):
                 if self._flow_runner is None:
@@ -1278,12 +1366,11 @@ class Supervisor:
                 result = {"status": "blocked", "error": "Permission denied: " + str(exc),
                           "code": "permission-denied"}
             else:
-                try:
-                    update_mission_status(int(mission_id), "failed")
-                except Exception:
-                    pass
-                result = {"status": "failed", "error": str(exc),
-                          "code": type(exc).__name__}
+                result = self._finalize_unexpected_failure(
+                    int(mission_id), exc, source="supervisor",
+                    method="_invoke_flow_mission",
+                    flow_id=(get_mission(int(mission_id)) or {}).get("flow_id"),
+                )
         if not isinstance(result, dict):
             result = {"status": "failed", "error": "Flow executor returned a non-dict result"}
         result.setdefault("mission_id", int(mission_id))

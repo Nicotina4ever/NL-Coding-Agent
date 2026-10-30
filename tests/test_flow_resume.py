@@ -85,33 +85,25 @@ def make_flow(flow_id: str, box: FactsBox, executor, persistence: AppFlowPersist
     )
 
 
-def test_crash_then_resume_reuses_snapshots_and_skips_completed_steps():
+def test_crash_then_failure_is_persisted_without_promotion():
     box = FactsBox()
     persistence = AppFlowPersistence()
     flow_id = "flow-resume-crash"
     first = make_flow(flow_id, box, CrashExecutor(box, crash_in="reviewer"), persistence)
-    with pytest.raises(RuntimeError):
-        first.kickoff(inputs={})
-    after_crash = persistence.snapshot_count(flow_id)
-    assert after_crash >= 3
+    result = first.kickoff(inputs={})
+    assert result["status"] == "failed"
+    assert result["error_code"] == "executor_exception"
+    assert first.state.phase == "blocked"
+    assert persistence.snapshot_count(flow_id) >= 3
     run = store.get_flow_run(flow_id)
-    assert run["status"] == "RUNNING"
-    assert run["last_method"] in ("verify", "route_verify")
+    assert run["status"] == "FAILED"
+    assert run["error_code"] == "executor_exception"
+    assert "simulated crash in reviewer" in (run["error_message"] or "")
     latest = persistence.load_state(flow_id)
-    assert latest["phase"] == "reviewing"
+    assert latest["phase"] == "blocked"
+    assert latest["error_code"] == "executor_exception"
     assert latest["mission_id"] == 1
-
-    resumed_executor = CrashExecutor(box)
-    resumed = make_flow(flow_id, box, resumed_executor, persistence)
-    result = resumed.kickoff(inputs={"id": flow_id})
-    assert resumed_executor.calls == ["reviewer", "promotion"]
-    assert result["flow_id"] == flow_id
-    assert result["status"] == "completed"
-    assert persistence.snapshot_count(flow_id) > after_crash
-    assert store.get_flow_run(flow_id)["status"] == "COMPLETED"
-    # one pinned flow id: a single run row and snapshot history
-    assert store.get_flow_run(flow_id) is not None
-    assert all(row["flow_uuid"] == flow_id for row in persistence.list_snapshots(flow_id))
+    assert not any(name == "promotion" for name in first.executor.calls)
 
 
 def test_restart_after_completion_is_a_no_op_for_the_executor():
@@ -131,19 +123,18 @@ def test_restart_after_completion_is_a_no_op_for_the_executor():
     assert store.get_flow_run(flow_id)["status"] == "COMPLETED"
 
 
-def test_crash_before_developer_fact_reruns_developer_once():
+def test_crash_before_developer_is_persisted_and_never_promotes():
     box = FactsBox()
     persistence = AppFlowPersistence()
     flow_id = "flow-resume-begin"
     first = make_flow(flow_id, box, CrashExecutor(box, crash_in="developer"), persistence)
-    with pytest.raises(RuntimeError):
-        first.kickoff(inputs={})
-    assert persistence.load_state(flow_id)["phase"] == "planned"
-    retry = CrashExecutor(box)
-    resumed = make_flow(flow_id, box, retry, persistence)
-    result = resumed.kickoff(inputs={"id": flow_id})
-    assert retry.calls == ["developer", "verification", "reviewer", "promotion"]
-    assert result["status"] == "completed"
+    result = first.kickoff(inputs={})
+    assert result["status"] == "failed"
+    assert result["error_code"] == "executor_exception"
+    assert "simulated crash in developer" in (result["error"] or "")
+    assert persistence.load_state(flow_id)["phase"] == "blocked"
+    assert store.get_flow_run(flow_id)["status"] == "FAILED"
+    assert first.executor.calls == ["developer"]
 
 
 def test_stop_then_resume_after_developer_does_not_repeat_developer():
@@ -164,7 +155,7 @@ def test_stop_then_resume_after_developer_does_not_repeat_developer():
     assert resumed_executor.calls == ["verification", "reviewer", "promotion"]
 
 
-def test_resume_does_not_rewrite_live_mission_status_or_create_second_mission():
+def test_caught_crash_does_not_rewrite_live_mission_status_or_create_second_mission():
     box = FactsBox()
     persistence = AppFlowPersistence()
     mission_id = missions.create_mission(None, "resume mission", "goal")
@@ -174,13 +165,8 @@ def test_resume_does_not_rewrite_live_mission_status_or_create_second_mission():
         persistence=persistence, executor=CrashExecutor(box, crash_in="reviewer"),
         facts_provider=box.provider, suppress_flow_events=True, tracing=False,
     )
-    with pytest.raises(RuntimeError):
-        first.kickoff(inputs={})
-    resumed = MissionFlow(
-        initial_state=MissionState(id=flow_id, project_id=1, mission_id=mission_id),
-        persistence=persistence, executor=CrashExecutor(box),
-        facts_provider=box.provider, suppress_flow_events=True, tracing=False,
-    )
-    assert resumed.kickoff(inputs={"id": flow_id})["status"] == "completed"
+    result = first.kickoff(inputs={})
+    assert result["status"] == "failed"
     assert missions.get_mission(mission_id)["status"] == "pending"
     assert len(missions.list_missions()) == 1
+    assert len(store.list_flow_runs(project_id=1)) == 1

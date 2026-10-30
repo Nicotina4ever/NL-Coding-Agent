@@ -125,6 +125,8 @@ class AppFlowPersistence(FlowPersistence):
             with conn:
                 self._insert_snapshot(conn, flow_key, str(method_name), state_json, sha)
                 status = _PHASE_STATUS.get(str(payload.get("phase") or ""), "RUNNING")
+                if str(payload.get("error_code") or "") == "executor_exception":
+                    status = "FAILED"
                 self._upsert_run(conn, flow_key, payload, str(method_name), sha, status)
                 if status in _TERMINAL_FLOW_STATUSES:
                     self._prune_snapshots(conn, flow_key)
@@ -319,21 +321,28 @@ class AppFlowPersistence(FlowPersistence):
             "created_at": now,
             "updated_at": now,
             "finished_at": finished_at,
+            "error_code": payload.get("error_code"),
+            "error_message": payload.get("last_error"),
+            "heartbeat_at": now,
         }
         conn.execute(
             """
             INSERT INTO flow_runs
                 (flow_id, project_id, mission_id, queue_id, supervisor_run_id,
                  pipeline, status, last_method, state_sha256, created_at,
-                 updated_at, finished_at)
+                 updated_at, finished_at, error_code, error_message, heartbeat_at)
             VALUES (:flow_id, :project_id, :mission_id, :queue_id,
                     :supervisor_run_id, :pipeline, :status, :last_method,
-                    :state_sha256, :created_at, :updated_at, :finished_at)
+                    :state_sha256, :created_at, :updated_at, :finished_at,
+                    :error_code, :error_message, :heartbeat_at)
             ON CONFLICT(flow_id) DO UPDATE SET
                 status=excluded.status,
                 last_method=excluded.last_method,
                 state_sha256=excluded.state_sha256,
                 updated_at=excluded.updated_at,
+                heartbeat_at=excluded.heartbeat_at,
+                error_code=COALESCE(excluded.error_code, flow_runs.error_code),
+                error_message=COALESCE(excluded.error_message, flow_runs.error_message),
                 finished_at=CASE WHEN flow_runs.finished_at IS NULL
                                  THEN excluded.finished_at
                                  ELSE flow_runs.finished_at END,

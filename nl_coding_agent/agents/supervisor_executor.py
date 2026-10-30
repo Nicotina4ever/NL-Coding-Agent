@@ -277,8 +277,18 @@ class SupervisorMissionExecutor:
 
     def finalize(self, flow_result: dict) -> dict:
         """Called ONLY by the supervisor after MissionFlow returns (writes terminal status)."""
-        self.prepare()
         status = str(flow_result.get("status") or "blocked")
+        if status == "failed" or str(flow_result.get("error_code") or "") == "executor_exception":
+            return self.orchestrator._finalize_execution_failed(
+                self.mission_id,
+                error=str(flow_result.get("error") or "unexpected executor failure"),
+                code=str(flow_result.get("error_code") or "executor_exception"),
+                stage=self.stage or None,
+                failure_stage=flow_result.get("failure_stage"),
+                traceback_text=str(flow_result.get("error_traceback") or ""),
+                exception_type=str(flow_result.get("exception_type") or ""),
+            )
+        self.prepare()
         if status == "completed":
             result = self.orchestrator._finalize_completed(
                 self.mission_id, self.goal, self.baseline,
