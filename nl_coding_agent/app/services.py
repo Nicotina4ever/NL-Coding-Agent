@@ -426,6 +426,14 @@ class AppServices:
         from nl_coding_agent.app import chat_sessions
         return chat_sessions.search(int(project_id), query, limit=limit)
 
+    def cleanup_chat_sessions(self, scope: str = "orphaned",
+                              project_id: int | None = None) -> dict:
+        from nl_coding_agent.app import chat_sessions
+        result = chat_sessions.cleanup_sessions(scope, project_id=project_id)
+        self._bus.emit(Event(source="chat", level="info",
+                             message="Chat cleanup completed", payload=result))
+        return result
+
     def get_mcp_config(self) -> dict:
         from nl_coding_agent.app.mcp import load_mcp_config
         return load_mcp_config()
@@ -697,6 +705,8 @@ class AppServices:
                           allow_coding=False, resume=False, tool_protocol="native",
                           research_profile="manual", session_id: str | None = None) -> dict:
         """Persist a real conversation; attachment context never grants execution."""
+        if str(model_spec or "").strip().lower() == "auto":
+            model_spec = None
         project_id = (project or {}).get("id")
         key = str(self._chat_history_path(project_id))
         with _CHAT_STORE_LOCK:

@@ -61,6 +61,7 @@ function testHtml() {
         'chat-controls-toggle', 'context-toggle', 'mission-fields-toggle', 'mission-list-toggle',
         'generation-save', 'permission-grant', 'autonomy-save', 'mcp-save',
         'probe-run', 'storage-scan', 'storage-purge', 'storage-vacuum', 'storage-list',
+        'storage-cleanup-orphans', 'storage-cleanup-archived',
         'specialist-list', 'specialist-name', 'specialist-provider', 'specialist-model',
         'specialist-role', 'specialist-instructions', 'specialist-tools',
         'specialist-permissions', 'specialist-enabled', 'specialist-save',

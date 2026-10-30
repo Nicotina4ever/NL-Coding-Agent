@@ -966,6 +966,14 @@ export class EngineConnection {
         return this.callJson<{ ok: boolean; messages: Array<Record<string, unknown>> }>('chat_search', { query, limit }, 30_000);
     }
 
+    async chatCleanup(scope: 'orphaned' | 'archived' = 'orphaned'): Promise<{
+        ok: boolean; result: { scope: string; sessions: number; messages: number };
+    }> {
+        return this.callJson<{
+            ok: boolean; result: { scope: string; sessions: number; messages: number };
+        }>('chat_cleanup', { scope, approved: true }, 60_000);
+    }
+
     async generationParameters(modelName = '', role = '', providerId = 'ollama'): Promise<GenerationParametersResult> {
         return this.callJson<GenerationParametersResult>('generation_parameters', {
             model_name: modelName, role, provider_id: providerId

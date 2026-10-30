@@ -294,7 +294,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 : [];
             const result = await this.connection.converse(
                 context.project.id, message, legacyAttachments, this.requestTimeoutMs,
-                this.chatModel || undefined, attachmentIds
+                this.chatModel || 'auto', attachmentIds
             );
             if (result.route) {
                 this.lastRoute = result.route;
@@ -607,6 +607,24 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         await this.connection.chatQueueRemove(String(itemId));
         await this.refreshQueue(false);
         this.postChat('system', 'Queued message removed.');
+    }
+
+    async cleanupChatSessions(scope: 'orphaned' | 'archived'): Promise<void> {
+        const label = scope === 'orphaned'
+            ? 'Delete conversations whose project no longer exists?'
+            : 'Delete archived conversations for the current project?';
+        const choice = await vscode.window.showWarningMessage(
+            label,
+            { modal: true, detail: 'Project files, missions and active conversations are never touched.' },
+            'Delete');
+        if (choice !== 'Delete') {
+            return;
+        }
+        const response = await this.connection.chatCleanup(scope);
+        const result = response.result || { sessions: 0, messages: 0 };
+        await this.loadSessions(this.currentSessionId);
+        this.postChat('system',
+            `Conversation cleanup: ${result.sessions} session(s), ${result.messages} message(s) removed.`);
     }
 
     /** Read/refresh the persistent queue and optionally drain one item. */
@@ -1530,6 +1548,10 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'searchChat':
                     await this.searchChat();
+                    break;
+                case 'cleanupChatSessions':
+                    await this.cleanupChatSessions(String(payload.scope || 'orphaned') === 'archived'
+                        ? 'archived' : 'orphaned');
                     break;
                 case 'removeQueueItem':
                     await this.removeQueuedItem(String(payload.itemId || ''));

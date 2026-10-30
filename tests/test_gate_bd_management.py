@@ -67,6 +67,25 @@ def test_custom_agent_profiles_crud_persist_in_engine_state(isolated):
     services._db.close()
 
 
+def test_chat_cleanup_removes_only_orphaned_or_archived_sessions(isolated):
+    from nl_coding_agent.app import chat_sessions
+    from nl_coding_agent.app.services import AppServices
+    services = AppServices()
+    project_dir = isolated / "project"
+    project_dir.mkdir()
+    (project_dir / "README.md").write_text("# Project", encoding="utf-8")
+    project = services.open_project(project_dir)
+    active = services.create_chat_session(project["id"], "Active")
+    archived = services.create_chat_session(project["id"], "Archived")
+    services.archive_chat_session(archived["id"])
+    result = services.cleanup_chat_sessions("archived")
+    assert result["sessions"] >= 1
+    remaining = services.list_chat_sessions(project["id"], include_archived=True)
+    assert all(item["id"] != archived["id"] for item in remaining)
+    assert any(item["id"] == active["id"] for item in remaining)
+    services._db.close()
+
+
 def test_operational_probe_runs_through_an_openai_compatible_provider():
     import json
     from nl_coding_agent.models.operational_probes import probe_model_with_provider

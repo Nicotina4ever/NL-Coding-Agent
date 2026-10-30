@@ -653,6 +653,17 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         return {"ok": True, "messages": services.search_chat_messages(
             bound_project_id, query, limit=int(limit))}
 
+    @server.tool()
+    def chat_cleanup(scope: str = "orphaned", approved: bool = False) -> dict:
+        """Delete archived sessions or conversations whose project was removed."""
+        require_execution(approved)
+        if str(scope) == "archived":
+            project_id = bound_project_id
+        else:
+            project_id = None
+        return {"ok": True, "result": services.cleanup_chat_sessions(
+            str(scope), project_id=project_id)}
+
 
     @server.tool(annotations=read_only)
     def chat_queue() -> dict:

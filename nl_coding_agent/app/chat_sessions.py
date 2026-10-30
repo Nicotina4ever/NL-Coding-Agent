@@ -256,3 +256,47 @@ def search(project_id: int, query: str, *, limit: int = 100) -> list[dict]:
     finally:
         conn.close()
     return [dict(row) for row in rows]
+
+
+def cleanup_sessions(scope: str = "orphaned", project_id: int | None = None) -> dict:
+    """Delete archived conversations or conversations of deleted projects.
+
+    Orphaned sessions have a project_id that is no longer in the project registry;
+    archived sessions are deleted only when explicitly requested. Active sessions
+    and active projects are never touched.
+    """
+    normalized = str(scope or "orphaned").strip().lower()
+    if normalized not in ("orphaned", "archived"):
+        raise ChatSessionError("Cleanup scope must be 'orphaned' or 'archived'")
+    conn = database.init_db()
+    try:
+        if normalized == "orphaned":
+            condition = ("project_id IS NOT NULL AND project_id NOT IN "
+                         "(SELECT id FROM projects)")
+            params: tuple = ()
+        else:
+            condition = "archived_at IS NOT NULL"
+            params = ()
+            if project_id is not None:
+                condition += " AND project_id=?"
+                params = (int(project_id),)
+        rows = conn.execute(
+            "SELECT id FROM chat_sessions WHERE " + condition, params).fetchall()
+        ids = [str(row["id"]) for row in rows]
+        if not ids:
+            return {"scope": normalized, "sessions": 0, "messages": 0,
+                    "project_id": project_id}
+        placeholders = ",".join("?" for _ in ids)
+        message_count = int(conn.execute(
+            "SELECT COUNT(*) FROM chat_messages WHERE session_id IN (" +
+            placeholders + ")", ids).fetchone()[0])
+        with conn:
+            conn.execute("DELETE FROM chat_messages WHERE session_id IN (" +
+                         placeholders + ")", ids)
+            conn.execute("DELETE FROM chat_sessions WHERE id IN (" +
+                         placeholders + ")", ids)
+        return {"scope": normalized, "sessions": len(ids),
+                "messages": message_count, "project_id": project_id}
+    finally:
+        conn.close()
+

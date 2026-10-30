@@ -322,6 +322,8 @@ export function buildChatHtml(assets: WebviewAssets): string {
                     <button id="storage-scan" type="button">Scan storage</button>
                     <button id="storage-purge" type="button">Purge selected</button>
                     <button id="storage-vacuum" type="button">Compact SQLite</button>
+                    <button id="storage-cleanup-orphans" type="button">Clean orphan chats</button>
+                    <button id="storage-cleanup-archived" type="button">Clean archived chats</button>
                     <span id="storage-total" class="nl-muted"></span>
                 </div>
                 <div id="storage-list" class="nl-list"></div>

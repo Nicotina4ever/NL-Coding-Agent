@@ -1407,6 +1407,12 @@
     });
     $('storage-scan').addEventListener('click', function () { postAction('scanStorage', {}); });
     $('storage-vacuum').addEventListener('click', function () { postAction('vacuumStorage', {}); });
+    $('storage-cleanup-orphans').addEventListener('click', function () {
+        postAction('cleanupChatSessions', { scope: 'orphaned' });
+    });
+    $('storage-cleanup-archived').addEventListener('click', function () {
+        postAction('cleanupChatSessions', { scope: 'archived' });
+    });
     $('storage-purge').addEventListener('click', function () {
         const ids = Object.keys(storageSelected).filter(function (id) { return storageSelected[id]; });
         postAction('purgeStorage', { ids: ids });
