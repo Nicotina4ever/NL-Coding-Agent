@@ -9,9 +9,10 @@ from PySide6.QtCore import (QBuffer, QIODevice, QObject, QRunnable, QSize, Qt,
                             QThreadPool, Signal, Slot)
 from PySide6.QtGui import QImage, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QHBoxLayout,
-                               QLabel, QListWidget, QListWidgetItem, QPushButton,
+                               QLabel, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
                                QTextBrowser, QTextEdit, QVBoxLayout, QWidget,
                                QInputDialog)
+from PySide6.QtWidgets import QSpinBox
 
 
 from nl_coding_agent.gui import i18n as _i18n
@@ -98,6 +99,9 @@ class ChatPanel(QWidget):
 
     submitted = Signal(dict)
     context_requested = Signal()
+    cancel_tools_requested = Signal()
+    resume_tools_requested = Signal()
+    session_selected = Signal(str)
 
     def __init__(self, services, parent=None, *, speech=None) -> None:
         super().__init__(parent)
@@ -137,6 +141,24 @@ class ChatPanel(QWidget):
         self._project_label.setMaximumWidth(160)
         header.addWidget(self._project_label)
         layout.addLayout(header)
+
+        session_row = QHBoxLayout()
+        self._session_combo = QComboBox()
+        self._session_combo.setObjectName("chatSessionCombo")
+        self._session_combo.setAccessibleName("Chat session")
+        self._session_combo.currentIndexChanged.connect(self._on_session_changed)
+        session_row.addWidget(QLabel("Session"))
+        session_row.addWidget(self._session_combo, 1)
+        for label, slot, name in (
+                ("New", self._new_session, "chatNewSessionButton"),
+                ("Rename", self._rename_session, "chatRenameSessionButton"),
+                ("Archive", self._archive_session, "chatArchiveSessionButton"),
+                ("Delete", self._delete_session, "chatDeleteSessionButton")):
+            button = QPushButton(label)
+            button.setObjectName(name)
+            button.clicked.connect(slot)
+            session_row.addWidget(button)
+        layout.addLayout(session_row)
         self._hint = QLabel(
             "Drop files or folders here, or paste with Ctrl+V (text, files, images, "
             "Windows screenshots). Enter sends; Ctrl+Enter adds a newline.")
@@ -232,6 +254,43 @@ class ChatPanel(QWidget):
         self._discover_btn.clicked.connect(self._discover_models)
         route.addWidget(self._discover_btn)
         layout.addLayout(route)
+        tools_row = QHBoxLayout()
+        self._tools_enabled = QCheckBox(_tr("chat.tools_authorize", "Authorize tools this turn"))
+        self._tools_enabled.setToolTip(_tr("chat.tools_warning", "Allows source reads, Research and trusted MCP calls under project permissions. External servers use your OS privileges."))
+        tools_row.addWidget(self._tools_enabled)
+        self._coding_enabled = QCheckBox(_tr("chat.coding_authorize", "Allow coding missions"))
+        tools_row.addWidget(self._coding_enabled)
+        self._tool_budget = QSpinBox()
+        self._tool_budget.setRange(1, 32)
+        self._tool_budget.setValue(8)
+        self._tool_budget.setToolTip(_tr("chat.tool_budget", "Maximum model requests plus tool calls per turn"))
+        tools_row.addWidget(self._tool_budget)
+        self._tool_protocol = QComboBox()
+        self._tool_protocol.addItem(_tr("chat.native_tools", "Native tools"), "native")
+        self._tool_protocol.addItem(_tr("chat.json_tools", "Validated JSON"), "json")
+        tools_row.addWidget(self._tool_protocol)
+        layout.addLayout(tools_row)
+        tool_controls = QHBoxLayout()
+        self._cancel_tools = QPushButton(_tr("chat.cancel_tools", "Stop tools"))
+        self._cancel_tools.clicked.connect(lambda: self.cancel_tools_requested.emit())
+        self._resume_tools = QPushButton(_tr("chat.resume_tools", "Resume tools"))
+        self._resume_tools.clicked.connect(lambda: self.resume_tools_requested.emit())
+        self._research_profile = QComboBox()
+        for value, key, label in (("manual", "manual", "Manual Research"),
+                                  ("trusted-auto-review", "trusted", "Trusted Research")):
+            self._research_profile.addItem(_tr("chat.research_" + key, label), value)
+        self._research_profile.setToolTip(_tr("chat.research_policy", "Research autonomy profile for this turn; capability and network grants remain required"))
+        tool_controls.addWidget(self._cancel_tools)
+        tool_controls.addWidget(self._resume_tools)
+        tool_controls.addWidget(self._research_profile)
+        self._tool_seconds = QSpinBox()
+        self._tool_seconds.setRange(5, 600)
+        self._tool_seconds.setValue(180)
+        self._tool_seconds.setSuffix(" s")
+        self._tool_seconds.setToolTip(_tr("chat.tool_seconds", "Tool conversation time budget; active calls stop at safe boundaries"))
+        tool_controls.addWidget(self._tool_seconds)
+        tool_controls.addStretch()
+        layout.addLayout(tool_controls)
         footer = QHBoxLayout()
         self._attach_btn = QPushButton(_tr(
             "chat.attach_files", "Attach files…"))
@@ -270,6 +329,16 @@ class ChatPanel(QWidget):
         self._submit_btn.setToolTip(_tr(
             "chat.submit_tooltip", "Send (Enter); newline (Ctrl+Enter)"))
         self._submit_btn.clicked.connect(self._submit)
+        self._queue_btn = QPushButton("Queue")
+        self._queue_btn.setObjectName("chatQueueButton")
+        self._queue_btn.setToolTip("Persist this text as the next Chat turn")
+        self._queue_btn.clicked.connect(lambda: self._queue_text("queue"))
+        self._steer_btn = QPushButton("Steer")
+        self._steer_btn.setObjectName("chatSteerButton")
+        self._steer_btn.setToolTip("Inject this text into the running Chat turn")
+        self._steer_btn.clicked.connect(lambda: self._queue_text("steer"))
+        footer.addWidget(self._queue_btn)
+        footer.addWidget(self._steer_btn)
         footer.addWidget(self._submit_btn)
         layout.addLayout(footer)
         QShortcut(QKeySequence("Ctrl+O"), self, activated=self._choose_files, context=Qt.ShortcutContext.WidgetWithChildrenShortcut)
@@ -281,6 +350,15 @@ class ChatPanel(QWidget):
     def retranslate(self) -> None:
         self._title.setText(_tr("chat.title", "CHAT"))
         if hasattr(self, "_action"):
+            for attribute, key, label in (("_tools_enabled", "tools_authorize", "Authorize tools this turn"),
+                                          ("_coding_enabled", "coding_authorize", "Allow coding missions"),
+                                          ("_cancel_tools", "cancel_tools", "Stop tools"),
+                                          ("_resume_tools", "resume_tools", "Resume tools")):
+                getattr(self, attribute).setText(_tr("chat." + key, label))
+            for index, key, label in ((0, "native_tools", "Native tools"), (1, "json_tools", "Validated JSON")):
+                self._tool_protocol.setItemText(index, _tr("chat." + key, label))
+            for index, key, label in ((0, "research_manual", "Manual Research"), (1, "research_trusted", "Trusted Research")):
+                self._research_profile.setItemText(index, _tr("chat." + key, label))
             for index, label in enumerate(("Conversation", "Document plan", "Coding task", "Autonomous Goal")):
                 self._action.setItemText(index, _tr("chat.action_" + self._action.itemData(index), label))
             self._discover_btn.setText(_tr("chat.models_refresh", "Models…"))
@@ -307,6 +385,9 @@ class ChatPanel(QWidget):
         old_id = (self._project or {}).get("id")
         self._project = dict(project) if project else None
         if old_id != (self._project or {}).get("id") and hasattr(self, "_model"):
+            self._tools_enabled.setChecked(False)
+            self._coding_enabled.setChecked(False)
+            self._research_profile.setCurrentIndex(0)
             route = studio_settings().value(
                 "workspace/chat_model/" + str((self._project or {}).get("id")), "")
             self._model.setCurrentIndex(0)
@@ -320,6 +401,109 @@ class ChatPanel(QWidget):
                 "chat.no_project", "No project open"))
         self._status.setText(_tr("chat.ready", "Ready") if project else _tr(
             "chat.open_project", "Open a project to submit a mission"))
+        self._refresh_sessions()
+
+    def _refresh_sessions(self, select_id: str | None = None) -> None:
+        if not self._project or not hasattr(self, "_session_combo"):
+            return
+        try:
+            sessions = self._services.list_chat_sessions(self._project["id"])
+        except Exception:
+            sessions = []
+        current = select_id or self.current_session_id()
+        self._session_combo.blockSignals(True)
+        self._session_combo.clear()
+        for session in sessions:
+            self._session_combo.addItem(str(session.get("title") or "Conversation"),
+                                        str(session.get("id") or ""))
+        index = self._session_combo.findData(current)
+        if index >= 0:
+            self._session_combo.setCurrentIndex(index)
+        self._session_combo.blockSignals(False)
+
+    def current_session_id(self) -> str | None:
+        if not hasattr(self, "_session_combo"):
+            return None
+        return self._session_combo.currentData()
+
+    def _on_session_changed(self, _index: int) -> None:
+        session_id = self.current_session_id()
+        if session_id:
+            self.session_selected.emit(str(session_id))
+
+    def _new_session(self) -> None:
+        if not self._project:
+            return
+        try:
+            session = self._services.create_chat_session(self._project["id"])
+        except Exception as exc:
+            self._status.setText("Create session failed: " + str(exc))
+            return
+        self._refresh_sessions(str(session.get("id")))
+        self.session_selected.emit(str(session.get("id")))
+        self.clear_transcript()
+
+    def _rename_session(self) -> None:
+        session_id = self.current_session_id()
+        if not session_id:
+            return
+        title, ok = QInputDialog.getText(self, "Rename session", "Title:")
+        if not ok or not str(title).strip():
+            return
+        try:
+            self._services.rename_chat_session(str(session_id), str(title))
+        except Exception as exc:
+            self._status.setText("Rename failed: " + str(exc))
+            return
+        self._refresh_sessions(str(session_id))
+
+    def _archive_session(self) -> None:
+        session_id = self.current_session_id()
+        if not session_id:
+            return
+        try:
+            self._services.archive_chat_session(str(session_id))
+        except Exception as exc:
+            self._status.setText("Archive failed: " + str(exc))
+            return
+        self._refresh_sessions()
+        self.session_selected.emit(str(self.current_session_id() or ""))
+        self.clear_transcript()
+
+    def _delete_session(self) -> None:
+        session_id = self.current_session_id()
+        if not session_id:
+            return
+        answer = QMessageBox.question(
+            self, "Delete archived session",
+            "Delete this Chat session and its messages? Archive it first.")
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self._services.delete_chat_session(self._project["id"], str(session_id))
+        except Exception as exc:
+            self._status.setText("Delete failed: " + str(exc))
+            return
+        self._refresh_sessions()
+        self.session_selected.emit(str(self.current_session_id() or ""))
+        self.clear_transcript()
+
+    def _queue_text(self, mode: str) -> None:
+        if not self._project:
+            return
+        text = str(self._input.toPlainText() or "").strip()
+        if not text:
+            self._status.setText("Type a message before queueing it.")
+            return
+        try:
+            from nl_coding_agent.app.chat_tools import enqueue
+            result = enqueue(self._services, self._project["id"], text, mode=mode)
+        except Exception as exc:
+            self._status.setText("Queue failed: " + str(exc))
+            return
+        self._input.clear()
+        self._status.setText(
+            f"Stored {mode} message ({result.get('count', 0)} queued).")
 
     def _discover_models(self):
         """Refresh the model list and let the user pick a model.
@@ -580,6 +764,7 @@ class ChatPanel(QWidget):
             "text": text,
             "action": self._action.currentData(),
             "model": self.selected_model(),
+            "tool_options": self.tool_options(),
             "project_id": (self._project or {}).get("id"),
             "attachments": [{"id": a.get("id"), "name": a.get("name"),
                              "kind": a.get("kind"), "size_bytes": a.get("size_bytes"),
@@ -590,9 +775,19 @@ class ChatPanel(QWidget):
         studio_settings().setValue(
             "workspace/chat_model/" + str((self._project or {}).get("id")), self.selected_model())
         self._input.clear()
+        self._tools_enabled.setChecked(False)
+        self._coding_enabled.setChecked(False)
         self.clear_attachments()
         self._set_status(_tr("chat.sent", "Message sent"))
         self.submitted.emit(payload)
+
+    def tool_options(self):
+        return {"tools_enabled": self._tools_enabled.isChecked(),
+                "allow_coding": self._coding_enabled.isChecked(),
+                "max_calls": self._tool_budget.value(),
+                "max_seconds": self._tool_seconds.value(),
+                "research_profile": self._research_profile.currentData(),
+                "tool_protocol": self._tool_protocol.currentData()}
 
     # ------------------------------------------------------------------ voice
     def _speech_backend(self):

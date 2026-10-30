@@ -5,8 +5,8 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtWidgets import (
-    QCheckBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMessageBox,
-    QProgressBar, QPushButton, QSplitter, QTextEdit, QTreeWidget,
+    QCheckBox, QHBoxLayout, QInputDialog, QLabel, QListWidget, QListWidgetItem,
+    QMessageBox, QProgressBar, QPushButton, QSplitter, QTextEdit, QTreeWidget,
     QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -140,7 +140,22 @@ class TaskBoardWidget(QWidget):
         self._review_btn = QPushButton(_tr("task_board.review", "Review candidate"))
         self._review_btn.clicked.connect(lambda: self.review_requested.emit(self._selected_mission_id)
                                          if self._selected_mission_id else None)
+        self._archive_btn = QPushButton("Archive")
+        self._archive_btn.setObjectName("archiveMissionButton")
+        self._archive_btn.setEnabled(False)
+        self._archive_btn.clicked.connect(self._archive_selected)
+        self._delete_btn = QPushButton("Delete")
+        self._delete_btn.setObjectName("deleteMissionButton")
+        self._delete_btn.setEnabled(False)
+        self._delete_btn.clicked.connect(self._delete_selected)
+        self._steer_btn = QPushButton("Steer")
+        self._steer_btn.setObjectName("steerMissionButton")
+        self._steer_btn.setEnabled(False)
+        self._steer_btn.clicked.connect(self._steer_selected)
         footer.addWidget(self._review_btn)
+        footer.addWidget(self._steer_btn)
+        footer.addWidget(self._archive_btn)
+        footer.addWidget(self._delete_btn)
         footer.addWidget(self._run_btn)
         layout.insertLayout(1, footer)
 
@@ -305,6 +320,10 @@ class TaskBoardWidget(QWidget):
         self._document_btn.setVisible(document_only)
         self._run_btn.setToolTip(_tr("task_board.document_only", "Historical document request: open Document plan; coding execution is unavailable.") if document_only else "")
         self._run_btn.setEnabled(not document_only and details.get("status") in ("pending", "interrupted", "failed", "blocked"))
+        terminal = details.get("status") in ("completed", "failed", "blocked", "interrupted")
+        self._archive_btn.setEnabled(terminal and not details.get("archived_at"))
+        self._delete_btn.setEnabled(terminal and bool(details.get("archived_at")))
+        self._steer_btn.setEnabled(details.get("status") in ("pending", "running", "interrupted", "blocked"))
 
         queue_item = None
         project_id = details.get("project_id")
@@ -355,6 +374,62 @@ class TaskBoardWidget(QWidget):
         return self._project_root()
 
     @Slot()
+    def _archive_selected(self) -> None:
+        mission_id = self._selected_mission_id
+        if not mission_id:
+            return
+        answer = QMessageBox.question(
+            self, "Archive mission",
+            f"Archive mission #{mission_id}? Data and evidence are retained."
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            details = self._services.get_mission_details(mission_id) or {}
+            self._services.archive_mission(mission_id, project_id=details.get("project_id"))
+        except Exception as exc:
+            QMessageBox.warning(self, "Archive failed", str(exc))
+            return
+        self.refresh()
+
+    def _delete_selected(self) -> None:
+        mission_id = self._selected_mission_id
+        if not mission_id:
+            return
+        answer = QMessageBox.question(
+            self, "Delete archived mission",
+            f"Delete mission #{mission_id} from the mission database? "
+            "Staged files remain and are handled only by the Storage Manager."
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            details = self._services.get_mission_details(mission_id) or {}
+            self._services.delete_mission(mission_id, project_id=details.get("project_id"))
+        except Exception as exc:
+            QMessageBox.warning(self, "Delete failed", str(exc))
+            return
+        self._selected_mission_id = None
+        self.refresh()
+
+    def _steer_selected(self) -> None:
+        mission_id = self._selected_mission_id
+        if not mission_id:
+            return
+        text, ok = QInputDialog.getMultiLineText(
+            self, "Steer mission",
+            "Instruction consumed at the next developer/reviewer checkpoint:")
+        if not ok or not str(text).strip():
+            return
+        try:
+            details = self._services.get_mission_details(mission_id) or {}
+            self._services.steer_mission(
+                mission_id, str(text), project_id=details.get("project_id"))
+        except Exception as exc:
+            QMessageBox.warning(self, "Steering failed", str(exc))
+            return
+        self._status_label.setText(f"Steering queued for mission #{mission_id}.")
+
     def _run_selected(self):
         if not self._selected_mission_id:
             return

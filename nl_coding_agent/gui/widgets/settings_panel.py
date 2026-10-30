@@ -3,9 +3,9 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QLabel, QMessageBox,
-    QPlainTextEdit, QPushButton, QSpinBox, QTableWidget, QTableWidgetItem,
-    QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QLabel,
+    QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox,
+    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from nl_coding_agent.gui.i18n import tr_for
@@ -100,6 +100,12 @@ class SettingsPanel(QWidget):
             form.addRow(label, widget)
         layout.addLayout(form)
 
+        self._provider_group = self._build_provider_group()
+        layout.addWidget(self._provider_group)
+
+        self._mcp_group = self._build_mcp_group()
+        layout.addWidget(self._mcp_group)
+
         self._advanced_group = self._build_advanced_group()
         layout.addWidget(self._advanced_group)
 
@@ -128,6 +134,132 @@ class SettingsPanel(QWidget):
 
     # ------------------------------------------------------------------ advanced UI
 
+    # ------------------------------------------------------------------ provider UI
+    def _build_provider_group(self) -> QGroupBox:
+        group = QGroupBox("Model providers and cloud policy")
+        form = QFormLayout()
+        self._provider_combo = QComboBox()
+        self._provider_combo.currentIndexChanged.connect(self._load_provider_form)
+        form.addRow("Provider", self._provider_combo)
+        self._provider_enabled = QCheckBox("Enabled")
+        form.addRow("State", self._provider_enabled)
+        self._provider_url = QLineEdit()
+        self._provider_url.setPlaceholderText("http://127.0.0.1:11434")
+        form.addRow("Base URL", self._provider_url)
+        self._cloud_enabled = QCheckBox("Allow explicit cloud escalation")
+        form.addRow("Cloud", self._cloud_enabled)
+        outer = QVBoxLayout(group)
+        outer.addLayout(form)
+        actions = QHBoxLayout()
+        self._save_provider_btn = QPushButton("Save provider")
+        self._save_provider_btn.setObjectName("saveProviderButton")
+        self._save_provider_btn.clicked.connect(self._save_provider)
+        actions.addWidget(self._save_provider_btn)
+        actions.addStretch()
+        outer.addLayout(actions)
+        self._provider_status = QLabel("")
+        self._provider_status.setWordWrap(True)
+        outer.addWidget(self._provider_status)
+        return group
+
+    def _load_provider_form(self, *_args) -> None:
+        get_config = getattr(self._services, "get_model_config", None)
+        config = get_config() if callable(get_config) else {}
+        providers = (config or {}).get("providers") or {}
+        provider_id = self._provider_combo.currentData()
+        entry = providers.get(provider_id) or {}
+        self._provider_enabled.setChecked(bool(entry.get("enabled", False)))
+        self._provider_url.setText(str(entry.get("base_url") or ""))
+        cloud = getattr(self._services, "is_cloud_escalation_enabled", None)
+        self._cloud_enabled.setChecked(bool(cloud()) if callable(cloud) else False)
+
+    def _populate_providers(self) -> None:
+        get_config = getattr(self._services, "get_model_config", None)
+        config = get_config() if callable(get_config) else {}
+        providers = (config or {}).get("providers") or {}
+        current = self._provider_combo.currentData()
+        self._provider_combo.blockSignals(True)
+        self._provider_combo.clear()
+        for provider_id in sorted(providers):
+            self._provider_combo.addItem(provider_id, provider_id)
+        index = self._provider_combo.findData(current)
+        if index >= 0:
+            self._provider_combo.setCurrentIndex(index)
+        self._provider_combo.blockSignals(False)
+        self._load_provider_form()
+        self._provider_group.setEnabled(bool(providers))
+
+    def _save_provider(self) -> None:
+        provider_id = self._provider_combo.currentData()
+        if not provider_id:
+            return
+        try:
+            self._services.save_provider_settings(
+                str(provider_id), enabled=self._provider_enabled.isChecked(),
+                base_url=self._provider_url.text().strip() or None)
+            self._services.save_cloud_escalation(self._cloud_enabled.isChecked())
+        except Exception as exc:
+            self._provider_status.setText("Save failed: " + str(exc))
+            return
+        self._provider_status.setText("Provider and cloud policy saved.")
+        self.refresh()
+
+    # ------------------------------------------------------------------ MCP UI
+    def _build_mcp_group(self) -> QGroupBox:
+        group = QGroupBox("MCP servers (trusted, explicit)")
+        outer = QVBoxLayout(group)
+        self._mcp_editor = QPlainTextEdit()
+        self._mcp_editor.setPlaceholderText(
+            '{\n  "servers": {\n    "example": {\n      "transport": "stdio",\n'
+            '      "command": "python",\n      "args": ["server.py"]\n'
+            '    }\n  }\n}')
+        outer.addWidget(self._mcp_editor)
+        actions = QHBoxLayout()
+        load = QPushButton("Reload MCP")
+        load.clicked.connect(self._load_mcp_json)
+        save = QPushButton("Save MCP")
+        save.setObjectName("saveMcpButton")
+        save.clicked.connect(self._save_mcp_json)
+        actions.addWidget(load)
+        actions.addWidget(save)
+        actions.addStretch()
+        outer.addLayout(actions)
+        self._mcp_status = QLabel("")
+        self._mcp_status.setWordWrap(True)
+        outer.addWidget(self._mcp_status)
+        return group
+
+    def _load_mcp_json(self) -> None:
+        getter = getattr(self._services, "get_mcp_config", None)
+        self._mcp_group.setEnabled(callable(getter))
+        if not callable(getter):
+            return
+        try:
+            import json
+            self._mcp_editor.setPlainText(json.dumps(getter(), indent=2, ensure_ascii=False))
+            self._mcp_status.setText("Configuration loaded.")
+        except Exception as exc:
+            self._mcp_status.setText("Load failed: " + str(exc))
+
+    def _save_mcp_json(self) -> None:
+        saver = getattr(self._services, "save_mcp_config", None)
+        if not callable(saver):
+            self._mcp_status.setText("This runtime does not expose MCP settings.")
+            return
+        try:
+            import json
+            payload = json.loads(self._mcp_editor.toPlainText() or "{}")
+        except ValueError as exc:
+            self._mcp_status.setText("Invalid JSON: " + str(exc))
+            return
+        try:
+            saver(payload)
+        except Exception as exc:
+            self._mcp_status.setText("Save failed: " + str(exc))
+            return
+        self._mcp_status.setText("MCP configuration saved.")
+
+    # ------------------------------------------------------------------ advanced UI
     def _build_advanced_group(self) -> QGroupBox:
         self._advanced_group_box = QGroupBox(tr_for(
             self._i18n, "settings.advanced_group",
@@ -410,6 +542,8 @@ class SettingsPanel(QWidget):
     # ------------------------------------------------------------------ refresh
 
     def refresh(self):
+        self._populate_providers()
+        self._load_mcp_json()
         settings = self._services.get_runtime_settings(self._project_root)
         root = settings.get("project_root")
         self._project_value.setText(root or tr_for(

@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QTabWidget,
     QTableWidget,
@@ -291,19 +292,87 @@ class ModelsPanel(QWidget):
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(0, 8, 0, 0)
         self._storage_value = QLabel(
-            "Model files are owned and managed by their inference providers. "
-            "A read-only space audit with ownership and actual sizes will be added "
-            "before any cleanup action is offered."
+            "Read-only size scan of temporary/build/backup/staging categories. "
+            "Sources, the live database, attachments and shared model files are protected."
         )
         self._storage_value.setWordWrap(True)
         self._storage_value.setStyleSheet("color: #B8BECA; font-size: 12px;")
         layout.addWidget(self._storage_value)
-        self._storage_providers = QLabel("")
-        self._storage_providers.setWordWrap(True)
-        self._storage_providers.setStyleSheet("color: #7E8798; font-size: 12px;")
-        layout.addWidget(self._storage_providers)
-        layout.addStretch()
+        self._storage_table = QTableWidget(0, 4)
+        self._storage_table.setHorizontalHeaderLabels(
+            ["Category", "Size (MB)", "Files", "Deletable"])
+        self._storage_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.Stretch)
+        self._storage_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows)
+        self._storage_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers)
+        layout.addWidget(self._storage_table, 1)
+        actions = QHBoxLayout()
+        self._storage_scan_btn = QPushButton("Scan storage")
+        self._storage_scan_btn.clicked.connect(self._scan_storage)
+        self._storage_purge_btn = QPushButton("Purge selected")
+        self._storage_purge_btn.setEnabled(False)
+        self._storage_purge_btn.clicked.connect(self._purge_storage)
+        actions.addWidget(self._storage_scan_btn)
+        actions.addWidget(self._storage_purge_btn)
+        actions.addStretch()
+        layout.addLayout(actions)
+        self._storage_status = QLabel("")
+        self._storage_status.setWordWrap(True)
+        self._storage_status.setStyleSheet("color: #7E8798; font-size: 12px;")
+        layout.addWidget(self._storage_status)
         return tab
+
+    def _scan_storage(self) -> None:
+        try:
+            result = self._services.storage_scan()
+        except Exception as exc:
+            self._storage_status.setText("Scan failed: " + str(exc))
+            return
+        items = result.get("items") or []
+        self._storage_table.setRowCount(len(items))
+        for row, item in enumerate(items):
+            category = QTableWidgetItem(str(item.get("category") or ""))
+            category.setData(Qt.ItemDataRole.UserRole, item.get("id"))
+            size = QTableWidgetItem(f"{int(item.get('bytes') or 0) / 1024 / 1024:.2f}")
+            files = QTableWidgetItem(str(item.get("files") or 0))
+            deletable = QTableWidgetItem("yes" if item.get("deletable") else "protected")
+            self._storage_table.setItem(row, 0, category)
+            self._storage_table.setItem(row, 1, size)
+            self._storage_table.setItem(row, 2, files)
+            self._storage_table.setItem(row, 3, deletable)
+        self._storage_purge_btn.setEnabled(any(i.get("deletable") for i in items))
+        self._storage_status.setText(
+            f"{len(items)} categor(ies), "
+            f"{int(result.get('total_bytes') or 0) / 1024 / 1024:.2f} MB total.")
+
+    def _purge_storage(self) -> None:
+        selected = set()
+        for index in self._storage_table.selectionModel().selectedRows():
+            item = self._storage_table.item(index.row(), 0)
+            if item and item.data(Qt.ItemDataRole.UserRole):
+                selected.add(str(item.data(Qt.ItemDataRole.UserRole)))
+        if not selected:
+            self._storage_status.setText("Select one or more storage rows first.")
+            return
+        answer = QMessageBox.question(
+            self, "Purge selected storage",
+            "Delete the selected temporary/build/backup categories permanently?"
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            result = self._services.storage_purge(
+                sorted(selected), confirm=True)
+        except Exception as exc:
+            self._storage_status.setText("Purge failed: " + str(exc))
+            return
+        self._storage_status.setText(
+            f"Removed {len(result.get('removed') or [])} item(s), "
+            f"{int(result.get('freed_bytes') or 0) / 1024 / 1024:.2f} MB freed.")
+        self._scan_storage()
+
 
     def shutdown(self):
         thread = self._thread
@@ -423,6 +492,5 @@ class ModelsPanel(QWidget):
             f"{provider.label}: {provider.base_url} - {len(provider.models)} model(s)"
             for provider in snapshot.providers
         ]
-        self._storage_providers.setText(
-            "Provider endpoints:\n" + "\n".join(lines) if lines else ""
-        )
+        self._storage_status.setText(
+            "Provider endpoints:\n" + "\n".join(lines) if lines else "")

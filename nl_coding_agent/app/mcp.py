@@ -50,6 +50,40 @@ class McpServerSpec:
                 "enabled": self.enabled, "trusted": self.trusted}
 
 
+def mcp_config_path() -> Path:
+    """Resolve the writable MCP config path using the same precedence as loading."""
+    import os
+    env_path = os.environ.get("NL_MCP_CONFIG", "").strip()
+    if env_path:
+        return Path(env_path)
+    data_path = database.data_root() / "mcp_servers.json"
+    if data_path.is_file():
+        return data_path
+    return Path(__file__).resolve().parents[2] / "config" / "mcp_servers.json"
+
+
+def save_mcp_config(payload: dict) -> dict:
+    """Validate and atomically persist MCP servers; no secret values are stored."""
+    if not isinstance(payload, dict):
+        raise McpError("config-invalid", "MCP config must be a JSON object")
+    servers = payload.get("servers", payload)
+    if not isinstance(servers, dict):
+        raise McpError("config-invalid", "MCP servers must be a mapping")
+    discover_servers(payload)
+    path = mcp_config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    from datetime import datetime
+    from nl_coding_agent.core.recovery_store import _atomic_write
+    if path.is_file():
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        backup = database.data_root() / "backups" / f"mcp-{stamp}.json"
+        backup.parent.mkdir(parents=True, exist_ok=True)
+        _atomic_write(backup, path.read_bytes())
+    import json
+    _atomic_write(path, json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8"))
+    return payload
+
+
 def load_mcp_config(path: str | Path | None = None) -> dict:
     import os
     candidates = []

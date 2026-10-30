@@ -140,6 +140,28 @@ CREATE TABLE IF NOT EXISTS model_generation_params (
     UNIQUE(scope, provider_id, model_name, role)
 );
 
+CREATE TABLE IF NOT EXISTS chat_sessions (
+    id          TEXT PRIMARY KEY,
+    project_id  INTEGER,
+    title       TEXT NOT NULL,
+    archived_at TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_project
+    ON chat_sessions(project_id, archived_at, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id  TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    role        TEXT NOT NULL,
+    content     TEXT NOT NULL,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session
+    ON chat_messages(session_id, id);
+
 CREATE TABLE IF NOT EXISTS events (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     source      TEXT NOT NULL DEFAULT 'system',
@@ -550,6 +572,8 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("events", "event_kind", "TEXT"),
     # Stage-4 Flow run link (C4b, additive; NULL for sequential missions).
     ("missions", "flow_id", "TEXT"),
+    # Mission archive (additive; NULL means visible in the active board).
+    ("missions", "archived_at", "TEXT"),
     # Flow recovery ownership / terminal diagnostics (additive; old rows NULL).
     ("flow_runs", "owner_pid", "INTEGER"),
     ("flow_runs", "owner_id", "TEXT"),

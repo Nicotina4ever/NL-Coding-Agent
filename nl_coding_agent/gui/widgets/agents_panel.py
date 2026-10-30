@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
-    QHeaderView, QLabel, QPushButton, QTableWidget, QTableWidgetItem,
-    QVBoxLayout, QWidget,
+    QComboBox, QHBoxLayout, QHeaderView, QLabel, QPushButton, QTableWidget,
+    QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 
@@ -128,6 +128,26 @@ class AgentsPanel(QWidget):
         self._configure_btn.clicked.connect(self._open_custom_agents)
         layout.addWidget(self._configure_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
+        editor = QHBoxLayout()
+        self._role_editor = QComboBox()
+        self._role_editor.setObjectName("roleModelRoleCombo")
+        self._role_editor.setAccessibleName("Role to assign a model")
+        for role in ("architect", "developer", "debugger", "reviewer", "chat"):
+            self._role_editor.addItem(role, role)
+        self._model_editor = QComboBox()
+        self._model_editor.setObjectName("roleModelModelCombo")
+        self._model_editor.setEditable(True)
+        self._model_editor.setAccessibleName("Model route for selected role")
+        self._save_role_btn = QPushButton("Save role model")
+        self._save_role_btn.setObjectName("saveRoleModelButton")
+        self._save_role_btn.clicked.connect(self._save_role_model)
+        editor.addWidget(QLabel("Role model"))
+        editor.addWidget(self._role_editor)
+        editor.addWidget(self._model_editor, 1)
+        editor.addWidget(self._save_role_btn)
+        layout.addLayout(editor)
+        self._role_editor.currentIndexChanged.connect(self._sync_role_model)
+
         self._render(self._services.get_agent_roles(), [], None)
         _register_retranslate(self)
 
@@ -154,6 +174,32 @@ class AgentsPanel(QWidget):
         dialog = CustomAgentsDialog(self._services, self)
         dialog.exec()
         self.refresh()
+
+    def _sync_role_model(self, *_args) -> None:
+        role = self._role_editor.currentData() or self._role_editor.currentText()
+        config = self._services.get_model_config() or {}
+        model = str(((config.get("roles") or {}).get(role) or {}).get("model") or "")
+        index = self._model_editor.findText(model)
+        if index >= 0:
+            self._model_editor.setCurrentIndex(index)
+        elif model:
+            self._model_editor.setCurrentText(model)
+
+    def _save_role_model(self) -> None:
+        role = str(self._role_editor.currentData() or self._role_editor.currentText())
+        model = str(self._model_editor.currentText() or "").strip()
+        if not role or not model:
+            self._status_label.setText("Role and model are required.")
+            self._status_label.setStyleSheet("color: #E26472; font-size: 12px;")
+            return
+        try:
+            self._services.save_role_settings(role, model=model)
+        except Exception as exc:
+            self._status_label.setText("Save failed: " + str(exc))
+            self._status_label.setStyleSheet("color: #E26472; font-size: 12px;")
+            return
+        self._status_label.setText(f"Saved model for {role}: {model}")
+        self._status_label.setStyleSheet("color: #55C58A; font-size: 12px;")
 
     def refresh(self):
         if self._thread is not None and self._thread.isRunning():
@@ -189,6 +235,10 @@ class AgentsPanel(QWidget):
 
     def _render(self, roles: list, models: list, reachable: bool | None):
         available = {m.name: m for m in models}
+        if self._model_editor.count() == 0:
+            for name in sorted(available):
+                self._model_editor.addItem(name, "ollama/" + name)
+            self._sync_role_model()
         self._table.setRowCount(len(roles))
         for row, role in enumerate(roles):
             name = str(role.get("role") or "")

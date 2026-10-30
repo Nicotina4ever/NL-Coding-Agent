@@ -170,6 +170,49 @@ def list_missions(project_id: int | None = None) -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def archive_mission(mission_id: int, *, project_id: int | None = None) -> dict:
+    """Archive a terminal mission without deleting any data."""
+    mission = get_mission(mission_id)
+    if not mission:
+        raise ValueError("Mission not found")
+    if project_id is not None and mission.get("project_id") != project_id:
+        raise ValueError("Mission belongs to another project")
+    if mission.get("status") in ("pending", "running"):
+        raise ValueError("Cannot archive a pending/running mission")
+    now = _now()
+    with _db() as conn, conn:
+        conn.execute("UPDATE missions SET archived_at=?, updated_at=? WHERE id=?",
+                     (now, now, int(mission_id)))
+    return get_mission(mission_id) or {}
+
+
+def unarchive_mission(mission_id: int) -> dict:
+    with _db() as conn, conn:
+        conn.execute("UPDATE missions SET archived_at=NULL, updated_at=? WHERE id=?",
+                     (_now(), int(mission_id)))
+    return get_mission(mission_id) or {}
+
+
+def delete_mission(mission_id: int, *, project_id: int | None = None) -> dict:
+    """Delete one archived terminal mission row and its dependent rows.
+
+    Staged files are not deleted here; the Storage Manager purges them only via
+    an explicit preview/confirmation path.
+    """
+    mission = get_mission(mission_id)
+    if not mission:
+        raise ValueError("Mission not found")
+    if project_id is not None and mission.get("project_id") != project_id:
+        raise ValueError("Mission belongs to another project")
+    if mission.get("status") in ("pending", "running"):
+        raise ValueError("Cannot delete a pending/running mission")
+    if not mission.get("archived_at"):
+        raise ValueError("Archive the mission before deleting it")
+    with _db() as conn, conn:
+        conn.execute("DELETE FROM missions WHERE id=?", (int(mission_id),))
+    return mission
+
+
 def set_mission_project(mission_id: int, project_id: int) -> None:
     with _db() as conn, conn:
         conn.execute(

@@ -436,7 +436,11 @@ class MainWindow(QMainWindow):
         # Multimodal mission chat (F1): local attachment pipeline + explicit submit.
         self._chat_panel = ChatPanel(services=self._services)
         self._chat_panel.submitted.connect(self._on_chat_submitted)
+        self._chat_panel.cancel_tools_requested.connect(self._cancel_chat_tools)
+        self._chat_panel.resume_tools_requested.connect(self._resume_chat_tools)
         self._chat_panel.context_requested.connect(self._reference_open_file)
+        self._chat_panel.session_selected.connect(self._load_chat_session)
+        self._chat_session_id: str | None = None
         self._stack.addWidget(self._chat_panel)  # index 7 = chat
 
         # Studio IDE (F3a): editor / terminal / read-only Git / problems.
@@ -844,6 +848,8 @@ class MainWindow(QMainWindow):
     @Slot(object)
     def _on_bus_event(self, event: Event):
         self._log_panel.append_log(event.source, event.level, event.message)
+        if event.source == "chat-tools" and self._current_project and (event.payload or {}).get("project_id") == self._current_project["id"]:
+            self._chat_panel.append_system_message(event.message)
         mission_id = (event.payload or {}).get("mission_id")
         if mission_id and self._current_project:
             details = self._services.get_mission_details(mission_id)
@@ -920,11 +926,8 @@ class MainWindow(QMainWindow):
         self._goals_panel.set_project(project)
         try:
             self._chat_panel.clear_transcript()
-            for item in self._services.list_chat_messages(project_id=project["id"]):
-                if item.get("role") == "user":
-                    self._chat_panel.append_user_message(item.get("content", ""))
-                else:
-                    self._chat_panel.append_assistant_message(item.get("content", ""))
+            self._chat_session_id = self._chat_panel.current_session_id()
+            self._load_chat_session(self._chat_session_id)
         except Exception:
             pass
         self._update_supervisor_status()
@@ -994,7 +997,9 @@ class MainWindow(QMainWindow):
                 project, text, attachment_ids))
             return
         if payload.get("action", "chat") == "chat":
-            self._run_chat_conversation(text, attachment_ids, payload.get("model"))
+            options = payload.get("tool_options") or {}
+            self._run_chat_conversation(text, attachment_ids, payload.get("model"),
+                                        **({"options": options} if options.get("tools_enabled") else {}))
             return
         if payload.get("action") == "goal":
             self._switch_page("goals")
@@ -1033,9 +1038,26 @@ class MainWindow(QMainWindow):
                    "attachment(s) (no model run).",
                    mission_id=str(mission_id), count=str(len(attachment_ids))))
 
-    def _run_chat_conversation(self, text: str, attachment_ids: list[int], model=None) -> None:
+    def _cancel_chat_tools(self):
+        if self._current_project:
+            try:
+                result = self._services.cancel_chat_tools(self._current_project["id"])
+                self._chat_panel.append_system_message(str(result))
+            except Exception as exc:
+                self._chat_panel.append_system_message(str(exc))
+
+    def _resume_chat_tools(self):
+        if self._current_project and not any(t.isRunning() for t in getattr(self, "_chat_reply_threads", [])):
+            options = self._chat_panel.tool_options()
+            options["resume"] = True
+            self._run_chat_conversation("", [], self._chat_panel.selected_model(), options=options)
+
+    def _run_chat_conversation(self, text: str, attachment_ids: list[int], model=None, *, options=None) -> None:
+        options = dict(options or {})
+        if self._chat_session_id:
+            options["session_id"] = self._chat_session_id
         thread = ChatReplyThread(self._services, self._current_project, text,
-                                attachment_ids, self, model=model)
+                                attachment_ids, self, model=model, **({"options": options} if options else {}))
         self._chat_reply_threads = getattr(self, "_chat_reply_threads", [])
         self._chat_reply_threads.append(thread)
         project_id = self._current_project["id"]
@@ -1063,6 +1085,24 @@ class MainWindow(QMainWindow):
         thread.reply_ready.connect(_finish)
         thread.finished.connect(_cleanup)
         thread.start()
+
+    @Slot(str)
+    def _load_chat_session(self, session_id: str) -> None:
+        if not self._current_project or not session_id:
+            return
+        self._chat_session_id = str(session_id)
+        self._chat_panel.clear_transcript()
+        try:
+            for item in self._services.list_chat_messages(
+                    project_id=self._current_project["id"], session_id=session_id):
+                if item.get("role") == "user":
+                    self._chat_panel.append_user_message(item.get("content", ""))
+                elif item.get("role") == "system":
+                    self._chat_panel.append_system_message(item.get("content", ""))
+                else:
+                    self._chat_panel.append_assistant_message(item.get("content", ""))
+        except Exception as exc:
+            self._chat_panel.append_system_message("Session load failed: " + str(exc))
 
     @Slot(int)
     def _review_mission_candidate(self, mission_id):
@@ -1320,17 +1360,19 @@ class MainWindow(QMainWindow):
 class ChatReplyThread(QThread):
     reply_ready = Signal(dict)
 
-    def __init__(self, services, project, text, attachment_ids, parent=None, *, model=None):
+    def __init__(self, services, project, text, attachment_ids, parent=None, *, model=None, options=None):
         super().__init__(parent)
         self._services = services
-        self._project = project
+        self._project = dict(project)
         self._text = text
         self._attachment_ids = attachment_ids
         self._model = model
+        self._options = dict(options or {})
 
     def run(self):
         try:
             self.reply_ready.emit(self._services.chat_conversation(
-                self._project, self._text, self._attachment_ids, **({"model_spec": self._model} if self._model else {})))
+                self._project, self._text, self._attachment_ids, **self._options,
+                **({"model_spec": self._model} if self._model else {})))
         except Exception as exc:
             self.reply_ready.emit({"ok": False, "reply": str(exc), "tool_activity": ""})

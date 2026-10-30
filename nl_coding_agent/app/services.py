@@ -273,6 +273,30 @@ class AppServices:
         ))
         return saved
 
+    def save_provider_settings(self, provider_id: str, **changes) -> dict:
+        from nl_coding_agent.models.model_config_store import update_provider
+        config = update_provider(provider_id, **changes)
+        self._bus.emit(Event(source="model_hub", level="info",
+                             message="Provider settings saved",
+                             payload={"provider_id": provider_id, "changes": changes}))
+        return config
+
+    def save_role_settings(self, role: str, **changes) -> dict:
+        from nl_coding_agent.models.model_config_store import update_role
+        config = update_role(role, **changes)
+        self._bus.emit(Event(source="model_hub", level="info",
+                             message="Role model settings saved",
+                             payload={"role": role, "changes": changes}))
+        return config
+
+    def save_cloud_escalation(self, enabled: bool) -> dict:
+        from nl_coding_agent.models.model_config_store import set_cloud_escalation
+        config = set_cloud_escalation(bool(enabled))
+        self._bus.emit(Event(source="model_hub", level="info",
+                             message="Cloud escalation setting saved",
+                             payload={"enabled": bool(enabled)}))
+        return config
+
     def get_database_path(self) -> Path:
         return db_path()
 
@@ -286,7 +310,14 @@ class AppServices:
             return self._chat_store_dir() / "global.json"
         return self._chat_store_dir() / f"project-{int(project_id)}.json"
 
-    def list_chat_messages(self, *, project_id: int | None = None) -> list[dict]:
+    def list_chat_messages(self, *, project_id: int | None = None,
+                           session_id: str | None = None) -> list[dict]:
+        from nl_coding_agent.app import chat_sessions
+        if project_id is None:
+            return self._legacy_list_chat_messages(project_id)
+        return chat_sessions.messages(int(project_id), session_id=session_id)
+
+    def _legacy_list_chat_messages(self, project_id: int | None = None) -> list[dict]:
         path = self._chat_history_path(project_id)
         with _CHAT_STORE_LOCK:
             if not path.is_file():
@@ -300,17 +331,57 @@ class AppServices:
             return [dict(item) for item in messages]
 
     def _append_chat_message(self, project_id: int | None, role: str, content: str,
-                             **metadata) -> dict:
-        from datetime import datetime
-        from nl_coding_agent.core.recovery_store import _atomic_write
-        item = {"role": role, "content": str(content or ""),
-                "created_at": datetime.now().isoformat(timespec="seconds"), **metadata}
-        with _CHAT_STORE_LOCK:
-            messages = self.list_chat_messages(project_id=project_id)
-            messages.append(item)
-            _atomic_write(self._chat_history_path(project_id),
-                          json.dumps(messages, ensure_ascii=False, indent=2).encode("utf-8"))
-        return item
+                             session_id: str | None = None, **metadata) -> dict:
+        from nl_coding_agent.app import chat_sessions
+        if project_id is None:
+            from datetime import datetime
+            item = {"role": role, "content": str(content or ""),
+                    "created_at": datetime.now().isoformat(timespec="seconds"), **metadata}
+            path = self._chat_history_path(None)
+            with _CHAT_STORE_LOCK:
+                messages = self._legacy_list_chat_messages(None)
+                messages.append(item)
+                from nl_coding_agent.core.recovery_store import _atomic_write
+                _atomic_write(path, json.dumps(messages, ensure_ascii=False, indent=2).encode("utf-8"))
+            return item
+        return chat_sessions.append_message(
+            int(project_id), role, content, session_id=session_id, **metadata)
+
+    def list_chat_sessions(self, project_id: int, *, include_archived: bool = False) -> list[dict]:
+        from nl_coding_agent.app import chat_sessions
+        return chat_sessions.list_sessions(int(project_id), include_archived=include_archived)
+
+    def create_chat_session(self, project_id: int, title: str = "New conversation") -> dict:
+        from nl_coding_agent.app import chat_sessions
+        return chat_sessions.create_session(int(project_id), title)
+
+    def rename_chat_session(self, session_id: str, title: str) -> dict:
+        from nl_coding_agent.app import chat_sessions
+        return chat_sessions.rename_session(session_id, title)
+
+    def archive_chat_session(self, session_id: str) -> dict:
+        from nl_coding_agent.app import chat_sessions
+        return chat_sessions.archive_session(session_id)
+
+    def delete_chat_session(self, project_id: int, session_id: str) -> dict:
+        from nl_coding_agent.app import chat_sessions
+        return chat_sessions.delete_session(int(project_id), session_id)
+
+    def search_chat_messages(self, project_id: int, query: str, limit: int = 100) -> list[dict]:
+        from nl_coding_agent.app import chat_sessions
+        return chat_sessions.search(int(project_id), query, limit=limit)
+
+    def get_mcp_config(self) -> dict:
+        from nl_coding_agent.app.mcp import load_mcp_config
+        return load_mcp_config()
+
+    def save_mcp_config(self, payload: dict) -> dict:
+        from nl_coding_agent.app.mcp import save_mcp_config
+        saved = save_mcp_config(payload)
+        self._bus.emit(Event(source="mcp", level="info",
+                             message="MCP server configuration saved",
+                             payload={"servers": sorted((saved.get("servers") or {}).keys())}))
+        return saved
 
     def get_ollama_url(self) -> str:
         config = self.get_model_config()
@@ -569,7 +640,7 @@ class AppServices:
     def chat_conversation(self, project: dict, text: str, attachment_ids=None, *, model_spec=None,
                           tools_enabled=False, max_calls=8, max_seconds=180,
                           allow_coding=False, resume=False, tool_protocol="native",
-                          research_profile="manual") -> dict:
+                          research_profile="manual", session_id: str | None = None) -> dict:
         """Persist a real conversation; attachment context never grants execution."""
         project_id = (project or {}).get("id")
         key = str(self._chat_history_path(project_id))
@@ -581,17 +652,22 @@ class AppServices:
             from nl_coding_agent.app.attachments import get_attachment
             from nl_coding_agent.core import permissions
             permissions.require(permissions.READ, project_id=project_id)
+            if session_id:
+                from nl_coding_agent.app import chat_sessions
+                session = chat_sessions.get_session(session_id)
+                if session.get("project_id") != project_id:
+                    raise ValueError("Chat session belongs to another project")
             attachments = []
             for attachment_id in attachment_ids or []:
                 item = get_attachment(int(attachment_id))
                 if item.get("project_id") != project_id:
                     raise ValueError("Attachment belongs to another project")
                 attachments.append(item)
-            history = self.list_chat_messages(project_id=project_id)
+            history = self.list_chat_messages(project_id=project_id, session_id=session_id)
             if resume and not tools_enabled:
                 raise ValueError("Resume requires explicit tool authorization")
             if not resume:
-                self._append_chat_message(project_id, "user", text,
+                self._append_chat_message(project_id, "user", text, session_id=session_id,
                                       attachment_ids=[item["id"] for item in attachments])
             if tools_enabled:
                 from nl_coding_agent.app.chat_tools import converse
@@ -601,7 +677,8 @@ class AppServices:
                 if result.get("ok"):
                     route = result.get("route") or {}
                     self._append_chat_message(
-                        project_id, "assistant", result["reply"], run_id=result["run_id"],
+                        project_id, "assistant", result["reply"], session_id=session_id,
+                        run_id=result["run_id"],
                         model=route.get("model"), provider_id=route.get("provider_id"),
                         automatic=route.get("automatic"),
                     )
@@ -611,7 +688,7 @@ class AppServices:
                                           model_spec=model_spec)
             reply = reply_info["reply"]
             route = reply_info.get("route") or {}
-            self._append_chat_message(project_id, "assistant", reply,
+            self._append_chat_message(project_id, "assistant", reply, session_id=session_id,
                                       model=route.get("model"),
                                       provider_id=route.get("provider_id"),
                                       automatic=route.get("automatic"))
@@ -619,7 +696,8 @@ class AppServices:
                                  payload={"project_id": project_id, "role": "assistant"}))
             return {"ok": True, "reply": reply, "tool_activity": "",
                     "route": route,
-                    "messages": self.list_chat_messages(project_id=project_id)}
+                    "messages": self.list_chat_messages(project_id=project_id,
+                                                        session_id=session_id)}
         except Exception as exc:
             return {"ok": False, "reply": str(exc),
                     "error": {"type": type(exc).__name__, "message": str(exc)}}
@@ -1126,9 +1204,69 @@ class AppServices:
                            "warnings": sum(1 for row in problems
                                            if row.get("severity") == "warning")}}
 
-    def list_missions(self, project_id: int | None = None) -> list[dict]:
+    def list_missions(self, project_id: int | None = None, *,
+                      include_archived: bool = True,
+                      status: str | None = None,
+                      query: str | None = None) -> list[dict]:
         from nl_coding_agent.persistence.missions import list_missions as _list_m
-        return _list_m(project_id)
+        items = _list_m(project_id)
+        if not include_archived:
+            items = [item for item in items if not item.get("archived_at")]
+        if status:
+            items = [item for item in items if item.get("status") == status]
+        if query:
+            needle = str(query).lower()
+            items = [item for item in items
+                     if needle in str(item.get("title") or "").lower()
+                     or needle in str(item.get("goal") or "").lower()]
+        return items
+
+    def archive_mission(self, mission_id: int, *, project_id: int | None = None) -> dict:
+        from nl_coding_agent.persistence.missions import archive_mission as _archive
+        return _archive(mission_id, project_id=project_id)
+
+    def unarchive_mission(self, mission_id: int) -> dict:
+        from nl_coding_agent.persistence.missions import unarchive_mission as _unarchive
+        return _unarchive(mission_id)
+
+    def delete_mission(self, mission_id: int, *, project_id: int | None = None) -> dict:
+        from nl_coding_agent.persistence.missions import delete_mission as _delete
+        return _delete(mission_id, project_id=project_id)
+
+    def steer_mission(self, mission_id: int, text: str, *,
+                      project_id: int | None = None) -> dict:
+        from nl_coding_agent.persistence.missions import get_mission
+        from nl_coding_agent.persistence import database
+        message = str(text or "").strip()
+        if not message:
+            raise ValueError("Steering text is required")
+        mission = get_mission(mission_id)
+        if not mission:
+            raise ValueError("Mission not found")
+        if project_id is not None and mission.get("project_id") != project_id:
+            raise ValueError("Mission belongs to another project")
+        if mission.get("status") not in ("pending", "running", "interrupted", "blocked"):
+            raise ValueError("Mission is not steerable in its current state")
+        database.set_setting("mission.steer." + str(mission_id), message[:8000])
+        self._bus.emit(Event(source="mission", level="info",
+                             message=f"Steering recorded for mission #{mission_id}",
+                             payload={"mission_id": int(mission_id)}))
+        return {"ok": True, "mission_id": int(mission_id),
+                "status": mission.get("status"), "characters": min(len(message), 8000)}
+
+    def storage_scan(self, project_root: str | Path | None = None) -> dict:
+        from nl_coding_agent.core.storage_manager import scan
+        return scan(project_root)
+
+    def storage_purge(self, selected_ids: list[str], *, confirm: bool = False,
+                      project_root: str | Path | None = None) -> dict:
+        from nl_coding_agent.core.storage_manager import purge
+        result = purge(selected_ids, confirm=confirm, project_root=project_root)
+        self._bus.emit(Event(source="storage", level="info",
+                             message="Selective storage cleanup completed",
+                             payload={"freed_bytes": result.get("freed_bytes"),
+                                      "removed": result.get("removed")}))
+        return result
 
     def mission_candidate_diff(self, mission_id: int, *, project_id: int) -> dict:
         """Read an existing candidate without approving, promoting or executing it."""

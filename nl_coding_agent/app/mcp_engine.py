@@ -320,6 +320,19 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         return services.generation_params(
             model_name=model_name, role=role, provider_id=provider_id)
 
+    @server.tool(annotations=read_only)
+    def mcp_servers() -> dict:
+        """Read the trusted MCP server configuration (secret values never returned)."""
+        require_read()
+        return {"ok": True, "config": services.get_mcp_config()}
+
+    @server.tool()
+    def save_mcp_servers(config: dict, approved: bool = False) -> dict:
+        """Validate and persist MCP server configuration; no secrets are accepted."""
+        require_execution(approved)
+        saved = services.save_mcp_config(config)
+        return {"ok": True, "servers": sorted((saved.get("servers") or {}).keys())}
+
     @server.tool()
     def save_generation_parameters(parameters: dict, scope: str = "model",
                                    model_name: str = "", role: str = "",
@@ -332,6 +345,37 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
             model_name=model_name, role=role)}
 
     @server.tool()
+    def save_provider_settings(provider_id: str, enabled: bool | None = None,
+                               base_url: str | None = None, label: str | None = None,
+                               approved: bool = False) -> dict:
+        """Persist provider enabled/endpoint/label; never returns or stores secrets."""
+        require_execution(approved)
+        changes = {key: value for key, value in {
+            "enabled": enabled, "base_url": base_url, "label": label,
+        }.items() if value is not None}
+        services.save_provider_settings(provider_id, **changes)
+        return {"ok": True, "provider": provider_id, "changes": changes}
+
+    @server.tool()
+    def save_role_settings(role: str, model: str | None = None,
+                           temperature: float | None = None,
+                           approved: bool = False) -> dict:
+        """Persist a role's model route and optional generation temperature."""
+        require_execution(approved)
+        changes = {key: value for key, value in {
+            "model": model, "temperature": temperature,
+        }.items() if value is not None}
+        services.save_role_settings(role, **changes)
+        return {"ok": True, "role": role, "changes": changes}
+
+    @server.tool()
+    def set_cloud_escalation(enabled: bool, approved: bool = False) -> dict:
+        """Persist the explicit cloud-escalation policy (default off)."""
+        require_execution(approved)
+        services.save_cloud_escalation(bool(enabled))
+        return {"ok": True, "cloud_escalation_enabled": bool(enabled)}
+
+    @server.tool()
     def nlc_converse(project_id: int, text: str, attachments: list, history: list, *,
                      model_spec: str | None = None,
                      attachment_ids: list[int] | None = None,
@@ -339,7 +383,8 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                      allow_coding: bool = False,
                      max_calls: int = 8, max_seconds: int = 180,
                      resume: bool = False,
-                     tool_protocol: str = "native") -> dict:
+                     tool_protocol: str = "native",
+                     session_id: str | None = None) -> dict:
         """Forward a chat request to the backend AppServices implementation.
 
         *project_id* must be the id reported by ``project_context`` for this
@@ -379,6 +424,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
             tools_enabled=bool(tools_enabled), max_calls=int(max_calls),
             max_seconds=int(max_seconds), allow_coding=bool(allow_coding),
             resume=bool(resume), tool_protocol=str(tool_protocol),
+            session_id=session_id,
         )
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False,
@@ -423,15 +469,13 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                            "max_files_per_batch": 20}}
 
     @server.tool(annotations=read_only)
-    def chat_history(limit: int = 200, before_index: int | None = None) -> dict:
-        """Read the bound project's persisted conversation thread (no new archive).
-
-        Uses the same per-project JSON persistence as the Studio and returns
-        attachment metadata plus the model/provider recorded for assistant turns.
-        """
+    def chat_history(limit: int = 200, before_index: int | None = None,
+                     session_id: str | None = None) -> dict:
+        """Read one persisted conversation session (default: latest active)."""
         require_read()
         from nl_coding_agent.app.attachments import get_attachment
-        messages = services.list_chat_messages(project_id=bound_project_id)
+        messages = services.list_chat_messages(project_id=bound_project_id,
+                                               session_id=session_id)
         total = len(messages)
         requested_limit = max(1, min(int(limit), 1000))
         end = total if before_index is None else max(0, min(int(before_index), total))
@@ -469,9 +513,53 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                 row["tool_activity"] = True
             page.append(row)
         return {"ok": True, "project_id": bound_project_id,
-                "thread": "chat/project-" + str(bound_project_id) + ".json",
+                "session_id": session_id,
+                "thread": "chat/session:" + str(session_id) if session_id else "chat/latest",
                 "count": total, "offset": start, "returned": len(page),
                 "has_more": start > 0, "messages": page}
+
+    @server.tool(annotations=read_only)
+    def chat_sessions(include_archived: bool = False) -> dict:
+        """List durable Chat sessions for the bound project."""
+        require_read()
+        return {"ok": True, "sessions": services.list_chat_sessions(
+            bound_project_id, include_archived=bool(include_archived))}
+
+    @server.tool()
+    def chat_session_create(title: str = "New conversation",
+                            approved: bool = False) -> dict:
+        """Create a new durable Chat session."""
+        require_execution(approved)
+        return {"ok": True, "session": services.create_chat_session(
+            bound_project_id, title)}
+
+    @server.tool()
+    def chat_session_rename(session_id: str, title: str,
+                            approved: bool = False) -> dict:
+        """Rename a Chat session."""
+        require_execution(approved)
+        return {"ok": True, "session": services.rename_chat_session(session_id, title)}
+
+    @server.tool()
+    def chat_session_archive(session_id: str, approved: bool = False) -> dict:
+        """Archive one Chat session; history is retained."""
+        require_execution(approved)
+        return {"ok": True, "session": services.archive_chat_session(session_id)}
+
+    @server.tool()
+    def chat_session_delete(session_id: str, approved: bool = False) -> dict:
+        """Delete one previously archived Chat session and its messages."""
+        require_execution(approved)
+        return {"ok": True, "session": services.delete_chat_session(
+            bound_project_id, session_id)}
+
+    @server.tool(annotations=read_only)
+    def chat_search(query: str, limit: int = 100) -> dict:
+        """Search persisted Chat messages in the bound project."""
+        require_read()
+        return {"ok": True, "messages": services.search_chat_messages(
+            bound_project_id, query, limit=int(limit))}
+
 
     @server.tool(annotations=read_only)
     def chat_queue() -> dict:
@@ -551,6 +639,44 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         """List persisted missions for the bound project without starting work."""
         require_read()
         return {"missions": services.list_missions(bound_project_id)}
+
+    @server.tool()
+    def archive_mission(mission_id: int, approved: bool = False) -> dict:
+        """Archive a terminal mission; data is retained and the action is reversible."""
+        require_execution(approved)
+        mission(mission_id)
+        return {"ok": True, "mission": services.archive_mission(
+            int(mission_id), project_id=bound_project_id)}
+
+    @server.tool()
+    def unarchive_mission(mission_id: int, approved: bool = False) -> dict:
+        """Restore an archived mission to the active list."""
+        require_execution(approved)
+        return {"ok": True, "mission": services.unarchive_mission(int(mission_id))}
+
+    @server.tool()
+    def delete_mission(mission_id: int, approved: bool = False) -> dict:
+        """Delete only an already archived terminal mission; never live/staged files."""
+        require_execution(approved)
+        mission(mission_id)
+        return {"ok": True, "mission": services.delete_mission(
+            int(mission_id), project_id=bound_project_id)}
+
+    @server.tool(annotations=read_only)
+    def storage_scan() -> dict:
+        """Read-only size scan of temporary/build/backup/staging categories."""
+        require_read()
+        return services.storage_scan(project["root"])
+
+    @server.tool()
+    def storage_purge(selected_ids: list[str], confirm: bool = False,
+                      approved: bool = False) -> dict:
+        """Delete only explicitly selected, non-protected storage categories."""
+        require_execution(approved)
+        if not confirm:
+            raise ValueError("Storage cleanup requires confirm=true")
+        return services.storage_purge(
+            selected_ids, confirm=True, project_root=project["root"])
 
     @server.tool(annotations=read_only)
     def mission_status(mission_id: int) -> dict:
