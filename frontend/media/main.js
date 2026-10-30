@@ -466,8 +466,8 @@
         if (probePrevious) { probe.value = probePrevious; }
         const result = current.capabilityProbe;
         $('probe-result').textContent = result
-            ? result.model + ': tools=' + result.tool_calling + ', structured=' +
-              result.structured_output + ', patch=' + result.patch_quality
+            ? result.provider_id + '/' + result.model + ': tools=' + result.tool_calling +
+              ', structured=' + result.structured_output + ', patch=' + result.patch_quality
             : '';
     }
 

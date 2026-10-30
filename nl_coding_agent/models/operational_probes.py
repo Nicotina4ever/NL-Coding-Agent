@@ -142,6 +142,35 @@ def _structured_probe(provider: OllamaProvider, model: str, timeout: float) -> d
     return {"supported": ok, "metadata": {"valid_json": isinstance(parsed, Mapping)}}
 
 
+def _run_probes(provider: Any, provider_id: str, model: str, timeout: float,
+                persist: bool) -> list[CapabilityRecord]:
+    records = probe_capabilities(
+        provider_id, model,
+        {
+            "tool_calling": lambda: _tool_calling_probe(provider, model, timeout),
+            "patch_quality": lambda: _patch_quality_probe(provider, model, timeout),
+            "structured_output": lambda: _structured_probe(provider, model, timeout),
+        },
+        backend_version=provider_id,
+        probe_id="operational-" + str(int(time.time())),
+    )
+    if persist:
+        record_capabilities(records)
+    return records
+
+
+def probe_model_with_provider(provider: Any, provider_id: str, model: str, *,
+                              timeout: float = 90.0, persist: bool = True,
+                              allow_cloud: bool = False) -> list[CapabilityRecord]:
+    """Measure a model through any configured provider (Ollama or compatible)."""
+    if provider is None:
+        raise ValueError("A provider instance is required")
+    if (not allow_cloud and provider_id == "ollama"
+            and "cloud" in str(model).lower()):
+        raise ValueError("Cloud model probes require explicit allow_cloud=True")
+    return _run_probes(provider, str(provider_id), str(model), timeout, persist)
+
+
 def probe_model(model: str, *, base_url: str = "http://127.0.0.1:11434",
                 timeout: float = 90.0, persist: bool = True,
                 allow_cloud: bool = False) -> list[CapabilityRecord]:
@@ -150,19 +179,7 @@ def probe_model(model: str, *, base_url: str = "http://127.0.0.1:11434",
                               or str(model).lower().endswith(":cloud"))):
         raise ValueError("Cloud model probes require explicit allow_cloud=True")
     provider = OllamaProvider(base_url=base_url)
-    records = probe_capabilities(
-        "ollama", model,
-        {
-            "tool_calling": lambda: _tool_calling_probe(provider, model, timeout),
-            "patch_quality": lambda: _patch_quality_probe(provider, model, timeout),
-            "structured_output": lambda: _structured_probe(provider, model, timeout),
-        },
-        backend_version="ollama",
-        probe_id="operational-" + str(int(time.time())),
-    )
-    if persist:
-        record_capabilities(records)
-    return records
+    return _run_probes(provider, "ollama", str(model), timeout, persist)
 
 
 def probe_available_models(*, base_url: str = "http://127.0.0.1:11434",

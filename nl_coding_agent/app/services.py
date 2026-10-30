@@ -314,17 +314,36 @@ class AppServices:
                                  allow_cloud: bool = False) -> dict:
         from nl_coding_agent.core import permissions
         permissions.require(permissions.EXECUTE)
-        from nl_coding_agent.models.operational_probes import probe_model
-        records = probe_model(
-            str(model), base_url=self.get_ollama_url(),
+        from nl_coding_agent.models.operational_probes import probe_model_with_provider
+        from nl_coding_agent.models.providers import build_providers
+        route = str(model or "").strip()
+        provider_id = "ollama"
+        model_name = route
+        if "/" in route:
+            provider_id, model_name = route.split("/", 1)
+        if not model_name:
+            raise ValueError("A model name is required")
+        config = self.get_model_config()
+        providers = build_providers(config)
+        provider = next(
+            (item for item in providers if str(getattr(item, "provider_id", "")) == provider_id),
+            None)
+        if provider is None and provider_id == "ollama":
+            provider = next(
+                (item for item in providers if getattr(item, "kind", "") == "ollama"),
+                None)
+        if provider is None:
+            raise ValueError("Provider is not configured: " + provider_id)
+        records = probe_model_with_provider(
+            provider, provider_id, model_name,
             timeout=max(5.0, min(float(timeout), 300.0)),
             allow_cloud=bool(allow_cloud),
         )
         by_name = {record.capability: record for record in records}
         quality = by_name.get("patch_quality")
         return {
-            "model": str(model),
-            "provider_id": "ollama",
+            "model": model_name,
+            "provider_id": provider_id,
             "tool_calling": by_name["tool_calling"].state if "tool_calling" in by_name else "unknown",
             "structured_output": (by_name["structured_output"].state
                                   if "structured_output" in by_name else "unknown"),

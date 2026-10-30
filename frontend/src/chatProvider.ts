@@ -1140,7 +1140,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         this.capabilityProbe = await this.connection.probeModelCapabilities(model);
         this.postState();
         this.postChat('system',
-            `Probe ${model}: tools=${this.capabilityProbe.tool_calling}, `
+            `Probe ${this.capabilityProbe.provider_id}/${this.capabilityProbe.model}: tools=${this.capabilityProbe.tool_calling}, `
             + `structured=${this.capabilityProbe.structured_output}, `
             + `patch=${this.capabilityProbe.patch_quality} (${this.capabilityProbe.patch_score.toFixed(2)})`);
     }

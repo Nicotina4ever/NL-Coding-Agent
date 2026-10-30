@@ -67,6 +67,30 @@ def test_custom_agent_profiles_crud_persist_in_engine_state(isolated):
     services._db.close()
 
 
+def test_operational_probe_runs_through_an_openai_compatible_provider():
+    import json
+    from nl_coding_agent.models.operational_probes import probe_model_with_provider
+
+    class FakeProvider:
+        def chat_turn(self, model, messages, tools, **kwargs):
+            name = tools[0]["function"]["name"]
+            args = {"value": 42} if name == "record_probe" else {
+                "path": "probe_target.py", "target": "VALUE = 1",
+                "replacement": "VALUE = 2"}
+            return {"tool_calls": [{"function": {"name": name,
+                                                 "arguments": json.dumps(args)}}]}
+
+        def generate(self, model, prompt, **kwargs):
+            return '{"ok": true, "n": 7}'
+
+    records = probe_model_with_provider(
+        FakeProvider(), "openai_compatible", "hosted-model", persist=False)
+    by_name = {record.capability: record for record in records}
+    assert by_name["tool_calling"].state == "measured"
+    assert by_name["patch_quality"].state == "measured"
+    assert by_name["structured_output"].state == "measured"
+
+
 def test_backup_retention_is_bounded(isolated):
     from nl_coding_agent.core.backup_retention import prune
     backups = isolated / "data" / "backups"
