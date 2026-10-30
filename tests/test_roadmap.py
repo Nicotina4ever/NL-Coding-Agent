@@ -22,12 +22,13 @@ from nl_coding_agent.core.workspace import (
 class TestRoadmap(unittest.TestCase):
     def test_repository_roadmap_parses(self):
         mission = next_mission(Path(__file__).resolve().parents[1])
-        self.assertIn("Development continuation", mission["title"])
-        self.assertIn("tests/test_rollback_stub.py", mission["write_paths"])
-        self.assertIn("tests/test_scope_permission.py", mission["write_paths"])
-        self.assertIn("nl_coding_agent/core/autonomous_roadmap_planner.py", mission["write_paths"])
-        self.assertTrue(len(mission["write_paths"]) >= 3)
-        self.assertGreaterEqual(len(mission["acceptance_gates"]), 3)
+        self.assertIn("NL Code 1.0 STABLE", mission["title"])
+        self.assertIn("nl_coding_agent/agents/orchestrator.py", mission["write_paths"])
+        self.assertIn("nl_coding_agent/models/model_router.py", mission["write_paths"])
+        self.assertIn("tests/test_execution_reliability.py", mission["write_paths"])
+        self.assertIn("docs/NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md", mission["write_paths"])
+        self.assertGreaterEqual(len(mission["write_paths"]), 4)
+        self.assertGreaterEqual(len(mission["acceptance_gates"]), 5)
         self.assertIn("Objective:", mission["goal"])
         self.assertIn("Acceptance gates:", mission["goal"])
         self.assertIn("Title:", format_mission(mission))
@@ -36,13 +37,14 @@ class TestRoadmap(unittest.TestCase):
         text = (
             "Modify `nl_coding_agent/core/roadmap.py`, `tests/test_roadmap.py`, and "
             "`pyproject.toml`. Never touch `python/python.exe` or `crewAI/crewai.py`. "
-            "See https://example.com/some/file.py and `docs/NEXT_SELF_BUILD_MISSION.md`."
+            "See https://example.com/some/file.py and "
+            "`docs/NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md`."
         )
         paths = extract_paths(text)
         self.assertIn("nl_coding_agent/core/roadmap.py", paths)
         self.assertIn("tests/test_roadmap.py", paths)
         self.assertIn("pyproject.toml", paths)
-        self.assertIn("docs/NEXT_SELF_BUILD_MISSION.md", paths)
+        self.assertIn("docs/NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md", paths)
         self.assertNotIn("python/python.exe", paths)
         self.assertNotIn("crewAI/crewai.py", paths)
 

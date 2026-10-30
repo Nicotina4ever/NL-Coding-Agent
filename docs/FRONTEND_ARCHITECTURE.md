@@ -4,7 +4,7 @@
 (model selection, project-scoped attachments, editor context, authorized URL research, persisted
 history) + real mission control + diff/verification review**, packaged as an installable VSIX and
 accepted against a real **VS Code Insiders 1.145.0-insider** extension host and the existing Python
-engine. The detailed chat operator guide is [FRONTEND_CHAT.md](FRONTEND_CHAT.md). This document
+engine. The detailed chat operator guide is [CHAT_AND_SESSIONS.md](CHAT_AND_SESSIONS.md). This document
 replaces the earlier draft that described a `vscode-languageclient`/LSP connection; that draft was
 wrong and its code was removed.
 
@@ -121,8 +121,8 @@ The webview has three sections:
   **read-only here**; the extension never writes `config/models.yaml`, permissions or the engine DB.
 
 The complete chat contract, permission requirements and evidence are in
-[FRONTEND_CHAT.md](FRONTEND_CHAT.md). The multi-agent runtime audit (CrewAI, Flows, Supervisor,
-ModelRouter, handoffs and proportional team policy) is in [MULTI_AGENT_RUNTIME.md](MULTI_AGENT_RUNTIME.md).
+[CHAT_AND_SESSIONS.md](CHAT_AND_SESSIONS.md). The multi-agent runtime audit (CrewAI, Flows, Supervisor,
+ModelRouter, handoffs and proportional team policy) is in [ARCHITECTURE_AND_ENGINE.md](ARCHITECTURE_AND_ENGINE.md).
 
 ### Mission lifecycle and approvals
 
@@ -147,7 +147,7 @@ agent handoffs (with payload/actions/summary), task attempts (model output/error
 commands/results and the reviewer verdict. The engine does **not** persist per-tool-call telemetry
 (`read_file`/`write_file`/`patch_file` invocations are discarded by the CrewAI seam), so the dashboard
 does not invent tool calls; only `actions` recorded by the existing text-block fallback appear in a
-handoff payload. See [FRONTEND_MISSIONS.md](FRONTEND_MISSIONS.md).
+handoff payload. See [ARCHITECTURE_AND_ENGINE.md](ARCHITECTURE_AND_ENGINE.md).
 
 
 

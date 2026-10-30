@@ -1,15 +1,14 @@
 """Roadmap parsing and next-mission selection.
 
-The self-builder reads ``docs/NEXT_SELF_BUILD_MISSION.md`` as its task source.
-No per-project YAML is required: the roadmap is ordinary Markdown that a human
-or the agent can update.
+The self-builder reads the consolidated ``docs/NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md``
+as its task source; requirement identifiers remain in the historical backlog.
 """
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
-DEFAULT_ROADMAP = Path("docs") / "NEXT_SELF_BUILD_MISSION.md"
+DEFAULT_ROADMAP = Path("docs") / "NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md"
 PROTECTED_PREFIXES = (
     "python/", "crewai/", "crewai-tools/", ".git/", "data/", ".workspace/",
     "logs/", "state/",
@@ -136,7 +135,7 @@ def next_mission(project_root: Path | str, roadmap_path: Path | None = None) -> 
         path = root / path
     if not path.exists():
         raise FileNotFoundError(
-            f"No roadmap found at {path}. Create docs/NEXT_SELF_BUILD_MISSION.md "
+            f"No roadmap found at {path}. Create docs/NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md "
             "with an Objective, Scope of Work and Acceptance Gates."
         )
     mission = parse_roadmap_file(path)

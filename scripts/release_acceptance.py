@@ -208,7 +208,7 @@ def _evidence_text(path: Path) -> str:
 
 
 def _requirement_rows(repo: Path) -> list[dict]:
-    release = _evidence_text(repo / "docs" / "RELEASE_ACCEPTANCE.md")
+    release = _evidence_text(repo / "docs" / "08_ACCEPTANCE_GATES.md")
     backlog = _evidence_text(repo / "docs" / "PRODUCT_BACKLOG.md")
     rows = []
     for requirement_id, title, source_id in (
@@ -221,7 +221,7 @@ def _requirement_rows(repo: Path) -> list[dict]:
         if requirement_id in release and "PARTIAL" in release:
             match = re.search(requirement_id + r"[^\n]*", release)
             if match:
-                evidence.append("docs/RELEASE_ACCEPTANCE.md: " + match.group(0).strip()[:300])
+                evidence.append("docs/08_ACCEPTANCE_GATES.md: " + match.group(0).strip()[:300])
                 if "MANUAL-PENDING" in match.group(0):
                     state = "partial"
                 elif "VERIFIED" in match.group(0):
@@ -241,7 +241,7 @@ def _requirement_rows(repo: Path) -> list[dict]:
 
 def _ci_evidence(repo: Path) -> dict:
     workflow = repo / ".github" / "workflows" / "ci.yml"
-    docs = _evidence_text(repo / "docs" / "CI.md")
+    docs = _evidence_text(repo / "docs" / "OPERATIONS_AND_RESTART.md")
     configured = workflow.is_file()
     return {"configured": configured,
             "state": "partial" if configured else "MANUAL-PENDING",
@@ -306,11 +306,11 @@ def build_matrix(repo: Path, records_dir: Path) -> dict:
     matrix = {
         "schema_version": SCHEMA_VERSION,
         "generated_from": ["installer/platform_targets.py",
-                           "docs/HARNESS_ACCEPTANCE.md",
-                           "docs/RELEASE_ACCEPTANCE.md",
-                           "docs/SECRETS_AUDIT.md",
+                           "docs/08_ACCEPTANCE_GATES.md",
+                           "docs/OPERATIONS_AND_RESTART.md",
+                           "docs/SAFETY_AND_STORAGE.md",
                            ".github/workflows/ci.yml",
-                           "docs/evidence/beta_acceptance/records"],
+                           "docs/evidence"],
         "ci_support_claimed": False,
         "targets": targets,
         "requirements": _requirement_rows(repo),

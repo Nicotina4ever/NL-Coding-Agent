@@ -1,4 +1,0 @@
-PASS webview/main.js parses and has no unsafe HTML sink
-PASS generated HTML has a strict CSP, no inline script and the dashboard structure
-PASS webview behaviour: state, chat, mission mode/detail, safe text rendering
-== WEBVIEW-TESTS-PASS ==

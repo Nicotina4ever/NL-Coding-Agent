@@ -164,14 +164,14 @@ def test_verify_reports_invalid_records_and_script_has_no_network_or_publish():
     for forbidden in ("urllib", "requests", "http.client", "socket", "git push",
                       "gh release", "gh api", "http://", "https://"):
         assert forbidden not in source.lower(), forbidden
-    docs = (REPO / "docs" / "BETA_ACCEPTANCE.md").read_text(encoding="utf-8")
+    docs = (REPO / "docs" / "08_ACCEPTANCE_GATES.md").read_text(encoding="utf-8")
     assert "MANUAL-PENDING" in docs
     assert "no support" in docs.lower() or "not a support claim" in docs.lower()
     assert "tester alias" in docs.lower() or "alias" in docs.lower()
 
 
 def test_beta_acceptance_docs_cover_commands_privacy_and_records():
-    docs = (REPO / "docs" / "BETA_ACCEPTANCE.md").read_text(encoding="utf-8")
+    docs = (REPO / "docs" / "08_ACCEPTANCE_GATES.md").read_text(encoding="utf-8")
     for expected in ("scripts/release_acceptance.py", "matrix", "record", "verify",
                      "target", "sha256", "privacy", "MANUAL-PENDING"):
         assert expected.lower() in docs.lower(), expected

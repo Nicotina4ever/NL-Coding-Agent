@@ -65,6 +65,6 @@ Nel Resource Manager mostrare: RAM/VRAM disponibile, processi osservabili, model
 
 ## Collegamento alla Master Checklist (proposta)
 
-**P2-13 — Resource Contention & Adaptive Fallback.** Monitorare carichi GPU esterni, distinguere inferenza LLM da esecuzione test GPU, accodare task incompatibili, fallback CPU/cloud soltanto secondo policy, timeout adattivi, heartbeat, ripresa persistente, e opzione futura di coordinamento con suite NL. → [SPEC-13A](specifiche/13A_GPU_CONTENTION_CLOUD_FALLBACK.md).
+**P2-13 — Resource Contention & Adaptive Fallback.** Monitorare carichi GPU esterni, distinguere inferenza LLM da esecuzione test GPU, accodare task incompatibili, fallback CPU/cloud soltanto secondo policy, timeout adattivi, heartbeat, ripresa persistente, e opzione futura di coordinamento con suite NL. → [SPEC-13A](13A_GPU_CONTENTION_CLOUD_FALLBACK.md).
 
 > Non modificare il repository attivo né interrompere la missione #41 per implementare questa specifica. Quando il self-build è verificato, integrare P2-13 nel backlog e selezionarlo soltanto quando dipendenze e priorità lo giustificano.

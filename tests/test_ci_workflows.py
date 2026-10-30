@@ -197,7 +197,7 @@ def test_package_smoke_local_pass_writes_only_report(tmp_path):
 
 
 def test_ci_docs_exist_and_mark_manual_pending():
-    docs = (REPO / "docs" / "CI.md").read_text(encoding="utf-8")
+    docs = (REPO / "docs" / "OPERATIONS_AND_RESTART.md").read_text(encoding="utf-8")
     assert "matrix" in docs.lower()
     assert "MANUAL-PENDING" in docs
     for platform in ("Windows", "Linux", "macOS", "ARM64", "x64"):
@@ -311,7 +311,7 @@ def test_reproducibility_detects_tamper_and_forbidden(tmp_path):
 
 
 def test_ci_docs_document_reproducibility_job():
-    docs = (REPO / "docs" / "CI.md").read_text(encoding="utf-8")
+    docs = (REPO / "docs" / "OPERATIONS_AND_RESTART.md").read_text(encoding="utf-8")
     lowered = docs.lower()
     assert "reproducib" in lowered
     assert "reproducibility_check.json" in docs

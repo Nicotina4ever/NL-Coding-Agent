@@ -67,5 +67,51 @@ da_eliminare/*
 
 # Local secrets / machine-local state
 .env
+.env.*
+!.env.example
+*.sqlite
 *.sqlite3
+*.sqlite3-*
 *.db
+*.db-*
+*.pem
+*.key
+*.p12
+*.pfx
+*_rsa
+id_rsa*
+credentials*.json
+secrets*.json
+
+# Model weights and local inference artifacts (never commit or package).
+*.gguf
+*.ggml
+*.bin
+*.safetensors
+*.onnx
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.tflite
+/models/
+
+# Code - OSS / VS Code build checkout and generated workbench output.
+# The checkout is a local build input, not NL Coding Agent source.
+vscode/
+.build/
+**/.build/
+out/
+**/out/
+*.vsix
+
+# Runtime logs and crash dumps
+*.log
+**/*.log
+*.dmp
+*.core
+core.*
+
+# Local caches and model storage directories
+.cache/
+ollama/
