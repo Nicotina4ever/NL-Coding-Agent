@@ -285,7 +285,8 @@ def test_backend_run_agent_returns_typed_result_and_closes(recording_crewai):
     assert result.text == "APPROVE\nfake backend output"
     assert result.model == "ollama/dev"
     assert result.provider == "ollama"
-    assert result.tools_used == ("read_file", "write_file")
+    assert result.tools_used == ()
+    assert result.available_tools == ("read_file", "write_file")
     assert result.duration_s is not None
     crew = RecordingCrew.instances[-1]
     assert crew.kicked is True

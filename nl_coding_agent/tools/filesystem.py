@@ -66,6 +66,8 @@ def scoped_patch_file(project_root: Path | str, rel_path: str, target_snippet: s
     target = resolve_scoped_path(project_root, rel_path, for_write=True)
     if not target.exists():
         raise FileNotFoundError(f"File not found: {rel_path}")
+    if not str(target_snippet):
+        raise ValueError("Refusing an empty patch target: it would replace every position")
 
     content = target.read_text(encoding="utf-8", errors="replace")
     if target_snippet not in content:

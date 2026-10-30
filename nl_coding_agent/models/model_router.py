@@ -377,6 +377,19 @@ class ModelRouter:
                 "avg_duration_s": round(avg_duration, 3),
                 "capability_score": cap_score,
                 "required_capabilities": list(required_capabilities or ()),
+                "prefer_capabilities": list(prefer_capabilities or ()),
+                "capability_states": {
+                    key: str(value.get("state") or "unknown")
+                    for key, value in capabilities.items()
+                },
+                "patch_quality_score": float(
+                    ((capabilities.get("patch_quality") or {}).get("metadata") or {})
+                    .get("score") or 0.0
+                ),
+                "reason": (
+                    "selected by measured capabilities and historical role outcomes; "
+                    "explicit caller candidates only, no cloud fallback"
+                ),
                 "max_cost_usd": max_cost_usd,
             }
             ranked.append((

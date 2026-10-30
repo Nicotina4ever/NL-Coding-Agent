@@ -374,6 +374,21 @@ export interface MissionExecutionError {
     new_status?: string | null;
 }
 
+export interface MissionToolInvocation {
+    id?: number;
+    tool_name?: string;
+    source?: string;
+    status?: string;
+    role?: string | null;
+    model?: string | null;
+    arguments?: unknown;
+    result?: unknown;
+    error?: string | null;
+    duration_ms?: number | null;
+    call_id?: string | null;
+    created_at?: string;
+}
+
 export interface MissionDetail {
     mission: MissionRow;
     tasks: MissionTask[];
@@ -381,6 +396,7 @@ export interface MissionDetail {
     verification_runs: VerificationRun[];
     attempts: MissionAttempt[];
     execution_errors?: MissionExecutionError[];
+    tool_invocations?: MissionToolInvocation[];
     model_bindings?: Record<string, MissionModelBinding>;
     progress: MissionProgress;
 }

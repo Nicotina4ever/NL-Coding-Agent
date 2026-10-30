@@ -1181,6 +1181,11 @@ class AppServices:
             ]
         except Exception:
             m["execution_errors"] = []
+        try:
+            from nl_coding_agent.core.tool_invocations import list_invocations
+            m["tool_invocations"] = list_invocations(mission_id=mission_id, limit=500)
+        except Exception:
+            m["tool_invocations"] = []
         return m
 
     def next_roadmap_mission(self, project_root: str | Path) -> dict:

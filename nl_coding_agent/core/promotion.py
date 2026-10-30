@@ -43,7 +43,7 @@ PROTECTED_DELTA_PREFIXES = (
     "logs/", "state/", "dist/", "build/", "patch/",
 )
 PROTECTED_DELTA_FILES = ("sha256_manifest.json", "foundation_changes.patch")
-MISSION_INPUT_DENY = ("docs/NEXT_SELF_BUILD_MISSION.md",)
+MISSION_INPUT_DENY = ("docs/NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md",)
 TERMINAL_MISSION_STATUSES = ("completed", "failed", "blocked", "interrupted")
 
 _STAGE_NAME_RE = re.compile(r"^mission-(\d+)-")

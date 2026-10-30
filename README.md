@@ -154,7 +154,7 @@ start/stop still asks for confirmation); without it the engine is read-only. URL
 owner-created `NETWORK` + `web-fetch` grants and an approving research profile (the extension never
 grants permissions). The mission planner is proportional: the core developer/tester/reviewer team gains
 a read-only architect for multi-file/design work and an auditor for security/audit objectives; the
-multi-agent runtime audit is in `docs/MULTI_AGENT_RUNTIME.md`. Commands: **Start Chat**, **Start
+multi-agent runtime audit is in `docs/ARCHITECTURE_AND_ENGINE.md`. Commands: **Start Chat**, **Start
 Mission…**, **Show Missions**, **Show Engine Settings**, **Toggle Mission Execution**, **Show Backend
 Status**, **Reconnect Backend**.
 
@@ -171,7 +171,7 @@ extension folder. The installed extension is **NL Coder** (extension ID `nlcodin
 and uses the real product logo as its icon. Real acceptance (isolated project mission completed with diff, candidate/oracle tests
 PASS and reviewer `APPROVE`; stop→resume; model→conversation; attachment/editor context; authorized
 URL fetch→context; installed-VSIX chat and mission acceptance) is recorded in
-`docs/FRONTEND_CHAT.md`, `docs/FRONTEND_MISSIONS.md` and `docs/evidence/frontend/`; protocol/architecture
+`docs/CHAT_AND_SESSIONS.md` and `docs/evidence/frontend/`; protocol/architecture
 details are in `docs/FRONTEND_ARCHITECTURE.md`. The NL Code standalone distribution still bundles
 extension 0.1.0 and must be rebuilt to include this chat/mission UI.
 
@@ -208,7 +208,7 @@ modified.
 | `config/` | Runtime configuration (models, external project paths). |
 | `assets/` | Real product logo and theme tokens. |
 | `.agents/` | Agent definitions, rules and skills used by agentic development sessions. |
-| `docs/` | Documentation; dated historical bundles live under `docs/history/legacy/`. |
+| `docs/` | Consolidated operational documentation; authority order is defined in `docs/README.md`. |
 | `data/` | SQLite database, self-build state, backups, mission baselines. **User data — never shipped.** Deliberately outside `.workspace/` (live-data path is a relocation-acceptance dependency). |
 | `.workspace/` | Single generated-data root (git-ignored): `build/` transient evidence, `dist/` release payloads (at most one verified candidate), `logs/`, `temp/`, `cache/`, `state/`. Default `<repo>/.workspace`; override with `NL_WORKSPACE_DIR`. |
 | `installer/` | Lightweight bootstrapper/installer tooling (stage-6 work in progress). |
@@ -216,27 +216,27 @@ modified.
 | `docs/evidence/` | Acceptance and SBOM evidence kept for audit traceability. |
 
 Directory ownership, retention/cleanup policy and the portable-build exclusion list are documented
-in `docs/REPOSITORY_STRUCTURE.md`.
+in `docs/SAFETY_AND_STORAGE.md` and `docs/README.md`.
 
 ## Documentation map
 
 | Document | Read it for |
 |---|---|
 | `AGENTS.md` | **Binding workspace rules**: containment, verification invariant, vendor policy, resource policy. |
+| `docs/README.md` | Entry point and authority of the consolidated documentation corpus. |
 | `docs/CURRENT_STATE.md` | What is actually implemented and verified today. |
-| `docs/02_SELF_BUILD_ROADMAP.md` | Product phases and roadmap. |
-| `docs/NEXT_SELF_BUILD_MISSION.md` | The next actionable self-build mission. |
-| `docs/08_ACCEPTANCE_GATES.md` | Gate definitions for a usable desktop milestone. |
-| `docs/PRODUCT_BACKLOG.md` | Consolidated, evidence-based product backlog. |
-| `docs/BLUEPRINT_INDEX.md` | Traceability index from the original blueprint to current requirements. |
-| `docs/product-blueprint/INDEX.json` | Machine-readable requirement status and **program order** (stages 1-6). |
-| `docs/REPOSITORY_STRUCTURE.md` | Directory ownership, build/data/log policy, packaging exclusions. |
-| `docs/REPOSITORY_HYGIENE.md` | Stage-5 read-only repository audit (historical measurement). |
-| `docs/REPOSITORY_HYGIENE_FOLLOWUP.md` | Structural consolidation performed after that audit. |
-| `docs/WORKSPACE_MIGRATION.md` | Completed workspace relocation record and rollback procedure. |
-| `docs/COMPLETED_MISSIONS.md` | Verified self-build mission history. |
-| `docs/CREWAI_RUNTIME.md`, `docs/PORTABLE_BUILD.md` | CrewAI runtime policy and portable staging evidence. |
-| `docs/history/legacy/INDEX.md` | Map of archived legacy documents, patch evidence and the archived one-off repair scripts (`docs/history/legacy/temp-scripts/`). |
+| `docs/NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md` | **Single 1.0 operational plan**, order of work and next self-build mission. |
+| `docs/08_ACCEPTANCE_GATES.md` | Real acceptance gates before any stable claim. |
+| `docs/OPERATIONS_AND_RESTART.md` | Resume commands, CI/reproducibility rules, what not to touch. |
+| `docs/ARCHITECTURE_AND_ENGINE.md` | Engine, CrewAI, Flows, Supervisor and handoff architecture. |
+| `docs/CHAT_AND_SESSIONS.md` | Agentic Chat, context, history, queue, steering and stop. |
+| `docs/MODELS_TOOLS_AND_SETTINGS.md` | Model Hub, routing, tools, permissions and settings. |
+| `docs/PRODUCT_AND_UX.md` | NL identity, mission-first UX and brand tokens. |
+| `docs/SAFETY_AND_STORAGE.md` | Storage, privacy, archive/purge and exclusions. |
+| `docs/RELEASE_AND_STANDALONE.md` | Standalone NL Code, packaging and release policy. |
+| `docs/PRODUCT_BACKLOG.md` | Historical `NL-BP-*` requirements (IDs preserved; source of truth is the live test). |
+| `docs/product-blueprint/INDEX.json` | Machine-readable requirement index and program order. |
+| `docs/evidence/` | Acceptance and SBOM evidence kept for audit traceability. |
 
 ## Verification
 

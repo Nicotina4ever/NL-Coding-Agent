@@ -31,6 +31,7 @@ __all__ = [
 ]
 
 DEFAULT_BASE_URL = "http://127.0.0.1:11434"
+MAX_TOOL_ARGUMENT_CHARS = 16_000
 
 
 # --------------------------------------------------------------------------- #
@@ -57,11 +58,19 @@ class AgentResult:
     usage: Mapping | None = None
     duration_s: float | None = None
     tools_used: tuple[str, ...] = ()
+    available_tools: tuple[str, ...] = ()
+    tool_invocations: tuple[Mapping, ...] = ()
     raw_events: tuple[Any, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "text", str(self.text or ""))
         object.__setattr__(self, "tools_used", tuple(str(item) for item in (self.tools_used or ())))
+        object.__setattr__(self, "available_tools",
+                           tuple(str(item) for item in (self.available_tools or ())))
+        invocations = []
+        for item in self.tool_invocations or ():
+            invocations.append(MappingProxyType(dict(item)))
+        object.__setattr__(self, "tool_invocations", tuple(invocations))
         object.__setattr__(self, "raw_events", tuple(self.raw_events or ()))
         if self.usage is not None:
             object.__setattr__(self, "usage", MappingProxyType(dict(self.usage)))
@@ -143,6 +152,69 @@ def _tool_names(tools: list | None) -> tuple[str, ...]:
     for tool in tools or ():
         names.append(str(getattr(tool, "name", type(tool).__name__)))
     return tuple(names)
+
+
+def _call_name_arguments(call: Any) -> tuple[str, Any, str]:
+    """Normalize one CrewAI/OpenAI tool-call object without executing it."""
+    if not isinstance(call, Mapping):
+        try:
+            call = dict(call)
+        except Exception:
+            return "", None, ""
+    function = call.get("function") or {}
+    if not isinstance(function, Mapping):
+        try:
+            function = dict(function)
+        except Exception:
+            function = {}
+    name = str(function.get("name") or call.get("name") or "").strip()
+    arguments = function.get("arguments", call.get("arguments"))
+    if isinstance(arguments, str):
+        try:
+            import json
+            arguments = json.loads(arguments)
+        except ValueError:
+            arguments = {"_raw": arguments[:MAX_TOOL_ARGUMENT_CHARS]}
+    return name, arguments, str(call.get("id") or call.get("tool_call_id") or "")
+
+
+def _invocations_from_output(output: Any) -> list[dict]:
+    """Extract actual tool calls/results from CrewAI task messages.
+
+    ``tools_used`` historically listed the available tools; this helper supplies
+    the distinct ledger of calls the model actually requested and their results.
+    """
+    invocations: list[dict] = []
+    pending: dict[str, dict] = {}
+    for task_output in getattr(output, "tasks_output", None) or ():
+        messages = getattr(task_output, "messages", None) or ()
+        for message in messages:
+            role = str(getattr(message, "role", "") or "")
+            if role == "assistant":
+                for call in getattr(message, "tool_calls", None) or ():
+                    name, arguments, call_id = _call_name_arguments(call)
+                    if not name:
+                        continue
+                    item = {
+                        "tool_name": name,
+                        "arguments": arguments,
+                        "result": None,
+                        "status": "requested",
+                        "call_id": call_id,
+                        "source": "native",
+                    }
+                    invocations.append(item)
+                    if call_id:
+                        pending[call_id] = item
+            elif role == "tool":
+                call_id = str(getattr(message, "tool_call_id", "") or "")
+                item = pending.get(call_id)
+                if item is None:
+                    continue
+                content = getattr(message, "content", "")
+                item["result"] = content
+                item["status"] = "completed"
+    return invocations
 
 
 def _usage_metrics(crew) -> dict | None:
@@ -339,13 +411,17 @@ class CrewAIBackend:
             output = crew.kickoff()
         except Exception as exc:  # classified below, message always preserved
             raise _map_backend_exception(exc) from exc
+        invocations = _invocations_from_output(output)
+        used = tuple(dict.fromkeys(item["tool_name"] for item in invocations))
         return AgentResult(
             text=str(output),
             model=str(model_name),
             provider=self.provider,
             usage=_usage_metrics(crew),
             duration_s=round(time.monotonic() - started, 3),
-            tools_used=_tool_names(tools),
+            tools_used=used,
+            available_tools=_tool_names(tools),
+            tool_invocations=tuple(invocations),
         )
 
     def run_crew(self, spec: CrewSpec, inputs: Mapping[str, Any], *,
@@ -488,7 +564,9 @@ class FakeCrewRuntime:
             self._scripts, [spec.role_id, spec.display_role, "*"], "agent")
         return AgentResult(
             text=text, model=str(model_name), provider="fake",
-            tools_used=_tool_names(tools),
+            tools_used=(),
+            available_tools=_tool_names(tools),
+            tool_invocations=(),
         )
 
     def run_crew(self, spec: CrewSpec, inputs: Mapping[str, Any], *,

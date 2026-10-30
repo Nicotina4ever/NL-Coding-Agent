@@ -101,6 +101,28 @@ CREATE TABLE IF NOT EXISTS task_attempts (
     error       TEXT
 );
 
+CREATE TABLE IF NOT EXISTS tool_invocations (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id      INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+    mission_id      INTEGER REFERENCES missions(id) ON DELETE SET NULL,
+    session_id      TEXT,
+    role            TEXT,
+    model           TEXT,
+    tool_name       TEXT NOT NULL,
+    source          TEXT NOT NULL DEFAULT 'native',
+    arguments_json  TEXT NOT NULL DEFAULT '{}',
+    result_json     TEXT NOT NULL DEFAULT '{}',
+    status          TEXT NOT NULL DEFAULT 'requested',
+    error           TEXT,
+    duration_ms     REAL,
+    call_id         TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_tool_invocations_mission
+    ON tool_invocations(mission_id, id);
+CREATE INDEX IF NOT EXISTS idx_tool_invocations_project
+    ON tool_invocations(project_id, id);
+
 CREATE TABLE IF NOT EXISTS app_settings (
     key         TEXT PRIMARY KEY,
     value       TEXT NOT NULL,

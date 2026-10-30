@@ -631,9 +631,24 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                 "previous_status": payload.get("previous_status"),
                 "new_status": payload.get("new_status"),
             })
+        tool_invocations = [{
+            "id": item.get("id"),
+            "tool_name": item.get("tool_name"),
+            "source": item.get("source"),
+            "status": item.get("status"),
+            "role": item.get("role"),
+            "model": item.get("model"),
+            "arguments": _bounded_payload(item.get("arguments_json") or {}),
+            "result": _bounded_payload(item.get("result_json") or {}),
+            "error": _bounded_text(item.get("error"), 2000),
+            "duration_ms": item.get("duration_ms"),
+            "call_id": item.get("call_id"),
+            "created_at": item.get("created_at"),
+        } for item in (details.get("tool_invocations") or [])]
         return {"mission": mission_view, "tasks": tasks, "handoffs": handoffs,
                 "verification_runs": verification_runs, "attempts": attempts,
                 "execution_errors": execution_errors,
+                "tool_invocations": tool_invocations,
                 "model_bindings": services.mission_model_bindings(mission_id),
                 "progress": details.get("progress") or {}}
 

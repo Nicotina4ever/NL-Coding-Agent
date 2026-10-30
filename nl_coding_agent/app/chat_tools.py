@@ -458,8 +458,10 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
                         raise ValueError("Native tool calling unavailable; select validated JSON mode explicitly")
                     response = model_turn(lambda: provider.chat_turn(model, state["messages"], model_tools, project_id=pid, timeout=timeout))
                 calls = response.get("tool_calls") or []
+                call_source = "native"
                 if not calls:
                     calls = _textual_tool_calls(response.get("content"))
+                    call_source = "fallback"
                 if not isinstance(calls, list) or len(calls) > 32:
                     raise ValueError("Invalid or excessive tool-call batch")
                 normalized = []
@@ -536,6 +538,17 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
                 body = json.dumps({"untrusted": True, "result": result}, ensure_ascii=False, default=str)
                 if not failed:
                     tool_cache[signature] = body
+                try:
+                    from nl_coding_agent.core.tool_invocations import record_invocation
+                    record_invocation(
+                        name, arguments=args, result=result,
+                        status="failed" if failed else "completed",
+                        source=call_source, project_id=pid, session_id=state["id"],
+                        role="chat", model=spec, call_id=call.get("id"),
+                        error=(str(result.get("message")) if failed else None),
+                    )
+                except Exception:
+                    pass
                 state["messages"].append({"role": "tool", "tool_call_id": call["id"], "name": name,
                     "content": body[:16000] + (" [TRUNCATED]" if len(body) > 16000 else "")})
                 if not failed and name in ("read_source", "read_file", "list_source", "search_files",

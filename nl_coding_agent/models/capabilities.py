@@ -14,7 +14,7 @@ from typing import Callable, Mapping
 
 from nl_coding_agent.persistence import database
 
-CAPABILITIES = ("tool_calling", "structured_output", "vision", "audio", "context")
+CAPABILITIES = ("tool_calling", "structured_output", "patch_quality", "vision", "audio", "context")
 STATES = ("measured", "declared", "unknown", "unavailable")
 __all__ = [
     "CAPABILITIES", "STATES", "CapabilityError", "CapabilityRecord",
@@ -29,6 +29,14 @@ class CapabilityError(ValueError):
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _json_object(value) -> dict:
+    try:
+        data = json.loads(str(value or "{}"))
+    except (TypeError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def ensure_schema() -> None:
@@ -50,11 +58,19 @@ def ensure_schema() -> None:
                     hardware_fingerprint TEXT,
                     context_limit INTEGER,
                     latency_ms REAL,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
                     source TEXT NOT NULL DEFAULT 'probe',
                     UNIQUE(provider_id, model_name, capability)
                 )
                 """
             )
+            columns = {row[1] for row in conn.execute(
+                "PRAGMA table_info(model_capabilities)").fetchall()}
+            if "metadata_json" not in columns:
+                conn.execute(
+                    "ALTER TABLE model_capabilities ADD COLUMN metadata_json "
+                    "TEXT NOT NULL DEFAULT '{}'"
+                )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_model_caps_model "
                 "ON model_capabilities(provider_id, model_name)"
@@ -76,6 +92,7 @@ class CapabilityRecord:
     hardware_fingerprint: str = ""
     context_limit: int | None = None
     latency_ms: float | None = None
+    metadata: Mapping = field(default_factory=dict)
     source: str = "probe"
 
     def __post_init__(self) -> None:
@@ -85,6 +102,7 @@ class CapabilityRecord:
             raise CapabilityError("Unknown capability state: " + repr(self.state))
         if not str(self.provider_id or "").strip() or not str(self.model_name or "").strip():
             raise CapabilityError("provider_id and model_name are required")
+        object.__setattr__(self, "metadata", dict(self.metadata or {}))
 
     def to_dict(self) -> dict:
         return {
@@ -94,7 +112,7 @@ class CapabilityRecord:
             "probe_id": self.probe_id, "measured_at": self.measured_at,
             "hardware_fingerprint": self.hardware_fingerprint,
             "context_limit": self.context_limit, "latency_ms": self.latency_ms,
-            "source": self.source,
+            "metadata": dict(self.metadata), "source": self.source,
         }
 
 
@@ -123,7 +141,8 @@ class CapabilitySet:
             "capabilities": {
                 name: {"state": record.state, "source": record.source,
                        "evidence_kind": record.evidence_kind,
-                       "measured_at": record.measured_at}
+                       "measured_at": record.measured_at,
+                       "metadata": dict(record.metadata)}
                 for name, record in self.records.items()
             },
         }
@@ -141,8 +160,8 @@ def record_capabilities(records: list[CapabilityRecord]) -> int:
                     INSERT INTO model_capabilities
                         (provider_id, model_name, backend_version, capability, state,
                          evidence_kind, probe_id, measured_at, hardware_fingerprint,
-                         context_limit, latency_ms, source)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                         context_limit, latency_ms, metadata_json, source)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
                     ON CONFLICT(provider_id, model_name, capability) DO UPDATE SET
                         backend_version=excluded.backend_version,
                         state=excluded.state,
@@ -152,12 +171,15 @@ def record_capabilities(records: list[CapabilityRecord]) -> int:
                         hardware_fingerprint=excluded.hardware_fingerprint,
                         context_limit=excluded.context_limit,
                         latency_ms=excluded.latency_ms,
+                        metadata_json=excluded.metadata_json,
                         source=excluded.source
                     """,
                     (record.provider_id, record.model_name, record.backend_version,
                      record.capability, record.state, record.evidence_kind,
                      record.probe_id, record.measured_at, record.hardware_fingerprint,
-                     record.context_limit, record.latency_ms, record.source),
+                     record.context_limit, record.latency_ms,
+                     json.dumps(dict(record.metadata), sort_keys=True, ensure_ascii=False),
+                     record.source),
                 )
                 written += 1
     finally:
@@ -175,6 +197,7 @@ def _row_to_record(row) -> CapabilityRecord:
         measured_at=str(row["measured_at"] or ""),
         hardware_fingerprint=str(row["hardware_fingerprint"] or ""),
         context_limit=row["context_limit"], latency_ms=row["latency_ms"],
+        metadata=_json_object(row["metadata_json"] if "metadata_json" in row.keys() else "{}"),
         source=str(row["source"] or "probe"),
     )
 
@@ -233,6 +256,7 @@ def probe_capabilities(provider_id: str, model_name: str,
         supported = bool(result.get("supported")) if isinstance(result, Mapping) else bool(result)
         context_limit = result.get("context_limit") if isinstance(result, Mapping) else None
         latency = result.get("latency_ms") if isinstance(result, Mapping) else None
+        metadata = result.get("metadata") if isinstance(result, Mapping) else None
         records.append(CapabilityRecord(
             provider_id, model_name, capability,
             "measured" if supported else "unavailable",
@@ -241,6 +265,7 @@ def probe_capabilities(provider_id: str, model_name: str,
             hardware_fingerprint=hardware_fingerprint,
             context_limit=int(context_limit) if context_limit is not None else None,
             latency_ms=float(latency) if latency is not None else None,
+            metadata=dict(metadata or {}) if isinstance(metadata, Mapping) else {},
             source="probe",
         ))
     return records

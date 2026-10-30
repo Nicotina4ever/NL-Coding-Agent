@@ -255,38 +255,75 @@ def _apply_python_tool_calls(project_root: Path, text: str) -> list[str]:
 
     actions: list[str] = []
     root = Path(project_root).resolve()
-    for block in re.findall(r"```(?:python|py)\r?\n(.*?)```", text, re.DOTALL):
+    blocks = re.findall(r"```(?:python|py)\r?\n(.*?)```", text, re.DOTALL)
+    for block in blocks:
         try:
             tree = ast.parse(block)
         except SyntaxError:
-            # A fenced block may contain prose around one call; try each line
-            # independently only when the whole block is not valid Python.
+            # A malformed trailing statement must not hide a literal tool call.
+            # Extract only the fixed literal form below; never eval/exec.
             calls = []
         else:
             calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)]
+        if not calls:
+            pattern = re.compile(
+                r"(write_file|patch_file)\(\s*(['\"])(.*?)\2\s*,\s*"
+                r"(\"\"\"|''')(.*?)\4\s*\)",
+                re.DOTALL,
+            )
+            for match in pattern.finditer(block):
+                name = match.group(1)
+                rel_path = match.group(3)
+                content = match.group(5)
+                try:
+                    if name == "write_file":
+                        scoped_write_file(root, rel_path, clean_file_content(content, rel_path))
+                        actions.append(f"Wrote {rel_path} via malformed Python tool call")
+                    else:
+                        _apply_unified_diff(root, rel_path, content)
+                        actions.append(f"Patched {rel_path} via malformed Python unified diff")
+                except Exception as exc:
+                    actions.append(f"Malformed Python tool call rejected for {rel_path}: {exc}")
+            continue
         for call in calls:
             func = call.func
             name = func.id if isinstance(func, ast.Name) else None
             if name not in ("patch_file", "write_file"):
                 continue
-            values: list[str] = []
-            for arg in call.args[:2]:
+            positional: list[str] = []
+            keywords: dict[str, str] = {}
+            for arg in call.args[:3]:
                 if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                    values.append(arg.value)
+                    positional.append(arg.value)
             for keyword in call.keywords:
-                if (keyword.arg in ("path", "content", "diff", "patch")
+                if (keyword.arg in ("path", "content", "diff", "patch", "target", "replacement")
                         and isinstance(keyword.value, ast.Constant)
                         and isinstance(keyword.value.value, str)):
-                    values.append(keyword.value.value)
-            if len(values) < 2:
+                    keywords[str(keyword.arg)] = keyword.value.value
+            rel_path = keywords.get("path") or (positional[0] if positional else "")
+            if not rel_path:
                 continue
-            rel_path, content = values[0], values[1]
             try:
                 if name == "write_file":
+                    content = keywords.get("content") or (
+                        positional[1] if len(positional) > 1 else "")
+                    if not content:
+                        continue
                     scoped_write_file(root, rel_path, clean_file_content(content, rel_path))
                     actions.append(f"Wrote {rel_path} via Python tool call")
+                elif "target" in keywords and "replacement" in keywords:
+                    scoped_patch_file(root, rel_path, keywords["target"],
+                                      keywords["replacement"])
+                    actions.append(f"Patched {rel_path} via Python snippet call")
+                elif len(positional) >= 3:
+                    scoped_patch_file(root, rel_path, positional[1], positional[2])
+                    actions.append(f"Patched {rel_path} via Python snippet call")
                 else:
-                    _apply_unified_diff(root, rel_path, content)
+                    diff = (keywords.get("diff") or keywords.get("patch")
+                            or (positional[-1] if len(positional) >= 2 else ""))
+                    if not diff:
+                        continue
+                    _apply_unified_diff(root, rel_path, diff)
                     actions.append(f"Patched {rel_path} via Python unified diff")
             except Exception as exc:
                 actions.append(f"Python tool call rejected for {rel_path}: {exc}")
@@ -383,6 +420,7 @@ class MultiAgentOrchestrator:
         self._last_verification = None
         self._last_agent_result = None
         self._route_selections: dict[str, dict] = {}
+        self._ledger_mission_id: int | None = None
 
     # ------------------------------------------------------------------ helpers
 
@@ -396,6 +434,9 @@ class MultiAgentOrchestrator:
                 "provider": str(getattr(result, "provider", None) or "ollama"),
                 "duration_s": getattr(result, "duration_s", None),
                 "tools_used": list(getattr(result, "tools_used", ()) or ()),
+                "available_tools": list(getattr(result, "available_tools", ()) or ()),
+                "tool_invocations": [dict(item) for item in
+                                     (getattr(result, "tool_invocations", ()) or ())],
             })
             usage = getattr(result, "usage", None)
             if usage:
@@ -427,14 +468,49 @@ class MultiAgentOrchestrator:
         try:
             from nl_coding_agent.models.model_router import ModelRouter, RouteRefused
             from nl_coding_agent.models.ollama_registry import list_models
+            from nl_coding_agent.models.capabilities import capability_set_for
             models = list_models()
             candidates = [{"provider_id": "ollama", "model_name": item.name}
                           for item in models if getattr(item, "name", "")]
             if not candidates:
                 raise RouteRefused("Automatic routing requires at least one available local model")
+            # Measure a bounded set only when the capability ledger has no
+            # measured evidence yet. The probe persists results, so later
+            # missions reuse them instead of calling the model again.
+            role_required = tuple(required_capabilities or (
+                ("tool_calling", "structured_output")
+                if role in ("developer", "debugger") else
+                ("structured_output",) if role == "reviewer" else ()
+            ))
+            measured = any(
+                capability_set_for("ollama", item["model_name"]).supports("tool_calling")
+                for item in candidates
+            )
+            if not measured:
+                try:
+                    from nl_coding_agent.models.operational_probes import (
+                        probe_available_models,
+                    )
+                    probe_available_models(limit=3)
+                    self._emit(
+                        "model_router", "info",
+                        "Measured operational capabilities for automatic routing "
+                        "(bounded Ollama probe).",
+                        mission_id=None,
+                    )
+                except Exception as probe_exc:
+                    self._emit(
+                        "model_router", "warning",
+                        "Capability probe unavailable; automatic routing will use "
+                        "existing evidence only: " + type(probe_exc).__name__,
+                        mission_id=None,
+                    )
+            prefer = ("tool_calling", "structured_output", "patch_quality") if role in (
+                "developer", "debugger") else ("structured_output", "tool_calling")
             router = ModelRouter(project_id=self.project_id)
             binding = router.auto_select(
-                role, candidates, required_capabilities=required_capabilities,
+                role, candidates, required_capabilities=role_required,
+                prefer_capabilities=prefer,
                 project_id=self.project_id, max_cost_usd=max_cost_usd,
             )
             resolved = f"{binding.provider_id}/{binding.model_name}"
@@ -489,27 +565,43 @@ class MultiAgentOrchestrator:
         name = str(request.get("name") or "")
         args = request.get("arguments") if isinstance(request.get("arguments"), dict) else {}
         from nl_coding_agent.tools.filesystem import scoped_list_dir, scoped_read_file
+        result = ""
+        status = "completed"
         try:
             if name in ("read_file", "read_source"):
-                return scoped_read_file(workspace, str(args.get("path") or ""))[:12000]
-            if name == "list_dir" or name == "list_source":
+                result = scoped_read_file(workspace, str(args.get("path") or ""))[:12000]
+            elif name in ("list_dir", "list_source"):
                 entries = scoped_list_dir(workspace, str(args.get("path") or "."))
-                return "\n".join(entries)[:8000]
-            if name == "run_tests":
+                result = "\n".join(entries)[:8000]
+            elif name == "run_tests":
                 from nl_coding_agent.tools.verification import detect_test_command
                 from nl_coding_agent.tools.shell import scoped_run_command
-                result = scoped_run_command(workspace, detect_test_command(workspace), timeout=120)
-                return (f"exit={result.get('returncode')}\n{result.get('stdout') or ''}\n"
-                        f"{result.get('stderr') or ''}")[:12000]
-            if name == "git_status":
+                run = scoped_run_command(workspace, detect_test_command(workspace), timeout=120)
+                result = (f"exit={run.get('returncode')}\n{run.get('stdout') or ''}\n"
+                          f"{run.get('stderr') or ''}")[:12000]
+            elif name == "git_status":
                 from nl_coding_agent.tools.git_tools import get_git_status
-                return get_git_status(workspace)[:8000]
-            if name == "git_diff":
+                result = get_git_status(workspace)[:8000]
+            elif name == "git_diff":
                 from nl_coding_agent.tools.git_tools import get_git_diff
-                return get_git_diff(workspace)[:12000]
+                result = get_git_diff(workspace)[:12000]
+            else:
+                result = "tool is not available for textual replay: " + name
+                status = "denied"
         except Exception as exc:
-            return "tool error: " + type(exc).__name__ + ": " + str(exc)
-        return "tool is not available for textual replay: " + name
+            result = "tool error: " + type(exc).__name__ + ": " + str(exc)
+            status = "failed"
+        try:
+            from nl_coding_agent.core.tool_invocations import record_invocation
+            record_invocation(
+                name, arguments=args, result=result, status=status,
+                source="fallback", project_id=self.project_id,
+                mission_id=getattr(self, "_ledger_mission_id", None),
+                call_id=str(request.get("id") or "") or None,
+            )
+        except Exception:
+            pass
+        return result
 
     def _call_model_with_textual_tools(self, role: str, model_name: str, prompt: str, *,
                                        workspace: Path, goal: str, backstory: str,
@@ -615,6 +707,18 @@ class MultiAgentOrchestrator:
             project_id=self.project_id,
         )
         self._last_agent_result = result
+        try:
+            from nl_coding_agent.core.tool_invocations import record_many
+            record_many(
+                [dict(item) for item in (getattr(result, "tool_invocations", ()) or ())],
+                project_id=self.project_id,
+                mission_id=getattr(self, "_ledger_mission_id", None),
+                role=role,
+                model=model_name,
+                source="native",
+            )
+        except Exception:
+            pass
         return result.text
 
     def _snapshot(self) -> dict[str, str]:
@@ -1519,6 +1623,7 @@ class MultiAgentOrchestrator:
         architect_model: str | None = None,
     ) -> dict:
         mission = get_mission(mission_id) or {}
+        self._ledger_mission_id = int(mission_id)
         existing_tasks = get_tasks(mission_id)
         stage: promotion.Stage | None = None
         baseline: dict[str, str] = {}

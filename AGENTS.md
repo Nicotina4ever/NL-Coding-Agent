@@ -11,8 +11,8 @@ The product is not a generic chat wrapper and not a clone of Cursor. Its definin
 is **orchestration**: task decomposition, precise handoffs, resource-aware scheduling,
 verification, conflict prevention, persistent state, and controlled self-development.
 
-Read `README.md` (overview and quick start), `docs/REPOSITORY_STRUCTURE.md` (directory ownership,
-retention and packaging limits) and this file before implementing major work.
+Read `README.md` (overview and quick start), `docs/README.md` and `docs/SAFETY_AND_STORAGE.md`
+(directory ownership, retention and packaging limits) and this file before implementing major work.
 
 ## Existing environment — preserve it
 
@@ -40,12 +40,12 @@ Python validation already succeeded:
 ## Documentation entry points
 
 - `README.md` — the single authoritative overview, quick start and documentation map.
-- `docs/REPOSITORY_STRUCTURE.md` — directory ownership, retention/cleanup policy and the
+- `docs/README.md` — entry point and authority of the consolidated documentation corpus.
+- `docs/SAFETY_AND_STORAGE.md` — directory ownership, retention/cleanup policy and the
   development-only exclusion list for the portable payload.
-- `docs/history/legacy/INDEX.md` — dated legacy documents and patch evidence kept for history;
-  they are evidence only, not current instructions.
-- Keep exactly one authoritative root README (`README.md`). Archive dated root documents under
-  `docs/history/legacy/` instead of adding alternative README variants.
+- `docs/NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md` — the single 1.0 operational plan and next mission.
+- Keep exactly one authoritative root README (`README.md`). Do not add alternative README variants
+  or new phase/roadmap documents; update the consolidated corpus.
 
 ## Entry points and cleanup staging
 
