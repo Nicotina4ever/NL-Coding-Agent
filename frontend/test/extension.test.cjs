@@ -112,7 +112,8 @@ async function run() {
     for (const id of ['chat-session', 'chat-queue', 'provider-id', 'provider-kind',
         'provider-api-key-env', 'chat-controls-toggle', 'mission-fields-toggle',
         'mission-list-toggle', 'generation-save', 'permission-grant',
-        'autonomy-save', 'mcp-save', 'probe-run', 'storage-scan', 'storage-vacuum']) {
+        'autonomy-save', 'mcp-save', 'probe-run', 'storage-scan', 'storage-vacuum',
+        'auto-coding']) {
         assert(html.includes('id="' + id + '"'), 'real VSIX webview exposes #' + id);
     }
     const systemMessage = api.chat.debugState.posted.find((message) =>

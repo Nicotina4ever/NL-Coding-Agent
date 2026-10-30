@@ -770,6 +770,38 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         return {"ok": True, "mission": services.delete_mission(
             int(mission_id), project_id=bound_project_id)}
 
+    @server.tool()
+    def job_start(argv: list[str], label: str = "", timeout_s: int = 900,
+                  approved: bool = False) -> dict:
+        """Run one allowlisted argv in the project root as a background job."""
+        require_execution(approved)
+        from nl_coding_agent.core import job_manager
+        return {"ok": True, "job": job_manager.start_job(
+            bound_project_id, project["root"], list(argv or []),
+            label=label, timeout_s=int(timeout_s))}
+
+    @server.tool(annotations=read_only)
+    def job_list() -> dict:
+        """List background jobs for the bound project."""
+        require_read()
+        from nl_coding_agent.core import job_manager
+        return {"ok": True, "jobs": job_manager.list_jobs(bound_project_id)}
+
+    @server.tool(annotations=read_only)
+    def job_output(job_id: str, max_bytes: int = 20000) -> dict:
+        """Read bounded output from one project background job."""
+        require_read()
+        from nl_coding_agent.core import job_manager
+        return {"ok": True, **job_manager.output(
+            bound_project_id, str(job_id), max_bytes=int(max_bytes))}
+
+    @server.tool()
+    def job_stop(job_id: str, approved: bool = False) -> dict:
+        """Stop one project background job."""
+        require_execution(approved)
+        from nl_coding_agent.core import job_manager
+        return {"ok": True, "job": job_manager.stop_job(bound_project_id, str(job_id))}
+
     @server.tool(annotations=read_only)
     def storage_scan() -> dict:
         """Read-only size scan of temporary/build/backup/staging categories."""

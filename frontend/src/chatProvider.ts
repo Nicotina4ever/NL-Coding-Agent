@@ -75,6 +75,7 @@ export interface DashboardState {
     busyMission: boolean;
     busyPhase: string;
     chatModel: string;
+    autoCoding: boolean;
     missionModels: { developerModel: string; reviewerModel: string };
     modelOptions: ModelOption[];
     providers: Array<{ id: string; label: string; kind: string; enabled: boolean }>;
@@ -134,6 +135,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     private busyMission = false;
     private busyPhase = 'idle';
     private chatModel = '';
+    private autoCoding = false;
     private missionModels = { developerModel: '', reviewerModel: '' };
     private attachments: AttachmentView[] = [];
     private history: HistoryMessage[] = [];
@@ -224,6 +226,10 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             if (typeof savedModel === 'string') {
                 this.chatModel = savedModel;
             }
+            const savedAutoCoding = this.workspaceState?.get<boolean>('nlCodingAgent.autoCoding');
+            if (typeof savedAutoCoding === 'boolean') {
+                this.autoCoding = savedAutoCoding;
+            }
             this.setupEditorTracking();
             await this.refreshAll(true);
             await this.loadSessions();
@@ -294,7 +300,8 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 : [];
             const result = await this.connection.converse(
                 context.project.id, message, legacyAttachments, this.requestTimeoutMs,
-                this.chatModel || 'auto', attachmentIds
+                this.chatModel || 'auto', attachmentIds,
+                this.autoCoding && this.connection.executionAllowed
             );
             if (result.route) {
                 this.lastRoute = result.route;
@@ -308,6 +315,15 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 if (names.length) {
                     this.postChat('system', 'Tools used: ' + Array.from(new Set(names)).join(', '));
                 }
+            }
+            const delegatedMissions = Array.isArray((result as { missions?: unknown[] }).missions)
+                ? ((result as { missions?: unknown[] }).missions || []).map(Number).filter(Number.isInteger)
+                : [];
+            if (delegatedMissions.length) {
+                this.activeMissionId = delegatedMissions[delegatedMissions.length - 1];
+                await this.refreshMissions();
+                this.postChat('system', 'Coding mission #' + this.activeMissionId +
+                    ' was created and will run through staging, verification and review.');
             }
             await this.loadHistory();
             await this.refreshQueue(false);
@@ -750,6 +766,19 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         }
         this.chatModel = value;
         void this.workspaceState?.update('nlCodingAgent.chatModel', value);
+        this.postState();
+    }
+
+    setAutoCoding(value: boolean): void {
+        if (value && !this.connection.executionAllowed) {
+            this.postChat('error', 'Enable mission execution before enabling automatic coding.');
+            return;
+        }
+        this.autoCoding = Boolean(value);
+        void this.workspaceState?.update('nlCodingAgent.autoCoding', this.autoCoding);
+        this.postChat('system', this.autoCoding
+            ? 'Automatic coding enabled: Chat may delegate an explicit coding goal to a verified mission.'
+            : 'Automatic coding disabled: Chat remains read-only until you start a mission.');
         this.postState();
     }
 
@@ -1295,6 +1324,13 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         if (this.chatModel && !this.modelOptions().some((option) => option.value === this.chatModel)) {
             this.chatModel = '';
         }
+        if (this.workspaceState?.get<boolean>('nlCodingAgent.autoCoding') === undefined &&
+            this.connection.executionAllowed) {
+            this.autoCoding = true;
+        }
+        if (!this.connection.executionAllowed) {
+            this.autoCoding = false;
+        }
         this.refreshEditorContext();
         await this.refreshMissions();
         this.errorMessage = undefined;
@@ -1491,6 +1527,9 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'setChatModel':
                     this.setChatModel(String(payload.value || ''));
+                    break;
+                case 'setAutoCoding':
+                    this.setAutoCoding(Boolean(payload.value));
                     break;
                 case 'attachPaths':
                     await this.attachPaths(Array.isArray(payload.paths)
@@ -1742,6 +1781,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             busyMission: this.busyMission,
             busyPhase: this.busyPhase,
             chatModel: this.chatModel,
+            autoCoding: this.autoCoding,
             missionModels: this.missionModels,
             modelOptions: this.modelOptions(),
             providers: (settings?.models.providers || []).map((provider) => ({

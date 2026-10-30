@@ -124,7 +124,26 @@ The launcher starts `NL Code.exe` with the portable `data/` profile and points t
 existing engine. Override the engine with `NLCODE_ENGINE_ROOT`; existing `NL_DATA_DIR` values are
 respected.
 
-## Acceptance gates (objective 2)
+## Unified operational Chat and background jobs
+
+When mission execution is enabled, Chat exposes **Auto-code**. The model can call
+`start_coding` for an explicit coding goal; the engine creates the mission, defers dispatch until the
+Chat turn releases the shared inference slot, then runs the normal Supervisor/staging/verification/
+reviewer path. Chat itself never writes the live tree directly. The toggle is persisted per
+workspace, is disabled automatically in read-only sessions, and every mission still requires the
+existing permissions and gates.
+
+Chat can also start, list, read and stop project-scoped background jobs through `job_start`,
+`job_list`, `job_output` and `job_stop`. Jobs are allowlisted argv vectors (no shell interpolation),
+run with the project root as cwd, keep bounded logs under `data/jobs/<project_id>/`, and reject
+inline Python/Node code and scripts outside the project. They are the local equivalent of background
+terminals, with the engine as owner.
+
+Conversation history is project-scoped and supports multiple sessions per project. Orphaned and
+archived sessions can be cleaned from Storage Manager; active projects and conversations are never
+touched.
+
+
 
 Command:
 

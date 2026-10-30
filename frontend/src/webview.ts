@@ -136,6 +136,9 @@ export function buildChatHtml(assets: WebviewAssets): string {
                             <select id="chat-model"></select>
                         </label>
                         <label class="nl-check"><input id="auto-model" type="checkbox"> Automatic</label>
+                        <label class="nl-check" title="Let Chat delegate an explicit coding goal to a verified mission when execution is enabled">
+                            <input id="auto-coding" type="checkbox"> Auto-code
+                        </label>
                         <span id="model-current" class="nl-muted"></span>
                     </div>
 

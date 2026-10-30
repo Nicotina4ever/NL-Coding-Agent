@@ -876,7 +876,8 @@ export class EngineConnection {
         attachments: AttachmentInput[] = [],
         timeoutMs?: number,
         modelSpec?: string,
-        attachmentIds: number[] = []
+        attachmentIds: number[] = [],
+        allowCoding = false
     ): Promise<ConverseResult> {
         if (!Number.isInteger(projectId) || projectId <= 0) {
             throw new EngineError('invalid-project', 'A valid project id from project_context is required.');
@@ -896,6 +897,9 @@ export class EngineConnection {
         }
         if (modelSpec && modelSpec.trim()) {
             params.model_spec = modelSpec.trim();
+        }
+        if (allowCoding) {
+            params.allow_coding = true;
         }
         const result = await this.callJson<ConverseResult>('nlc_converse', params, timeoutMs || this.timeoutMs);
         if (!result || result.ok !== true || typeof result.reply !== 'string') {

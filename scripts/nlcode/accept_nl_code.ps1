@@ -200,6 +200,15 @@ $results.Add((Write-Result 'NL Code editor watermark captured' (Test-Path $shotW
 
 Send-Keys '^%h' 1200
 Send-Keys '^+p' 900
+Send-Keys 'Terminal: Create New Terminal' 900
+Send-Keys '{ENTER}' 2200
+$shotTerminal = Save-Shot 'terminal'
+$results.Add((Write-Result 'Integrated terminal launched' (Test-Path $shotTerminal) $shotTerminal)) | Out-Null
+Send-Keys '^+p' 900
+Send-Keys 'Terminal: Kill the Active Terminal Instance' 700
+Send-Keys '{ENTER}' 800
+
+Send-Keys '^+p' 900
 Send-Keys 'NL Code: Open Agents' 900
 Send-Keys '{ENTER}' 1800
 $shotAgents = Save-Shot 'agents'
@@ -252,7 +261,7 @@ $resultPath = Join-Path $scratch 'acceptance-result.json'
     dist       = $Dist
     project    = $Project
     dataDir    = $DataDir
-    screenshots = @($shotBefore, $shotHome, $shotWatermark, $shotAgents, $shotSent, $shotReply)
+    screenshots = @($shotBefore, $shotHome, $shotWatermark, $shotTerminal, $shotAgents, $shotSent, $shotReply)
     results    = $results
     passed     = ($failed.Count -eq 0)
     finishedAt = (Get-Date).ToString('o')

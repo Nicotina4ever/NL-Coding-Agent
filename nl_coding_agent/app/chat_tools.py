@@ -215,6 +215,18 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
     if allow_coding:
         builtin.append(_tool("start_coding", "Delegate an explicitly requested source change to the verified Supervisor. Never use for questions or document planning. Returns queued id, not success.",
                              {"goal": {"type": "string", "minLength": 1}}, ["goal"]))
+        builtin.extend([
+            _tool("job_start", "Run one allowlisted argv in the project root as a background job (tests, build, watcher). Use only when the user asks to execute it.",
+                  {"argv": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+                   "label": {"type": "string"}, "timeout_s": {"type": "integer", "minimum": 5, "maximum": 3600}},
+                  ["argv"]),
+            _tool("job_list", "List background jobs for this project.", {}),
+            _tool("job_output", "Read bounded output from a background job.",
+                  {"job_id": {"type": "string"}, "max_bytes": {"type": "integer", "minimum": 1, "maximum": 200000}},
+                  ["job_id"]),
+            _tool("job_stop", "Stop a background job.",
+                  {"job_id": {"type": "string"}}, ["job_id"]),
+        ])
     if resume:
         state = load_state(pid)
         if not state or state["project_id"] != pid or state["root"] != registered["root"]:
@@ -391,11 +403,37 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
             if not item or item["project_id"] != pid:
                 raise ValueError("Mission belongs to another project")
             return {k: item.get(k) for k in ("id", "status", "review_verdict", "promotion_status", "verification_runs")}
+        if name == "job_start":
+            if not allow_coding:
+                raise PermissionError("Coding not authorized for this turn")
+            for scope in (permissions.WRITE, permissions.EXECUTE):
+                permissions.require(scope, project_id=pid)
+            from nl_coding_agent.core import job_manager
+            return job_manager.start_job(
+                pid, registered["root"], list(args.get("argv") or []),
+                label=str(args.get("label") or ""),
+                timeout_s=int(args.get("timeout_s") or 900))
+        if name == "job_list":
+            from nl_coding_agent.core import job_manager
+            return {"jobs": job_manager.list_jobs(pid)}
+        if name == "job_output":
+            from nl_coding_agent.core import job_manager
+            return job_manager.output(pid, str(args.get("job_id") or ""),
+                                      max_bytes=int(args.get("max_bytes") or 20000))
+        if name == "job_stop":
+            if not allow_coding:
+                raise PermissionError("Coding not authorized for this turn")
+            permissions.require(permissions.EXECUTE, project_id=pid)
+            from nl_coding_agent.core import job_manager
+            return job_manager.stop_job(pid, str(args.get("job_id") or ""))
         if name == "start_coding":
             if not allow_coding:
                 raise PermissionError("Coding not authorized for this turn")
             for scope in (permissions.WRITE, permissions.EXECUTE):
                 permissions.require(scope, project_id=pid)
+            from nl_coding_agent.core.doc_planning import is_document_plan_request
+            if is_document_plan_request(args["goal"]):
+                raise ValueError("Document analysis requires the Document Plan action")
             from nl_coding_agent.core.doc_planning import is_document_plan_request
             if is_document_plan_request(args["goal"]):
                 raise ValueError("Document analysis requires the Document Plan action")

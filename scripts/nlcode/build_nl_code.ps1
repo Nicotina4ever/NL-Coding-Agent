@@ -318,6 +318,17 @@ foreach ($target in $watermarkTargets) {
     Copy-Item (Join-Path $repoRoot 'assets\nl-watermark-hcDark.svg') (Join-Path $target 'letterpress-hcDark.svg') -Force
 }
 
+Write-Step 'Restore node-pty ConPTY runtime files omitted by the package task'
+$ptySource = Join-Path $src 'node_modules\node-pty\prebuilds\win32-x64\conpty'
+$ptyBase = Join-Path $dist 'resources\app\node_modules.asar.unpacked\node-pty'
+if (Test-Path $ptySource) {
+    foreach ($relative in @('prebuilds\win32-x64\conpty', 'build\Release\conpty')) {
+        $target = Join-Path $ptyBase $relative
+        New-Item -ItemType Directory -Force -Path $target | Out-Null
+        Copy-Item (Join-Path $ptySource '*') $target -Recurse -Force
+    }
+}
+
 Write-Step 'Build and install the NL Coding Agent extension into the portable profile'
 $frontend = Join-Path $repoRoot 'frontend'
 if (-not (Test-Path (Join-Path $frontend 'node_modules'))) { Invoke-Native $npm @('install') $frontend }

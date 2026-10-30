@@ -41,6 +41,7 @@
     const providerSelectEl = $('provider-select');
     const chatModelEl = $('chat-model');
     const autoModelEl = $('auto-model');
+    const autoCodingEl = $('auto-coding');
     const modelCurrentEl = $('model-current');
     const modelBar = $('model-bar');
     const contextStrip = $('context-strip');
@@ -518,6 +519,8 @@
         populateSelect(reviewerModelEl, options, current.missionModels ? current.missionModels.reviewerModel : '');
         const auto = !current.chatModel;
         autoModelEl.checked = auto;
+        autoCodingEl.checked = Boolean(current.autoCoding);
+        autoCodingEl.disabled = !current.executionEnabled;
 
         const providers = [];
         const seenProviders = {};
@@ -1216,6 +1219,10 @@
         } else {
             postModelRoute('');
         }
+    });
+
+    autoCodingEl.addEventListener('change', function () {
+        postAction('setAutoCoding', { value: autoCodingEl.checked });
     });
 
     function missionModelsChanged() {
