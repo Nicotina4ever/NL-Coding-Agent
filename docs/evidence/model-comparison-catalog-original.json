@@ -1,0 +1,215 @@
+{
+  "fixture": "catalog-original-strict",
+  "tests_unchanged": true,
+  "models": [
+    {
+      "label": "qwen25",
+      "model": "ollama/qwen2.5-coder:7b-instruct-q4_K_M",
+      "baseline_code": 2,
+      "status": "blocked",
+      "result_summary": "Developer produced no workspace change. Actions parsed: none. The model output did not modify files.",
+      "flow_id": "a4b13708de5e46b080ef94e14534dd9b",
+      "review_verdict": "REJECT",
+      "promotion_status": "staged",
+      "live_tests_code": 2,
+      "tasks": [
+        {
+          "role": "architect",
+          "status": "completed"
+        },
+        {
+          "role": "developer",
+          "status": "failed"
+        },
+        {
+          "role": "developer",
+          "status": "pending"
+        },
+        {
+          "role": "developer",
+          "status": "pending"
+        },
+        {
+          "role": "tester",
+          "status": "pending"
+        },
+        {
+          "role": "reviewer",
+          "status": "pending"
+        }
+      ],
+      "attempts": [
+        {
+          "role": "architect",
+          "status": "completed",
+          "error": "",
+          "output_tail": "lease(reservation_id)`: Releases a reservation if it exists.\n   - `expire(now=None)`: Expires reservations whose `expires_at` is <= `now`.\n   - `available(product_id, now=None)`: Returns the available stock for a product, considering active reservations.\n\n2. **Repository Class**:\n   - Implement methods to store, retrieve, and update reservation data.\n   - Ensure that reservations are properly linked to products and have expiration logic.\n\n3. **API Class**:\n   - Implement methods to interact with the `CatalogService` using the bootstrap service.\n\n**Risks:**\n- Ensure that reservations do not block stock for expired reservations.\n- Verify that the `release` method only returns `True` for known reservations.\n- Ensure that the `expire` method correctly removes expired reservations and returns the count.\n\n**Verification Targets:**\n- Unit tests for each method in `CatalogService`.\n- Integration tests to ensure that the API methods correctly interact with the service.\n- End-to-end tests to simulate reservation and release scenarios.\n\n**Additional Notes:**\n- Ensure that the implementation does not introduce any new dependencies.\n- Maintain the existing code structure and naming conventions.",
+          "tools_used": null,
+          "invocations": 0
+        },
+        {
+          "role": "developer",
+          "status": "failed",
+          "error": "Developer produced no workspace change. Actions parsed: none. The model output did not modify files.",
+          "output_tail": "ion persistence is not implemented\\\")\"}}\n{\"name\": \"patch_file\", \"arguments\": {\"path\": \"catalog/repository.py\", \"target\": \"raise NotImplementedError(\\\"reservation lookup is not implemented\\\")\", \"replacement\": \"def get_reservation(self, reservation_id: str) -> Reservation | None:\\n    return self._reservations.get(reservation_id)\\n\\n    raise NotImplementedError(\\\"reservation lookup is not implemented\\\")\"}}\n{\"name\": \"patch_file\", \"arguments\": {\"path\": \"catalog/repository.py\", \"target\": \"raise NotImplementedError(\\\"reservation deletion is not implemented\\\")\", \"replacement\": \"def delete_reservation(self, reservation_id: str) -> bool:\\n    if reservation_id in self._reservations:\\n        del self._reservations[reservation_id]\\n        return True\\n    return False\\n\\n    raise NotImplementedError(\\\"reservation deletion is not implemented\\\")\"}}\n{\"name\": \"patch_file\", \"arguments\": {\"path\": \"catalog/repository.py\", \"target\": \"raise NotImplementedError(\\\"reservation listing is not implemented\\\")\", \"replacement\": \"def list_reservations(self) -> list[Reservation]:\\n    return list(self._reservations.values())\\n\\n    raise NotImplementedError(\\\"reservation listing is not implemented\\\")\"}}\n```",
+          "tools_used": null,
+          "invocations": 0
+        }
+      ],
+      "tool_invocations": [
+        {
+          "tool": "text_action",
+          "status": "failed",
+          "source": "fallback"
+        }
+      ],
+      "verification_runs": []
+    },
+    {
+      "label": "qwen35",
+      "model": "ollama/qwen3.5:9b",
+      "baseline_code": 2,
+      "status": "failed",
+      "result_summary": "Mission failed during execution: CrewRuntimeError: Tool 'read_file' failed during '\nPROJECT ROOT: K:\\AI\\NL Coding Agent\\.workspace\\temp\\model-trials\\qwen35\\project\nWORKSPACE (staged copy; write relative paths here): K:\\AI\\NL Coding Agent\\.workspace\\temp\\model-trials\\qwen35\\project\\data\\staging\\mission-1-73igonjl\\workspace\nMISSION GOAL: Implement reservation support in catalog/service.py, catalog/repository.py and catalog/api.py. Add CatalogService.reserve(product_id, quantity, now=None, ttl=30), release(reservation_id), expire(now=None) and available(product_id, now=None). Reservations must reduce available stock; a reservation whose expires_at is <= now must no longer block stock. release returns True only for a known reservation; expire returns the number of reservations removed. Add api.api_reserve(service, product_id, quantity, now=None, ttl=30), api.api_release(service, reservation_id) and api.api_available(service, product_id, now=None) using the same bootstrap service. Preserve the existing product API and all existing tests. Change only catalog/service.py, catalog/repository.py and catalog/api.py.\n\nSUBTASK 1/3 — implement the part of the objective that belongs to `catalog/repository.py`. Start by reading `catalog/repository.py` and the modules it depends on. Do not modify any other file.\n\nSUBTASK 1/3: Implement change in catalog/repository.py\nDeclared write scope for THIS subtask (do not modify other files):\n- catalog/repository.py\n\nPRIOR ARCHITECTURE/AUDIT NOTES AND ",
+      "flow_id": "d46e5140bb89442886559b298cde21bd",
+      "review_verdict": null,
+      "promotion_status": "staged",
+      "live_tests_code": 2,
+      "tasks": [
+        {
+          "role": "architect",
+          "status": "completed"
+        },
+        {
+          "role": "developer",
+          "status": "failed"
+        },
+        {
+          "role": "developer",
+          "status": "pending"
+        },
+        {
+          "role": "developer",
+          "status": "pending"
+        },
+        {
+          "role": "tester",
+          "status": "pending"
+        },
+        {
+          "role": "reviewer",
+          "status": "pending"
+        }
+      ],
+      "attempts": [
+        {
+          "role": "architect",
+          "status": "completed",
+          "error": "",
+          "output_tail": "pers change\n\n---\n\n## Constraints\n1. Available stock = total_stock - sum(non-expired reservations)\n2. Expired reservation (expires_at <= now) does NOT block stock\n3. release() returns True ONLY for known reservation_id\n4. expire() returns integer count of removed reservations\n5. Reservation ID must be unique per product (UUID or counter in dict key)\n\n---\n\n## Risks\n- Float timestamp precision when comparing expires_at <= now\n- No concurrency protection (assumed single-threaded per tests)\n- Reservation ID generation must not collide across products\n- Expire logic must handle multiple expired reservations correctly\n\n---\n\n## Verification Targets\n1. `test_reservation_reduces_available_stock` → available drops by reservation quantity\n2. `test_insufficient_stock_is_rejected` → InsufficientStock raised when stock insufficient\n3. `test_release_restores_stock_and_reports_unknown_id` → release returns True/False correctly\n4. `test_expired_reservation_no_longer_blocks_stock` → expire removes expired reservations, stock restored\n5. `test_api_helpers_share_bootstrap_service` → api_* functions work with bootstrap service\n6. `test_existing_product_api_is_preserved` → all product API calls unchanged",
+          "tools_used": null,
+          "invocations": 0
+        },
+        {
+          "role": "developer",
+          "status": "failed",
+          "error": "CrewRuntimeError: Tool 'read_file' failed during '\nPROJECT ROOT: K:\\AI\\NL Coding Agent\\.workspace\\temp\\model-trials\\qwen35\\project\nWORKSPACE (staged copy; write relative paths here): K:\\AI\\NL Coding Agent\\.workspace\\temp\\model-trials\\qwen35\\project\\data\\staging\\mission-1-73igonjl\\workspace\nMISSION GOAL: Implement reservation support in catalog/service.py, catalog/repository.py and catalog/api.py. Add CatalogService.reserve(product_id, quantity, now=None, ttl=30), release(reservation_id), expire(now=None) and available(product_id, now=None). Reservations must reduce available stock; a reservati",
+          "output_tail": "",
+          "tools_used": null,
+          "invocations": 0
+        }
+      ],
+      "tool_invocations": [],
+      "verification_runs": []
+    },
+    {
+      "label": "muse",
+      "model": "ollama/muse-glimmer:30b-q4_K_M",
+      "baseline_code": 2,
+      "status": "blocked",
+      "result_summary": "Software Architect analysis failed: Completions.create() got an unexpected keyword argument 'num_ctx'",
+      "flow_id": "cec4a4fb13ca44d390fdb3fa33c07346",
+      "review_verdict": "REJECT",
+      "promotion_status": "staged",
+      "live_tests_code": 2,
+      "tasks": [
+        {
+          "role": "architect",
+          "status": "failed"
+        },
+        {
+          "role": "developer",
+          "status": "pending"
+        },
+        {
+          "role": "developer",
+          "status": "pending"
+        },
+        {
+          "role": "developer",
+          "status": "pending"
+        },
+        {
+          "role": "tester",
+          "status": "pending"
+        },
+        {
+          "role": "reviewer",
+          "status": "pending"
+        }
+      ],
+      "attempts": [
+        {
+          "role": "architect",
+          "status": "failed",
+          "error": "Completions.create() got an unexpected keyword argument 'num_ctx'",
+          "output_tail": "",
+          "tools_used": null,
+          "invocations": 0
+        }
+      ],
+      "tool_invocations": [],
+      "verification_runs": []
+    }
+  ],
+  "capability_records": {
+    "qwen3.5:9b": {},
+    "muse-glimmer:30b-q4_K_M": {
+      "tool_calling": {
+        "state": "measured",
+        "metadata": {
+          "call": "record_probe",
+          "source": "native"
+        }
+      },
+      "structured_output": {
+        "state": "measured",
+        "metadata": {
+          "valid_json": true
+        }
+      },
+      "patch_quality": {
+        "state": "measured",
+        "metadata": {
+          "arguments_valid": true,
+          "call": "patch_file",
+          "exact_fixture": true,
+          "score": 1.0,
+          "source": "native"
+        }
+      },
+      "vision": {
+        "state": "unknown",
+        "metadata": {}
+      },
+      "audio": {
+        "state": "unknown",
+        "metadata": {}
+      },
+      "context": {
+        "state": "unknown",
+        "metadata": {}
+      }
+    }
+  }
+}

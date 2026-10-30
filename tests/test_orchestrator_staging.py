@@ -173,8 +173,13 @@ def test_happy_path_promotes_only_after_review_approval(project, mission_env):
     assert "def sub(a, b):" in read_text(live_path)
     assert model.roles == [MODEL_DEVELOPER, MODEL_REVIEWER]
     assert len(model.calls[0]["tools"]) >= 4
-    assert {"write_file", "patch_file", "run_tests", "git_diff"} <= {
+    # Developer stages get read/write/patch/git tools; shell and test execution are
+    # deliberately excluded so a local model cannot loop on run_command/run_tests
+    # instead of producing a patch. Verification runs independently afterwards.
+    assert {"read_file", "write_file", "patch_file", "git_diff"} <= {
         item.name for item in model.calls[0]["tools"]}
+    assert "run_tests" not in {item.name for item in model.calls[0]["tools"]}
+    assert "run_command" not in {item.name for item in model.calls[0]["tools"]}
 
     mission = get_mission(mission_id)
     assert mission["status"] == "completed"

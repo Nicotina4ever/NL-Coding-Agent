@@ -51,6 +51,21 @@ def test_python_keyword_and_three_positional_patch_calls(tmp_path, isolated_db):
     assert (root / "a.py").read_text(encoding="utf-8") == "A = 4\nB = 3\n"
 
 
+def test_fenced_json_line_patch_calls_are_applied(tmp_path, isolated_db):
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "a.py").write_text("A = 1\nB = 2\n", encoding="utf-8")
+    text = (
+        "```python\n"
+        '{"name": "patch_file", "arguments": {"path": "a.py", '
+        '"target": "B = 2", "replacement": "B = 5"}}\n'
+        "```"
+    )
+    actions = _apply_text_actions(root, text)
+    assert any("Patched a.py" in item for item in actions)
+    assert (root / "a.py").read_text(encoding="utf-8") == "A = 1\nB = 5\n"
+
+
 def test_empty_patch_target_is_rejected(tmp_path):
     root = tmp_path / "project"
     root.mkdir()

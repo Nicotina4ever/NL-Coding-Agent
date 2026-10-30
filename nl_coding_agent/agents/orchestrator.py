@@ -127,7 +127,20 @@ def _make_llm(model_name: str, base_url: str = "http://127.0.0.1:11434",
     from nl_coding_agent.core.permissions import assert_model_permitted
 
     assert_model_permitted(model_name, base_url, project_id=project_id)
-    return LLM(model=model_name, base_url=base_url, temperature=temperature)
+    kwargs: dict = {"model": model_name, "base_url": base_url, "temperature": temperature}
+    # Keep a bounded Ollama context: the 131k model default spills a 9B/30B model
+    # into CPU RAM and turns every stage into a multi-minute stall on 8 GB VRAM.
+    # Cloud or explicitly non-Ollama routes keep their provider defaults.
+    if "cloud" not in str(model_name).lower():
+        try:
+            num_ctx = int(os.environ.get("NL_OLLAMA_NUM_CTX", "16384"))
+        except ValueError:
+            num_ctx = 16384
+        if num_ctx >= 2048:
+            # CrewAI's Ollama route uses the OpenAI-compatible client; pass the
+            # Ollama option through extra_body rather than as a top-level kwarg.
+            kwargs["extra_body"] = {"options": {"num_ctx": num_ctx}}
+    return LLM(**kwargs)
 
 
 def parse_reviewer_verdict(text: str) -> str:
@@ -330,7 +343,9 @@ def _apply_python_tool_calls(project_root: Path, text: str) -> list[str]:
     return actions
 
 
-def _apply_text_actions(project_root: Path, text: str) -> list[str]:
+def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None = None,
+                        mission_id: int | None = None, role: str | None = None,
+                        model: str | None = None) -> list[str]:
     """Execute write/patch actions emitted as text by a local model.
 
     This is a fallback for models that describe a tool call instead of using the
@@ -339,6 +354,57 @@ def _apply_text_actions(project_root: Path, text: str) -> list[str]:
     actions: list[str] = []
     root = Path(project_root).resolve()
 
+    # Some local models emit one JSON tool object per line inside a Python fence
+    # instead of a JSON array or a ```json fence. Parse the literal objects only.
+    for block in re.findall(r"```(?:python|py)\r?\n(.*?)```", text, re.DOTALL):
+        for line in block.splitlines():
+            candidate = line.strip().rstrip(",")
+            if not candidate.startswith("{"):
+                continue
+            try:
+                item = json.loads(candidate)
+            except ValueError:
+                continue
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name") or item.get("tool") or item.get("action")
+            args = item.get("arguments") or item.get("args")
+            if not isinstance(args, dict):
+                continue
+            try:
+                if name == "write_file" and "path" in args and "content" in args:
+                    content = clean_file_content(str(args["content"]), str(args["path"]))
+                    scoped_write_file(root, str(args["path"]), content)
+                    actions.append(f"Wrote {args['path']} via fenced JSON line")
+                elif name == "patch_file" and {"path", "target", "replacement"} <= set(args):
+                    target = str(args["target"])
+                    if not target:
+                        raise ValueError("empty patch target")
+                    scoped_patch_file(root, str(args["path"]), target,
+                                      str(args["replacement"]))
+                    actions.append(f"Patched {args['path']} via fenced JSON line")
+            except Exception as exc:
+                actions.append(f"Fenced JSON action rejected: {exc}")
+
+    # Full-file fenced form used by many local models:
+    # ```python
+    # --- catalog/repository.py ---
+    # <complete file>
+    # ```
+    section_pattern = re.compile(
+        r"```(?:python|py)\r?\n---\s*([^\r\n]+?)\s*---\r?\n(.*?)```",
+        re.DOTALL,
+    )
+    for match in section_pattern.finditer(text):
+        rel_path = match.group(1).strip().strip("`")
+        if not rel_path or " " in rel_path:
+            continue
+        try:
+            scoped_write_file(root, rel_path,
+                              clean_file_content(match.group(2), rel_path))
+            actions.append(f"Wrote {rel_path} via section code block")
+        except Exception as exc:
+            actions.append(f"Failed to write {rel_path}: {exc}")
     # JSON tool calls: ```json {"name": "write_file", "arguments": {...}} ```
     for block in re.findall(r"```json\r?\n(.*?)```", text, re.DOTALL):
         try:
@@ -400,6 +466,24 @@ def _apply_text_actions(project_root: Path, text: str) -> list[str]:
             actions.append(f"Failed to patch {rel_path}: {exc}")
 
     actions.extend(_apply_python_tool_calls(root, text))
+    try:
+        from nl_coding_agent.core.tool_invocations import record_invocation
+        for action in actions:
+            lowered = action.lower()
+            if action.startswith("Wrote "):
+                tool_name = "write_file"
+            elif action.startswith("Patched "):
+                tool_name = "patch_file"
+            else:
+                tool_name = "text_action"
+            status = "failed" if ("rejected" in lowered or lowered.startswith("failed")) else "completed"
+            record_invocation(
+                tool_name, result=action, status=status, source="fallback",
+                project_id=project_id, mission_id=mission_id,
+                role=role, model=model,
+            )
+    except Exception:
+        pass
     return actions
 
 
@@ -2068,7 +2152,7 @@ Do not claim that changes were made. The Developer will perform them in a staged
         )
 
         tools = [item for item in get_project_tools(stage.workspace, project_id=self.project_id)
-                 if getattr(item, "name", "") not in ("read_file", "list_dir")]
+                 if getattr(item, "name", "") not in ("run_command", "run_tests")]
         scope_text = (
             "Declared write scope for THIS subtask (do not modify other files):\n- "
             + "\n- ".join(write_paths)
@@ -2183,12 +2267,20 @@ INSTRUCTIONS:
                     # Preserve the rejected candidate for diagnosis instead of
                     # leaving only the restored baseline.
                     if first_output:
-                        _apply_text_actions(stage.workspace, first_output)
+                        _apply_text_actions(
+                            stage.workspace, first_output,
+                            project_id=self.project_id, mission_id=mission_id,
+                            role="developer", model=model_name,
+                        )
                         promotion.normalize_staged_newlines(stage)
                     output = first_output
                     break
                 raise
-            actions = _apply_text_actions(stage.workspace, output)
+            actions = _apply_text_actions(
+                stage.workspace, output,
+                project_id=self.project_id, mission_id=mission_id,
+                role="developer", model=model_name,
+            )
             promotion.normalize_staged_newlines(stage)
             after_files = snapshot_workspace(stage.workspace)
             allowed = {str(path).replace("\\", "/") for path in write_paths}
@@ -2513,7 +2605,11 @@ INSTRUCTIONS:
             expected_output="Summary of the staged fix actually applied.",
             tools=tools,
         )
-        actions = _apply_text_actions(stage.workspace, output)
+        actions = _apply_text_actions(
+            stage.workspace, output,
+            project_id=self.project_id, mission_id=mission_id,
+            role="debugger", model=model_name,
+        )
         promotion.normalize_staged_newlines(stage)
         after_debug = snapshot_workspace(stage.workspace)
         reverted: list[str] = []

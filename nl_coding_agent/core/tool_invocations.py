@@ -45,19 +45,23 @@ def record_invocation(
         source = "native"
     if status not in ("requested", "completed", "failed", "denied", "unknown"):
         status = "unknown"
-    with database.get_connection() as conn:
-        cur = conn.execute(
-            """INSERT INTO tool_invocations
-               (project_id, mission_id, session_id, role, model, tool_name, source,
-                arguments_json, result_json, status, error, duration_ms, call_id)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (
-                project_id, mission_id, session_id, role, model, str(tool_name or "")[:200],
-                source, _bounded_json(arguments), _bounded_json(result), status,
-                str(error or "")[:4000] or None, duration_ms, call_id,
-            ),
-        )
-        return int(cur.lastrowid)
+    conn = database.get_connection()
+    try:
+        with conn:
+            cur = conn.execute(
+                """INSERT INTO tool_invocations
+                   (project_id, mission_id, session_id, role, model, tool_name, source,
+                    arguments_json, result_json, status, error, duration_ms, call_id)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    project_id, mission_id, session_id, role, model, str(tool_name or "")[:200],
+                    source, _bounded_json(arguments), _bounded_json(result), status,
+                    str(error or "")[:4000] or None, duration_ms, call_id,
+                ),
+            )
+            return int(cur.lastrowid)
+    finally:
+        conn.close()
 
 
 def record_many(
@@ -110,11 +114,14 @@ def list_invocations(*, mission_id: int | None = None, project_id: int | None = 
         clauses.append("session_id = ?")
         params.append(str(session_id))
     where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
-    with database.get_connection() as conn:
+    conn = database.get_connection()
+    try:
         rows = conn.execute(
             "SELECT * FROM tool_invocations" + where + " ORDER BY id DESC LIMIT ?",
             (*params, limit),
         ).fetchall()
+    finally:
+        conn.close()
     items = []
     for row in rows:
         item = dict(row)
