@@ -211,5 +211,19 @@
         "metadata": {}
       }
     }
+  },
+  "post_run_note": "After these snapshots, fallback recognition was extended to --- file --- full-file blocks and newline-delimited JSON tool objects; those failed candidates were not re-run to avoid identical retries. Re-running qwen2.5 would apply its patch lines, but the emitted replacement nests a def inside an existing method, so the validation/syntax gate still blocks it.",
+  "latest_observations": {
+    "qwen3.5:9b": "Architect completed; developer made no attempt within the controlled window and the abandoned Flow was reconciled to INTERRUPTED.",
+    "qwen2.5:14b-instruct": "No developer attempt within the controlled window; abandoned Flow reconciled to INTERRUPTED.",
+    "muse-glimmer:30b-q4_K_M": "Capability probe measured tool_calling=true and patch_quality=1.0 (exact fixture) and structured_output=true. Full mission architect exceeded the 8GB-VRAM/context window; abandoned Flow reconciled to INTERRUPTED, no developer attempt.",
+    "qwen2.5-coder:7b-instruct-q4_K_M": "No accepted candidate. Output format is the reproducible cause: full-file sections and fenced JSON patch lines were initially unrecognized; patch lines later recognized contain a duplicate nested def/replacement indentation and are rejected by validation."
+  },
+  "gates": {
+    "catalog_original_mission": "BLOCKED",
+    "gate_c_complete": false,
+    "gate_b_started": false,
+    "gate_d_started": false,
+    "gate_e_started": false
   }
 }
