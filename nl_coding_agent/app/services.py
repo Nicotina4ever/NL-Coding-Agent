@@ -1150,6 +1150,7 @@ class AppServices:
         debug_model: str | None = None,
         architect_model: str | None = None,
         stop_after: str | None = None,
+        pipeline: str | None = None,
     ) -> str:
         """Schedule autonomous multi-agent mission execution on the sequential scheduler."""
         task_id = f"mission-{mission_id}"
@@ -1172,7 +1173,8 @@ class AppServices:
             try:
                 overrides = {key: value for key, value in {
                     "developer_model": developer_model, "reviewer_model": reviewer_model,
-                    "debug_model": debug_model, "architect_model": architect_model}.items()
+                    "debug_model": debug_model, "architect_model": architect_model,
+                    "pipeline": pipeline}.items()
                     if value is not None}
                 config = SupervisorConfig.load(mission.get("project_id"), overrides=overrides)
                 def factory(project_root):

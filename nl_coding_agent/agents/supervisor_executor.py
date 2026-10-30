@@ -52,8 +52,10 @@ class SupervisorMissionExecutor:
         self.stage = None
         self.baseline: dict[str, str] = {}
         self.mission: dict = {}
-        self.tasks: dict[str, dict] = {}
+        self.tasks: list[dict] = []
+        self.task_map: dict[str, list[dict]] = {}
         self.review_text = ""
+        self._last_verification_error = ""
         self._prepared = False
 
     # ------------------------------------------------------------------ setup
@@ -74,6 +76,10 @@ class SupervisorMissionExecutor:
         if not mission:
             raise ExecutorError("Mission not found: " + str(self.mission_id))
         orch._assert_harness_mission(mission)
+        self.developer_model = orch._resolve_route("developer", self.developer_model)
+        self.reviewer_model = orch._resolve_route("reviewer", self.reviewer_model)
+        self.debug_model = orch._resolve_route("debugger", self.debug_model)
+        self.architect_model = orch._resolve_route("architect", self.architect_model)
         existing_tasks = get_tasks(self.mission_id)
         if existing_tasks:
             reset_ids = reset_interrupted_tasks(self.mission_id)
@@ -101,8 +107,15 @@ class SupervisorMissionExecutor:
         else:
             baseline = orch._snapshot()
             orch._save_baseline(self.mission_id, baseline)
-        task_map = {t["agent_role"]: t for t in tasks}
-        stage = orch._ensure_stage(self.mission_id, task_map.get("developer"), self.goal)
+        task_map: dict[str, list[dict]] = {}
+        for task in tasks:
+            task_map.setdefault(str(task.get("agent_role") or ""), []).append(task)
+        scope_paths = [path for task in task_map.get("developer", [])
+                       for path in (task.get("write_paths") or [])]
+        stage = orch._ensure_stage(
+            self.mission_id, (task_map.get("developer") or [None])[0], self.goal,
+            scope_paths=scope_paths,
+        )
         outcome = promotion.reconcile(stage, recovery_dir=orch._recovery_dir())
         if outcome.get("state") == "conflict":
             raise GateFailure("Promotion journal conflict: " + json.dumps(outcome, default=str),
@@ -110,7 +123,8 @@ class SupervisorMissionExecutor:
         if outcome.get("state") == "promotion-complete" or promotion.is_live_promoted(stage):
             orch._save_promotion_status(self.mission_id, "promoted")
         self.mission = mission
-        self.tasks = task_map
+        self.tasks = tasks
+        self.task_map = task_map
         self.baseline = baseline
         self.stage = stage
         self._prepared = True
@@ -139,28 +153,28 @@ class SupervisorMissionExecutor:
         try:
             self.prepare()
             self._checkpoint("before-architect")
-            planned_tasks = list(self.tasks.values())
             architecture_notes = self.orchestrator._run_planned_analysis(
-                self.mission_id, planned_tasks, self.goal,
+                self.mission_id, self.tasks, self.goal,
                 {"architect": self.architect_model, "auditor": self.developer_model},
             )
             self._checkpoint("after-architect")
             self._checkpoint("before-developer")
-            task = self.tasks.get("developer")
-            if task and task["status"] != "completed":
-                self.orchestrator._run_developer_stage(
-                    self.mission_id, task, self.goal,
+            dev_tasks = self.task_map.get("developer", [])
+            if dev_tasks:
+                self.orchestrator._run_developer_tasks(
+                    self.mission_id, self.tasks, self.goal,
                     self.developer_model, self.baseline, self.stage,
                     architecture_notes=architecture_notes,
+                    control=self.control,
                 )
-            elif task:
-                verdict = self.orchestrator._validate_stage(self.stage)
-                if not verdict["valid"]:
-                    raise GateFailure(
-                        "Persisted staged candidate no longer validates: "
-                        + "; ".join(verdict["errors"]), code="candidate-rejected",
-                        details={"errors": verdict["errors"]},
-                    )
+                if all(task.get("status") == "completed" for task in dev_tasks):
+                    verdict = self.orchestrator._validate_stage(self.stage)
+                    if not verdict["valid"]:
+                        raise GateFailure(
+                            "Persisted staged candidate no longer validates: "
+                            + "; ".join(verdict["errors"]), code="candidate-rejected",
+                            details={"errors": verdict["errors"]},
+                        )
             self._checkpoint("after-developer")
             return StepResult.ok(**self._candidate_payload())
         except RunStopped:
@@ -172,12 +186,22 @@ class SupervisorMissionExecutor:
         try:
             self.prepare()
             self._checkpoint("before-tester")
-            task = self.tasks.get("tester")
+            test_tasks = self.task_map.get("tester", [])
+            task = test_tasks[-1] if test_tasks else None
             if task and task["status"] != "completed":
-                self.orchestrator._run_tester_stage(
+                outcome = self.orchestrator._run_tester_stage(
                     self.mission_id, task,
                     self.debug_model, self.baseline, self.stage,
+                    defer_repairs=True,
                 )
+                if outcome.get("needs_repair"):
+                    self._last_verification_error = str(outcome.get("error") or "verification failed")
+                    self._write_paths = list(outcome.get("write_paths") or self.stage.scope)
+                    return StepResult.needs_repair(
+                        error=self._last_verification_error,
+                        error_code="verification-failed",
+                        **self._candidate_payload(),
+                    )
             elif task:
                 self.orchestrator._rebind_persisted_verification(self.mission_id, self.stage)
             runs = __import__("nl_coding_agent.persistence.missions", fromlist=["get_verification_runs"]).get_verification_runs(self.mission_id)
@@ -192,15 +216,32 @@ class SupervisorMissionExecutor:
             return self._blocked(exc)
 
     def run_repair(self, state) -> StepResult:
-        # The real tester stage already performs bounded debugger repairs; MissionFlow's
-        # outer repair loop is therefore a no-op here (no duplicate repair loop).
-        return StepResult.ok()
+        """Execute one real debugger repair round; MissionFlow owns the retry branch."""
+        try:
+            self.prepare()
+            self._checkpoint("before-repair")
+            if not self._last_verification_error:
+                return StepResult.blocked("No verification failure is available to repair",
+                                          error_code="repair-without-error")
+            write_paths = list(getattr(self, "_write_paths", None) or self.stage.scope)
+            self.orchestrator._run_debugger(
+                self.mission_id, self.debug_model, self._last_verification_error,
+                write_paths, self.baseline, self.stage,
+            )
+            self._last_verification_error = ""
+            self._checkpoint("after-repair")
+            return StepResult.ok(**self._candidate_payload())
+        except RunStopped:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            return self._blocked(exc)
 
     def run_reviewer(self, state) -> StepResult:
         try:
             self.prepare()
             self._checkpoint("before-reviewer")
-            task = self.tasks.get("reviewer")
+            review_tasks = self.task_map.get("reviewer", [])
+            task = review_tasks[-1] if review_tasks else None
             if task and task["status"] != "completed":
                 review_text, verdict = self.orchestrator._run_reviewer_stage(
                     self.mission_id, task,

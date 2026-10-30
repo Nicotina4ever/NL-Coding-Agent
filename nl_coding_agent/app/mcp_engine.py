@@ -549,13 +549,15 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
     @server.tool()
     def start_mission(goal: str, developer_model: str, reviewer_model: str,
                       approved: bool = False, resume_mission_id: int | None = None,
-                      architect_model: str | None = None) -> dict:
+                      architect_model: str | None = None,
+                      pipeline: str = "flow") -> dict:
         """Start/resume through the resource-gated engine only with owner-enabled execution.
 
         Exact model routes are required; this does not approve a candidate or bypass tests.
         *architect_model* is optional; when omitted the developer route is used for the
-        read-only architecture stage. Returns a queued mission id; use status/events to
-        monitor actual completion.
+        read-only architecture stage. ``pipeline`` selects the real CrewAI Flow graph
+        (default) or the legacy sequential driver. Returns a queued mission id; use
+        status/events to monitor actual completion.
         """
         require_execution(approved)
         if not goal.strip() or not developer_model.strip() or not reviewer_model.strip():
@@ -571,7 +573,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         try:
             task_id = services.run_mission(mission_id, project["root"], goal,
                 developer_model=developer_model, reviewer_model=reviewer_model,
-                architect_model=architect_model,
+                architect_model=architect_model, pipeline=pipeline,
                 on_done=lambda result: active.discard(mission_id))
         except Exception:
             active.discard(mission_id)

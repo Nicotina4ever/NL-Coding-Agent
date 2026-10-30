@@ -96,7 +96,7 @@ def test_crash_then_resume_reuses_snapshots_and_skips_completed_steps():
     assert after_crash >= 3
     run = store.get_flow_run(flow_id)
     assert run["status"] == "RUNNING"
-    assert run["last_method"] == "verify"
+    assert run["last_method"] in ("verify", "route_verify")
     latest = persistence.load_state(flow_id)
     assert latest["phase"] == "reviewing"
     assert latest["mission_id"] == 1

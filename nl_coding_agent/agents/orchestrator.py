@@ -10,6 +10,7 @@ The orchestrator is intentionally evidence-driven:
 from __future__ import annotations
 
 import hashlib
+import dataclasses
 import json
 import os
 import re
@@ -276,6 +277,7 @@ class MultiAgentOrchestrator:
         self.bus = get_event_bus()
         self._last_verification = None
         self._last_agent_result = None
+        self._route_selections: dict[str, dict] = {}
 
     # ------------------------------------------------------------------ helpers
 
@@ -311,6 +313,40 @@ class MultiAgentOrchestrator:
         if control is not None:
             control.checkpoint(stage)
 
+    def _resolve_route(self, role: str, requested: str | None, *,
+                       required_capabilities=(), max_cost_usd: float | None = None) -> str:
+        """Resolve an explicit route, or an explicitly requested ``auto`` route."""
+        route = str(requested or "").strip()
+        if route.lower() not in ("auto", "automatic"):
+            return route
+        try:
+            from nl_coding_agent.models.model_router import ModelRouter, RouteRefused
+            from nl_coding_agent.models.ollama_registry import list_models
+            models = list_models()
+            candidates = [{"provider_id": "ollama", "model_name": item.name}
+                          for item in models if getattr(item, "name", "")]
+            if not candidates:
+                raise RouteRefused("Automatic routing requires at least one available local model")
+            router = ModelRouter(project_id=self.project_id)
+            binding = router.auto_select(
+                role, candidates, required_capabilities=required_capabilities,
+                project_id=self.project_id, max_cost_usd=max_cost_usd,
+            )
+            resolved = f"{binding.provider_id}/{binding.model_name}"
+            self._route_selections[role] = dict(binding.selection)
+            self._emit(
+                "model_router", "info",
+                f"Automatic model for {role}: {resolved} (score {binding.selection.get('score')})",
+                mission_id=None,
+                selection=dict(binding.selection),
+            )
+            return resolved
+        except Exception as exc:  # fail closed: never silently choose a different model
+            raise GateFailure(
+                f"Automatic model selection failed for {role}: {type(exc).__name__}: {exc}",
+                code="model-selection-failed",
+            ) from exc
+
     def _record_model_assignments(self, mission_id: int, routes: dict[str, str]) -> None:
         """Resolve role routes through the existing ModelRouter and persist the snapshot.
 
@@ -337,6 +373,11 @@ class MultiAgentOrchestrator:
                 return
             router = ModelRouter(role_bindings=overrides, project_id=self.project_id)
             resolved = {role: router.resolve(role) for role in overrides}
+            for role, selection in self._route_selections.items():
+                if role in resolved and selection:
+                    resolved[role] = dataclasses.replace(
+                        resolved[role], source="auto_ranked", selection=selection,
+                    )
             router.record_mission_snapshot(mission_id, resolved)
             self._emit(
                 "orchestrator", "info",
@@ -464,8 +505,37 @@ class MultiAgentOrchestrator:
                    "dipenden", "performance", "prestazion", "risk", "rischio")
         return any(marker in lowered for marker in markers)
 
+    @staticmethod
+    def _subtask_clauses(goal: str) -> list[str]:
+        """Split an objective into independently reviewable implementation clauses."""
+        text = str(goal or "")
+        for separator in ("\r\n", "\n", ";"):
+            text = text.replace(separator, "\n")
+        raw = [line.strip(" \t-*") for line in text.split("\n") if line.strip(" \t-*")]
+        clauses: list[str] = []
+        for line in raw:
+            # Do not split ordinary prose on "and": it creates redundant subtasks.
+            clauses.append(line)
+        result: list[str] = []
+        for clause in clauses:
+            if clause and clause not in result:
+                result.append(clause)
+        return result
+
     def _plan_tasks(self, mission_id: int, goal: str) -> list[dict]:
-        write_paths = extract_paths(goal)
+        """Proportionally plan analysis, one or more implementation subtasks, test and review.
+
+        The planner is deterministic and auditable: it derives implementation subtasks
+        from the declared source paths (one writer per path, chained in dependency
+        order), or from explicit clauses when the objective has no path list. This is
+        what allows more than one task per role without a second orchestrator.
+        """
+        write_paths = list(dict.fromkeys(extract_paths(goal)))
+        source_paths = [path for path in write_paths
+                        if not path.replace("\\", "/").lower().startswith("tests/")
+                        and not path.lower().endswith((".md", ".rst", ".txt"))]
+        test_paths = [path for path in write_paths
+                      if path.replace("\\", "/").lower().startswith("tests/")]
         analysis_tasks: list[dict] = []
         if self._needs_architecture_review(goal, write_paths):
             analysis_tasks.append(add_task(
@@ -486,29 +556,88 @@ class MultiAgentOrchestrator:
                 depends_on=[analysis_tasks[-1]] if analysis_tasks else [],
                 write_paths=[],
             ))
-        t1 = add_task(
-            mission_id,
-            "Code Implementation",
-            goal,
-            "developer",
-            depends_on=[analysis_tasks[-1]] if analysis_tasks else [],
-            write_paths=write_paths,
-        )
-        t2 = add_task(
+
+        clauses = self._subtask_clauses(goal)
+        units: list[tuple[str, list[str], str]] = []
+        if 2 <= len(source_paths) <= 4:
+            for index, path in enumerate(source_paths):
+                clause = clauses[index % len(clauses)] if clauses else goal
+                units.append((
+                    f"Implement change in {path}",
+                    [path],
+                    f"{goal}\n\nSUBTASK {index + 1}/{len(source_paths)} — implement the part of the "
+                    f"objective that belongs to `{path}`. Start by reading `{path}` and the modules it "
+                    f"depends on. Do not modify any other file.",
+                ))
+        elif source_paths:
+            # A broad path list is one integration-sized change, not dozens of microtasks.
+            # One source file may still be split by explicit clauses, capped for safety.
+            if len(source_paths) == 1 and 1 < len(clauses) <= 3:
+                for index, clause in enumerate(clauses):
+                    units.append((
+                        f"Implementation part {index + 1}",
+                        source_paths,
+                        f"{goal}\n\nSUBTASK {index + 1}/{len(clauses)} — focus only on this clause:\n"
+                        f"{clause}\nDo not modify any other file.",
+                    ))
+            else:
+                units.append(("Code Implementation", source_paths, goal))
+        else:
+            units.append(("Code Implementation", write_paths, goal))
+
+        if test_paths:
+            units.append((
+                "Test updates",
+                test_paths,
+                f"{goal}\n\nSUBTASK — update only the tests needed for this objective. "
+                "Do not modify source files in this subtask.",
+            ))
+
+        implementation_tasks: list[int] = []
+        previous_id: int | None = analysis_tasks[-1] if analysis_tasks else None
+        for title, paths, description in units:
+            depends = [previous_id] if previous_id else []
+            task_id = add_task(
+                mission_id,
+                title,
+                description,
+                "developer",
+                depends_on=depends,
+                write_paths=paths,
+            )
+            implementation_tasks.append(task_id)
+            previous_id = task_id
+        if not implementation_tasks:
+            implementation_tasks.append(add_task(
+                mission_id, "Code Implementation", goal, "developer",
+                depends_on=[analysis_tasks[-1]] if analysis_tasks else [],
+                write_paths=write_paths,
+            ))
+
+        tester = add_task(
             mission_id,
             "Test & Verification",
-            "Run automated tests against the modified source and repair failures",
+            "Run independent candidate/oracle tests against the complete staged change and repair failures",
             "tester",
-            depends_on=[t1],
+            depends_on=[implementation_tasks[-1]],
         )
-        t3 = add_task(
+        reviewer = add_task(
             mission_id,
             "Code Review",
             "Review the mission-scoped diff and record APPROVE/REJECT",
             "reviewer",
-            depends_on=[t2],
+            depends_on=[tester],
         )
         return get_tasks(mission_id)
+
+    @staticmethod
+    def _tasks_for_role(tasks: list[dict], role: str) -> list[dict]:
+        return [task for task in tasks if task.get("agent_role") == role]
+
+    @staticmethod
+    def _task_order_key(task: dict) -> tuple:
+        return (int(task.get("id") or 0),)
+
 
     def _validate_plan(self, tasks: list[dict]) -> None:
         graph = TaskGraph()
@@ -608,7 +737,8 @@ class MultiAgentOrchestrator:
         except permissions.PermissionDenied as exc:
             raise GateFailure(str(exc), code="permission-denied") from exc
 
-    def _ensure_stage(self, mission_id: int, dev_task: dict | None, goal: str) -> promotion.Stage:
+    def _ensure_stage(self, mission_id: int, dev_task: dict | None, goal: str,
+                      *, scope_paths: list[str] | None = None) -> promotion.Stage:
         mission = get_mission(mission_id) or {}
         stored = mission.get("staging_dir")
         if stored:
@@ -616,7 +746,7 @@ class MultiAgentOrchestrator:
             if stage.project_root != self.root:
                 raise GateFailure("Staged candidate belongs to a different project root", code="stage-mismatch")
             return stage
-        write_paths = list((dev_task or {}).get("write_paths") or [])
+        write_paths = list(scope_paths or (dev_task or {}).get("write_paths") or [])
         scope = promotion.derive_scope(self.root, write_paths or extract_paths(goal))
         stage = promotion.begin_stage(self.root, mission_id, scope)
         set_mission_staging(mission_id, str(stage.stage_dir))
@@ -1068,6 +1198,10 @@ class MultiAgentOrchestrator:
         baseline: dict[str, str] = {}
         architect_model = str(architect_model or developer_model or "")
         try:
+            developer_model = self._resolve_route("developer", developer_model)
+            reviewer_model = self._resolve_route("reviewer", reviewer_model)
+            debug_model = self._resolve_route("debugger", debug_model)
+            architect_model = self._resolve_route("architect", architect_model)
             from nl_coding_agent.core.doc_planning import is_document_plan_request
             if is_document_plan_request(goal):
                 raise GateFailure(
@@ -1125,13 +1259,17 @@ class MultiAgentOrchestrator:
                 self._save_baseline(mission_id, baseline)
 
             task_map = {t["agent_role"]: t for t in tasks}
-            arch_task = task_map.get("architect")
-            dev_task = task_map.get("developer")
-            test_task = task_map.get("tester")
-            rev_task = task_map.get("reviewer")
+            dev_tasks = self._tasks_for_role(tasks, "developer")
+            test_tasks = self._tasks_for_role(tasks, "tester")
+            review_tasks = self._tasks_for_role(tasks, "reviewer")
+            dev_task = dev_tasks[0] if dev_tasks else None
+            test_task = test_tasks[-1] if test_tasks else None
+            rev_task = review_tasks[-1] if review_tasks else None
 
             # Candidate stage: every model write lands inside stage.workspace, never live.
-            stage = self._ensure_stage(mission_id, dev_task, goal)
+            # The scope is the union of all implementation subtasks, not just the first.
+            stage_scope = [path for task in dev_tasks for path in (task.get("write_paths") or [])]
+            stage = self._ensure_stage(mission_id, dev_task, goal, scope_paths=stage_scope)
             outcome = promotion.reconcile(stage, recovery_dir=self._recovery_dir())
             if outcome.get("state") == "conflict":
                 self._save_promotion_status(mission_id, "rollback_conflict")
@@ -1170,23 +1308,21 @@ class MultiAgentOrchestrator:
 
             self._checkpoint(control, "before-developer")
 
-            # 1. Developer: staged candidate only.
-            if dev_task and dev_task["status"] != "completed":
-                self._run_developer_stage(mission_id, dev_task, goal, developer_model, baseline, stage,
-                                          architecture_notes=architecture_notes)
-            elif dev_task:
-                self._emit(
-                    "developer", "info",
-                    "Developer stage already completed; re-validating the persisted staged candidate.",
+            # 1. Developer: all planned implementation subtasks, staged candidate only.
+            if dev_tasks:
+                self._run_developer_tasks(
+                    mission_id, tasks, goal, developer_model, baseline, stage,
+                    architecture_notes=architecture_notes, control=control,
                 )
-                verdict = self._validate_stage(stage)
-                if not verdict["valid"]:
-                    raise GateFailure(
-                        "Persisted staged candidate no longer validates: "
-                        + "; ".join(verdict["errors"]),
-                        code="candidate-rejected",
-                        details={"errors": verdict["errors"]},
-                    )
+                if all(task.get("status") == "completed" for task in dev_tasks):
+                    verdict = self._validate_stage(stage)
+                    if not verdict["valid"]:
+                        raise GateFailure(
+                            "Persisted staged candidate no longer validates: "
+                            + "; ".join(verdict["errors"]),
+                            code="candidate-rejected",
+                            details={"errors": verdict["errors"]},
+                        )
 
             self._checkpoint(control, "after-developer")
 
@@ -1418,6 +1554,62 @@ Do not claim that changes were made. The Developer will perform them in a staged
                 notes.append(f"[{label}]\n{analysis.strip()}")
         return "\n\n".join(notes)
 
+    def _developer_task_note(self, mission_id: int, task_id: int) -> str:
+        """Read the structured handoff of a completed implementation subtask."""
+        for handoff in reversed(get_handoffs(mission_id)):
+            payload = handoff.get("payload") or {}
+            if handoff.get("from_role") == "developer" and int(payload.get("task_id") or -1) == int(task_id):
+                parts = [
+                    f"Task #{task_id}: {payload.get('task_title') or ''}".strip(),
+                    str(payload.get("decisions") or payload.get("output_sample") or "")[:2500],
+                    "Artifacts: " + ", ".join(payload.get("changed_paths") or []),
+                ]
+                return "\n".join(part for part in parts if part)
+        return ""
+
+    def _run_developer_tasks(
+        self,
+        mission_id: int,
+        tasks: list[dict],
+        goal: str,
+        model_name: str,
+        baseline: dict[str, str],
+        stage: promotion.Stage,
+        *,
+        architecture_notes: str = "",
+        control: RunControl | None = None,
+    ) -> str:
+        """Execute every planned implementation subtask in dependency order on one candidate.
+
+        Completed subtasks are skipped on resume; their structured handoff is replayed
+        into the next developer prompt. There is intentionally only one implementation
+        runtime: each subtask is a scoped call to the same developer stage.
+        """
+        dev_tasks = sorted(self._tasks_for_role(tasks, "developer"), key=self._task_order_key)
+        notes = str(architecture_notes or "")
+        for index, task in enumerate(dev_tasks):
+            next_target = "tester" if index == len(dev_tasks) - 1 else "developer"
+            if task.get("status") == "completed":
+                prior = self._developer_task_note(mission_id, int(task["id"]))
+                if prior:
+                    notes = (notes + "\n\nCOMPLETED SUBTASK\n" + prior).strip()
+                continue
+            self._checkpoint(control, f"before-developer-{task['id']}")
+            task_goal = str(task.get("description") or goal)
+            output = self._run_developer_stage(
+                mission_id, task, task_goal, model_name, baseline, stage,
+                architecture_notes=notes,
+                handoff_to=next_target,
+                task_index=index,
+                task_count=len(dev_tasks),
+            )
+            note = (
+                f"Task #{task['id']} ({task.get('title') or 'implementation'}) completed.\n"
+                + _truncate(str(output or ""), 2500)
+            )
+            notes = (notes + "\n\nCOMPLETED SUBTASK\n" + note).strip()
+        return notes
+
     def _run_developer_stage(
         self,
         mission_id: int,
@@ -1428,53 +1620,58 @@ Do not claim that changes were made. The Developer will perform them in a staged
         stage: promotion.Stage,
         *,
         architecture_notes: str = "",
+        handoff_to: str = "tester",
+        task_index: int = 0,
+        task_count: int = 1,
     ) -> str:
         task_id = task_rec["id"]
         write_paths = task_rec.get("write_paths") or list(stage.scope)
         update_task_status(task_id, "running")
         self._emit(
             "developer", "info",
-            f"Developer agent starting work on task #{task_id} with {model_name}",
+            f"Developer agent starting subtask {task_index + 1}/{task_count} (#{task_id}) with {model_name}",
             model=model_name,
             write_paths=write_paths,
             stage_dir=str(stage.stage_dir),
         )
 
-        tools = get_project_tools(stage.workspace)
+        tools = get_project_tools(stage.workspace, project_id=self.project_id)
         scope_text = (
-            "Declared write scope (do not modify other files):\n- " + "\n- ".join(write_paths)
+            "Declared write scope for THIS subtask (do not modify other files):\n- "
+            + "\n- ".join(write_paths)
             if write_paths
             else "No explicit write scope was declared. Stay focused on the goal."
         )
         architecture_text = (
-            "ARCHITECT NOTES (read-only analysis, use as guidance; verify against the code):\n"
-            + _truncate(architecture_notes, 8_000)
+            "PRIOR ARCHITECTURE/AUDIT NOTES AND COMPLETED SUBTASKS (use as guidance; verify against the code):\n"
+            + _truncate(architecture_notes, 10_000)
             if str(architecture_notes or "").strip()
-            else "ARCHITECT NOTES: (not required for this mission)"
+            else "PRIOR NOTES: (none yet)"
         )
         prompt = f"""
 PROJECT ROOT: {self.root}
 WORKSPACE (staged copy; write relative paths here): {stage.workspace}
 MISSION GOAL: {goal}
 
+SUBTASK {task_index + 1}/{task_count}: {task_rec.get('title') or 'implementation'}
 {scope_text}
 
 {architecture_text}
 
 INSTRUCTIONS:
-1. Read the relevant existing files first.
+1. Read the relevant existing files first, including their imports and dependent modules.
 2. Implement the requested change directly in the staged workspace files.
 3. Prefer patch_file for small edits. For complete files use write_file or this exact block format:
 ```write:<relative_path>
 <valid source code>
 ```
-4. Do NOT edit files outside the declared write scope: the candidate is rejected if you do.
+4. Do NOT edit files outside this subtask's declared write scope: the candidate is rejected if you do.
 5. Preserve every existing public function and test unless the objective explicitly asks to remove or rename it. Do not move functions between files.
 6. Do NOT output 'diff --git' or unified-diff headers inside a source file.
 7. Nothing is live until review and promotion; only the staged copy may change.
-8. There is no shell or test runner tool: the independent tester verifies later.
+8. Real tools are available in the staged workspace: read/list/write/patch, git status/diff, run tests, and a bounded shell allowlist. Use them to inspect and self-check, but never claim a test passed without its output.
 9. Do NOT claim success without actually writing the files.
-10. Finish with a short summary of the files you changed.
+10. Finish with a concise summary of the files changed, decisions made and any open problem.
 """
         output = self._call_model(
             "Implementation Developer",
@@ -1495,6 +1692,13 @@ INSTRUCTIONS:
         verdict = self._validate_stage(stage)
         diff, changed, _stat = promotion.candidate_diff(stage)
         metadata = self._agent_metadata(model_name)
+        metadata.update({
+            "task_id": task_id,
+            "subtask": task_rec.get("title"),
+            "subtask_index": task_index,
+            "subtask_count": task_count,
+            "handoff_to": handoff_to,
+        })
         # The no-change check runs before the invalid-verdict branch: validate() reports an
         # empty candidate as invalid, which would otherwise mask DeveloperNoChangeError.
         if not changed:
@@ -1519,18 +1723,37 @@ INSTRUCTIONS:
         record_task_attempt(task_id, "completed", output=_truncate(output), metadata=metadata)
         update_task_status(task_id, "completed")
         summary = (
-            f"Developer staged {len(changed)} file(s): {', '.join(changed)}. "
+            f"Developer subtask #{task_id} staged {len(changed)} file(s): {', '.join(changed)}. "
             f"Actions: {len(actions)}."
         )
+        open_issues = []
+        lower_output = str(output or "").lower()
+        for marker in ("could not", "unable to", "todo", "remaining", "non riesco", "da fare"):
+            if marker in lower_output:
+                open_issues.append(marker)
         record_handoff(
             mission_id=mission_id,
             from_role="developer",
-            to_role="tester",
+            to_role=handoff_to,
             summary=summary,
             payload={
                 "model": model_name,
+                "task_id": task_id,
+                "task_title": task_rec.get("title"),
+                "subtask_goal": _truncate(goal, 3000),
                 "changed_paths": changed,
                 "actions": actions,
+                "artifact": {
+                    "changed_paths": changed,
+                    "diff_sample": _truncate(diff, 4000),
+                },
+                "decisions": _truncate(output, 1500),
+                "open_issues": open_issues,
+                "next_steps": (
+                    "Continue with the next implementation subtask."
+                    if handoff_to == "developer"
+                    else "Independent candidate/oracle verification, then review."
+                ),
                 "diff_sample": _truncate(diff, 4000),
                 "output_sample": _truncate(output, 1500),
                 "agent": metadata,
@@ -1547,6 +1770,8 @@ INSTRUCTIONS:
         baseline: dict[str, str],
         stage: promotion.Stage,
         max_attempts: int | None = None,
+        *,
+        defer_repairs: bool = False,
     ) -> dict:
         task_id = task_rec["id"]
         fresh = get_task(task_id) or task_rec
@@ -1579,6 +1804,20 @@ INSTRUCTIONS:
                     stderr=_truncate(errors, 40_000),
                     passed=False,
                 )
+                if defer_repairs:
+                    record_handoff(
+                        mission_id=mission_id,
+                        from_role="tester",
+                        to_role="debugger",
+                        summary="Candidate validation failed; Flow routes to repair.",
+                        payload={"error": _truncate(errors, 4000),
+                                 "write_paths": write_paths,
+                                 "deferred_repair": True},
+                    )
+                    record_task_attempt(task_id, "failed", error=_truncate(errors, 4000),
+                                        metadata={"deferred_repair": True})
+                    return {"needs_repair": True, "error": errors,
+                            "write_paths": write_paths}
                 if attempt >= max_attempts:
                     break
                 record_handoff(
@@ -1619,13 +1858,27 @@ INSTRUCTIONS:
             if any(suite.infrastructure_failure for suite in (report.candidate, report.oracle)):
                 # A broken/unsupported harness cannot be repaired by editing project source.
                 break
-            if attempt >= max_attempts:
-                break
             error_msg = (
                 f"Verification failed (attempt {attempt + 1}): {report.error}\n"
                 f"CANDIDATE:\n{report.candidate.stdout_tail[-4000:]}\n{report.candidate.stderr_tail[-4000:]}\n"
                 f"ORACLE:\n{report.oracle.stdout_tail[-4000:]}\n{report.oracle.stderr_tail[-4000:]}"
             )
+            if defer_repairs:
+                record_handoff(
+                    mission_id=mission_id,
+                    from_role="tester",
+                    to_role="debugger",
+                    summary="Verification failed; Flow routes to repair.",
+                    payload={"error": _truncate(error_msg, 4000),
+                             "write_paths": write_paths,
+                             "deferred_repair": True},
+                )
+                record_task_attempt(task_id, "failed", error=_truncate(error_msg, 4000),
+                                    metadata={"deferred_repair": True})
+                return {"needs_repair": True, "error": error_msg,
+                        "write_paths": write_paths}
+            if attempt >= max_attempts:
+                break
             record_handoff(
                 mission_id=mission_id,
                 from_role="tester",
@@ -1665,7 +1918,7 @@ INSTRUCTIONS:
         stage: promotion.Stage,
     ) -> None:
         """Debugger agent repairs only the staged candidate based on verification failures."""
-        tools = get_project_tools(stage.workspace)
+        tools = get_project_tools(stage.workspace, project_id=self.project_id)
         scope_text = (
             "Stay inside the staged declared write scope:\n- " + "\n- ".join(write_paths)
             if write_paths
@@ -1687,7 +1940,7 @@ INSTRUCTIONS:
 ```
 3. Do NOT edit files outside the declared write scope; out-of-scope changes are rejected.
 4. Nothing is live until review and promotion; only the staged copy may change.
-5. There is no shell or test runner tool available.
+5. Real tools are available: file read/write/patch, git status/diff, run tests and a bounded shell allowlist. Use them to diagnose the real failure.
 6. Do NOT include 'diff --git' or unified-diff headers inside a source file.
 7. Keep changes minimal and focused on resolving the error.
 """

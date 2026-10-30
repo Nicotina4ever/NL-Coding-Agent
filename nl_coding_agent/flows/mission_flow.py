@@ -9,9 +9,9 @@ supervisor do not import or wire this module (C4c adds an explicit pipeline).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Protocol, runtime_checkable
+from typing import Any, ClassVar, Literal, Protocol, runtime_checkable
 
-from crewai.flow.flow import Flow, start
+from crewai.flow.flow import Flow, listen, router, start
 from crewai.flow.persistence import persist
 from pydantic import ConfigDict, Field
 
@@ -187,8 +187,8 @@ class MissionFlow(Flow[MissionState]):
     # ------------------------------------------------------------------ graph
 
     @start()
-    def run(self) -> dict:
-        """Single deterministic pipeline; durable facts decide where it resumes."""
+    def run(self) -> None:
+        """Start the graph at the durable phase; every transition is an explicit event."""
         try:
             decision = self._decision()
             self._apply(phase=decision.phase)
@@ -199,15 +199,91 @@ class MissionFlow(Flow[MissionState]):
                     error="; ".join(decision.conflicts),
                     error_code="reconciliation_conflict",
                 )
-                return self._finish("blocked", payload={"conflicts": list(decision.conflicts)})
-            return self._drive(decision.phase)
         except RunStopped as exc:
-            self._apply(phase="interrupted", error=str(exc) or "stopped",
-                        error_code="run_stopped")
-            self._save("interrupted")
-            return self._finish("interrupted")
+            self._interrupt(exc)
+
+    @router(run, emit=["run_develop", "run_verify", "run_repair", "run_review",
+                       "run_promote", "run_finish"])
+    def route_start(self) -> str:
+        return self._route_phase()
+
+    @listen("run_develop")
+    def develop(self) -> None:
+        self._safe_step(self._step_developer)
+
+    @router(develop, emit=["run_verify", "run_finish"])
+    def route_develop(self) -> str:
+        return self._route_phase()
+
+    @listen("run_verify")
+    def verify(self) -> None:
+        self._safe_step(self._step_verification)
+
+    @router(verify, emit=["run_review", "run_repair", "run_finish"])
+    def route_verify(self) -> str:
+        return self._route_phase()
+
+    @listen("run_repair")
+    def repair(self) -> None:
+        self._safe_step(self._step_repair)
+
+    @router(repair, emit=["run_verify", "run_finish"])
+    def route_repair(self) -> str:
+        return self._route_phase()
+
+    @listen("run_review")
+    def review(self) -> None:
+        self._safe_step(self._step_review)
+
+    @router(review, emit=["run_promote", "run_finish"])
+    def route_review(self) -> str:
+        return self._route_phase()
+
+    @listen("run_promote")
+    def promote(self) -> None:
+        self._safe_step(self._step_promote)
+
+    @router(promote, emit=["run_finish"])
+    def route_promote(self) -> str:
+        return self._route_phase()
+
+    @listen("run_finish")
+    def finish(self) -> dict:
+        phase = self.state.phase if self.state.phase in TERMINAL_PHASES else "blocked"
+        return self._finish(phase)
+
+    def _route_phase(self) -> str:
+        phase = str(self.state.phase)
+        if phase in TERMINAL_PHASES or phase == "waiting_approval":
+            return "run_finish"
+        if phase in ("planned", "developing"):
+            return "run_develop"
+        if phase == "verifying":
+            return "run_verify"
+        if phase == "repairing":
+            return "run_repair"
+        if phase == "reviewing":
+            return "run_review"
+        if phase == "promoting":
+            return "run_promote"
+        return "run_finish"
+
+    def _interrupt(self, exc: Exception) -> None:
+        self._apply(
+            phase="interrupted",
+            error=str(exc) or "stopped",
+            error_code="run_stopped",
+        )
+        self._save("interrupted")
+
+    def _safe_step(self, step) -> None:
+        try:
+            step()
+        except RunStopped as exc:
+            self._interrupt(exc)
 
     def _drive(self, phase: str) -> dict:
+        """Compatibility fallback for callers that still drive the old loop directly."""
         for _ in range(_MAX_PIPELINE_ITERATIONS):
             if phase in TERMINAL_PHASES or phase == "waiting_approval":
                 return self._finish(phase)

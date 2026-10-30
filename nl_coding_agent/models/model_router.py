@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from types import MappingProxyType
 from typing import Any, Callable, Mapping
@@ -21,7 +21,7 @@ from nl_coding_agent.persistence import database
 
 __all__ = [
     "ModelBinding", "RouteRefused", "RouteResourceUnavailable",
-    "ModelRouter", "binding_from_mapping",
+    "ModelRouter", "binding_from_mapping", "historical_performance",
 ]
 
 
@@ -57,6 +57,7 @@ class ModelBinding:
     source: str = "role_config"
     measured_at: str = ""
     config_sha256: str = ""
+    selection: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not str(self.role or "").strip():
@@ -66,6 +67,7 @@ class ModelBinding:
         object.__setattr__(self, "params", MappingProxyType(dict(self.params or {})))
         object.__setattr__(self, "capabilities", MappingProxyType(dict(self.capabilities or {})))
         object.__setattr__(self, "capability_sources", MappingProxyType(dict(self.capability_sources or {})))
+        object.__setattr__(self, "selection", MappingProxyType(dict(self.selection or {})))
 
     @property
     def is_cloud(self) -> bool:
@@ -80,6 +82,7 @@ class ModelBinding:
             "capability_sources": dict(self.capability_sources),
             "source": self.source, "measured_at": self.measured_at,
             "config_sha256": self.config_sha256,
+            "selection": dict(self.selection),
         }
 
 
@@ -97,12 +100,85 @@ def binding_from_mapping(role: str, data: Mapping[str, Any], *,
         source=str(data.get("source") or source),
         measured_at=str(data.get("measured_at") or ""),
         config_sha256=str(data.get("config_sha256") or ""),
+        selection=dict(data.get("selection") or {}),
     )
 
 
 def _role_config_hash(role_config: Mapping[str, Any]) -> str:
     payload = json.dumps(role_config, sort_keys=True, default=str, ensure_ascii=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def historical_performance(project_id: int | None = None) -> dict[str, dict]:
+    """Aggregate real attempt outcomes by role+model for results-based selection.
+
+    The source is the existing task_attempts metadata (model, duration, usage) joined
+    to tasks/missions; no new store is created and missing cost is not invented.
+    """
+    database.init_db().close()
+    conn = database.init_db()
+    try:
+        clauses = []
+        params: list[Any] = []
+        if project_id is not None:
+            clauses.append("t.mission_id IN (SELECT id FROM missions WHERE project_id=?)")
+            params.append(int(project_id))
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        rows = conn.execute(
+            "SELECT t.agent_role, a.status AS attempt_status, a.metadata_json, "
+            "m.review_verdict, m.promotion_status "
+            "FROM task_attempts a JOIN tasks t ON t.id=a.task_id "
+            "LEFT JOIN missions m ON m.id=t.mission_id" + where,
+            tuple(params),
+        ).fetchall()
+    except Exception:
+        return {}
+    finally:
+        conn.close()
+    stats: dict[str, dict] = {}
+    for row in rows:
+        try:
+            metadata = json.loads(str(row["metadata_json"] or "{}"))
+        except Exception:
+            metadata = {}
+        route = str(metadata.get("model") or "").strip()
+        if not route:
+            continue
+        provider, _, model_name = route.partition("/")
+        if not model_name:
+            provider, model_name = "ollama", route
+        role = str(row["agent_role"] or "")
+        key = role + "::" + model_name
+        item = stats.setdefault(key, {
+            "role": role, "model_name": model_name, "provider_id": provider,
+            "attempts": 0, "successes": 0, "failures": 0,
+            "duration_total_s": 0.0, "duration_count": 0,
+            "tokens_total": 0, "cost_usd": None,
+            "approved_missions": 0,
+        })
+        item["attempts"] += 1
+        if str(row["attempt_status"] or "") == "completed":
+            item["successes"] += 1
+        else:
+            item["failures"] += 1
+        duration = metadata.get("duration_s")
+        if isinstance(duration, (int, float)):
+            item["duration_total_s"] += float(duration)
+            item["duration_count"] += 1
+        usage = metadata.get("usage") or {}
+        tokens = usage.get("total_tokens") if isinstance(usage, Mapping) else None
+        if isinstance(tokens, (int, float)):
+            item["tokens_total"] += int(tokens)
+        cost = metadata.get("cost_usd")
+        if isinstance(cost, (int, float)):
+            item["cost_usd"] = float(item["cost_usd"] or 0.0) + float(cost)
+        if str(row["review_verdict"] or "").upper() == "APPROVE":
+            item["approved_missions"] += 1
+    for item in stats.values():
+        count = int(item["duration_count"] or 0)
+        item["avg_duration_s"] = round(item["duration_total_s"] / count, 3) if count else None
+        item["success_rate"] = round(item["successes"] / item["attempts"], 3) if item["attempts"] else 0.0
+    return stats
 
 
 class ModelRouter:
@@ -232,6 +308,93 @@ class ModelRouter:
         if "temperature" in binding.params:
             kwargs["temperature"] = binding.params["temperature"]
         return LLM(**kwargs)
+
+    # -------------------------------------------------------------- selection
+
+    def auto_select(self, role: str, candidates: list[Mapping[str, Any]], *,
+                    required_capabilities=(), project_id: int | None = None,
+                    max_cost_usd: float | None = None,
+                    prefer_capabilities=("tool_calling", "structured_output")) -> ModelBinding:
+        """Rank explicit candidate models by measured capabilities and real past outcomes.
+
+        This never invents candidates and never silently falls back: the caller passes
+        the models it is willing to run (e.g. the live Ollama list), and the returned
+        binding records the score, history and capability evidence used to pick it.
+        """
+        role = str(role)
+        stats = historical_performance(project_id)
+        ranked: list[tuple[float, ModelBinding, dict]] = []
+        refusals: list[str] = []
+        for item in candidates:
+            candidate = dict(item)
+            if "model" in candidate and "model_name" not in candidate:
+                candidate["model_name"] = candidate["model"]
+            provider = str(candidate.get("provider_id") or "ollama")
+            model_name = str(candidate.get("model_name") or "").strip()
+            if not model_name:
+                continue
+            binding = binding_from_mapping(role, {**candidate, "provider_id": provider,
+                                                  "model_name": model_name},
+                                           source="auto_ranked")
+            capability_set = self._capabilities_for(binding)
+            ok, missing = capability_set.satisfies(tuple(required_capabilities or ()))
+            if not ok:
+                refusals.append(model_name + ": missing " + ",".join(missing))
+                continue
+            try:
+                permissions.assert_model_permitted(
+                    binding.model_name, binding.base_url, project_id if project_id is not None else self.project_id,
+                )
+            except PermissionDenied as exc:
+                refusals.append(model_name + ": permission denied")
+                continue
+            history = stats.get(role + "::" + model_name, {})
+            attempts = int(history.get("attempts") or 0)
+            successes = int(history.get("successes") or 0)
+            avg_duration = float(history.get("avg_duration_s") or 0.0)
+            success_rate = (successes / attempts) if attempts else 0.5
+            cap_score = sum(1 for cap in prefer_capabilities if capability_set.supports(cap))
+            score = success_rate * 50 + min(successes * 5, 25) + cap_score * 5
+            if avg_duration:
+                score -= min(avg_duration, 120.0) * 0.05
+            cost = history.get("cost_usd")
+            if max_cost_usd is not None:
+                # Local inference is billed at 0; unknown cloud cost is not assumed free.
+                if binding.is_cloud and cost is None:
+                    refusals.append(model_name + ": cost unknown")
+                    continue
+                effective_cost = float(cost or 0.0)
+                if effective_cost > float(max_cost_usd):
+                    refusals.append(model_name + ": cost over cap")
+                    continue
+            capabilities = capability_set.to_dict()["capabilities"]
+            selection = {
+                "strategy": "measured_capabilities+historical_results",
+                "score": round(score, 3),
+                "attempts": attempts,
+                "successes": successes,
+                "success_rate": round(success_rate, 3),
+                "avg_duration_s": round(avg_duration, 3),
+                "capability_score": cap_score,
+                "required_capabilities": list(required_capabilities or ()),
+                "max_cost_usd": max_cost_usd,
+            }
+            ranked.append((
+                score,
+                replace(binding, source="auto_ranked", selection=selection,
+                        capabilities=capabilities,
+                        capability_sources={name: str(entry.get("source") or "")
+                                            for name, entry in capabilities.items()}),
+                history,
+            ))
+        if not ranked:
+            raise RouteRefused(
+                "Auto model selection found no permitted candidate for role " + repr(role)
+                + (" (" + "; ".join(refusals) + ")" if refusals else ""),
+                refused=tuple(refusals),
+            )
+        ranked.sort(key=lambda row: (-row[0], row[1].model_name))
+        return ranked[0][1]
 
     # -------------------------------------------------------------- snapshots
 

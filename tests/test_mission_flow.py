@@ -117,8 +117,8 @@ def test_happy_path_maps_developer_verify_review_promote():
     assert persistence.snapshot_count("flow-happy") >= 4
     run = store.get_flow_run("flow-happy")
     assert run["status"] == "COMPLETED"
-    # The final engine-level persist after the @start method runs last.
-    assert run["last_method"] == "run"
+    # The real graph ends at the explicit finish node.
+    assert run["last_method"] == "finish"
 
 
 @pytest.mark.parametrize("durable, expected_calls", [

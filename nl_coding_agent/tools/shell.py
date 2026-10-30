@@ -56,6 +56,51 @@ def _build_env(env: dict | None) -> dict[str, str]:
     return merged
 
 
+def scoped_run_argv(
+    project_root: Path | str,
+    args: list[str],
+    timeout: int = 60,
+    env: dict | None = None,
+) -> dict:
+    """Run one argv vector with shell=False, scoped to project_root.
+
+    Used by the model-facing tool layer for an explicit command allowlist; no shell
+    expansion, redirection or chaining is possible.
+    """
+    root = Path(project_root).resolve()
+    if not root.exists() or not root.is_dir():
+        raise ValueError(f"Invalid project root: {root}")
+    if not args:
+        raise ValueError("Empty command")
+    start_time = time.time()
+    try:
+        proc = subprocess.run(
+            [str(item) for item in args],
+            cwd=str(root), shell=False, capture_output=True, text=False,
+            timeout=timeout, env=_build_env(env), stdin=subprocess.DEVNULL,
+        )
+        return {
+            "returncode": proc.returncode,
+            "stdout": decode_output(proc.stdout),
+            "stderr": decode_output(proc.stderr),
+            "duration_s": round(time.time() - start_time, 3),
+            "timed_out": False,
+        }
+    except subprocess.TimeoutExpired as e:
+        return {
+            "returncode": -1,
+            "stdout": decode_output(e.stdout),
+            "stderr": (decode_output(e.stderr) + f"\n[Command timed out after {timeout}s]").strip(),
+            "duration_s": round(time.time() - start_time, 3),
+            "timed_out": True,
+        }
+    except Exception as e:
+        return {
+            "returncode": -2, "stdout": "", "stderr": str(e),
+            "duration_s": round(time.time() - start_time, 3), "timed_out": False,
+        }
+
+
 def scoped_run_command(
     project_root: Path | str,
     command: str,
