@@ -469,7 +469,16 @@ class Supervisor:
                 self._event("Heartbeat failed: " + str(exc), level="warning", kind="heartbeat")
             else:
                 self._heartbeat_failures = 0
-            if renewed is None and self._heartbeat_failures >= 3:
+            if renewed is None and self._heartbeat_failures >= 10:
+                # A transient SQLite lock must not strand a still-valid lease.
+                # Only declare loss once the durable lease has actually expired.
+                expires = getattr(self.lease, "expires_at", None) if self.lease else None
+                try:
+                    from datetime import datetime
+                    if expires and datetime.fromisoformat(str(expires)) > datetime.now():
+                        continue
+                except (TypeError, ValueError):
+                    pass
                 self._lease_lost = True
                 self.control.request_stop("heartbeat failed")
                 return
