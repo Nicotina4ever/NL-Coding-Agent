@@ -52,7 +52,13 @@ function testHtml() {
     assert(!/<script>[\s\S]*?<\/script>/.test(html.replace(/<script src=[^>]*><\/script>/g, '')), 'no inline script body');
     assert(!/\son[a-z]+\s*=/.test(html), 'no inline event handlers');
     for (const id of ['mission-banner', 'mission-list', 'mission-detail', 'engine-content',
-        'chat-model', 'dev-model', 'reviewer-model', 'mode', 'exec-toggle']) {
+        'chat-model', 'dev-model', 'reviewer-model', 'mode', 'exec-toggle',
+        'chat-session', 'chat-queue', 'provider-edit', 'provider-save', 'role-save',
+        'provider-id', 'provider-kind', 'provider-label', 'provider-api-key-env',
+        'chat-controls-toggle', 'context-toggle', 'mission-fields-toggle', 'mission-list-toggle',
+        'generation-save', 'permission-grant', 'autonomy-save', 'mcp-save',
+        'probe-run', 'storage-scan', 'storage-purge', 'storage-vacuum', 'storage-list',
+        'mission-query', 'mission-status-filter', 'mission-archived-toggle']) {
         assert(html.includes(`id="${id}"`), `markup exposes #${id}`);
     }
     assert.strictEqual(escapeHtml('<b>&"\'</b>'), '&lt;b&gt;&amp;&quot;&#39;&lt;/b&gt;');
@@ -277,6 +283,22 @@ function testWebviewBehaviour() {
             injection_warnings: []
         },
         researchProfile: 'trusted-auto-review',
+        chatQueue: [{ id: 'q1', text: 'queued task', mode: 'queue' }],
+        chatSessions: [
+            { id: 's1', project_id: 7, title: 'Main', message_count: 2 },
+            { id: 's2', project_id: 7, title: 'Archived', message_count: 0, archived_at: '2026-10-30T10:00:00' }
+        ],
+        currentSessionId: 's1',
+        showArchivedSessions: false,
+        generationParams: { effective: { temperature: 0.2, top_k: 20 }, configured: [] },
+        autonomy: { ok: true, mode: 'off', max_missions_per_run: 1, max_attempts_per_requirement: 2 },
+        mcpConfig: { servers: {} },
+        storage: {
+            root: 'K:\\project', data_root: 'K:\\data',
+            total_bytes: 1048576,
+            items: [{ id: 'tmp-1', category: 'workspace-temp', path: 'K:\\tmp', bytes: 1048576, files: 2, deletable: true, reason: 'temporary files' }],
+            never_delete: []
+        },
         historyCount: 2,
         historyLoaded: true
     };
@@ -322,6 +344,50 @@ function testWebviewBehaviour() {
     assert(engineText.includes('Trusted auto review'), 'research profile options rendered');
     assert(engineText.includes('ollama/dev'), 'model routes rendered');
     assert(engineText.includes('dev'), 'discovered model rendered');
+    assert.strictEqual(get('chat-session').children.length, 2, 'chat sessions rendered');
+    assert.strictEqual(get('chat-session').value, 's1', 'current session selected');
+    assert.strictEqual(get('chat-queue').children.length, 1, 'persistent queue rendered');
+    assert.strictEqual(get('storage-list').children.length, 1, 'storage scan rendered');
+    assert(get('mcp-json').value.includes('servers'), 'MCP JSON rendered');
+    assert.strictEqual(get('provider-edit').value, 'ollama', 'provider editor populated');
+    assert.strictEqual(get('provider-id').value, 'ollama', 'provider id populated');
+    assert.strictEqual(get('provider-kind').value, 'ollama', 'provider kind populated');
+    assert.strictEqual(get('probe-model').children.length, 2, 'probe model options rendered');
+
+    get('chat-controls-toggle').dispatch('click', {});
+    assert(get('model-bar').classList.contains('hidden'), 'model controls collapse');
+    get('chat-controls-toggle').dispatch('click', {});
+    assert(!get('model-bar').classList.contains('hidden'), 'model controls expand');
+    get('mission-list-toggle').dispatch('click', {});
+    assert(get('mission-list').classList.contains('hidden'), 'mission list collapses');
+    get('mission-list-toggle').dispatch('click', {});
+    assert(!get('mission-list').classList.contains('hidden'), 'mission list expands');
+
+    get('chat-session').value = 's2';
+    get('chat-session').dispatch('change', {});
+    assert(posted.some((message) => message.type === 'action' &&
+        message.action === 'selectChatSession' && message.payload.sessionId === 's2'),
+        'session selection posts a real action');
+    get('provider-enabled').checked = false;
+    get('provider-save').dispatch('click', {});
+    assert(posted.some((message) => message.type === 'action' &&
+        message.action === 'saveProviderSettings'), 'provider save posts a real action');
+    get('generation-temperature').value = '0.3';
+    get('generation-save').dispatch('click', {});
+    assert(posted.some((message) => message.type === 'action' &&
+        message.action === 'saveGenerationParameters' &&
+        Number(message.payload.temperature) === 0.3), 'generation save posts a real action');
+    get('mission-query').value = 'calc';
+    get('mission-apply-filter').dispatch('click', {});
+    assert(posted.some((message) => message.type === 'action' &&
+        message.action === 'setMissionFilter' && message.payload.query === 'calc'),
+        'mission filter posts a real action');
+    get('storage-scan').dispatch('click', {});
+    assert(posted.some((message) => message.type === 'action' &&
+        message.action === 'scanStorage'), 'storage scan posts a real action');
+    get('probe-run').dispatch('click', {});
+    assert(posted.some((message) => message.type === 'action' &&
+        message.action === 'probeModel'), 'capability probe posts a real action');
 
     // Engine history is rendered from the engine's persisted thread, not local storage.
     send({
@@ -404,3 +470,5 @@ testScriptSyntax();
 testHtml();
 testWebviewBehaviour();
 console.log('== WEBVIEW-TESTS-PASS ==');
+
+

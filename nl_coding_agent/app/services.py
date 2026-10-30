@@ -297,6 +297,42 @@ class AppServices:
                              payload={"enabled": bool(enabled)}))
         return config
 
+    def set_permission_scope(self, scope: str, granted: bool, *,
+                             project_id: int | None = None,
+                             source: str = "gui") -> dict:
+        from nl_coding_agent.core import permissions
+        if bool(granted):
+            permissions.grant(scope, project_id=project_id, source=source)
+        else:
+            permissions.revoke(scope, project_id=project_id, source=source)
+        self._bus.emit(Event(source="permissions", level="info",
+                             message=("Permission granted" if granted else "Permission revoked"),
+                             payload={"scope": str(scope), "project_id": project_id}))
+        return self.get_permissions(project_id)
+
+    def probe_model_capabilities(self, model: str, *, timeout: float = 90.0,
+                                 allow_cloud: bool = False) -> dict:
+        from nl_coding_agent.core import permissions
+        permissions.require(permissions.EXECUTE)
+        from nl_coding_agent.models.operational_probes import probe_model
+        records = probe_model(
+            str(model), base_url=self.get_ollama_url(),
+            timeout=max(5.0, min(float(timeout), 300.0)),
+            allow_cloud=bool(allow_cloud),
+        )
+        by_name = {record.capability: record for record in records}
+        quality = by_name.get("patch_quality")
+        return {
+            "model": str(model),
+            "provider_id": "ollama",
+            "tool_calling": by_name["tool_calling"].state if "tool_calling" in by_name else "unknown",
+            "structured_output": (by_name["structured_output"].state
+                                  if "structured_output" in by_name else "unknown"),
+            "patch_quality": quality.state if quality else "unknown",
+            "patch_score": float((quality.metadata or {}).get("score") or 0.0) if quality else 0.0,
+            "capabilities": {key: value.to_dict() for key, value in by_name.items()},
+        }
+
     def get_database_path(self) -> Path:
         return db_path()
 
@@ -682,6 +718,8 @@ class AppServices:
                         model=route.get("model"), provider_id=route.get("provider_id"),
                         automatic=route.get("automatic"),
                     )
+                    result["messages"] = self.list_chat_messages(
+                        project_id=project_id, session_id=session_id)
                 return result
             reply_info = self._chat_reply(project=project, text=text, attachments=attachments,
                                           tool_activity="", history=history,
@@ -1266,6 +1304,15 @@ class AppServices:
                              message="Selective storage cleanup completed",
                              payload={"freed_bytes": result.get("freed_bytes"),
                                       "removed": result.get("removed")}))
+        return result
+
+    def storage_vacuum(self, *, confirm: bool = False) -> dict:
+        from nl_coding_agent.core.storage_manager import vacuum_database
+        result = vacuum_database(confirm=confirm)
+        self._bus.emit(Event(source="storage", level="info",
+                             message="SQLite compaction attempted",
+                             payload={"freed_bytes": result.get("freed_bytes"),
+                                      "ok": result.get("ok")}))
         return result
 
     def mission_candidate_diff(self, mission_id: int, *, project_id: int) -> dict:

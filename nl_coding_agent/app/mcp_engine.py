@@ -347,11 +347,14 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
     @server.tool()
     def save_provider_settings(provider_id: str, enabled: bool | None = None,
                                base_url: str | None = None, label: str | None = None,
+                               kind: str | None = None,
+                               api_key_env: str | None = None,
                                approved: bool = False) -> dict:
-        """Persist provider enabled/endpoint/label; never returns or stores secrets."""
+        """Persist provider enabled/endpoint/label/kind; never returns or stores secrets."""
         require_execution(approved)
         changes = {key: value for key, value in {
             "enabled": enabled, "base_url": base_url, "label": label,
+            "kind": kind, "api_key_env": api_key_env,
         }.items() if value is not None}
         services.save_provider_settings(provider_id, **changes)
         return {"ok": True, "provider": provider_id, "changes": changes}
@@ -374,6 +377,41 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         require_execution(approved)
         services.save_cloud_escalation(bool(enabled))
         return {"ok": True, "cloud_escalation_enabled": bool(enabled)}
+
+    @server.tool()
+    def probe_model_capabilities(model: str, timeout_s: float = 90.0,
+                                 approved: bool = False) -> dict:
+        """Measure real tool-calling/structured/patch capabilities for one local model."""
+        require_execution(approved)
+        return services.probe_model_capabilities(model, timeout=timeout_s)
+
+    @server.tool()
+    def save_permission_scope(scope: str, granted: bool,
+                              approved: bool = False) -> dict:
+        """Explicitly grant/revoke one project permission and return fresh policy."""
+        require_execution(approved)
+        return {"ok": True, "permissions": services.set_permission_scope(
+            str(scope), bool(granted), project_id=bound_project_id, source="mcp-approved")}
+
+    @server.tool(annotations=read_only)
+    def autonomy_settings() -> dict:
+        """Read persisted autonomy mode/budgets for the bound project."""
+        require_read()
+        return services.autonomy_settings(bound_project_id)
+
+    @server.tool()
+    def save_autonomy_settings(mode: str | None = None,
+                               max_missions: int | None = None,
+                               attempts: int | None = None,
+                               max_wall_time_s: int | None = None,
+                               mission_wall_time_s: int | None = None,
+                               approved: bool = False) -> dict:
+        """Persist validated autonomy settings; never starts a run."""
+        require_execution(approved)
+        return services.save_autonomy_settings(
+            bound_project_id, mode=mode, max_missions=max_missions,
+            attempts=attempts, max_wall_time_s=max_wall_time_s,
+            mission_wall_time_s=mission_wall_time_s)
 
     @server.tool()
     def nlc_converse(project_id: int, text: str, attachments: list, history: list, *,
@@ -635,10 +673,13 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         return _research_view(payload)
 
     @server.tool(annotations=read_only)
-    def mission_list() -> dict:
+    def mission_list(include_archived: bool = True, status: str | None = None,
+                     query: str | None = None) -> dict:
         """List persisted missions for the bound project without starting work."""
         require_read()
-        return {"missions": services.list_missions(bound_project_id)}
+        return {"missions": services.list_missions(
+            bound_project_id, include_archived=bool(include_archived),
+            status=status, query=query)}
 
     @server.tool()
     def archive_mission(mission_id: int, approved: bool = False) -> dict:
@@ -652,6 +693,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
     def unarchive_mission(mission_id: int, approved: bool = False) -> dict:
         """Restore an archived mission to the active list."""
         require_execution(approved)
+        mission(mission_id)
         return {"ok": True, "mission": services.unarchive_mission(int(mission_id))}
 
     @server.tool()
@@ -677,6 +719,14 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
             raise ValueError("Storage cleanup requires confirm=true")
         return services.storage_purge(
             selected_ids, confirm=True, project_root=project["root"])
+
+    @server.tool()
+    def storage_vacuum(confirm: bool = False, approved: bool = False) -> dict:
+        """Compact SQLite with a bounded backup after explicit confirmation."""
+        require_execution(approved)
+        if not confirm:
+            raise ValueError("SQLite compaction requires confirm=true")
+        return services.storage_vacuum(confirm=True)
 
     @server.tool(annotations=read_only)
     def mission_status(mission_id: int) -> dict:
@@ -728,7 +778,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                         "updated_at", "started_at", "finished_at", "result_summary",
                         "review_verdict", "promotion_status", "diff_stat", "staging_dir",
                         "harness_version", "resume_count", "requirement_id",
-                        "supervisor_run_id", "flow_id")
+                        "supervisor_run_id", "flow_id", "archived_at")
         mission_view = {key: details.get(key) for key in mission_keys}
         mission_view["changed_paths"] = changed_paths
         tasks = [{key: task.get(key) for key in (

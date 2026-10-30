@@ -81,7 +81,17 @@ $results.Add((Write-Result 'packaged application executable present' $true (Spli
 
 $launcher = Join-Path $Dist 'NL Code.bat'
 $results.Add((Write-Result 'portable launcher present' (Test-Path $launcher) $launcher)) | Out-Null
-$results.Add((Write-Result 'extension installed in portable profile' (Test-Path (Join-Path $Dist 'data\extensions\nlcodingagent.nl-coding-agent-0.1.0\package.json')) '')) | Out-Null
+$extensionDirs = @(Get-ChildItem (Join-Path $Dist 'data\extensions') -Directory -Filter 'nlcodingagent.nl-coding-agent-*' -ErrorAction SilentlyContinue)
+$installedExtension = $null
+if ($extensionDirs.Count -gt 0) {
+    $installedExtension = $extensionDirs | Sort-Object {
+        $package = Join-Path $_.FullName 'package.json'
+        if (Test-Path $package) {
+            [version]((Get-Content $package -Raw | ConvertFrom-Json).version)
+        } else { [version]'0.0.0' }
+    } -Descending | Select-Object -First 1
+}
+$results.Add((Write-Result 'extension installed in portable profile' ($null -ne $installedExtension -and (Test-Path (Join-Path $installedExtension.FullName 'package.json'))) $(if ($installedExtension) { $installedExtension.Name } else { '' }))) | Out-Null
 $results.Add((Write-Result 'build metadata present' (Test-Path (Join-Path $Dist 'BUILD_INFO.json')) '')) | Out-Null
 
 New-Item -ItemType Directory -Force -Path $Project, $DataDir, $workspaceDir, $ScreenshotDir | Out-Null
@@ -115,7 +125,7 @@ if os.path.isfile(db):
         names = {row[0] for row in cur}
         if "app_settings" in names:
             rows = con.execute("SELECT key, value FROM app_settings ORDER BY key").fetchall()
-            out["settings"] = hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()
+            out["settings"] = {key: value for key, value in rows}
         if "projects" in names:
             out["projects"] = con.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
     finally:
@@ -178,7 +188,7 @@ Send-Keys '{ESC}' 1500
 $shotReady = Save-Shot 'after-dismiss'
 
 Send-Keys '^+p' 900
-Send-Keys 'NL Coding Agent: Start Chat' 900
+Send-Keys 'NL Coder: Start Chat' 900
 Send-Keys '{ENTER}' 3500
 Send-Keys 'Reply with exactly: NLCODE-GUI-OK' 500
 Send-Keys '{ENTER}' 800
@@ -207,8 +217,16 @@ if (-not $KeepOpen) {
 & (Join-Path $repoRoot 'python\python.exe') (Join-Path $scratch 'snapshot.py') $DataDir | Set-Content (Join-Path $scratch 'engine-data-after.json') -Encoding UTF8
 $before = Get-Content $snapshotFile -Raw | ConvertFrom-Json
 $after = Get-Content (Join-Path $scratch 'engine-data-after.json') -Raw | ConvertFrom-Json
-$settingsPreserved = ($before.settings -eq $after.settings)
-$results.Add((Write-Result 'existing engine settings preserved' $settingsPreserved (('settings hash ' + $before.settings)))) | Out-Null
+$existingKeys = @($before.settings.PSObject.Properties.Name)
+$preservedSettings = $true
+foreach ($key in $existingKeys) {
+    $afterProperty = $after.settings.PSObject.Properties[$key]
+    if ($null -eq $afterProperty -or $afterProperty.Value -ne $before.settings.$key) {
+        $preservedSettings = $false
+        break
+    }
+}
+$results.Add((Write-Result 'existing engine settings preserved' $preservedSettings (('preserved ' + $existingKeys.Count + ' preexisting key(s); new internal migration keys are allowed')))) | Out-Null
 
 $failed = @($results | Where-Object { -not $_.ok })
 $resultPath = Join-Path $scratch 'acceptance-result.json'

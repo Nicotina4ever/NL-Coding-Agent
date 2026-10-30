@@ -23,6 +23,8 @@ const projectA = path.join(scratch, 'project-a');
 const projectB = path.join(scratch, 'project-b');
 const dataDir = path.join(scratch, 'data');
 const workspaceDir = path.join(scratch, 'workspace');
+const modelsConfig = path.join(scratch, 'models.yaml');
+const mcpConfig = path.join(scratch, 'mcp_servers.json');
 
 function log(line) {
     console.log(line);
@@ -46,9 +48,11 @@ function prepare() {
         'The secret token is NLATTACH-47.\nSecond line for extraction.\n');
     fs.writeFileSync(path.join(projectB, 'notes.txt'), 'Project B fixture.\n');
     fs.writeFileSync(path.join(scratch, 'outside.txt'), 'outside the project root\n');
+    fs.copyFileSync(path.join(repoRoot, 'config', 'models.yaml'), modelsConfig);
+    fs.writeFileSync(mcpConfig, JSON.stringify({ servers: {} }, null, 2));
 }
 
-function engineOptions(projectRoot) {
+function engineOptions(projectRoot, extra = {}) {
     return {
         engineRoot: '',
         extensionPath: frontendDir,
@@ -56,10 +60,12 @@ function engineOptions(projectRoot) {
         env: {
             NL_DATA_DIR: dataDir,
             NL_WORKSPACE_DIR: workspaceDir,
-            NL_MODELS_CONFIG: path.join(repoRoot, 'config', 'models.yaml')
+            NL_MODELS_CONFIG: modelsConfig,
+            NL_MCP_CONFIG: mcpConfig
         },
         requestTimeoutMs: 240000,
-        log: (line) => log('    [engine] ' + line)
+        log: (line) => log('    [engine] ' + line),
+        ...extra
     };
 }
 
@@ -121,7 +127,14 @@ async function main() {
         const names = tools.map((tool) => tool.name);
         for (const required of ['project_context', 'nlc_converse', 'mission_list', 'mission_status',
             'mission_events', 'mission_detail', 'candidate_diff', 'start_mission', 'cancel_mission',
-            'engine_settings', 'attachment_ingest', 'chat_history', 'research_fetch_url']) {
+            'engine_settings', 'attachment_ingest', 'chat_history', 'research_fetch_url',
+            'chat_sessions', 'chat_session_create', 'chat_session_rename',
+            'chat_session_archive', 'chat_session_delete', 'chat_search',
+            'generation_parameters', 'save_generation_parameters', 'save_provider_settings',
+            'save_role_settings', 'set_cloud_escalation', 'save_permission_scope',
+            'autonomy_settings', 'save_autonomy_settings', 'mcp_servers', 'save_mcp_servers',
+            'probe_model_capabilities', 'archive_mission', 'unarchive_mission',
+            'delete_mission', 'storage_scan', 'storage_vacuum']) {
             assert(names.includes(required), `missing tool ${required}`);
         }
         log(`PASS tools discovered (${tools.length}): ${names.join(', ')}`);
@@ -215,6 +228,71 @@ async function main() {
             'history resolves attachment metadata');
         log(`PASS real model route ${explicitModel} + attachment context: ${JSON.stringify(reply.reply)}`);
         log(`PASS engine history: ${history.count} messages, model recorded, attachment metadata resolved`);
+
+        // 5b. Full VSIX -> MCP -> backend round trip for Gate B/D settings.
+        const writer = new EngineConnection(engineOptions(projectA, { allowExecution: true }));
+        const verifier = new EngineConnection(engineOptions(projectA));
+        try {
+            await writer.connect();
+            assert.strictEqual(writer.executionAllowed, true, 'writer execution enabled');
+            const configuredModel = settings.models.chat_default_spec;
+            const before = await writer.generationParameters(configuredModel, 'chat');
+            assert(before && before.effective !== undefined, 'generation parameters read');
+            await writer.saveGenerationParameters(
+                { temperature: 0.2, top_p: 0.9, top_k: 20 }, 'model', configuredModel);
+            const after = await writer.generationParameters(configuredModel, 'chat');
+            assert.strictEqual(after.effective.temperature, 0.2, 'generation parameter persisted');
+            assert.strictEqual(after.effective.top_k, 20, 'top_k persisted');
+
+            await writer.saveProviderSettings('ollama', { enabled: true });
+            await writer.saveProviderSettings('lm_studio_custom', {
+                enabled: false, baseUrl: 'http://127.0.0.1:1234/v1',
+                label: 'Custom OpenAI-compatible', kind: 'openai_compatible'
+            });
+            const settingsAfterProvider = await writer.engineSettings(false);
+            const customProvider = settingsAfterProvider.models.providers.find(
+                (item) => item.provider_id === 'lm_studio_custom');
+            assert(customProvider, 'custom provider persisted');
+            assert.strictEqual(customProvider.kind, 'openai_compatible', 'custom provider kind');
+            assert.strictEqual(customProvider.enabled, false, 'custom provider disabled');
+            await writer.saveRoleSettings('chat', { model: configuredModel });
+            await writer.saveCloudEscalation(false);
+            await writer.savePermissionScope('read', true);
+            const autonomy = await writer.autonomySettings();
+            assert(Array.isArray(autonomy.modes), 'autonomy modes');
+            await writer.saveAutonomySettings({ mode: 'off', maxMissions: 1, attempts: 1 });
+
+            const sessions = await writer.chatSessions();
+            assert(Array.isArray(sessions.sessions) && sessions.sessions.length >= 1, 'sessions listed');
+            const created = await writer.chatSessionCreate('Integration durable session');
+            await writer.chatSessionRename(created.session.id, 'Integration renamed session');
+            const archiveTarget = await writer.chatSessionCreate('Archive me');
+            await writer.chatSessionArchive(archiveTarget.session.id);
+            await writer.chatSessionDelete(archiveTarget.session.id);
+            const search = await writer.chatSearch('NLATTACH-47');
+            assert(Array.isArray(search.messages), 'chat search shape');
+
+            const mcp = await writer.mcpServers();
+            assert(mcp && mcp.config && typeof mcp.config === 'object', 'MCP config read');
+            await writer.saveMcpServers({ servers: {} });
+            const scan = await writer.storageScan();
+            assert(Array.isArray(scan.items) && Array.isArray(scan.never_delete), 'storage scan shape');
+            const vacuum = await writer.storageVacuum();
+            assert(vacuum && typeof vacuum.ok === 'boolean', 'SQLite compaction result shape');
+
+            // Restart persistence: a fresh connection must see the durable rows.
+            await verifier.connect();
+            const persistedSessions = await verifier.chatSessions();
+            assert(persistedSessions.sessions.some((item) => item.id === created.session.id),
+                'chat session survives engine restart');
+            const persistedGenerations = await verifier.generationParameters(configuredModel, 'chat');
+            assert.strictEqual(persistedGenerations.effective.temperature, 0.2,
+                'generation parameters survive engine restart');
+            log('PASS VSIX backend round trip: settings, generation params, sessions, MCP, storage, restart persistence');
+        } finally {
+            await writer.close();
+            await verifier.close();
+        }
 
         // 6. The server refuses another project's id (cross-project isolation).
         let refused = null;

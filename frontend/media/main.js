@@ -60,6 +60,15 @@
     const missionListEl = $('mission-list');
     const missionDetailEl = $('mission-detail');
     const engineContent = $('engine-content');
+    const sessionSelectEl = $('chat-session');
+    const chatQueueEl = $('chat-queue');
+    const storageListEl = $('storage-list');
+    const probeSelectEl = $('probe-model');
+    let storageSelected = {};
+    let chatControlsVisible = true;
+    let contextVisible = true;
+    let missionFieldsVisible = true;
+    let missionListVisible = true;
 
     const labels = { user: 'You', assistant: 'NL', system: 'NL', error: 'Error' };
     const transcript = [];
@@ -223,10 +232,11 @@
     function setMode(next) {
         mode = next === 'mission' ? 'mission' : 'chat';
         modeEl.value = mode;
-        missionFields.classList.toggle('hidden', mode !== 'mission');
-        missionNote.classList.toggle('hidden', mode !== 'mission');
-        if (modelBar) { modelBar.classList.toggle('hidden', mode === 'mission'); }
-        if (contextStrip) { contextStrip.classList.toggle('hidden', mode === 'mission'); }
+        missionFields.classList.toggle('hidden', mode !== 'mission' || !missionFieldsVisible);
+        missionNote.classList.toggle('hidden', mode !== 'mission' || !missionFieldsVisible);
+        $('mission-fields-toggle').classList.toggle('hidden', mode !== 'mission');
+        if (modelBar) { modelBar.classList.toggle('hidden', mode === 'mission' || !chatControlsVisible); }
+        if (contextStrip) { contextStrip.classList.toggle('hidden', mode === 'mission' || !contextVisible); }
         sendEl.textContent = mode === 'mission' ? 'Start mission' : 'Send';
         if (state) { renderContext(state); }
         persist();
@@ -265,6 +275,141 @@
         execToggle.dataset.enabled = current.executionEnabled ? 'true' : 'false';
         showNotice(current.error || null);
     }
+    function fmtBytes(value) {
+        const bytes = Number(value) || 0;
+        return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+    }
+
+    function renderSessions(current) {
+        const sessions = current.chatSessions || [];
+        const selected = current.currentSessionId || '';
+        clear(sessionSelectEl);
+        sessions.forEach(function (session) {
+            const option = el('option', '', (session.title || '(untitled)') +
+                (session.archived_at ? ' · archived' : '') +
+                (typeof session.message_count === 'number' ? ' · ' + session.message_count : ''));
+            option.value = session.id;
+            if (session.id === selected) { option.selected = true; }
+            sessionSelectEl.appendChild(option);
+        });
+        sessionSelectEl.value = selected;
+        $('session-archived-toggle').checked = Boolean(current.showArchivedSessions);    }
+
+    function renderQueue(current) {
+        clear(chatQueueEl);
+        const items = current.chatQueue || [];
+        if (!items.length) {
+            chatQueueEl.classList.add('hidden');
+            return;
+        }
+        chatQueueEl.classList.remove('hidden');
+        items.forEach(function (item) {
+            const row = el('div', 'nl-queue-row');
+            row.appendChild(el('span', 'nl-queue-mode', item.mode || 'queue'));
+            row.appendChild(el('span', 'nl-queue-text', item.text || ''));
+            const remove = el('button', '', 'Remove');
+            remove.type = 'button';
+            remove.addEventListener('click', function () {
+                postAction('removeQueueItem', { itemId: item.id });
+            });
+            row.appendChild(remove);
+            chatQueueEl.appendChild(row);
+        });
+    }
+
+    function renderStorage(current) {
+        const storage = current.storage;
+        clear(storageListEl);
+        if (!storage) { return; }
+        $('storage-total').textContent = fmtBytes(storage.total_bytes) + ' total';
+        (storage.items || []).forEach(function (item) {
+            const row = el('label', 'nl-storage-row');
+            const check = el('input');
+            check.type = 'checkbox';
+            check.disabled = !item.deletable;
+            check.checked = Boolean(storageSelected[item.id]);
+            check.addEventListener('change', function () {
+                storageSelected[item.id] = check.checked;
+            });
+            row.appendChild(check);
+            row.appendChild(el('span', 'nl-storage-category', item.category || ''));
+            row.appendChild(el('span', 'nl-muted', fmtBytes(item.bytes) + ' · ' + item.files + ' files'));
+            row.appendChild(el('span', 'nl-muted', item.deletable ? 'deletable' : 'protected'));
+            storageListEl.appendChild(row);
+        });
+    }
+
+    function setValueIfIdle(id, value) {
+        const node = $(id);
+        if (!node || document.activeElement === node) { return; }
+        node.value = value === undefined || value === null ? '' : String(value);
+    }
+
+    function renderSettings(current) {
+        const settings = current.settings;
+        if (!settings) { return; }
+        const providerSelect = $('provider-edit');
+        const previous = providerSelect.value;
+        clear(providerSelect);
+        (settings.models.providers || []).forEach(function (provider) {
+            const option = el('option', '', provider.label + ' (' + provider.provider_id + ')');
+            option.value = provider.provider_id;
+            providerSelect.appendChild(option);
+        });
+        if (previous) { providerSelect.value = previous; }
+        if (!providerSelect.value && providerSelect.children.length) {
+            providerSelect.value = providerSelect.children[0].value;
+        }
+        const providerId = providerSelect.value;
+        const provider = (settings.models.providers || []).filter(function (item) {
+            return item.provider_id === providerId;
+        })[0];
+        if (provider) {
+            $('provider-enabled').checked = Boolean(provider.enabled);
+            setValueIfIdle('provider-url', provider.base_url);
+            setValueIfIdle('provider-id', provider.provider_id);
+            $('provider-kind').value = provider.kind || 'openai_compatible';
+            setValueIfIdle('provider-label', provider.label);
+            setValueIfIdle('provider-api-key-env', provider.api_key_env);
+        }
+        const role = $('role-edit').value;
+        const roleConfig = (settings.models.roles || {})[role];
+        setValueIfIdle('role-model-edit', roleConfig && roleConfig.model);
+        setValueIfIdle('generation-model', current.chatModel || settings.models.chat_default_spec || '');
+        const generation = current.generationParams && current.generationParams.effective || {};
+        setValueIfIdle('generation-temperature', generation.temperature);
+        setValueIfIdle('generation-top-p', generation.top_p);
+        setValueIfIdle('generation-top-k', generation.top_k);
+        setValueIfIdle('generation-min-p', generation.min_p);
+        setValueIfIdle('generation-repeat', generation.repeat_penalty);
+        setValueIfIdle('generation-seed', generation.seed);
+        setValueIfIdle('generation-max', generation.max_tokens);
+        const autonomy = current.autonomy || {};
+        $('autonomy-mode').value = autonomy.mode || 'off';
+        setValueIfIdle('autonomy-missions', autonomy.max_missions_per_run);
+        setValueIfIdle('autonomy-attempts', autonomy.max_attempts_per_requirement);
+        $('cloud-policy').checked = Boolean(settings.models.cloud_escalation_enabled);
+        const mcp = $('mcp-json');
+        if (document.activeElement !== mcp) {
+            mcp.value = JSON.stringify(current.mcpConfig || { servers: {} }, null, 2);
+        }
+        const probe = $('probe-model');
+        const probePrevious = probe.value;
+        clear(probe);
+        (current.modelOptions || []).forEach(function (option) {
+            if (!option.value) { return; }
+            const node = el('option', '', option.label);
+            node.value = option.value;
+            probe.appendChild(node);
+        });
+        if (probePrevious) { probe.value = probePrevious; }
+        const result = current.capabilityProbe;
+        $('probe-result').textContent = result
+            ? result.model + ': tools=' + result.tool_calling + ', structured=' +
+              result.structured_output + ', patch=' + result.patch_quality
+            : '';
+    }
+
     function renderBanner(current) {
         const mission = current.activeMissionId
             ? (current.selected && current.selected.detail && current.selected.detail.mission.id === current.activeMissionId
@@ -474,6 +619,9 @@
     function renderMissionList(current) {
         clear(missionListEl);
         const missions = current.missions || [];
+        $('mission-query').value = current.missionQuery || '';
+        $('mission-status-filter').value = current.missionStatusFilter || '';
+        $('mission-archived-toggle').checked = Boolean(current.missionShowArchived);
         if (!missions.length) {
             missionListEl.appendChild(el('p', 'nl-muted', 'No persistent missions for this project.'));
             return;
@@ -484,6 +632,7 @@
             head.appendChild(el('span', 'nl-mission-id', '#' + mission.id));
             head.appendChild(el('span', 'nl-mission-title', mission.title || '(untitled)'));
             head.appendChild(chip(mission.status || '—', statusKind(mission.status)));
+            if (mission.archived_at) { head.appendChild(chip('archived', 'neutral')); }
             const meta = el('span', 'nl-muted', [mission.review_verdict, mission.promotion_status, mission.diff_stat]
                 .filter(Boolean).join(' · '));
             head.appendChild(meta);
@@ -515,6 +664,36 @@
                     postAction('resumeMission', { missionId: mission.id });
                 });
                 actions.appendChild(resume);
+            }
+            if (!mission.archived_at && ['completed', 'failed', 'blocked', 'interrupted'].indexOf(mission.status) >= 0) {
+                const archive = el('button', '', 'Archive');
+                archive.addEventListener('click', function (event) {
+                    event.stopPropagation();
+                    postAction('archiveMission', { missionId: mission.id });
+                });
+                actions.appendChild(archive);
+            }
+            if (mission.archived_at) {
+                const unarchive = el('button', '', 'Unarchive');
+                unarchive.addEventListener('click', function (event) {
+                    event.stopPropagation();
+                    postAction('unarchiveMission', { missionId: mission.id });
+                });
+                actions.appendChild(unarchive);
+                const remove = el('button', '', 'Delete');
+                remove.addEventListener('click', function (event) {
+                    event.stopPropagation();
+                    postAction('deleteMission', { missionId: mission.id });
+                });
+                actions.appendChild(remove);
+            }
+            if (['pending', 'running', 'interrupted', 'blocked'].indexOf(mission.status) >= 0) {
+                const steer = el('button', '', 'Steer');
+                steer.addEventListener('click', function (event) {
+                    event.stopPropagation();
+                    postAction('steerMission', { missionId: mission.id });
+                });
+                actions.appendChild(steer);
             }
             row.appendChild(actions);
             row.addEventListener('click', function () {
@@ -865,12 +1044,16 @@
         rendering = true;
         try {
             renderHeader(state);
+            renderSessions(state);
+            renderQueue(state);
             renderBanner(state);
             renderModelBar(state);
             renderContext(state);
             renderResearch(state);
             renderMissionList(state);
             renderMissionDetail(state);
+            renderSettings(state);
+            renderStorage(state);
             renderEngine(state);
         } finally {
             rendering = false;
@@ -1028,6 +1211,134 @@
         if (uris.length) {
             postAction('dropUris', { uris: uris });
         }
+    });
+
+    sessionSelectEl.addEventListener('change', function () {
+        postAction('selectChatSession', { sessionId: sessionSelectEl.value });
+    });
+    $('session-new').addEventListener('click', function () { postAction('newChatSession', {}); });
+    $('session-rename').addEventListener('click', function () { postAction('renameChatSession', {}); });
+    $('session-archive').addEventListener('click', function () { postAction('archiveChatSession', {}); });
+    $('session-delete').addEventListener('click', function () { postAction('deleteChatSession', {}); });
+    $('session-search').addEventListener('click', function () { postAction('searchChat', {}); });
+    $('session-archived-toggle').addEventListener('change', function () {
+        postAction('toggleArchivedSessions', {});
+    });
+    $('mission-apply-filter').addEventListener('click', function () {
+        postAction('setMissionFilter', {
+            query: $('mission-query').value,
+            status: $('mission-status-filter').value,
+            includeArchived: $('mission-archived-toggle').checked
+        });
+    });
+    $('provider-edit').addEventListener('change', function () {
+        const provider = ((state && state.settings && state.settings.models.providers) || []).filter(function (item) {
+            return item.provider_id === $('provider-edit').value;
+        })[0];
+        if (provider) {
+            $('provider-enabled').checked = Boolean(provider.enabled);
+            $('provider-url').value = provider.base_url || '';
+            $('provider-id').value = provider.provider_id || '';
+            $('provider-kind').value = provider.kind || 'openai_compatible';
+            $('provider-label').value = provider.label || '';
+            $('provider-api-key-env').value = provider.api_key_env || '';
+        }
+    });
+    $('role-edit').addEventListener('change', function () {
+        const roles = (state && state.settings && state.settings.models.roles) || {};
+        const role = roles[$('role-edit').value] || {};
+        $('role-model-edit').value = role.model || '';
+    });
+    $('provider-save').addEventListener('click', function () {
+        postAction('saveProviderSettings', {
+            providerId: $('provider-id').value || $('provider-edit').value,
+            enabled: $('provider-enabled').checked,
+            baseUrl: $('provider-url').value,
+            kind: $('provider-kind').value,
+            label: $('provider-label').value,
+            apiKeyEnv: $('provider-api-key-env').value
+        });
+    });
+    $('role-save').addEventListener('click', function () {
+        postAction('saveRoleSettings', {
+            role: $('role-edit').value,
+            model: $('role-model-edit').value
+        });
+    });
+    $('generation-save').addEventListener('click', function () {
+        function numberOrNull(id) {
+            const value = $(id).value;
+            return value === '' ? null : Number(value);
+        }
+        postAction('saveGenerationParameters', {
+            scope: $('generation-scope').value,
+            modelName: $('generation-model').value,
+            role: $('generation-role').value,
+            temperature: numberOrNull('generation-temperature'),
+            top_p: numberOrNull('generation-top-p'),
+            top_k: numberOrNull('generation-top-k'),
+            min_p: numberOrNull('generation-min-p'),
+            repeat_penalty: numberOrNull('generation-repeat'),
+            seed: numberOrNull('generation-seed'),
+            max_tokens: numberOrNull('generation-max')
+        });
+    });
+    $('permission-grant').addEventListener('click', function () {
+        postAction('savePermission', { scope: $('permission-scope').value, granted: true });
+    });
+    $('permission-revoke').addEventListener('click', function () {
+        postAction('savePermission', { scope: $('permission-scope').value, granted: false });
+    });
+    $('cloud-save').addEventListener('click', function () {
+        postAction('saveCloudPolicy', { enabled: $('cloud-policy').checked });
+    });
+    $('autonomy-save').addEventListener('click', function () {
+        postAction('saveAutonomy', {
+            mode: $('autonomy-mode').value,
+            maxMissions: $('autonomy-missions').value ? Number($('autonomy-missions').value) : undefined,
+            attempts: $('autonomy-attempts').value ? Number($('autonomy-attempts').value) : undefined
+        });
+    });
+    $('mcp-save').addEventListener('click', function () {
+        let config = {};
+        try {
+            config = JSON.parse($('mcp-json').value || '{}');
+        } catch (error) {
+            showNotice('MCP JSON is invalid: ' + error.message);
+            return;
+        }
+        postAction('saveMcpConfig', { config: config });
+    });
+    $('probe-run').addEventListener('click', function () {
+        postAction('probeModel', { model: $('probe-model').value });
+    });
+    $('storage-scan').addEventListener('click', function () { postAction('scanStorage', {}); });
+    $('storage-vacuum').addEventListener('click', function () { postAction('vacuumStorage', {}); });
+    $('storage-purge').addEventListener('click', function () {
+        const ids = Object.keys(storageSelected).filter(function (id) { return storageSelected[id]; });
+        postAction('purgeStorage', { ids: ids });
+    });
+    $('chat-controls-toggle').addEventListener('click', function () {
+        chatControlsVisible = !chatControlsVisible;
+        $('model-bar').classList.toggle('hidden', !chatControlsVisible || mode === 'mission');
+        $('chat-controls-toggle').textContent = (chatControlsVisible ? '▾' : '▸') + ' model controls';
+    });
+    $('context-toggle').addEventListener('click', function () {
+        contextVisible = !contextVisible;
+        $('context-strip').classList.toggle('hidden', !contextVisible || mode === 'mission');
+        $('context-toggle').textContent = (contextVisible ? '▾' : '▸') + ' attachments';
+    });
+    $('mission-fields-toggle').addEventListener('click', function () {
+        missionFieldsVisible = !missionFieldsVisible;
+        $('mission-fields').classList.toggle('hidden', mode !== 'mission' || !missionFieldsVisible);
+        $('mission-note').classList.toggle('hidden', mode !== 'mission' || !missionFieldsVisible);
+        $('mission-fields-toggle').textContent =
+            (missionFieldsVisible ? '▾' : '▸') + ' mission model selection';
+    });
+    $('mission-list-toggle').addEventListener('click', function () {
+        missionListVisible = !missionListVisible;
+        $('mission-list').classList.toggle('hidden', !missionListVisible);
+        $('mission-list-toggle').textContent = (missionListVisible ? '▾' : '▸') + ' mission list';
     });
 
     tabButtons.forEach(function (button) {

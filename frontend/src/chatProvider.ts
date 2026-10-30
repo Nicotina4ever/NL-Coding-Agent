@@ -11,18 +11,23 @@ import * as vscode from 'vscode';
 import {
     AttachmentInput,
     AttachmentView,
+    AutonomySettings,
     CandidateDiff,
     ChatHistoryResult,
     ChatQueueItem,
     ChatRoute,
+    ChatSession,
     EngineConnection,
     EngineError,
     EngineSettings,
+    GenerationParametersResult,
     HistoryMessage,
     MissionDetail,
     MissionRow,
+    ModelCapabilityProbe,
     ProjectContext,
-    ResearchFetchResult
+    ResearchFetchResult,
+    StorageScanResult
 } from './backend';
 import { buildChatHtml } from './webview';
 
@@ -79,6 +84,17 @@ export interface DashboardState {
     lastRoute?: ChatRoute;
     chatQueue?: ChatQueueItem[];
     queueCount?: number;
+    chatSessions?: ChatSession[];
+    currentSessionId?: string;
+    showArchivedSessions?: boolean;
+    missionShowArchived?: boolean;
+    missionStatusFilter?: string;
+    missionQuery?: string;
+    generationParams?: GenerationParametersResult;
+    autonomy?: AutonomySettings;
+    storage?: StorageScanResult;
+    capabilityProbe?: ModelCapabilityProbe;
+    mcpConfig?: Record<string, unknown>;
     research?: ResearchFetchResult;
     researchProfile: string;
     historyCount: number;
@@ -123,6 +139,17 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     private historyCount = 0;
     private historyLoaded = false;
     private chatQueue: ChatQueueItem[] = [];
+    private chatSessions: ChatSession[] = [];
+    private currentSessionId: string | undefined;
+    private showArchivedSessions = false;
+    private missionShowArchived = false;
+    private missionStatusFilter = '';
+    private missionQuery = '';
+    private generationParams: GenerationParametersResult | undefined;
+    private autonomy: AutonomySettings | undefined;
+    private storage: StorageScanResult | undefined;
+    private capabilityProbe: ModelCapabilityProbe | undefined;
+    private mcpConfig: Record<string, unknown> | undefined;
     private editorContext: EditorContext | undefined;
     private lastEditor: vscode.TextEditor | undefined;
     private lastRoute: ChatRoute | undefined;
@@ -198,6 +225,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             }
             this.setupEditorTracking();
             await this.refreshAll(true);
+            await this.loadSessions();
             await this.loadHistory();
             await this.refreshQueue(false);
             if (!this.readyAnnounced) {
@@ -445,7 +473,11 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     /** Load the engine's persisted thread; never an extension-side archive. */
     async loadHistory(limit = 200): Promise<void> {
         try {
-            const history: ChatHistoryResult = await this.connection.chatHistory(limit);
+            if (!this.currentSessionId) {
+                await this.loadSessions();
+            }
+            const history: ChatHistoryResult = await this.connection.chatHistory(
+                limit, undefined, this.currentSessionId);
             this.history = history.messages || [];
             this.historyCount = Number(history.count || 0);
             this.historyLoaded = true;
@@ -457,9 +489,127 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    async loadSessions(selectId?: string): Promise<void> {
+        try {
+            const result = await this.connection.chatSessions(this.showArchivedSessions);
+            this.chatSessions = result.sessions || [];
+            const saved = this.workspaceState?.get<string>('nlCodingAgent.chatSession');
+            const preferred = selectId || this.currentSessionId ||
+                (typeof saved === 'string' ? saved : undefined);
+            const selected = this.chatSessions.find((item) => item.id === preferred) ||
+                this.chatSessions.find((item) => !item.archived_at) ||
+                this.chatSessions[0];
+            this.currentSessionId = selected?.id;
+            await this.workspaceState?.update('nlCodingAgent.chatSession', this.currentSessionId || '');
+            this.postState();
+        } catch (error) {
+            this.output.appendLine('[sessions] ' + this.errorText(error));
+        }
+    }
+
+    async switchSession(sessionId: string): Promise<void> {
+        this.currentSessionId = String(sessionId || '');
+        await this.workspaceState?.update('nlCodingAgent.chatSession', this.currentSessionId);
+        await this.loadHistory();
+        this.postState();
+    }
+
+    async newChatSession(): Promise<void> {
+        const title = await vscode.window.showInputBox({
+            prompt: 'New conversation title',
+            value: 'New conversation'
+        });
+        if (title === undefined) {
+            return;
+        }
+        const result = await this.connection.chatSessionCreate(title || 'New conversation');
+        await this.loadSessions(result.session.id);
+        await this.loadHistory();
+        this.postChat('system', 'New conversation created.');
+    }
+
+    async renameChatSession(): Promise<void> {
+        if (!this.currentSessionId) {
+            return;
+        }
+        const current = this.chatSessions.find((item) => item.id === this.currentSessionId);
+        const title = await vscode.window.showInputBox({
+            prompt: 'Rename conversation',
+            value: current?.title || ''
+        });
+        if (!title || !title.trim()) {
+            return;
+        }
+        await this.connection.chatSessionRename(this.currentSessionId, title.trim());
+        await this.loadSessions(this.currentSessionId);
+        this.postState();
+    }
+
+    async archiveChatSession(): Promise<void> {
+        if (!this.currentSessionId) {
+            return;
+        }
+        const choice = await vscode.window.showWarningMessage(
+            'Archive this conversation? Messages are retained.',
+            { modal: true }, 'Archive');
+        if (choice !== 'Archive') {
+            return;
+        }
+        await this.connection.chatSessionArchive(this.currentSessionId);
+        await this.loadSessions();
+        await this.loadHistory();
+        this.postState();
+    }
+
+    async deleteChatSession(): Promise<void> {
+        if (!this.currentSessionId) {
+            return;
+        }
+        const current = this.chatSessions.find((item) => item.id === this.currentSessionId);
+        if (!current?.archived_at) {
+            this.postChat('system', 'Archive the conversation before deleting it.');
+            return;
+        }
+        const choice = await vscode.window.showWarningMessage(
+            'Delete this archived conversation and its messages?',
+            { modal: true }, 'Delete');
+        if (choice !== 'Delete') {
+            return;
+        }
+        await this.connection.chatSessionDelete(this.currentSessionId);
+        await this.loadSessions();
+        await this.loadHistory();
+        this.postState();
+    }
+
+    async toggleArchivedSessions(): Promise<void> {
+        this.showArchivedSessions = !this.showArchivedSessions;
+        await this.loadSessions(this.currentSessionId);
+    }
+
+    async searchChat(): Promise<void> {
+        const query = await vscode.window.showInputBox({
+            prompt: 'Search persisted conversations'
+        });
+        if (!query || !query.trim()) {
+            return;
+        }
+        const result = await this.connection.chatSearch(query.trim());
+        const lines = (result.messages || []).map((item) =>
+            `#${String(item['id'])} [${String(item['title'])}] ${String(item['role'])}: ${String(item['content']).slice(0, 240)}`);
+        this.postChat('system', lines.length
+            ? 'Search results:\n' + lines.join('\n')
+            : 'No persisted conversation matched.');
+    }
+
+    async removeQueuedItem(itemId: string): Promise<void> {
+        await this.connection.chatQueueRemove(String(itemId));
+        await this.refreshQueue(false);
+        this.postChat('system', 'Queued message removed.');
+    }
+
     /** Read/refresh the persistent queue and optionally drain one item. */
-    async refreshQueue(drain = false): Promise<void> {
-        if (!this.view) {
+    async refreshQueue(drain = false): Promise<void> {        if (!this.view) {
             return;
         }
         try {
@@ -778,13 +928,224 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    async steerMissionById(missionId: number): Promise<void> {
+        const text = await vscode.window.showInputBox({
+            prompt: 'Steering instruction for mission #' + missionId
+        });
+        if (!text || !text.trim()) {
+            return;
+        }
+        await this.connection.missionSteer(missionId, text.trim());
+        this.postChat('system', 'Steering queued for mission #' + missionId
+            + '; it applies at the next safe checkpoint.');
+    }
+
     async refreshMissions(): Promise<void> {
         try {
-            this.missions = await this.connection.missionList();
+            this.missions = await this.connection.missionList({
+                includeArchived: this.missionShowArchived,
+                status: this.missionStatusFilter || undefined,
+                query: this.missionQuery || undefined
+            });
         } catch (error) {
             this.output.appendLine('[missions] ' + this.errorText(error));
         }
     }
+
+    async setMissionFilter(input: { includeArchived?: boolean; status?: string; query?: string }): Promise<void> {
+        if (typeof input.includeArchived === 'boolean') {
+            this.missionShowArchived = input.includeArchived;
+        }
+        if (typeof input.status === 'string') {
+            this.missionStatusFilter = input.status;
+        }
+        if (typeof input.query === 'string') {
+            this.missionQuery = input.query;
+        }
+        await this.refreshMissions();
+        this.postState();
+    }
+
+    async archiveMissionById(missionId: number): Promise<void> {
+        const choice = await vscode.window.showWarningMessage(
+            'Archive mission #' + missionId + '? Evidence and diff are retained.',
+            { modal: true }, 'Archive');
+        if (choice !== 'Archive') {
+            return;
+        }
+        await this.connection.archiveMission(missionId);
+        await this.refreshMissions();
+        if (this.selected?.detail.mission.id === missionId) {
+            await this.selectMission(missionId);
+        }
+        this.postState();
+    }
+
+    async unarchiveMissionById(missionId: number): Promise<void> {
+        await this.connection.unarchiveMission(missionId);
+        await this.refreshMissions();
+        this.postState();
+    }
+
+    async deleteMissionById(missionId: number): Promise<void> {
+        const choice = await vscode.window.showWarningMessage(
+            'Delete archived mission #' + missionId + ' from the mission database? '
+            + 'Staged files remain for the Storage Manager.',
+            { modal: true }, 'Delete');
+        if (choice !== 'Delete') {
+            return;
+        }
+        await this.connection.deleteMission(missionId);
+        if (this.selected?.detail.mission.id === missionId) {
+            this.selected = undefined;
+        }
+        await this.refreshMissions();
+        this.postState();
+    }
+
+    async saveProviderSettings(payload: Record<string, unknown>): Promise<void> {
+        const providerId = String(payload.providerId || '').trim();
+        if (!/^[a-z][a-z0-9_]*$/.test(providerId)) {
+            throw new EngineError('missing-provider',
+                'Provider id must be lowercase letters, digits or underscores.');
+        }
+        await this.connection.saveProviderSettings(providerId, {
+            enabled: typeof payload.enabled === 'boolean' ? payload.enabled : undefined,
+            baseUrl: typeof payload.baseUrl === 'string' ? payload.baseUrl : undefined,
+            label: typeof payload.label === 'string' ? payload.label : undefined,
+            kind: typeof payload.kind === 'string' ? payload.kind : undefined,
+            apiKeyEnv: typeof payload.apiKeyEnv === 'string' ? payload.apiKeyEnv : undefined
+        });
+        await this.refreshAll(false);
+        this.postChat('system', 'Provider settings saved for ' + providerId + '.');
+    }
+
+    async saveRoleSettings(payload: Record<string, unknown>): Promise<void> {
+        const role = String(payload.role || '');
+        const model = String(payload.model || '');
+        if (!role || !model) {
+            throw new EngineError('missing-role-model', 'Role and model are required.');
+        }
+        await this.connection.saveRoleSettings(role, {
+            model,
+            temperature: typeof payload.temperature === 'number' ? payload.temperature : undefined
+        });
+        await this.refreshAll(false);
+        this.postChat('system', `Role ${role} now uses ${model}.`);
+    }
+
+    async saveGenerationParameters(payload: Record<string, unknown>): Promise<void> {
+        const scope = String(payload.scope || 'model') as 'global' | 'role' | 'model';
+        const params: Record<string, number | string | boolean | null> = {};
+        for (const key of ['temperature', 'top_p', 'top_k', 'min_p', 'repeat_penalty', 'seed', 'max_tokens']) {
+            const value = payload[key];
+            if (value === '' || value === null || value === undefined) {
+                continue;
+            }
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric)) {
+                throw new EngineError('invalid-parameter', key + ' must be numeric.');
+            }
+            params[key] = numeric;
+        }
+        await this.connection.saveGenerationParameters(
+            params, scope, String(payload.modelName || ''), String(payload.role || ''));
+        this.generationParams = await this.connection.generationParameters(
+            String(payload.modelName || ''), String(payload.role || ''));
+        this.postState();
+        this.postChat('system', 'Generation parameters saved.');
+    }
+
+    async saveCloudPolicy(enabled: boolean): Promise<void> {
+        await this.connection.saveCloudEscalation(enabled);
+        await this.refreshAll(false);
+        this.postChat('system', 'Cloud escalation ' + (enabled ? 'enabled.' : 'disabled.'));
+    }
+
+    async savePermission(scope: string, granted: boolean): Promise<void> {
+        const choice = await vscode.window.showWarningMessage(
+            (granted ? 'Grant ' : 'Revoke ') + scope + ' for this project?',
+            { modal: true },
+            granted ? 'Grant' : 'Revoke');
+        if (!choice) {
+            return;
+        }
+        await this.connection.savePermissionScope(scope, granted);
+        await this.refreshAll(false);
+        this.postChat('system', `Permission ${scope}: ${granted ? 'granted' : 'revoked'}.`);
+    }
+
+    async probeModel(model: string): Promise<void> {
+        const choice = await vscode.window.showWarningMessage(
+            'Run real capability probes for ' + model + '?',
+            {
+                modal: true,
+                detail: 'This loads the local model and measures tool calling, structured output and patch quality. It can take several minutes on 8 GB VRAM.'
+            },
+            'Probe');
+        if (choice !== 'Probe') {
+            return;
+        }
+        this.capabilityProbe = await this.connection.probeModelCapabilities(model);
+        this.postState();
+        this.postChat('system',
+            `Probe ${model}: tools=${this.capabilityProbe.tool_calling}, `
+            + `structured=${this.capabilityProbe.structured_output}, `
+            + `patch=${this.capabilityProbe.patch_quality} (${this.capabilityProbe.patch_score.toFixed(2)})`);
+    }
+
+    async saveAutonomy(payload: Record<string, unknown>): Promise<void> {
+        this.autonomy = await this.connection.saveAutonomySettings({
+            mode: typeof payload.mode === 'string' ? payload.mode : undefined,
+            maxMissions: typeof payload.maxMissions === 'number' ? payload.maxMissions : undefined,
+            attempts: typeof payload.attempts === 'number' ? payload.attempts : undefined
+        });
+        this.postState();
+        this.postChat('system', 'Autonomy settings saved (no run started).');
+    }
+
+    async saveMcpConfig(payload: Record<string, unknown>): Promise<void> {
+        await this.connection.saveMcpServers(payload);
+        await this.refreshAll(false);
+        this.postChat('system', 'MCP server configuration saved.');
+    }
+
+    async scanStorage(): Promise<void> {
+        this.storage = await this.connection.storageScan();
+        this.postState();
+    }
+
+    async purgeStorage(selectedIds: string[]): Promise<void> {
+        if (!selectedIds.length) {
+            throw new EngineError('empty-selection', 'Select at least one storage category.');
+        }
+        const choice = await vscode.window.showWarningMessage(
+            'Permanently delete ' + selectedIds.length + ' selected temporary storage item(s)?',
+            { modal: true, detail: 'Sources, the live database and attachments are protected.' },
+            'Purge');
+        if (choice !== 'Purge') {
+            return;
+        }
+        const result = await this.connection.storagePurge(selectedIds);
+        await this.scanStorage();
+        this.postChat('system', `Storage purge freed ${Math.round(result.freed_bytes / 1024 / 1024 * 100) / 100} MB.`);
+    }
+
+    async vacuumStorage(): Promise<void> {
+        const choice = await vscode.window.showWarningMessage(
+            'Compact the SQLite database now?',
+            { modal: true, detail: 'A bounded backup is created first; active missions block compaction.' },
+            'Compact');
+        if (choice !== 'Compact') {
+            return;
+        }
+        const result = await this.connection.storageVacuum();
+        await this.scanStorage();
+        this.postChat('system', result.ok
+            ? `SQLite compacted; ${Math.round(result.freed_bytes / 1024 / 1024 * 100) / 100} MB freed.`
+            : 'SQLite compaction failed: ' + (result.error || 'unknown error'));
+    }
+
 
     async refreshModels(): Promise<void> {
         try {
@@ -840,6 +1201,22 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         await this.connection.connect();
         this.projectContext = await this.connection.projectContext();
         this.settings = await this.connection.engineSettings(probeModels);
+        try {
+            this.generationParams = await this.connection.generationParameters(
+                this.settings.models.chat_default_spec || '', '');
+        } catch (error) {
+            this.output.appendLine('[generation-params] ' + this.errorText(error));
+        }
+        try {
+            this.autonomy = await this.connection.autonomySettings();
+        } catch (error) {
+            this.output.appendLine('[autonomy] ' + this.errorText(error));
+        }
+        try {
+            this.mcpConfig = (await this.connection.mcpServers()).config || {};
+        } catch (error) {
+            this.output.appendLine('[mcp] ' + this.errorText(error));
+        }
         if (!this.missionModels.developerModel) {
             this.missionModels = {
                 developerModel: this.settings.mission_defaults.developer_model,
@@ -1082,6 +1459,85 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                     };
                     this.postState();
                     break;
+                case 'newChatSession':
+                    await this.newChatSession();
+                    break;
+                case 'renameChatSession':
+                    await this.renameChatSession();
+                    break;
+                case 'archiveChatSession':
+                    await this.archiveChatSession();
+                    break;
+                case 'deleteChatSession':
+                    await this.deleteChatSession();
+                    break;
+                case 'selectChatSession':
+                    await this.switchSession(String(payload.sessionId || ''));
+                    break;
+                case 'toggleArchivedSessions':
+                    await this.toggleArchivedSessions();
+                    break;
+                case 'searchChat':
+                    await this.searchChat();
+                    break;
+                case 'removeQueueItem':
+                    await this.removeQueuedItem(String(payload.itemId || ''));
+                    break;
+                case 'saveProviderSettings':
+                    await this.saveProviderSettings(payload);
+                    break;
+                case 'saveRoleSettings':
+                    await this.saveRoleSettings(payload);
+                    break;
+                case 'saveGenerationParameters':
+                    await this.saveGenerationParameters(payload);
+                    break;
+                case 'saveCloudPolicy':
+                    await this.saveCloudPolicy(Boolean(payload.enabled));
+                    break;
+                case 'savePermission':
+                    await this.savePermission(String(payload.scope || ''),
+                        Boolean(payload.granted));
+                    break;
+                case 'probeModel':
+                    await this.probeModel(String(payload.model || ''));
+                    break;
+                case 'saveAutonomy':
+                    await this.saveAutonomy(payload);
+                    break;
+                case 'saveMcpConfig':
+                    await this.saveMcpConfig((payload.config || {}) as Record<string, unknown>);
+                    break;
+                case 'scanStorage':
+                    await this.scanStorage();
+                    break;
+                case 'purgeStorage':
+                    await this.purgeStorage(Array.isArray(payload.ids)
+                        ? (payload.ids as unknown[]).map(String) : []);
+                    break;
+                case 'vacuumStorage':
+                    await this.vacuumStorage();
+                    break;
+                case 'setMissionFilter':
+                    await this.setMissionFilter({
+                        includeArchived: typeof payload.includeArchived === 'boolean'
+                            ? payload.includeArchived : undefined,
+                        status: typeof payload.status === 'string' ? payload.status : undefined,
+                        query: typeof payload.query === 'string' ? payload.query : undefined
+                    });
+                    break;
+                case 'archiveMission':
+                    await this.archiveMissionById(Number(payload.missionId));
+                    break;
+                case 'unarchiveMission':
+                    await this.unarchiveMissionById(Number(payload.missionId));
+                    break;
+                case 'deleteMission':
+                    await this.deleteMissionById(Number(payload.missionId));
+                    break;
+                case 'steerMission':
+                    await this.steerMissionById(Number(payload.missionId));
+                    break;
                 default:
                     break;
             }
@@ -1219,6 +1675,17 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             lastRoute: this.lastRoute,
             chatQueue: this.chatQueue.slice(),
             queueCount: this.chatQueue.length,
+            chatSessions: this.chatSessions.slice(),
+            currentSessionId: this.currentSessionId,
+            showArchivedSessions: this.showArchivedSessions,
+            missionShowArchived: this.missionShowArchived,
+            missionStatusFilter: this.missionStatusFilter,
+            missionQuery: this.missionQuery,
+            generationParams: this.generationParams,
+            autonomy: this.autonomy,
+            storage: this.storage,
+            capabilityProbe: this.capabilityProbe,
+            mcpConfig: this.mcpConfig,
             research: this.research,
             researchProfile: this.connection.researchProfile,
             historyCount: this.historyCount,

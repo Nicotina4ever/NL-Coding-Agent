@@ -81,9 +81,54 @@ def scan(project_root: Path | str | None = None, *, data_root: Path | None = Non
                           "category": "mission-staging", "path": str(staging),
                           "bytes": size, "files": files, "deletable": True,
                           "reason": "retained staged candidates; inspect before purge"})
+    db_file = data / "nl_coding_agent.sqlite3"
+    if db_file.is_file():
+        size, files = _size(db_file)
+        items.append({"id": "database:" + str(db_file), "category": "database",
+                      "path": str(db_file), "bytes": size, "files": files,
+                      "deletable": False,
+                      "reason": "live mission/chat database; safest compaction is VACUUM"})
     return {"root": str(root), "data_root": str(data), "items": items,
             "total_bytes": sum(item["bytes"] for item in items),
             "never_delete": sorted(_NEVER)}
+
+
+def vacuum_database(*, confirm: bool = False) -> dict:
+    """Compact SQLite with a bounded backup, never during active missions."""
+    if not confirm:
+        raise StorageError("Explicit confirmation is required for SQLite compaction")
+    from nl_coding_agent.persistence.missions import list_missions
+    if any(mission.get("status") in ("pending", "running") for mission in list_missions()):
+        raise StorageError("Refusing SQLite compaction while a mission is active")
+    data = Path(database.data_root()).resolve()
+    db_file = data / "nl_coding_agent.sqlite3"
+    if not db_file.is_file():
+        return {"ok": False, "error": "Database file not found", "freed_bytes": 0}
+    before = db_file.stat().st_size
+    backups = data / "backups"
+    backups.mkdir(parents=True, exist_ok=True)
+    from datetime import datetime
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    backup = backups / f"db-{stamp}.sqlite3"
+    shutil.copy2(db_file, backup)
+    try:
+        from nl_coding_agent.core.backup_retention import prune
+        prune(backups, "db-")
+    except Exception:
+        pass
+    conn = database.get_connection()
+    try:
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        conn.execute("VACUUM")
+        conn.commit()
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "backup": str(backup),
+                "freed_bytes": 0}
+    finally:
+        conn.close()
+    after = db_file.stat().st_size
+    return {"ok": True, "before_bytes": before, "after_bytes": after,
+            "freed_bytes": max(0, before - after), "backup": str(backup)}
 
 
 def purge(selected_ids: Iterable[str], *, confirm: bool = False,

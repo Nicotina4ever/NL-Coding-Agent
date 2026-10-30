@@ -98,6 +98,17 @@ export function buildChatHtml(assets: WebviewAssets): string {
 
             <div id="messages" class="nl-messages" role="log" aria-live="polite" aria-label="Conversation"></div>
 
+            <div class="nl-session-bar">
+                <select id="chat-session" aria-label="Conversation session"></select>
+                <button id="session-new" type="button">New</button>
+                <button id="session-rename" type="button">Rename</button>
+                <button id="session-archive" type="button">Archive</button>
+                <button id="session-delete" type="button">Delete</button>
+                <button id="session-search" type="button">Search</button>
+                <label class="nl-check"><input id="session-archived-toggle" type="checkbox"> archived</label>
+            </div>
+            <div id="chat-queue" class="nl-queue" aria-label="Persistent chat queue"></div>
+
             <div id="drop-overlay" class="nl-drop-overlay hidden">Drop workspace files to attach them</div>
 
             <form id="composer" class="nl-composer" autocomplete="off">
@@ -112,6 +123,10 @@ export function buildChatHtml(assets: WebviewAssets): string {
                 </div>
 
                 <div class="nl-composer-shell">
+                    <div class="nl-composer-toggle-row">
+                        <button id="chat-controls-toggle" type="button" class="nl-collapse-button">▾ model controls</button>
+                        <button id="context-toggle" type="button" class="nl-collapse-button">▾ attachments</button>
+                    </div>
                     <div id="model-bar" class="nl-model-bar">
                         <label class="nl-field nl-field-small">Provider
                             <select id="provider-select"></select>
@@ -126,6 +141,9 @@ export function buildChatHtml(assets: WebviewAssets): string {
                     <label class="nl-visually-hidden" for="input">Message NL Coder</label>
                     <textarea id="input" rows="3" placeholder="Ask NL Coder…  (/mission &lt;objective&gt; starts a mission)"></textarea>
 
+                    <div class="nl-mission-toggle-row">
+                        <button id="mission-fields-toggle" type="button" class="nl-collapse-button hidden">▾ mission model selection</button>
+                    </div>
                     <div id="mission-fields" class="nl-field-row hidden">
                         <label class="nl-field">Developer model
                             <select id="dev-model"></select>
@@ -160,17 +178,123 @@ export function buildChatHtml(assets: WebviewAssets): string {
                     <button id="refresh-missions" type="button">Refresh</button>
                 </span>
             </div>
+            <div class="nl-filter-row">
+                <input id="mission-query" type="search" placeholder="Filter title/goal…" aria-label="Mission filter">
+                <select id="mission-status-filter" aria-label="Mission status filter">
+                    <option value="">all statuses</option>
+                    <option value="running">running</option>
+                    <option value="pending">pending</option>
+                    <option value="completed">completed</option>
+                    <option value="failed">failed</option>
+                    <option value="blocked">blocked</option>
+                    <option value="interrupted">interrupted</option>
+                </select>
+                <label class="nl-check"><input id="mission-archived-toggle" type="checkbox"> archived</label>
+                <button id="mission-apply-filter" type="button">Apply</button>
+                <button id="mission-list-toggle" type="button" class="nl-collapse-button">▾ mission list</button>
+            </div>
             <div id="mission-list" class="nl-list"></div>
             <div id="mission-detail" class="nl-detail hidden"></div>
         </section>
 
         <section id="tab-engine" class="nl-tab-panel">
             <div class="nl-section-head">
-                <strong>Engine</strong>
+                <strong>Engine settings and Model Hub</strong>
                 <span class="nl-actions">
                     <button id="refresh-models" type="button">Probe models</button>
                     <button id="refresh-engine" type="button">Refresh</button>
                 </span>
+            </div>
+            <div class="nl-settings-card">
+                <h3>Provider</h3>
+                <div class="nl-filter-row">
+                    <select id="provider-edit" aria-label="Provider to edit"></select>
+                    <label class="nl-check"><input id="provider-enabled" type="checkbox"> enabled</label>
+                    <input id="provider-url" type="url" placeholder="http://127.0.0.1:11434" aria-label="Provider URL">
+                    <button id="provider-save" type="button">Save provider</button>
+                </div>
+                <div class="nl-filter-row">
+                    <input id="provider-id" type="text" placeholder="new provider id (e.g. lm_studio)" aria-label="Provider id">
+                    <select id="provider-kind" aria-label="Provider kind">
+                        <option value="openai_compatible">openai_compatible</option>
+                        <option value="ollama">ollama</option>
+                    </select>
+                    <input id="provider-label" type="text" placeholder="label" aria-label="Provider label">
+                    <input id="provider-api-key-env" type="text" placeholder="API key env var (optional)" aria-label="API key env var">
+                </div>
+                <h3>Role model assignment</h3>
+                <div class="nl-filter-row">
+                    <select id="role-edit" aria-label="Role to edit">
+                        <option value="architect">architect</option>
+                        <option value="developer">developer</option>
+                        <option value="debugger">debugger</option>
+                        <option value="reviewer">reviewer</option>
+                        <option value="chat">chat</option>
+                    </select>
+                    <input id="role-model-edit" type="text" placeholder="ollama/model:tag" aria-label="Role model route">
+                    <button id="role-save" type="button">Save role</button>
+                </div>
+                <h3>Generation parameters</h3>
+                <div class="nl-filter-row">
+                    <select id="generation-scope">
+                        <option value="model">model</option>
+                        <option value="role">role</option>
+                        <option value="global">global</option>
+                    </select>
+                    <input id="generation-model" type="text" placeholder="ollama/model" aria-label="Generation model">
+                    <input id="generation-role" type="text" placeholder="role" aria-label="Generation role">
+                </div>
+                <div class="nl-filter-row">
+                    <input id="generation-temperature" type="number" step="0.01" placeholder="temperature">
+                    <input id="generation-top-p" type="number" step="0.01" placeholder="top_p">
+                    <input id="generation-top-k" type="number" placeholder="top_k">
+                    <input id="generation-min-p" type="number" step="0.01" placeholder="min_p">
+                    <input id="generation-repeat" type="number" step="0.01" placeholder="repeat_penalty">
+                    <input id="generation-seed" type="number" placeholder="seed">
+                    <input id="generation-max" type="number" placeholder="max_tokens">
+                    <button id="generation-save" type="button">Save parameters</button>
+                </div>
+                <h3>Permissions and autonomy</h3>
+                <div class="nl-filter-row">
+                    <select id="permission-scope">
+                        <option value="read">read</option>
+                        <option value="write">write</option>
+                        <option value="execute">execute</option>
+                        <option value="network">network</option>
+                        <option value="cloud">cloud</option>
+                    </select>
+                    <button id="permission-grant" type="button">Grant</button>
+                    <button id="permission-revoke" type="button">Revoke</button>
+                    <label class="nl-check"><input id="cloud-policy" type="checkbox"> cloud policy</label>
+                    <button id="cloud-save" type="button">Save cloud</button>
+                </div>
+                <div class="nl-filter-row">
+                    <select id="autonomy-mode">
+                        <option value="off">off</option>
+                        <option value="assisted">assisted</option>
+                        <option value="automatic">automatic</option>
+                    </select>
+                    <input id="autonomy-missions" type="number" min="1" max="5" placeholder="max missions">
+                    <input id="autonomy-attempts" type="number" min="1" placeholder="attempts">
+                    <button id="autonomy-save" type="button">Save autonomy</button>
+                </div>
+                <h3>MCP servers (JSON)</h3>
+                <textarea id="mcp-json" rows="5" aria-label="MCP servers JSON"></textarea>
+                <button id="mcp-save" type="button">Save MCP</button>
+                <h3>Model capability probe</h3>
+                <div class="nl-filter-row">
+                    <select id="probe-model" aria-label="Model to probe"></select>
+                    <button id="probe-run" type="button">Probe capabilities</button>
+                    <span id="probe-result" class="nl-muted"></span>
+                </div>
+                <h3>Storage Manager</h3>
+                <div class="nl-filter-row">
+                    <button id="storage-scan" type="button">Scan storage</button>
+                    <button id="storage-purge" type="button">Purge selected</button>
+                    <button id="storage-vacuum" type="button">Compact SQLite</button>
+                    <span id="storage-total" class="nl-muted"></span>
+                </div>
+                <div id="storage-list" class="nl-list"></div>
             </div>
             <div id="engine-content" class="nl-detail"></div>
         </section>

@@ -104,6 +104,81 @@ export interface ChatQueueResult {
     [key: string]: unknown;
 }
 
+export interface ChatSession {
+    id: string;
+    project_id: number;
+    title: string;
+    archived_at?: string | null;
+    created_at?: string;
+    updated_at?: string;
+    message_count?: number;
+}
+
+export interface ChatSessionsResult {
+    ok: boolean;
+    sessions: ChatSession[];
+}
+
+export interface GenerationParametersResult {
+    effective: Record<string, number | string | boolean>;
+    configured: Array<{
+        id?: number;
+        scope: string;
+        provider_id: string;
+        model_name: string;
+        role: string;
+        params: Record<string, number | string | boolean>;
+        updated_at?: string;
+    }>;
+}
+
+export interface ModelCapabilityProbe {
+    model: string;
+    provider_id: string;
+    tool_calling: string;
+    structured_output: string;
+    patch_quality: string;
+    patch_score: number;
+    capabilities: Record<string, QueryableCapability>;
+}
+
+export interface QueryableCapability {
+    capability: string;
+    state: string;
+    metadata?: Record<string, unknown>;
+    [key: string]: unknown;
+}
+
+export interface StorageItem {
+    id: string;
+    category: string;
+    path: string;
+    bytes: number;
+    files: number;
+    deletable: boolean;
+    reason: string;
+}
+
+export interface StorageScanResult {
+    root: string;
+    data_root: string;
+    items: StorageItem[];
+    total_bytes: number;
+    never_delete: string[];
+}
+
+export interface AutonomySettings {
+    ok: boolean;
+    mode: string;
+    max_missions_per_run: number;
+    max_attempts_per_requirement: number;
+    max_wall_time_s: number;
+    mission_wall_time_s: number;
+    pipeline: string;
+    modes?: string[];
+    [key: string]: unknown;
+}
+
 export interface AttachmentInput {
     name?: string;
     extracted_text?: string;
@@ -281,6 +356,7 @@ export interface MissionRow {
     harness_version?: number | null;
     promotion_status?: string | null;
     resume_count?: number;
+    archived_at?: string | null;
 }
 
 export interface MissionProgress {
@@ -833,13 +909,135 @@ export class EngineConnection {
         return result;
     }
 
-    /** Read the engine's persisted conversation thread for this project. */
-    async chatHistory(limit = 200, beforeIndex?: number): Promise<ChatHistoryResult> {
+    /** Read one persisted conversation session (default: latest active). */
+    async chatHistory(limit = 200, beforeIndex?: number, sessionId?: string): Promise<ChatHistoryResult> {
         const params: Record<string, unknown> = { limit };
         if (beforeIndex !== undefined) {
             params.before_index = beforeIndex;
         }
+        if (sessionId) {
+            params.session_id = sessionId;
+        }
         return this.callJson<ChatHistoryResult>('chat_history', params, 30_000);
+    }
+
+    async chatSessions(includeArchived = false): Promise<ChatSessionsResult> {
+        return this.callJson<ChatSessionsResult>(
+            'chat_sessions', { include_archived: includeArchived }, 30_000);
+    }
+
+    async chatSessionCreate(title = 'New conversation'): Promise<{ ok: boolean; session: ChatSession }> {
+        return this.callJson<{ ok: boolean; session: ChatSession }>('chat_session_create', { title, approved: true }, 30_000);
+    }
+
+    async chatSessionRename(sessionId: string, title: string): Promise<{ ok: boolean; session: ChatSession }> {
+        return this.callJson<{ ok: boolean; session: ChatSession }>('chat_session_rename', {
+            session_id: sessionId, title, approved: true
+        }, 30_000);
+    }
+
+    async chatSessionArchive(sessionId: string): Promise<{ ok: boolean; session: ChatSession }> {
+        return this.callJson<{ ok: boolean; session: ChatSession }>('chat_session_archive', {
+            session_id: sessionId, approved: true
+        }, 30_000);
+    }
+
+    async chatSessionDelete(sessionId: string): Promise<{ ok: boolean; session: ChatSession }> {
+        return this.callJson<{ ok: boolean; session: ChatSession }>('chat_session_delete', {
+            session_id: sessionId, approved: true
+        }, 30_000);
+    }
+
+    async chatSearch(query: string, limit = 100): Promise<{ ok: boolean; messages: Array<Record<string, unknown>> }> {
+        return this.callJson<{ ok: boolean; messages: Array<Record<string, unknown>> }>('chat_search', { query, limit }, 30_000);
+    }
+
+    async generationParameters(modelName = '', role = '', providerId = 'ollama'): Promise<GenerationParametersResult> {
+        return this.callJson<GenerationParametersResult>('generation_parameters', {
+            model_name: modelName, role, provider_id: providerId
+        }, 30_000);
+    }
+
+    async saveGenerationParameters(params: Record<string, number | string | boolean | null>,
+                                   scope: 'global' | 'role' | 'model',
+                                   modelName = '', role = ''): Promise<{ ok: boolean; saved: Record<string, unknown> }> {
+        return this.callJson<{ ok: boolean; saved: Record<string, unknown> }>('save_generation_parameters', {
+            parameters: params, scope, model_name: modelName, role,
+            provider_id: 'ollama', approved: true
+        }, 30_000);
+    }
+
+    async saveProviderSettings(providerId: string, settings: {
+        enabled?: boolean; baseUrl?: string; label?: string; kind?: string;
+        apiKeyEnv?: string;
+    }): Promise<{ ok: boolean; provider: string; changes: Record<string, unknown> }> {
+        return this.callJson<{ ok: boolean; provider: string; changes: Record<string, unknown> }>('save_provider_settings', {
+            provider_id: providerId, enabled: settings.enabled,
+            base_url: settings.baseUrl, label: settings.label,
+            kind: settings.kind, api_key_env: settings.apiKeyEnv, approved: true
+        }, 30_000);
+    }
+
+    async saveRoleSettings(role: string, settings: {
+        model?: string; temperature?: number;
+    }): Promise<{ ok: boolean; role: string; changes: Record<string, unknown> }> {
+        return this.callJson<{ ok: boolean; role: string; changes: Record<string, unknown> }>('save_role_settings', {
+            role, model: settings.model, temperature: settings.temperature,
+            approved: true
+        }, 30_000);
+    }
+
+    async saveCloudEscalation(enabled: boolean): Promise<{ ok: boolean }> {
+        return this.callJson<{ ok: boolean }>('set_cloud_escalation', { enabled, approved: true }, 30_000);
+    }
+
+    async savePermissionScope(scope: string, granted: boolean): Promise<{ ok: boolean; permissions: EngineSettings['permissions'] }> {
+        return this.callJson<{ ok: boolean; permissions: EngineSettings['permissions'] }>('save_permission_scope', {
+            scope, granted, approved: true
+        }, 30_000);
+    }
+
+    async probeModelCapabilities(model: string, timeoutS = 90): Promise<ModelCapabilityProbe> {
+        return this.callJson<ModelCapabilityProbe>('probe_model_capabilities', {
+            model, timeout_s: timeoutS, approved: true
+        }, Math.max(120_000, timeoutS * 1000 + 30_000));
+    }
+
+    async autonomySettings(): Promise<AutonomySettings> {
+        return this.callJson<AutonomySettings>('autonomy_settings', {}, 30_000);
+    }
+
+    async saveAutonomySettings(input: {
+        mode?: string; maxMissions?: number; attempts?: number;
+        maxWallTimeS?: number; missionWallTimeS?: number;
+    }): Promise<AutonomySettings> {
+        return this.callJson<AutonomySettings>('save_autonomy_settings', {
+            mode: input.mode, max_missions: input.maxMissions, attempts: input.attempts,
+            max_wall_time_s: input.maxWallTimeS,
+            mission_wall_time_s: input.missionWallTimeS, approved: true
+        }, 30_000);
+    }
+
+    async mcpServers(): Promise<{ ok: boolean; config: Record<string, unknown> }> {
+        return this.callJson<{ ok: boolean; config: Record<string, unknown> }>('mcp_servers', {}, 30_000);
+    }
+
+    async saveMcpServers(config: Record<string, unknown>): Promise<{ ok: boolean; servers: string[] }> {
+        return this.callJson<{ ok: boolean; servers: string[] }>('save_mcp_servers', { config, approved: true }, 30_000);
+    }
+
+    async storageScan(): Promise<StorageScanResult> {
+        return this.callJson<StorageScanResult>('storage_scan', {}, 60_000);
+    }
+
+    async storagePurge(selectedIds: string[]): Promise<{ ok: boolean; removed: string[]; freed_bytes: number }> {
+        return this.callJson<{ ok: boolean; removed: string[]; freed_bytes: number }>('storage_purge', {
+            selected_ids: selectedIds, confirm: true, approved: true
+        }, 120_000);
+    }
+
+    async storageVacuum(): Promise<{ ok: boolean; freed_bytes: number; error?: string }> {
+        return this.callJson<{ ok: boolean; freed_bytes: number; error?: string }>('storage_vacuum', { confirm: true, approved: true }, 180_000);
     }
 
     async chatQueue(): Promise<ChatQueueResult> {
@@ -889,9 +1087,24 @@ export class EngineConnection {
     }
 
     /** Persisted missions of the bound project, newest first. */
-    async missionList(): Promise<MissionRow[]> {
-        const result = await this.callJson<{ missions?: MissionRow[] }>('mission_list', {}, 30_000);
+    async missionList(options: { includeArchived?: boolean; status?: string; query?: string } = {}): Promise<MissionRow[]> {
+        const result = await this.callJson<{ missions?: MissionRow[] }>('mission_list', {
+            include_archived: options.includeArchived !== false,
+            status: options.status, query: options.query
+        }, 30_000);
         return Array.isArray(result.missions) ? result.missions : [];
+    }
+
+    async archiveMission(missionId: number): Promise<{ ok: boolean; mission: MissionRow }> {
+        return this.callJson<{ ok: boolean; mission: MissionRow }>('archive_mission', { mission_id: missionId, approved: true }, 30_000);
+    }
+
+    async unarchiveMission(missionId: number): Promise<{ ok: boolean; mission: MissionRow }> {
+        return this.callJson<{ ok: boolean; mission: MissionRow }>('unarchive_mission', { mission_id: missionId, approved: true }, 30_000);
+    }
+
+    async deleteMission(missionId: number): Promise<{ ok: boolean; mission: MissionRow }> {
+        return this.callJson<{ ok: boolean; mission: MissionRow }>('delete_mission', { mission_id: missionId, approved: true }, 30_000);
     }
 
     async missionStatus(missionId: number): Promise<MissionRow> {
@@ -955,3 +1168,4 @@ export class EngineConnection {
         );
     }
 }
+

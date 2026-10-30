@@ -51,6 +51,11 @@ def _backup(path: Path, config: Mapping[str, Any]) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     _atomic_write(target, yaml.safe_dump(dict(config), sort_keys=False,
                                         allow_unicode=True).encode("utf-8"))
+    try:
+        from nl_coding_agent.core.backup_retention import prune
+        prune(target.parent, "models-")
+    except Exception:
+        pass
     return target
 
 
@@ -120,7 +125,7 @@ def validate(config: Mapping[str, Any]) -> dict:
 
 def update_provider(provider_id: str, **changes: Any) -> dict:
     """Update only whitelisted provider fields; never expose secrets."""
-    allowed = {"enabled", "base_url", "label", "kind"}
+    allowed = {"enabled", "base_url", "label", "kind", "api_key_env"}
     unknown = set(changes) - allowed
     if unknown:
         raise ModelConfigError("Unsupported provider fields: " + ", ".join(sorted(unknown)))

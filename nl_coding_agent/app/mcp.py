@@ -79,6 +79,11 @@ def save_mcp_config(payload: dict) -> dict:
         backup = database.data_root() / "backups" / f"mcp-{stamp}.json"
         backup.parent.mkdir(parents=True, exist_ok=True)
         _atomic_write(backup, path.read_bytes())
+        try:
+            from nl_coding_agent.core.backup_retention import prune
+            prune(backup.parent, "mcp-")
+        except Exception:
+            pass
     import json
     _atomic_write(path, json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8"))
     return payload

@@ -873,3 +873,97 @@ select option[data-kind='loaded'] {
     border: 1px solid var(--vscode-panel-border, transparent);
     font-size: 0.8em;
 }
+
+/* ---- Gate B/D integrated controls ---- */
+.nl-session-bar,
+.nl-filter-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 6px 0;
+}
+
+.nl-session-bar select { flex: 1 1 180px; }
+.nl-session-bar button,
+.nl-filter-row button { flex: 0 0 auto; }
+
+.nl-queue {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 8px;
+    border: 1px solid var(--vscode-panel-border, transparent);
+    border-radius: 4px;
+    margin-bottom: 6px;
+}
+
+.nl-queue-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85em;
+}
+
+.nl-queue-mode {
+    color: var(--vscode-descriptionForeground);
+    text-transform: uppercase;
+    font-size: 0.8em;
+}
+
+.nl-queue-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nl-settings-card {
+    border: 1px solid var(--vscode-panel-border, transparent);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+}
+
+.nl-settings-card h3 {
+    margin: 10px 0 4px;
+    font-size: 0.9em;
+    font-weight: 600;
+}
+
+.nl-settings-card textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 0.8em;
+}
+
+.nl-storage-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 0;
+    font-size: 0.85em;
+}
+
+.nl-storage-category {
+    min-width: 120px;
+    font-weight: 600;
+}
+
+.nl-composer-toggle-row,
+.nl-mission-toggle-row {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+.nl-collapse-button {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: var(--vscode-descriptionForeground);
+    font-size: 0.78em;
+    cursor: pointer;
+    padding: 1px 4px;
+}

@@ -109,6 +109,12 @@ async function run() {
         .replace(/&amp;/g, '&');
     assert(html.includes("default-src 'none'"), 'webview HTML has a CSP');
     assert(/media\/main\.js/.test(html), 'webview script points at the extension media resource');
+    for (const id of ['chat-session', 'chat-queue', 'provider-id', 'provider-kind',
+        'provider-api-key-env', 'chat-controls-toggle', 'mission-fields-toggle',
+        'mission-list-toggle', 'generation-save', 'permission-grant',
+        'autonomy-save', 'mcp-save', 'probe-run', 'storage-scan', 'storage-vacuum']) {
+        assert(html.includes('id="' + id + '"'), 'real VSIX webview exposes #' + id);
+    }
     const systemMessage = api.chat.debugState.posted.find((message) =>
         message.type === 'chat' && message.role === 'system');
     assert(systemMessage, 'webview received the project/tool system message');

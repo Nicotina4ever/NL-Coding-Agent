@@ -30,6 +30,13 @@ def test_model_config_store_updates_provider_role_cloud_atomically(isolated, mon
     store.save(config)
     store.update_provider("ollama", enabled=False, base_url="http://127.0.0.1:11434")
     assert store.load()["providers"]["ollama"]["enabled"] is False
+    store.update_provider("lm_studio_custom", enabled=False,
+                          base_url="http://127.0.0.1:1234/v1",
+                          label="Custom", kind="openai_compatible",
+                          api_key_env="CUSTOM_API_KEY")
+    custom = store.load()["providers"]["lm_studio_custom"]
+    assert custom["kind"] == "openai_compatible"
+    assert custom["api_key_env"] == "CUSTOM_API_KEY"
     store.update_role("developer", model="ollama/b", temperature=0.2)
     assert store.load()["roles"]["developer"]["model"] == "ollama/b"
     store.set_cloud_escalation(True)
@@ -38,6 +45,29 @@ def test_model_config_store_updates_provider_role_cloud_atomically(isolated, mon
     assert backups
     with pytest.raises(store.ModelConfigError):
         store.update_role("developer", model="bad model with spaces")
+
+
+def test_backup_retention_is_bounded(isolated):
+    from nl_coding_agent.core.backup_retention import prune
+    backups = isolated / "data" / "backups"
+    backups.mkdir(parents=True)
+    for index in range(15):
+        (backups / f"models-{index:02d}.yaml").write_text("x", encoding="utf-8")
+    removed = prune(backups, "models-", keep=5)
+    assert len(removed) == 10
+    assert len(list(backups.glob("models-*.yaml"))) == 5
+
+
+def test_storage_vacuum_is_guarded_and_returns_result(isolated):
+    from nl_coding_agent.core import storage_manager
+    from nl_coding_agent.persistence import database
+    conn = database.init_db()
+    conn.close()
+    with pytest.raises(storage_manager.StorageError):
+        storage_manager.vacuum_database(confirm=False)
+    result = storage_manager.vacuum_database(confirm=True)
+    assert "ok" in result
+    assert isinstance(result.get("freed_bytes"), int)
 
 
 def test_chat_sessions_are_persistent_and_migrate_legacy(isolated):
