@@ -325,11 +325,11 @@ def _apply_python_tool_calls(project_root: Path, text: str) -> list[str]:
                     scoped_write_file(root, rel_path, clean_file_content(content, rel_path))
                     actions.append(f"Wrote {rel_path} via Python tool call")
                 elif "target" in keywords and "replacement" in keywords:
-                    scoped_patch_file(root, rel_path, keywords["target"],
-                                      keywords["replacement"])
+                    _apply_snippet_patch(root, rel_path, keywords["target"],
+                                         keywords["replacement"])
                     actions.append(f"Patched {rel_path} via Python snippet call")
                 elif len(positional) >= 3:
-                    scoped_patch_file(root, rel_path, positional[1], positional[2])
+                    _apply_snippet_patch(root, rel_path, positional[1], positional[2])
                     actions.append(f"Patched {rel_path} via Python snippet call")
                 else:
                     diff = (keywords.get("diff") or keywords.get("patch")
@@ -341,6 +341,19 @@ def _apply_python_tool_calls(project_root: Path, text: str) -> list[str]:
             except Exception as exc:
                 actions.append(f"Python tool call rejected for {rel_path}: {exc}")
     return actions
+
+
+def _apply_snippet_patch(project_root: Path, rel_path: str, target: str,
+                         replacement: str) -> None:
+    """Apply a literal snippet patch through the scoped filesystem writer.
+
+    Local-model output is never executed. A model that emits a duplicate method
+    signature is rejected by the validation gate rather than rewritten by a
+    fragile heuristic; the retry feedback asks for an exact snippet.
+    """
+    if not str(target):
+        raise ValueError("Refusing an empty patch target")
+    scoped_patch_file(Path(project_root).resolve(), rel_path, target, replacement)
 
 
 def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None = None,
@@ -380,8 +393,8 @@ def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None
                     target = str(args["target"])
                     if not target:
                         raise ValueError("empty patch target")
-                    scoped_patch_file(root, str(args["path"]), target,
-                                      str(args["replacement"]))
+                    _apply_snippet_patch(root, str(args["path"]), target,
+                                         str(args["replacement"]))
                     actions.append(f"Patched {args['path']} via fenced JSON line")
             except Exception as exc:
                 actions.append(f"Fenced JSON action rejected: {exc}")
@@ -422,7 +435,8 @@ def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None
                     scoped_write_file(root, str(args["path"]), content)
                     actions.append(f"Wrote {args['path']} via JSON tool call")
                 elif name == "patch_file" and {"path", "target", "replacement"} <= set(args):
-                    scoped_patch_file(root, str(args["path"]), str(args["target"]), str(args["replacement"]))
+                    _apply_snippet_patch(root, str(args["path"]),
+                                         str(args["target"]), str(args["replacement"]))
                     actions.append(f"Patched {args['path']} via JSON tool call")
         except Exception as exc:
             actions.append(f"JSON action rejected: {exc}")
@@ -460,7 +474,7 @@ def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None
     for match in patch_pattern.finditer(text):
         rel_path = match.group(1).strip()
         try:
-            scoped_patch_file(root, rel_path, match.group(2), match.group(3))
+            _apply_snippet_patch(root, rel_path, match.group(2), match.group(3))
             actions.append(f"Patched {rel_path} via patch block")
         except Exception as exc:
             actions.append(f"Failed to patch {rel_path}: {exc}")
