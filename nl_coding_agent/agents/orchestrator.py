@@ -2146,6 +2146,20 @@ INSTRUCTIONS:
                       "Use patch_file to preserve every existing class/function; do not rewrite "
                       "an existing file and do not remove or rename existing definitions."
                 )
+                retry_files: list[str] = []
+                for rel_path in write_paths:
+                    target = stage.workspace / str(rel_path)
+                    if target.is_file():
+                        try:
+                            retry_files.append(
+                                "--- " + str(rel_path) + " (current exact content) ---\n"
+                                + _truncate(target.read_text(encoding="utf-8", errors="replace"), 5000))
+                        except OSError:
+                            continue
+                if retry_files:
+                    model_prompt += ("\n\nUse these exact snippets as patch targets; do not invent "
+                                     "line positions or duplicate a class that already exists:\n\n"
+                                     + "\n\n".join(retry_files))
             try:
                 output = self._call_model_with_textual_tools(
                     "Implementation Developer", model_name, model_prompt,
