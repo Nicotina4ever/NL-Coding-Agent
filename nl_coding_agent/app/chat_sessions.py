@@ -69,7 +69,8 @@ def ensure_default_session(project_id: int) -> dict:
         ).fetchone()
         if row:
             return dict(row)
-        legacy = _legacy_messages(project_id)
+        legacy = [] if database.get_setting(
+            "chat.legacy_migrated." + str(int(project_id))) == "1" else _legacy_messages(project_id)
         session_id = "legacy-" + str(int(project_id)) if legacy else uuid.uuid4().hex
         title = "Imported conversation" if legacy else "Main"
         if legacy:
@@ -84,6 +85,11 @@ def ensure_default_session(project_id: int) -> dict:
             )
             for item in legacy:
                 _insert_message(conn, session_id, item)
+            conn.execute(
+                "INSERT INTO app_settings(key, value, updated_at) VALUES (?,?,?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+                ("chat.legacy_migrated." + str(int(project_id)), "1", _now()),
+            )
         row = conn.execute("SELECT * FROM chat_sessions WHERE id=?", (session_id,)).fetchone()
         return dict(row)
     finally:

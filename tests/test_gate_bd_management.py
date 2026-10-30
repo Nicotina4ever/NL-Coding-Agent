@@ -60,6 +60,11 @@ def test_chat_sessions_are_persistent_and_migrate_legacy(isolated):
     chat_sessions.archive_session(created["id"])
     chat_sessions.delete_session(1, created["id"])
     assert all(item["id"] != created["id"] for item in chat_sessions.list_sessions(1, include_archived=True))
+    # Deleting every session must not silently re-import the retained legacy file.
+    for session in chat_sessions.list_sessions(1):
+        chat_sessions.archive_session(session["id"])
+        chat_sessions.delete_session(1, session["id"])
+    assert chat_sessions.messages(1) == []
 
 
 def test_mission_archive_then_delete_requires_archived(isolated):
