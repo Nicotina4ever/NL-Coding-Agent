@@ -82,7 +82,25 @@ export interface ConverseResult {
     messages?: ConverseMessage[];
     error?: { type?: string; message?: string };
     tool_activity?: string;
+    tool_trace?: Array<{ tool?: string; status?: string; [key: string]: unknown }>;
     route?: ChatRoute;
+    [key: string]: unknown;
+}
+
+export interface ChatQueueItem {
+    id: string;
+    text: string;
+    attachment_ids?: number[];
+    mode?: 'queue' | 'steer';
+    created_at?: number;
+}
+
+export interface ChatQueueResult {
+    ok: boolean;
+    items?: ChatQueueItem[];
+    count?: number;
+    item?: ChatQueueItem;
+    removed?: string;
     [key: string]: unknown;
 }
 
@@ -786,6 +804,38 @@ export class EngineConnection {
             params.before_index = beforeIndex;
         }
         return this.callJson<ChatHistoryResult>('chat_history', params, 30_000);
+    }
+
+    async chatQueue(): Promise<ChatQueueResult> {
+        return this.callJson<ChatQueueResult>('chat_queue', {}, 30_000);
+    }
+
+    async chatEnqueue(text: string, attachmentIds: number[] = [], mode: 'queue' | 'steer' = 'queue'): Promise<ChatQueueResult> {
+        return this.callJson<ChatQueueResult>('chat_enqueue', {
+            text, attachment_ids: attachmentIds, mode
+        }, 30_000);
+    }
+
+    async chatSteer(text: string): Promise<ChatQueueResult> {
+        return this.callJson<ChatQueueResult>('chat_steer', { text }, 30_000);
+    }
+
+    async chatQueueRemove(itemId: string): Promise<ChatQueueResult> {
+        return this.callJson<ChatQueueResult>('chat_queue_remove', { item_id: itemId }, 30_000);
+    }
+
+    async chatQueueReorder(ids: string[]): Promise<ChatQueueResult> {
+        return this.callJson<ChatQueueResult>('chat_queue_reorder', { ids }, 30_000);
+    }
+
+    async chatCancel(): Promise<Record<string, unknown>> {
+        return this.callJson<Record<string, unknown>>('chat_cancel', {}, 30_000);
+    }
+
+    async missionSteer(missionId: number, text: string): Promise<Record<string, unknown>> {
+        return this.callJson<Record<string, unknown>>('mission_steer', {
+            mission_id: missionId, text
+        }, 30_000);
     }
 
     /** Fetch one URL through the existing Research service/permissions. */

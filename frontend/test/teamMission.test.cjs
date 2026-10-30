@@ -94,20 +94,25 @@ async function run() {
     const roles = detail.tasks.map((task) => task.agent_role);
     assert(roles.includes('architect'), 'proportional planner added architect: ' + roles.join(','));
     assert(roles.includes('developer') && roles.includes('tester') && roles.includes('reviewer'));
-    assert.strictEqual(detail.tasks.length, 4, 'team has four proportional roles');
+    assert(roles.filter((role) => role === 'developer').length >= 2,
+        'one developer subtask per source path');
+    assert(detail.tasks.length >= 5, 'team has proportional dependent roles');
     assert(detail.tasks.every((task) => task.status === 'completed'), 'every planned agent completed');
     console.log('PASS proportional team: ' + roles.join(' -> '));
 
     const handoffPairs = detail.handoffs.map((item) => item.from_role + '->' + item.to_role);
-    for (const required of ['architect->developer', 'developer->tester', 'tester->reviewer', 'reviewer->orchestrator']) {
+    for (const required of ['architect->developer', 'developer->developer',
+        'developer->tester', 'tester->reviewer', 'reviewer->orchestrator']) {
         assert(handoffPairs.includes(required), 'missing handoff ' + required + ': ' + handoffPairs.join(', '));
     }
     const architectHandoff = detail.handoffs.find((item) => item.from_role === 'architect');
     assert(architectHandoff && architectHandoff.payload && String(architectHandoff.payload.notes || '').trim().length > 20,
         'architect delivered real notes');
-    const developerHandoff = detail.handoffs.find((item) => item.from_role === 'developer' && item.to_role === 'tester');
-    assert(developerHandoff && (developerHandoff.payload.changed_paths || []).length >= 2,
-        'developer handoff contains both changed files');
+    const developerPaths = detail.handoffs
+        .filter((item) => item.from_role === 'developer')
+        .flatMap((item) => (item.payload && item.payload.changed_paths) || []);
+    assert(new Set(developerPaths).size >= 2,
+        'developer handoffs cover both changed files: ' + JSON.stringify(developerPaths));
     console.log('PASS persisted handoffs with real work payloads');
 
     assert(detail.model_bindings && detail.model_bindings.developer && detail.model_bindings.reviewer,

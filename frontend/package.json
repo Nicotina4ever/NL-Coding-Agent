@@ -20,7 +20,9 @@
     "onCommand:nlCodingAgent.showEngineSettings",
     "onCommand:nlCodingAgent.toggleMissionExecution",
     "onCommand:nlCodingAgent.showStatus",
-    "onCommand:nlCodingAgent.reconnect"
+    "onCommand:nlCodingAgent.reconnect",
+    "onCommand:nlCodingAgent.steerChat",
+    "onCommand:nlCodingAgent.stopChat"
   ],
   "main": "./out/extension.js",
   "scripts": {
@@ -78,6 +80,14 @@
       {
         "command": "nlCodingAgent.reconnect",
         "title": "NL Coder: Reconnect Backend"
+      },
+      {
+        "command": "nlCodingAgent.steerChat",
+        "title": "NL Coder: Steer Running Chat…"
+      },
+      {
+        "command": "nlCodingAgent.stopChat",
+        "title": "NL Coder: Stop Running Chat"
       }
     ],
     "configuration": {

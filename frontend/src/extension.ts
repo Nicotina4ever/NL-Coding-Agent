@@ -313,6 +313,31 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
     );
 
     context.subscriptions.push(
+        vscode.commands.registerCommand('nlCodingAgent.steerChat', async () => {
+            const instruction = await vscode.window.showInputBox({
+                title: 'Steer NL Chat',
+                prompt: 'Instruction applied at the next safe checkpoint (running Chat or mission)',
+                ignoreFocusOut: true
+            });
+            if (!instruction || !instruction.trim()) {
+                return;
+            }
+            try {
+                await chat!.steerChat(instruction.trim());
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                void vscode.window.showErrorMessage('NL Coder steering failed: ' + message);
+            }
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nlCodingAgent.stopChat', async () => {
+            await chat!.stopChat();
+        })
+    );
+
+    context.subscriptions.push(
         vscode.commands.registerCommand('nlCodingAgent.reconnect', async () => {
             try {
                 await connection!.restart();

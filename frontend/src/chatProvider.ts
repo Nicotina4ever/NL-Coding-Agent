@@ -13,6 +13,7 @@ import {
     AttachmentView,
     CandidateDiff,
     ChatHistoryResult,
+    ChatQueueItem,
     ChatRoute,
     EngineConnection,
     EngineError,
@@ -76,6 +77,8 @@ export interface DashboardState {
     attachments: AttachmentView[];
     editor?: EditorContext;
     lastRoute?: ChatRoute;
+    chatQueue?: ChatQueueItem[];
+    queueCount?: number;
     research?: ResearchFetchResult;
     researchProfile: string;
     historyCount: number;
@@ -119,6 +122,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     private history: HistoryMessage[] = [];
     private historyCount = 0;
     private historyLoaded = false;
+    private chatQueue: ChatQueueItem[] = [];
     private editorContext: EditorContext | undefined;
     private lastEditor: vscode.TextEditor | undefined;
     private lastRoute: ChatRoute | undefined;
@@ -195,6 +199,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             this.setupEditorTracking();
             await this.refreshAll(true);
             await this.loadHistory();
+            await this.refreshQueue(false);
             if (!this.readyAnnounced) {
                 this.readyAnnounced = true;
                 this.postChat('system', [
@@ -219,17 +224,35 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     }
 
     /** One chat turn; the webview appends the user message locally until history reload. */
-    async handleUserMessage(text: string, attachment?: AttachmentInput | null): Promise<void> {
+    async handleUserMessage(text: string, attachment?: AttachmentInput | null,
+                            queuedAttachmentIds: number[] = []): Promise<void> {
         const message = String(text || '').trim();
         if (!message) {
             return;
         }
-        if (this.busyChat) {
-            this.postChat('error', 'A reply is already running for this project.');
+        const pendingAttachments = this.attachments.slice();
+        const attachmentIds = queuedAttachmentIds.length
+            ? queuedAttachmentIds.slice()
+            : pendingAttachments.map((item) => item.id);
+        if (this.busyChat || this.busyMission) {
+            if (/^\/steer\s+/i.test(message)) {
+                await this.steerChat(message.replace(/^\/steer\s+/i, ''));
+                return;
+            }
+            if (this.busyMission && this.activeMissionId) {
+                await this.connection.missionSteer(this.activeMissionId, message);
+                this.postChat('system', 'Message sent as steering to mission #' + this.activeMissionId +
+                    '; it applies at the next safe agent stage.');
+                return;
+            }
+            const queued = await this.connection.chatEnqueue(message, attachmentIds, 'queue');
+            this.attachments = [];
+            this.postChat('system', 'Queued while the current reply runs' +
+                (typeof queued.count === 'number' ? ' (' + queued.count + ')' : '') +
+                '. It will be sent after this turn; use /steer to redirect the running turn.');
+            await this.refreshQueue(false);
             return;
         }
-        const pendingAttachments = this.attachments.slice();
-        const attachmentIds = pendingAttachments.map((item) => item.id);
         this.busyChat = true;
         this.busyPhase = 'thinking';
         this.postState();
@@ -249,7 +272,16 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             }
             this.attachments = [];
             this.postChat('assistant', result.reply || '');
+            if (Array.isArray(result.tool_trace) && result.tool_trace.length) {
+                const names = result.tool_trace
+                    .filter((item) => item.status === 'completed')
+                    .map((item) => String(item.tool || ''));
+                if (names.length) {
+                    this.postChat('system', 'Tools used: ' + Array.from(new Set(names)).join(', '));
+                }
+            }
             await this.loadHistory();
+            await this.refreshQueue(false);
             this.output.appendLine(`[chat] project #${context.project.id}: ${message.length} chars in, ` +
                 `${(result.reply || '').length} chars out, route ${result.route?.provider_id || '?'}/${result.route?.model || '?'}`);
         } catch (error) {
@@ -258,6 +290,8 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             this.busyChat = false;
             this.busyPhase = this.busyMission ? 'mission' : 'idle';
             this.postState();
+            // A queued turn is dispatched only after this one is genuinely idle.
+            void this.refreshQueue(true);
         }
     }
 
@@ -420,6 +454,54 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             this.historyLoaded = false;
             this.output.appendLine('[history] ' + this.errorText(error));
             this.postChat('error', 'Conversation history could not be loaded: ' + this.errorText(error));
+        }
+    }
+
+    /** Read/refresh the persistent queue and optionally drain one item. */
+    async refreshQueue(drain = false): Promise<void> {
+        if (!this.view) {
+            return;
+        }
+        try {
+            const result = await this.connection.chatQueue();
+            this.chatQueue = Array.isArray(result.items) ? result.items : [];
+            this.postState();
+            if (drain && !this.busyChat && !this.busyMission && this.chatQueue.length) {
+                const next = this.chatQueue[0];
+                await this.connection.chatQueueRemove(next.id);
+                await this.handleUserMessage(next.text, undefined, next.attachment_ids || []);
+            }
+        } catch (error) {
+            this.output.appendLine('[queue] ' + this.errorText(error));
+        }
+    }
+
+    async steerChat(text: string): Promise<void> {
+        const message = String(text || '').trim();
+        if (!message) {
+            return;
+        }
+        if (this.busyMission && this.activeMissionId) {
+            await this.connection.missionSteer(this.activeMissionId, message);
+            this.postChat('system', 'Steering queued for mission #' + this.activeMissionId +
+                '; it applies at the next safe agent stage.');
+            return;
+        }
+        const result = await this.connection.chatSteer(message);
+        this.postChat('system', 'Steering queued' +
+            (typeof result.count === 'number' ? ' (' + result.count + ' in queue)' : '') +
+            '; it applies at the next Chat checkpoint.');
+        await this.refreshQueue(false);
+    }
+
+    async stopChat(): Promise<void> {
+        try {
+            const result = await this.connection.chatCancel();
+            this.postChat('system', result.ok === false
+                ? 'No running Chat turn to stop.'
+                : 'Chat stop requested at the next safe checkpoint.');
+        } catch (error) {
+            this.reportError(error, 'chat-stop');
         }
     }
 
@@ -925,6 +1007,9 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 case 'sendChat':
                     await this.handleUserMessage(String(payload.text || ''));
                     break;
+                case 'stopChat':
+                    await this.stopChat();
+                    break;
                 case 'startMission':
                     await this.startMission({
                         goal: String(payload.goal || ''),
@@ -1132,6 +1217,8 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             attachments: this.attachments,
             editor: this.editorContext,
             lastRoute: this.lastRoute,
+            chatQueue: this.chatQueue.slice(),
+            queueCount: this.chatQueue.length,
             research: this.research,
             researchProfile: this.connection.researchProfile,
             historyCount: this.historyCount,

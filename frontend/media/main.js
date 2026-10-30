@@ -22,6 +22,7 @@
     const bannerStop = $('btn-banner-stop');
     const bannerResume = $('btn-banner-resume');
     const bannerDetails = $('btn-banner-details');
+    const chatStop = $('btn-chat-stop');
 
     const researchCard = $('research-card');
     const researchOutcome = $('research-outcome');
@@ -362,9 +363,12 @@
             fetching: 'Fetching page through Research…',
             mission: 'Mission running…'
         }[current.busyPhase] || '';
-        hintEl.textContent = phaseText || (current.busyChat ? 'Waiting for the engine…' : current.busyMission ? 'Dispatching mission…' : '');
-        sendEl.disabled = Boolean(current.busyChat || current.busyMission);
-        sendEl.textContent = mode === 'mission' ? 'Start mission' : 'Send';
+        hintEl.textContent = phaseText || (current.busyChat
+            ? 'Running — a new message is queued; start it with /steer to redirect at the next checkpoint.'
+            : current.busyMission ? 'Mission running — messages are sent as steering; /mission waits.' : '');
+        sendEl.disabled = false;
+        sendEl.textContent = mode === 'mission' ? 'Start mission' : (current.busyChat ? 'Queue' : 'Send');
+        chatStop.classList.toggle('hidden', !current.busyChat);
     }
 
     function renderEditorContext(current) {
@@ -875,10 +879,14 @@
 
     function submit() {
         const text = inputEl.value.trim();
-        if (!text || (state && (state.busyChat || state.busyMission))) {
+        if (!text) {
             return;
         }
         if (mode === 'mission') {
+            if (state && (state.busyChat || state.busyMission)) {
+                hintEl.textContent = 'A turn is still running; wait before starting another mission.';
+                return;
+            }
             postAction('startMission', {
                 goal: text,
                 developerModel: devModelEl.value,
@@ -886,6 +894,10 @@
             });
             append('user', text);
         } else if (text.indexOf('/mission ') === 0) {
+            if (state && (state.busyChat || state.busyMission)) {
+                hintEl.textContent = 'A turn is still running; wait before starting another mission.';
+                return;
+            }
             postAction('startMission', {
                 goal: text.slice('/mission '.length).trim(),
                 developerModel: devModelEl.value,
@@ -1029,6 +1041,7 @@
     bannerStop.addEventListener('click', function () {
         if (state && state.activeMissionId) { postAction('cancelMission', { missionId: state.activeMissionId }); }
     });
+    chatStop.addEventListener('click', function () { postAction('stopChat', {}); });
     bannerResume.addEventListener('click', function () {
         if (state && state.activeMissionId) { postAction('resumeMission', { missionId: state.activeMissionId }); }
     });

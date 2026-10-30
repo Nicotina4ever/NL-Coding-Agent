@@ -64,17 +64,20 @@ def test_scoped_shell_execution():
         assert "test.txt" in res["stdout"]
 
 
-def test_crew_tools_binding_limited_to_file_operations():
+def test_crew_tools_binding_is_bounded_and_explicit():
     with tempfile.TemporaryDirectory() as tmp_dir:
         root = Path(tmp_dir)
         tools = get_project_tools(root)
         tool_names = [t.name for t in tools]
-        assert len(tools) == 4
-        assert set(tool_names) == {"read_file", "write_file", "patch_file", "list_dir"}
-        # Arbitrary shell/test/git execution must never be model-facing (SPEC-28 SH-05).
-        assert "run_command" not in tool_names
-        assert "run_tests" not in tool_names
-        assert "git_diff" not in tool_names
+        assert {"read_file", "write_file", "patch_file", "list_dir"} <= set(tool_names)
+        assert {"run_command", "run_tests", "git_status", "git_diff",
+                "research_fetch_url", "mcp_list_tools"} <= set(tool_names)
+        assert len(tools) == 10
+        # Execution is exposed only through the bounded argv/test wrappers, never
+        # as an unrestricted model-supplied shell command.
+        source = Path("nl_coding_agent/tools/crew_tools.py").read_text(encoding="utf-8")
+        assert "shell=False" in source
+        assert "_allowed_argv" in source
 
 
 def test_scoped_write_file_writes_lf_bytes_without_newline_translation():

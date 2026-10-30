@@ -33,7 +33,7 @@ from nl_coding_agent.core.workspace import (
     out_of_scope_paths,
     snapshot_workspace,
 )
-from nl_coding_agent.persistence.database import db_path
+from nl_coding_agent.persistence.database import db_path, get_setting, set_setting
 from nl_coding_agent.persistence.missions import (
     add_task,
     get_handoffs,
@@ -347,6 +347,91 @@ class MultiAgentOrchestrator:
                 code="model-selection-failed",
             ) from exc
 
+    def _take_steering(self, mission_id: int) -> str:
+        """Consume a queued user steering instruction at the next stage prompt."""
+        try:
+            key = "mission.steer." + str(int(mission_id))
+            text = get_setting(key, "") or ""
+            if text:
+                set_setting(key, "")
+            return str(text)[:8000]
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _textual_tool_request(output: str) -> dict | None:
+        """Recover a tool request emitted as JSON text by a non-native model."""
+        text = str(output or "").strip()
+        if text.startswith("```"):
+            lines = text.splitlines()
+            if len(lines) >= 3 and lines[-1].strip() == "```":
+                text = "\n".join(lines[1:-1]).strip()
+        try:
+            parsed = json.loads(text)
+        except (TypeError, ValueError):
+            return None
+        if not isinstance(parsed, dict):
+            return None
+        if isinstance(parsed.get("tool_calls"), list) and parsed["tool_calls"]:
+            first = parsed["tool_calls"][0]
+            return first if isinstance(first, dict) else None
+        if isinstance(parsed.get("name"), str) and isinstance(parsed.get("arguments", {}), dict):
+            return {"name": parsed["name"], "arguments": parsed.get("arguments") or {}}
+        return None
+
+    def _execute_textual_tool(self, workspace: Path, request: dict) -> str:
+        """Execute only read-only/textual tools requested as text; write tools are not auto-run."""
+        name = str(request.get("name") or "")
+        args = request.get("arguments") if isinstance(request.get("arguments"), dict) else {}
+        from nl_coding_agent.tools.filesystem import scoped_list_dir, scoped_read_file
+        try:
+            if name in ("read_file", "read_source"):
+                return scoped_read_file(workspace, str(args.get("path") or ""))[:12000]
+            if name == "list_dir" or name == "list_source":
+                entries = scoped_list_dir(workspace, str(args.get("path") or "."))
+                return "\n".join(entries)[:8000]
+            if name == "run_tests":
+                from nl_coding_agent.tools.verification import detect_test_command
+                from nl_coding_agent.tools.shell import scoped_run_command
+                result = scoped_run_command(workspace, detect_test_command(workspace), timeout=120)
+                return (f"exit={result.get('returncode')}\n{result.get('stdout') or ''}\n"
+                        f"{result.get('stderr') or ''}")[:12000]
+            if name == "git_status":
+                from nl_coding_agent.tools.git_tools import get_git_status
+                return get_git_status(workspace)[:8000]
+            if name == "git_diff":
+                from nl_coding_agent.tools.git_tools import get_git_diff
+                return get_git_diff(workspace)[:12000]
+        except Exception as exc:
+            return "tool error: " + type(exc).__name__ + ": " + str(exc)
+        return "tool is not available for textual replay: " + name
+
+    def _call_model_with_textual_tools(self, role: str, model_name: str, prompt: str, *,
+                                       workspace: Path, goal: str, backstory: str,
+                                       expected_output: str, tools: list | None,
+                                       max_rounds: int = 2) -> str:
+        """Run a bounded read-tool loop for models that emit JSON tool text instead of native calls."""
+        current_prompt = prompt
+        output = ""
+        for round_index in range(max_rounds + 1):
+            output = self._call_model(
+                role, model_name, current_prompt, goal=goal, backstory=backstory,
+                expected_output=expected_output,
+                tools=tools if round_index == 0 else None,
+            )
+            request = self._textual_tool_request(output)
+            if not request or round_index >= max_rounds:
+                break
+            result = self._execute_textual_tool(workspace, request)
+            current_prompt = (
+                prompt
+                + "\n\nTOOL RESULT FOR " + str(request.get("name")) + ":\n"
+                + _truncate(result, 12000)
+                + "\n\nDo not request more read-only tools. Now produce the actual code changes "
+                  "using patch_file or a ```write:path``` block. Do not return a tool request or a plan."
+            )
+        return output
+
     def _record_model_assignments(self, mission_id: int, routes: dict[str, str]) -> None:
         """Resolve role routes through the existing ModelRouter and persist the snapshot.
 
@@ -522,6 +607,71 @@ class MultiAgentOrchestrator:
                 result.append(clause)
         return result
 
+    @staticmethod
+    def _module_path_for(name: str, known: set[str]) -> str | None:
+        candidate = name.replace(".", "/") + ".py"
+        if candidate in known:
+            return candidate
+        return None
+
+    def _order_source_paths_by_imports(self, paths: list[str]) -> list[str]:
+        """Topologically order target modules using their real imports (deps first)."""
+        import ast
+
+        ordered_input = [str(path).replace("\\", "/") for path in paths]
+        known = set(ordered_input)
+        dependencies: dict[str, set[str]] = {path: set() for path in ordered_input}
+        for path in ordered_input:
+            full = self.root / path
+            try:
+                tree = ast.parse(full.read_text(encoding="utf-8", errors="replace"))
+            except Exception:
+                continue
+            for node in ast.walk(tree):
+                modules = []
+                if isinstance(node, ast.Import):
+                    modules = [alias.name for alias in node.names]
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    modules = [node.module]
+                for module in modules:
+                    target = self._module_path_for(module, known)
+                    if target and target != path:
+                        dependencies[path].add(target)
+        ordered: list[str] = []
+        remaining = list(ordered_input)
+        while remaining:
+            ready = [path for path in remaining if not (dependencies[path] - set(ordered))]
+            if not ready:
+                # Import cycle or unparseable graph: keep the declared deterministic order.
+                ready = [remaining[0]]
+            ready.sort(key=lambda item: remaining.index(item))
+            for path in ready:
+                ordered.append(path)
+                remaining.remove(path)
+        return ordered
+
+    def _existing_project_context(self, workspace: Path, limit: int = 18_000) -> str:
+        """Bounded read-only snapshot of the small project for the developer prompt."""
+        chunks: list[str] = []
+        used = 0
+        for candidate in sorted(workspace.rglob("*")):
+            if used >= limit:
+                break
+            if any(part in {".git", "data", ".workspace", "__pycache__", "node_modules"}
+                   for part in candidate.parts):
+                continue
+            if not candidate.is_file() or candidate.suffix not in (".py", ".toml", ".ini", ".cfg"):
+                continue
+            try:
+                body = candidate.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            relative = candidate.relative_to(workspace).as_posix()
+            snippet = body[: max(1000, min(6000, limit - used))]
+            chunks.append(f"--- {relative} ---\n{snippet}")
+            used += len(snippet)
+        return "\n\n".join(chunks)
+
     def _plan_tasks(self, mission_id: int, goal: str) -> list[dict]:
         """Proportionally plan analysis, one or more implementation subtasks, test and review.
 
@@ -534,6 +684,7 @@ class MultiAgentOrchestrator:
         source_paths = [path for path in write_paths
                         if not path.replace("\\", "/").lower().startswith("tests/")
                         and not path.lower().endswith((".md", ".rst", ".txt"))]
+        source_paths = self._order_source_paths_by_imports(source_paths)
         test_paths = [path for path in write_paths
                       if path.replace("\\", "/").lower().startswith("tests/")]
         analysis_tasks: list[dict] = []
@@ -1626,6 +1777,7 @@ Do not claim that changes were made. The Developer will perform them in a staged
     ) -> str:
         task_id = task_rec["id"]
         write_paths = task_rec.get("write_paths") or list(stage.scope)
+        before_files = snapshot_workspace(stage.workspace)
         update_task_status(task_id, "running")
         self._emit(
             "developer", "info",
@@ -1635,7 +1787,8 @@ Do not claim that changes were made. The Developer will perform them in a staged
             stage_dir=str(stage.stage_dir),
         )
 
-        tools = get_project_tools(stage.workspace, project_id=self.project_id)
+        tools = [item for item in get_project_tools(stage.workspace, project_id=self.project_id)
+                 if getattr(item, "name", "") not in ("read_file", "list_dir")]
         scope_text = (
             "Declared write scope for THIS subtask (do not modify other files):\n- "
             + "\n- ".join(write_paths)
@@ -1648,6 +1801,22 @@ Do not claim that changes were made. The Developer will perform them in a staged
             if str(architecture_notes or "").strip()
             else "PRIOR NOTES: (none yet)"
         )
+        steering = self._take_steering(mission_id)
+        steering_text = (
+            "USER STEERING (highest priority, while preserving verification and scope):\n"
+            + steering if steering else ""
+        )
+        existing_context = self._existing_project_context(stage.workspace)
+        tests_context = ""
+        try:
+            test_files = sorted((stage.workspace / "tests").glob("test_*.py"))
+            tests_context = "\n\n".join(
+                f"--- {item.relative_to(stage.workspace).as_posix()} ---\n"
+                + item.read_text(encoding="utf-8", errors="replace")[:8000]
+                for item in test_files[:8]
+            )
+        except Exception:
+            tests_context = ""
         prompt = f"""
 PROJECT ROOT: {self.root}
 WORKSPACE (staged copy; write relative paths here): {stage.workspace}
@@ -1658,13 +1827,18 @@ SUBTASK {task_index + 1}/{task_count}: {task_rec.get('title') or 'implementation
 
 {architecture_text}
 
+{steering_text}
+
+EXISTING PROJECT FILES (read-only snapshot; preserve these interfaces and do not invent a different project):
+{existing_context}
+
+ACCEPTANCE TESTS ARE AUTHORITATIVE — do not edit tests; implement exactly the calls and signatures they make:
+{tests_context or '(no test files found)'}
+
 INSTRUCTIONS:
 1. Read the relevant existing files first, including their imports and dependent modules.
 2. Implement the requested change directly in the staged workspace files.
-3. Prefer patch_file for small edits. For complete files use write_file or this exact block format:
-```write:<relative_path>
-<valid source code>
-```
+3. The target files already exist. You MUST modify them with patch_file (possibly several patch_file calls) and preserve every existing class/function. Do NOT replace an existing file with write_file and do NOT delete/rename existing public definitions: the validation gate rejects that as a destructive change. write_file is only for genuinely new files, or as the exact ```write:path``` fallback when no patch can express the change.
 4. Do NOT edit files outside this subtask's declared write scope: the candidate is rejected if you do.
 5. Preserve every existing public function and test unless the objective explicitly asks to remove or rename it. Do not move functions between files.
 6. Do NOT output 'diff --git' or unified-diff headers inside a source file.
@@ -1673,11 +1847,9 @@ INSTRUCTIONS:
 9. Do NOT claim success without actually writing the files.
 10. Finish with a concise summary of the files changed, decisions made and any open problem.
 """
-        output = self._call_model(
-            "Implementation Developer",
-            model_name,
-            prompt,
-            goal=f"Implement the requested code change in the staged candidate: {goal}",
+        output = self._call_model_with_textual_tools(
+            "Implementation Developer", model_name, prompt,
+            workspace=stage.workspace, goal=f"Implement the requested code change in the staged candidate: {goal}",
             backstory=(
                 "You are an expert autonomous software engineer. You inspect existing code using read_file "
                 "or list_dir, and you write the necessary files or patches using write_file or patch_file. "
@@ -1689,6 +1861,29 @@ INSTRUCTIONS:
         )
         actions = _apply_text_actions(stage.workspace, output)
         promotion.normalize_staged_newlines(stage)
+        after_files = snapshot_workspace(stage.workspace)
+        allowed = {str(path).replace("\\", "/") for path in write_paths}
+        unauthorized = [
+            path for path in set(before_files) | set(after_files)
+            if before_files.get(path) != after_files.get(path)
+            and allowed and path.replace("\\", "/") not in allowed
+        ]
+        if unauthorized:
+            # Revert this subtask's out-of-scope edits instead of corrupting the work
+            # of a previous developer stage. The task only owns its declared paths.
+            for path in unauthorized:
+                target = stage.workspace / path
+                if path in before_files:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text(before_files[path], encoding="utf-8")
+                else:
+                    target.unlink(missing_ok=True)
+            self._emit(
+                "developer", "warning",
+                "Reverted out-of-scope subtask edits: " + ", ".join(sorted(unauthorized)),
+                mission_id=mission_id, task_id=task_id,
+            )
+            promotion.normalize_staged_newlines(stage)
         verdict = self._validate_stage(stage)
         diff, changed, _stat = promotion.candidate_diff(stage)
         metadata = self._agent_metadata(model_name)
@@ -1918,7 +2113,11 @@ INSTRUCTIONS:
         stage: promotion.Stage,
     ) -> None:
         """Debugger agent repairs only the staged candidate based on verification failures."""
-        tools = get_project_tools(stage.workspace, project_id=self.project_id)
+        from nl_coding_agent.core.code_integrity_gate import detect_stub
+
+        before_debug = snapshot_workspace(stage.workspace)
+        tools = [item for item in get_project_tools(stage.workspace, project_id=self.project_id)
+                 if getattr(item, "name", "") not in ("read_file", "list_dir")]
         scope_text = (
             "Stay inside the staged declared write scope:\n- " + "\n- ".join(write_paths)
             if write_paths
@@ -1958,6 +2157,29 @@ INSTRUCTIONS:
         )
         actions = _apply_text_actions(stage.workspace, output)
         promotion.normalize_staged_newlines(stage)
+        after_debug = snapshot_workspace(stage.workspace)
+        reverted: list[str] = []
+        for path in set(before_debug) | set(after_debug):
+            before_text = before_debug.get(path)
+            after_text = after_debug.get(path)
+            if before_text == after_text:
+                continue
+            # A repair must not delete existing definitions or replace a real module
+            # with an empty/stub file. For new-feature files the stage baseline is
+            # empty, so the pre-repair candidate is the correct comparison point.
+            if after_text is None or detect_stub(after_text, before_text):
+                target = stage.workspace / path
+                if before_text is not None:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text(before_text, encoding="utf-8")
+                else:
+                    target.unlink(missing_ok=True)
+                reverted.append(path)
+        if reverted:
+            promotion.normalize_staged_newlines(stage)
+            self._emit("debugger", "warning",
+                       "Reverted destructive debugger edits: " + ", ".join(sorted(reverted)),
+                       mission_id=mission_id)
         diff, changed, _stat = promotion.candidate_diff(stage)
         metadata = self._agent_metadata(model_name)
         summary = (
@@ -2005,6 +2227,11 @@ INSTRUCTIONS:
         ) or "- No verification run recorded."
         mission = get_mission(mission_id) or {}
         objective = str(mission.get("goal") or "(missing persisted objective)")
+        steering = self._take_steering(mission_id)
+        steering_text = (
+            "\nUSER STEERING TO CONSIDER DURING REVIEW:\n" + steering
+            if steering else ""
+        )
         self._emit(
             "reviewer", "info",
             f"Reviewer inspecting the staged candidate ({stat}) on task #{task_id}",
@@ -2017,6 +2244,8 @@ CANDIDATE CHANGED FILES: {', '.join(changed) or '(none)'}
 
 PERSISTED MISSION OBJECTIVE:
 {objective}
+
+{steering_text}
 
 AUTHORIZED CANDIDATE WRITE SCOPE:
 {json.dumps(list(stage.scope), ensure_ascii=False)}

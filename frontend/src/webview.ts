@@ -146,6 +146,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                             </label>
                             <span id="hint" class="nl-hint"></span>
                         </div>
+                        <button id="btn-chat-stop" type="button" class="hidden">Stop chat</button>
                         <button id="send" type="submit">Send</button>
                     </div>
                 </div>

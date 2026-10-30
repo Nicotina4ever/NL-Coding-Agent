@@ -3,7 +3,7 @@
 Model-facing file tools are scoped to the staged candidate. The additional execution
 tools are deliberately bounded: tests and a small argv allowlist (git/read-only
 inspection/python compile) with shell=False, so a model cannot turn the tool layer
-into an unrestricted shell. Research uses the existing permission-gated service.
+into an unrestricted shell. Research uses the existing authorized service.
 MCP discovery uses the existing local stdio client; MCP invocation remains
 human-approval-gated by that client and is never silently approved here.
 """
@@ -158,7 +158,7 @@ def get_project_tools(project_root: Path | str, *, read_only: bool = False,
 
     @tool("research_fetch_url")
     def research_fetch_url(url: str) -> str:
-        """Fetch one URL through the existing permission-gated Research service and return
+        """Fetch one URL through the existing authorized Research service and return
         bounded text plus metadata. Does not bypass NETWORK/web-fetch grants."""
         try:
             from nl_coding_agent.research.service import ResearchService

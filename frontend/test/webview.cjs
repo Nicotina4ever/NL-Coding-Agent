@@ -386,10 +386,11 @@ function testWebviewBehaviour() {
     assert(body.children.every((child) => child.tagName === 'span'), 'only text spans created from model text');
     assert.strictEqual(sandbox.__pwned, undefined, 'no script executed');
 
-    // Busy state disables sending.
+    // Busy state keeps input available so messages can be queued or steered.
     send({ type: 'state', payload: { ...state, busyChat: true } });
-    assert.strictEqual(get('send').disabled, true, 'send disabled while busy');
-    assert.strictEqual(get('hint').textContent, 'Waiting for the engine…');
+    assert.strictEqual(get('send').disabled, false, 'send remains available while busy');
+    assert.strictEqual(get('send').textContent, 'Queue');
+    assert(get('hint').textContent.includes('/steer'), 'busy hint explains steering');
 
     // Error notice.
     send({ type: 'state', payload: { ...state, error: 'engine is read-only' } });

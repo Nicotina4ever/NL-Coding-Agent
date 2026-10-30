@@ -314,19 +314,25 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
     @server.tool()
     def nlc_converse(project_id: int, text: str, attachments: list, history: list, *,
                      model_spec: str | None = None,
-                     attachment_ids: list[int] | None = None) -> dict:
+                     attachment_ids: list[int] | None = None,
+                     tools_enabled: bool = True,
+                     allow_coding: bool = False,
+                     max_calls: int = 8, max_seconds: int = 180,
+                     resume: bool = False,
+                     tool_protocol: str = "native") -> dict:
         """Forward a chat request to the backend AppServices implementation.
 
         *project_id* must be the id reported by ``project_context`` for this
         server; any other id is rejected. *text* is the user message.
         *attachment_ids* references files ingested through ``attachment_ingest``;
         the backend validates project ownership and applies its own extraction
-        budget. The legacy *attachments* list of ``{name, extracted_text}`` is
-        still accepted for editor text but is not persisted as attachment
-        provenance. *history* is accepted for protocol compatibility but ignored:
+        budget. *history* is accepted for protocol compatibility but ignored:
         the backend persists and replays the real conversation history itself.
         *model_spec* optionally selects an exact provider/model route.
-        Returns the conversation dict including the route actually used.
+
+        Chat is agentic by default with read-only project tools. *allow_coding*
+        only enables the explicit start_coding delegation; it never bypasses the
+        Supervisor or mission verification.
         """
         require_read()
         try:
@@ -348,8 +354,12 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                 raise ValueError("attachment_ids must be integers") from None
         prompt = message + ("" if ids else _attachment_context(attachments))
         proj = {"id": bound_project_id, "root": project.get("root", "")}
-        return services.chat_conversation(proj, prompt, attachment_ids=ids or None,
-                                          model_spec=model_spec)
+        return services.chat_conversation(
+            proj, prompt, attachment_ids=ids or None, model_spec=model_spec,
+            tools_enabled=bool(tools_enabled), max_calls=int(max_calls),
+            max_seconds=int(max_seconds), allow_coding=bool(allow_coding),
+            resume=bool(resume), tool_protocol=str(tool_protocol),
+        )
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False,
                                              idempotentHint=False, openWorldHint=False))
@@ -443,6 +453,57 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                 "count": total, "offset": start, "returned": len(page),
                 "has_more": start > 0, "messages": page}
 
+    @server.tool(annotations=read_only)
+    def chat_queue() -> dict:
+        """List persistent messages queued while a Chat turn is running."""
+        require_read()
+        from nl_coding_agent.app.chat_tools import list_queue
+        return list_queue(bound_project_id)
+
+    @server.tool()
+    def chat_enqueue(text: str, attachment_ids: list[int] | None = None,
+                     mode: str = "queue") -> dict:
+        """Persist a user message without interrupting the running Chat turn.
+
+        ``mode=steer`` injects the message at the next Chat checkpoint; ordinary
+        ``queue`` messages are drained as the next turn by the client.
+        """
+        require_read()
+        from nl_coding_agent.app.chat_tools import enqueue, load_state
+        state = load_state(bound_project_id)
+        if mode == "steer" and (not state or state.get("status") != "running"):
+            mode = "queue"
+        return enqueue(services, bound_project_id, text, attachment_ids=attachment_ids, mode=mode)
+
+    @server.tool()
+    def chat_queue_remove(item_id: str) -> dict:
+        """Remove one queued Chat message by id."""
+        require_read()
+        from nl_coding_agent.app.chat_tools import remove_queued
+        return remove_queued(bound_project_id, item_id)
+
+    @server.tool()
+    def chat_queue_reorder(ids: list[str]) -> dict:
+        """Reorder every queued Chat message; all ids must be present exactly once."""
+        require_read()
+        from nl_coding_agent.app.chat_tools import reorder_queue
+        return reorder_queue(bound_project_id, ids)
+
+    @server.tool()
+    def chat_steer(text: str) -> dict:
+        """Inject a steering instruction into the running Chat at its next checkpoint."""
+        require_read()
+        from nl_coding_agent.app.chat_tools import enqueue, load_state
+        state = load_state(bound_project_id)
+        mode = "steer" if state and state.get("status") == "running" else "queue"
+        return enqueue(services, bound_project_id, text, mode=mode)
+
+    @server.tool()
+    def chat_cancel() -> dict:
+        """Request cooperative cancellation of the current Chat tool run."""
+        require_read()
+        return services.cancel_chat_tools(bound_project_id)
+
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False,
                                              idempotentHint=True, openWorldHint=True))
     def research_fetch_url(url: str) -> dict:
@@ -479,6 +540,21 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                 "review_verdict", "promotion_status", "changed_paths", "staging_dir",
                 "verification_runs")
         return {key: details.get(key) for key in keys}
+
+    @server.tool()
+    def mission_steer(mission_id: int, text: str) -> dict:
+        """Queue a steering instruction for the next safe mission stage checkpoint."""
+        details = mission(mission_id)
+        status = str(details.get("status") or "")
+        if status not in ("pending", "running", "interrupted", "blocked"):
+            raise ValueError("Mission is not active; steering only queues for a resumable mission")
+        message = str(text or "").strip()
+        if not message:
+            raise ValueError("Steering text is required")
+        from nl_coding_agent.persistence.database import set_setting
+        set_setting("mission.steer." + str(int(mission_id)), message[:8000])
+        return {"ok": True, "mission_id": int(mission_id), "queued": True,
+                "note": "Applied at the next agent stage prompt/checkpoint; not instant."}
 
     @server.tool(annotations=read_only)
     def mission_events(mission_id: int, limit: int = 30) -> dict:

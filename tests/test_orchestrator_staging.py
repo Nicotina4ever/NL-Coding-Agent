@@ -172,7 +172,9 @@ def test_happy_path_promotes_only_after_review_approval(project, mission_env):
     assert observed["live_at_review"] == live_before
     assert "def sub(a, b):" in read_text(live_path)
     assert model.roles == [MODEL_DEVELOPER, MODEL_REVIEWER]
-    assert len(model.calls[0]["tools"]) == 4
+    assert len(model.calls[0]["tools"]) >= 4
+    assert {"write_file", "patch_file", "run_tests", "git_diff"} <= {
+        item.name for item in model.calls[0]["tools"]}
 
     mission = get_mission(mission_id)
     assert mission["status"] == "completed"

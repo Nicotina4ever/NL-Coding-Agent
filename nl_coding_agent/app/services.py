@@ -530,7 +530,10 @@ class AppServices:
             project_root=project["root"], project_id=project["id"],
             objective=text, paths=paths, consent=True)
 
-    def chat_conversation(self, project: dict, text: str, attachment_ids=None, *, model_spec=None) -> dict:
+    def chat_conversation(self, project: dict, text: str, attachment_ids=None, *, model_spec=None,
+                          tools_enabled=False, max_calls=8, max_seconds=180,
+                          allow_coding=False, resume=False, tool_protocol="native",
+                          research_profile="manual") -> dict:
         """Persist a real conversation; attachment context never grants execution."""
         project_id = (project or {}).get("id")
         key = str(self._chat_history_path(project_id))
@@ -549,8 +552,24 @@ class AppServices:
                     raise ValueError("Attachment belongs to another project")
                 attachments.append(item)
             history = self.list_chat_messages(project_id=project_id)
-            self._append_chat_message(project_id, "user", text,
+            if resume and not tools_enabled:
+                raise ValueError("Resume requires explicit tool authorization")
+            if not resume:
+                self._append_chat_message(project_id, "user", text,
                                       attachment_ids=[item["id"] for item in attachments])
+            if tools_enabled:
+                from nl_coding_agent.app.chat_tools import converse
+                result = converse(self, project, text, attachments, history, model_spec=model_spec,
+                                  max_calls=max_calls, max_seconds=max_seconds, allow_coding=allow_coding,
+                                  resume=resume, protocol=tool_protocol, research_profile=research_profile)
+                if result.get("ok"):
+                    route = result.get("route") or {}
+                    self._append_chat_message(
+                        project_id, "assistant", result["reply"], run_id=result["run_id"],
+                        model=route.get("model"), provider_id=route.get("provider_id"),
+                        automatic=route.get("automatic"),
+                    )
+                return result
             reply_info = self._chat_reply(project=project, text=text, attachments=attachments,
                                           tool_activity="", history=history,
                                           model_spec=model_spec)
@@ -570,6 +589,10 @@ class AppServices:
                     "error": {"type": type(exc).__name__, "message": str(exc)}}
         finally:
             turn_lock.release()
+
+    def cancel_chat_tools(self, project_id):
+        from nl_coding_agent.app.chat_tools import cancel
+        return cancel(self, int(project_id))
 
     def _chat_reply(self, *, project: dict, text: str, attachments, tool_activity: str,
                     history=None, model_spec=None) -> dict:
