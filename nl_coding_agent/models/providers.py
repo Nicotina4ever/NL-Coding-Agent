@@ -135,6 +135,7 @@ class OllamaProvider:
                     loaded=item.name in loaded_names or item.loaded,
                     family=item.family,
                     modified_at=item.modified_at,
+                    capabilities=tuple(getattr(item, "capabilities", ())),
                     metadata={"source": "ollama"},
                 )
                 for item in available
@@ -150,6 +151,7 @@ class OllamaProvider:
                 )
                 for item in loaded
             ]
+            self._capabilities = {item.name: item.capabilities for item in models}
             return ProviderSnapshot(
                 provider_id=self.provider_id,
                 label=self.label,
@@ -175,10 +177,26 @@ class OllamaProvider:
         from nl_coding_agent.core.permissions import assert_model_permitted
         assert_model_permitted(model, self.base_url, project_id=project_id)
 
+    def _generation_options(self, model: str, role: str = "chat") -> dict:
+        """Return only explicitly persisted generation options (never num_ctx)."""
+        try:
+            from nl_coding_agent.models.generation_params import effective_params
+            params = effective_params(model_name=model, role=role)
+        except Exception:
+            return {}
+        allowed = {"temperature", "top_p", "top_k", "min_p", "repeat_penalty",
+                   "repeat_last_n", "seed", "num_predict", "frequency_penalty",
+                   "presence_penalty", "tfs_z", "typical_p", "mirostat",
+                   "mirostat_tau", "mirostat_eta"}
+        return {key: value for key, value in params.items() if key in allowed}
+
     def generate(self, model: str, prompt: str, timeout: float = 120.0, *,
-                 project_id=None, messages=None) -> str:
+                 project_id=None, messages=None, role: str = "chat") -> str:
         self.assert_generation_permitted(model, project_id)
         body = {"model": model, "stream": False}
+        options = self._generation_options(model, role=role)
+        if options:
+            body["options"] = options
         if messages is not None:
             body["messages"] = messages
             endpoint = "/api/chat"
@@ -192,6 +210,25 @@ class OllamaProvider:
 
     def unload(self, name: str) -> bool:
         return ollama_stop_model(name)
+
+    def chat_turn(self, model, messages, tools, *, project_id=None, timeout=120,
+                  role: str = "chat"):
+        """Preserve actual native tool calls; never parse prose as execution."""
+        self.assert_generation_permitted(model, project_id)
+        capabilities = getattr(self, "_capabilities", {}).get(model, ())
+        if capabilities and "tools" not in capabilities:
+            raise ValueError("Selected model reports no native tools capability; select validated JSON mode explicitly")
+        wire_messages = [{**m, **({"tool_name": m.get("name", "")} if m["role"] == "tool" else {})}
+                         for m in messages]
+        body = {
+            "model": model, "messages": wire_messages, "tools": tools,
+            "stream": False, "think": False,
+        }
+        options = self._generation_options(model, role=role)
+        if options:
+            body["options"] = options
+        data = _post_json(self.base_url + "/api/chat", body, timeout)
+        return dict(data.get("message") or {})
 
 
 class OpenAICompatibleProvider:
@@ -305,6 +342,24 @@ class OpenAICompatibleProvider:
 
     def unload(self, name: str) -> bool:
         return False
+
+    def chat_turn(self, model, messages, tools, *, project_id=None, timeout=120):
+        self.assert_generation_permitted(model, project_id)
+        wire_messages = []
+        for message in messages:
+            item = dict(message)
+            if item.get("tool_calls"):
+                item["tool_calls"] = [{**call, "function": {**call["function"], "arguments":
+                    json.dumps(call["function"]["arguments"]) if isinstance(call["function"]["arguments"], dict)
+                    else call["function"]["arguments"]}} for call in item["tool_calls"]]
+            wire_messages.append(item)
+        data = _post_json(self.base_url + "/chat/completions", {
+            "model": model, "messages": wire_messages, "tools": tools,
+            "stream": False}, timeout, self._headers())
+        choices = data.get("choices") or []
+        if not choices:
+            raise ValueError("Provider returned no chat completion")
+        return dict(choices[0].get("message") or {})
 
 
 def build_providers(config: dict[str, Any] | None = None) -> list[Any]:

@@ -248,6 +248,31 @@ class AppServices:
         except Exception:
             return {}
 
+    def generation_params(self, *, model_name: str = "", role: str = "",
+                          provider_id: str = "ollama") -> dict:
+        from nl_coding_agent.models.generation_params import (
+            effective_params, list_params,
+        )
+        return {
+            "effective": effective_params(model_name=model_name, role=role,
+                                          provider_id=provider_id),
+            "configured": list_params(),
+        }
+
+    def save_generation_params(self, params: dict, *, scope: str = "model",
+                               provider_id: str = "ollama",
+                               model_name: str = "", role: str = "") -> dict:
+        from nl_coding_agent.models.generation_params import save_params
+        saved = save_params(params, scope=scope, provider_id=provider_id,
+                            model_name=model_name, role=role)
+        self._bus.emit(Event(
+            source="model_hub", level="info",
+            message="Generation parameters saved",
+            payload={"scope": scope, "provider_id": provider_id,
+                     "model_name": model_name, "role": role, "params": saved},
+        ))
+        return saved
+
     def get_database_path(self) -> Path:
         return db_path()
 

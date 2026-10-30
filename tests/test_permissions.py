@@ -380,7 +380,6 @@ def test_orchestrator_make_llm_local_model_passes_and_keeps_signature(perms, mon
         "model": LOCAL_MODEL,
         "base_url": "http://127.0.0.1:11434",
         "temperature": 0.25,
-        "extra_body": {"options": {"num_ctx": 16384}},
     }
 
 

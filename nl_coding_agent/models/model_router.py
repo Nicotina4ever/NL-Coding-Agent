@@ -305,8 +305,15 @@ class ModelRouter:
         kwargs: dict[str, Any] = {"model": binding.model_name}
         if binding.base_url:
             kwargs["base_url"] = binding.base_url
-        if "temperature" in binding.params:
-            kwargs["temperature"] = binding.params["temperature"]
+        try:
+            from nl_coding_agent.agents.orchestrator import _llm_generation_kwargs
+            from nl_coding_agent.models.generation_params import effective_params
+            params = effective_params(model_name=binding.model_name, role=binding.role)
+            params.update(dict(binding.params or {}))
+            kwargs.update(_llm_generation_kwargs(params))
+        except Exception:
+            if "temperature" in binding.params:
+                kwargs["temperature"] = binding.params["temperature"]
         return LLM(**kwargs)
 
     # -------------------------------------------------------------- selection

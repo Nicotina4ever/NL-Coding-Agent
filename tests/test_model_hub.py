@@ -174,15 +174,37 @@ def test_model_hub_panel_renders_and_recovers_from_error():
     )
 
     class FakeServices:
+        def __init__(self):
+            self.saved = None
+
         def discover_models(self, timeout=5.0):
             return snapshot
 
-    panel = ModelsPanel(FakeServices())
-    assert panel._tabs.count() == 4
+        def save_generation_params(self, params, **kwargs):
+            self.saved = (params, kwargs)
+            return dict(params)
+
+        def generation_params(self, **kwargs):
+            return {"effective": {}, "configured": []}
+
+    services = FakeServices()
+    panel = ModelsPanel(services)
+    assert panel._tabs.count() == 5
     panel._on_snapshot(snapshot)
     assert panel._table.rowCount() == 1
     assert panel._table.item(0, 1).text() == "qwen3.5:9b"
     assert "1 model" in panel._status_label.text()
+    panel._gp_scope.setCurrentText("model")
+    panel._gp_model.setText("ollama/qwen3.5:9b")
+    panel._gp_fields["temperature"].setText("0.2")
+    panel._gp_fields["top_k"].setText("40")
+    panel._save_parameters()
+    assert services.saved is not None
+    params, kwargs = services.saved
+    assert params == {"temperature": 0.2, "top_k": 40}
+    assert kwargs["scope"] == "model"
+    assert kwargs["model_name"] == "ollama/qwen3.5:9b"
+    assert "Saved" in panel._gp_status.text()
     panel._on_error("offline")
     assert "offline" in panel._status_label.text()
     assert panel._refresh_btn.isEnabled()

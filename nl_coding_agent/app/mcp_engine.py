@@ -292,6 +292,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                 "chat_default_spec": chat_default,
                 "cloud_escalation_enabled": bool(services.is_cloud_escalation_enabled()),
                 "discovered": discovered,
+                "generation_parameters": _plain_json(services.generation_params()),
             },
             "mission_defaults": mission_defaults,
             "agents": {
@@ -311,6 +312,25 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
 
     # ---------------------------------------------------------------------
     # Expose chat functionality over MCP for VS Code extension clients.
+    @server.tool(annotations=read_only)
+    def generation_parameters(model_name: str = "", role: str = "",
+                              provider_id: str = "ollama") -> dict:
+        """Read effective persistent generation parameters for a model/role."""
+        require_read()
+        return services.generation_params(
+            model_name=model_name, role=role, provider_id=provider_id)
+
+    @server.tool()
+    def save_generation_parameters(parameters: dict, scope: str = "model",
+                                   model_name: str = "", role: str = "",
+                                   provider_id: str = "ollama",
+                                   approved: bool = False) -> dict:
+        """Persist explicit generation params; no num_ctx or Ollama server mutation."""
+        require_execution(approved)
+        return {"ok": True, "saved": services.save_generation_params(
+            parameters, scope=scope, provider_id=provider_id,
+            model_name=model_name, role=role)}
+
     @server.tool()
     def nlc_converse(project_id: int, text: str, attachments: list, history: list, *,
                      model_spec: str | None = None,

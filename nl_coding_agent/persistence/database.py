@@ -129,6 +129,17 @@ CREATE TABLE IF NOT EXISTS app_settings (
     updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS model_generation_params (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    scope       TEXT NOT NULL,
+    provider_id TEXT NOT NULL DEFAULT 'ollama',
+    model_name  TEXT NOT NULL DEFAULT '',
+    role        TEXT NOT NULL DEFAULT '',
+    params_json TEXT NOT NULL DEFAULT '{}',
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(scope, provider_id, model_name, role)
+);
+
 CREATE TABLE IF NOT EXISTS events (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     source      TEXT NOT NULL DEFAULT 'system',

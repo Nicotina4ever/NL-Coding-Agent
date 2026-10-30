@@ -238,14 +238,21 @@ def _usage_metrics(crew) -> dict | None:
 
 
 def _default_llm_factory(model_name: str, *, base_url: str, temperature: float,
-                         project_id: int | None = None) -> LLM:
+                         project_id: int | None = None,
+                         role: str | None = None) -> LLM:
     # Lazy import avoids an orchestrator <-> backend import cycle; the permission
     # gate remains inside orchestrator._make_llm (single construction point).
     from nl_coding_agent.agents.orchestrator import _make_llm
 
-    return _make_llm(
-        model_name, base_url, temperature=temperature, project_id=project_id,
-    )
+    try:
+        return _make_llm(
+            model_name, base_url, temperature=temperature, project_id=project_id, role=role,
+        )
+    except TypeError:
+        # Test/monkeypatched seam retaining the pre-role signature.
+        return _make_llm(
+            model_name, base_url, temperature=temperature, project_id=project_id,
+        )
 
 
 def build_agent(spec: AgentSpec, *, goal: str, backstory: str,
@@ -259,9 +266,16 @@ def build_agent(spec: AgentSpec, *, goal: str, backstory: str,
     if not spec.requires_llm:
         raise SpecError("Deterministic role " + spec.role_id + " does not use an LLM")
     factory = llm_factory or _default_llm_factory
-    llm = factory(
-        model_name, base_url=base_url, temperature=temperature, project_id=project_id,
-    )
+    try:
+        llm = factory(
+            model_name, base_url=base_url, temperature=temperature,
+            project_id=project_id, role=spec.role_id,
+        )
+    except TypeError:
+        # Test/third-party factories may retain the pre-role signature.
+        llm = factory(
+            model_name, base_url=base_url, temperature=temperature, project_id=project_id,
+        )
     kwargs: dict[str, Any] = {
         "role": spec.display_role,
         "goal": goal,

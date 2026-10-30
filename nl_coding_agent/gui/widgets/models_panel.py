@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QPushButton,
     QTabWidget,
     QTableWidget,
@@ -97,6 +98,7 @@ class ModelsPanel(QWidget):
 
         self._tabs = QTabWidget()
         self._tabs.addTab(self._build_models_tab(), _tr("model_hub.tab_models", "Models"))
+        self._tabs.addTab(self._build_parameters_tab(), "Generation")
         self._tabs.addTab(self._build_speech_tab(), _tr("model_hub.tab_speech", "Speech"))
         self._tabs.addTab(self._build_hardware_tab(), _tr("model_hub.tab_hardware", "Hardware"))
         self._tabs.addTab(self._build_storage_tab(), _tr("model_hub.tab_storage", "Storage"))
@@ -110,9 +112,9 @@ class ModelsPanel(QWidget):
             "Inference providers, local models, speech engines and resource status."))
         self._refresh_btn.setText(_tr("model_hub.refresh", "Refresh"))
         self._tabs.setTabText(0, _tr("model_hub.tab_models", "Models"))
-        self._tabs.setTabText(1, _tr("model_hub.tab_speech", "Speech"))
-        self._tabs.setTabText(2, _tr("model_hub.tab_hardware", "Hardware"))
-        self._tabs.setTabText(3, _tr("model_hub.tab_storage", "Storage"))
+        self._tabs.setTabText(2, _tr("model_hub.tab_speech", "Speech"))
+        self._tabs.setTabText(3, _tr("model_hub.tab_hardware", "Hardware"))
+        self._tabs.setTabText(4, _tr("model_hub.tab_storage", "Storage"))
 
     def _build_models_tab(self) -> QWidget:
         tab = QWidget()
@@ -152,6 +154,93 @@ class ModelsPanel(QWidget):
         self._empty_label.setStyleSheet("color: #7E8798; font-size: 12px;")
         layout.addWidget(self._empty_label)
         return tab
+
+    def _build_parameters_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(0, 8, 0, 0)
+        layout.setSpacing(8)
+        heading = QLabel("Persistent generation parameters")
+        heading.setStyleSheet("font-weight: 600;")
+        layout.addWidget(heading)
+        note = QLabel(
+            "Blank fields leave the provider/Ollama default untouched. Context length "
+            "is owned by Ollama application settings and is never sent by NL Code."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet("color: #7E8798; font-size: 12px;")
+        layout.addWidget(note)
+
+        form = QFormLayout()
+        self._gp_scope = QComboBox()
+        self._gp_scope.addItems(["model", "role", "global"])
+        form.addRow("Scope", self._gp_scope)
+        self._gp_model = QLineEdit()
+        self._gp_model.setPlaceholderText("ollama/model:tag for model scope")
+        form.addRow("Model", self._gp_model)
+        self._gp_role = QComboBox()
+        self._gp_role.setEditable(True)
+        self._gp_role.addItems(["", "architect", "developer", "debugger", "reviewer", "chat"])
+        form.addRow("Role", self._gp_role)
+        self._gp_fields: dict[str, QLineEdit] = {}
+        for key, placeholder in (
+            ("temperature", "e.g. 0.2"), ("top_p", "e.g. 0.9"),
+            ("top_k", "e.g. 40"), ("min_p", "e.g. 0.05"),
+            ("repeat_penalty", "e.g. 1.1"), ("seed", "e.g. 42"),
+            ("max_tokens", "optional output cap"),
+        ):
+            field = QLineEdit()
+            field.setPlaceholderText(placeholder)
+            self._gp_fields[key] = field
+            form.addRow(key, field)
+        layout.addLayout(form)
+
+        actions = QHBoxLayout()
+        save = QPushButton("Save parameters")
+        save.clicked.connect(self._save_parameters)
+        clear = QPushButton("Clear fields")
+        clear.clicked.connect(self._clear_parameter_fields)
+        actions.addWidget(save)
+        actions.addWidget(clear)
+        actions.addStretch()
+        layout.addLayout(actions)
+        self._gp_status = QLabel(
+            "Explicit values are stored in SQLite; untouched values remain provider defaults.")
+        self._gp_status.setWordWrap(True)
+        self._gp_status.setStyleSheet("color: #7E8798; font-size: 12px;")
+        layout.addWidget(self._gp_status)
+        layout.addStretch()
+        return tab
+
+    def _clear_parameter_fields(self) -> None:
+        for field in self._gp_fields.values():
+            field.clear()
+        self._gp_status.setText("Fields cleared. Save to remove configured values.")
+
+    def _save_parameters(self) -> None:
+        values: dict = {}
+        for key, field in self._gp_fields.items():
+            text = field.text().strip()
+            if not text:
+                continue
+            try:
+                values[key] = int(text) if key in ("top_k", "seed", "max_tokens") else float(text)
+            except ValueError:
+                self._gp_status.setText(f"{key} must be numeric.")
+                return
+        scope = self._gp_scope.currentText()
+        try:
+            saved = self._services.save_generation_params(
+                values, scope=scope,
+                model_name=self._gp_model.text().strip(),
+                role=self._gp_role.currentText().strip(),
+            )
+        except Exception as exc:
+            self._gp_status.setText(f"Save failed: {exc}")
+            return
+        self._gp_status.setText(
+            "Saved " + (", ".join(f"{k}={v}" for k, v in saved.items()) or "(none)")
+            + ". Unconfigured parameters remain provider defaults.")
 
     def _build_speech_tab(self) -> QWidget:
         tab = QWidget()

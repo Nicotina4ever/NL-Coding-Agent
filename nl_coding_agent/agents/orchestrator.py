@@ -116,31 +116,57 @@ def _truncate(text: str, limit: int = 20_000) -> str:
 
 
 def _make_llm(model_name: str, base_url: str = "http://127.0.0.1:11434",
-              temperature: float = 0.1, *, project_id: int | None = None) -> LLM:
+              temperature: float = 0.1, *, project_id: int | None = None,
+              role: str | None = None) -> LLM:
     """Create a permission-checked CrewAI LLM instance for Ollama.
 
-    Fail-closed escalation gate: a cloud model needs an explicit CLOUD grant and
-    a non-loopback endpoint needs an explicit NETWORK grant. There is no flag or
-    environment variable that disables this check. project_id applies the
-    project-scoped permission policy when the caller (stage-3 supervisor) has one.
+    Context length is deliberately not set here: Ollama's own model/server
+    settings own it. Only explicitly persisted generation parameters are sent;
+    unconfigured values remain provider defaults.
     """
     from nl_coding_agent.core.permissions import assert_model_permitted
 
     assert_model_permitted(model_name, base_url, project_id=project_id)
     kwargs: dict = {"model": model_name, "base_url": base_url, "temperature": temperature}
-    # Keep a bounded Ollama context: the 131k model default spills a 9B/30B model
-    # into CPU RAM and turns every stage into a multi-minute stall on 8 GB VRAM.
-    # Cloud or explicitly non-Ollama routes keep their provider defaults.
-    if "cloud" not in str(model_name).lower():
-        try:
-            num_ctx = int(os.environ.get("NL_OLLAMA_NUM_CTX", "16384"))
-        except ValueError:
-            num_ctx = 16384
-        if num_ctx >= 2048:
-            # CrewAI's Ollama route uses the OpenAI-compatible client; pass the
-            # Ollama option through extra_body rather than as a top-level kwarg.
-            kwargs["extra_body"] = {"options": {"num_ctx": num_ctx}}
+    # Persistent per-model/per-role generation parameters. Missing values are
+    # intentionally omitted so the provider keeps its own defaults.
+    try:
+        from nl_coding_agent.models.generation_params import effective_params
+        params = effective_params(model_name=model_name, role=role)
+        kwargs.update(_llm_generation_kwargs(params))
+    except Exception:
+        pass
     return LLM(**kwargs)
+
+
+#: CrewAI/OpenAI-compatible kwargs accepted directly.
+_DIRECT_LLM_PARAMS = {
+    "temperature", "top_p", "seed", "max_tokens", "frequency_penalty",
+    "presence_penalty", "stop",
+}
+#: Ollama-native options that must travel via extra_body.options.
+_OLLAMA_OPTION_PARAMS = {
+    "top_k", "min_p", "repeat_penalty", "repeat_last_n", "mirostat",
+    "mirostat_tau", "mirostat_eta", "num_predict", "tfs_z", "typical_p",
+}
+
+
+def _llm_generation_kwargs(params: dict | None) -> dict:
+    """Translate persisted generation params without imposing context length."""
+    selected = dict(params or {})
+    kwargs: dict = {}
+    options: dict = {}
+    for key, value in selected.items():
+        if key == "num_ctx":
+            # Context length belongs to the Ollama application, never to NL Code.
+            continue
+        if key in _DIRECT_LLM_PARAMS:
+            kwargs[key] = value
+        elif key in _OLLAMA_OPTION_PARAMS:
+            options[key] = value
+    if options:
+        kwargs["extra_body"] = {"options": options}
+    return kwargs
 
 
 def parse_reviewer_verdict(text: str) -> str:
@@ -522,7 +548,7 @@ class MultiAgentOrchestrator:
 
     # ------------------------------------------------------------------ helpers
 
-    def _agent_metadata(self, model_name: str) -> dict:
+    def _agent_metadata(self, model_name: str, role: str = "developer") -> dict:
         """Actual CrewAI result evidence for the last call, bounded and JSON-safe."""
         result = self._last_agent_result
         metadata = {"model": str(model_name or ""), "provider": "ollama"}
@@ -542,6 +568,20 @@ class MultiAgentOrchestrator:
                     metadata["usage"] = dict(usage)
                 except Exception:
                     pass
+        try:
+            from nl_coding_agent.models.generation_params import effective_params
+            params = effective_params(model_name=model_name, role=role)
+            metadata["generation_params"] = {
+                key: value for key, value in params.items() if key != "num_ctx"
+            }
+        except Exception:
+            metadata["generation_params"] = {}
+        try:
+            from nl_coding_agent.models.ollama_registry import loaded_model_context
+            metadata["effective_context"] = loaded_model_context(
+                str(model_name).split("/", 1)[-1])
+        except Exception:
+            metadata["effective_context"] = None
         return metadata
 
     def _emit(self, source: str, level: str, message: str, **payload) -> None:
@@ -2649,7 +2689,7 @@ INSTRUCTIONS:
                        "Reverted destructive debugger edits: " + ", ".join(sorted(reverted)),
                        mission_id=mission_id)
         diff, changed, _stat = promotion.candidate_diff(stage)
-        metadata = self._agent_metadata(model_name)
+        metadata = self._agent_metadata(model_name, "debugger")
         summary = (
             f"Debugger staged {len(changed)} file(s): {', '.join(changed)}."
             if changed
@@ -2748,7 +2788,7 @@ INSTRUCTIONS:
                 expected_output="APPROVE or REJECT verdict on the first line, followed by review notes.",
             )
             verdict = parse_reviewer_verdict(review_text)
-            metadata = self._agent_metadata(model_name)
+            metadata = self._agent_metadata(model_name, "reviewer")
             record_task_attempt(task_id, "completed", output=_truncate(review_text),
                                 metadata=metadata)
             update_task_status(task_id, "completed")
@@ -2772,7 +2812,7 @@ INSTRUCTIONS:
             return review_text, verdict
         except Exception as exc:
             record_task_attempt(task_id, "failed", error=str(exc),
-                                metadata=self._agent_metadata(model_name))
+                                metadata=self._agent_metadata(model_name, "reviewer"))
             update_task_status(task_id, "failed", error=str(exc))
             self._emit("reviewer", "error", f"Review failed: {exc}", mission_id=mission_id)
             raise

@@ -1,4 +1,4 @@
-﻿"""Ollama model registry — dynamic discovery via CLI and HTTP API."""
+"""Ollama model registry — dynamic discovery via CLI and HTTP API."""
 from __future__ import annotations
 
 import json
@@ -19,6 +19,7 @@ class OllamaModel:
     loaded: bool
     modified_at: str = ""
     family: str = ""
+    capabilities: tuple[str, ...] = ()
 
 
 def _run_ollama(*args: str, timeout: int = 15) -> tuple[int, str, str]:
@@ -67,7 +68,8 @@ def list_models(base_url: str = OLLAMA_BASE_URL, timeout: float = 10.0) -> list[
             modified = m.get("modified_at", "")
             models.append(OllamaModel(
                 name=name, size_gb=round(size, 2),
-                loaded=(name in loaded_names), modified_at=modified, family=family
+                loaded=(name in loaded_names), modified_at=modified, family=family,
+                capabilities=tuple(m.get("capabilities") or ())
             ))
         return models
     except Exception:
@@ -112,6 +114,30 @@ def list_loaded_models(base_url: str = OLLAMA_BASE_URL, timeout: float = 5.0) ->
         if parts:
             result.append(OllamaModel(name=parts[0], size_gb=0.0, loaded=True))
     return result
+
+
+def loaded_model_context(name: str, base_url: str = OLLAMA_BASE_URL,
+                         timeout: float = 5.0) -> int | None:
+    """Read the effective context length Ollama reports for a loaded model.
+
+    Read-only diagnostic: this never changes the server/model configuration.
+    """
+    try:
+        with urllib.request.urlopen(f"{base_url}/api/ps", timeout=timeout) as resp:
+            data = json.loads(resp.read())
+    except Exception:
+        return None
+    for item in data.get("models", []) if isinstance(data, dict) else []:
+        if str(item.get("name") or "") != str(name):
+            continue
+        for key in ("context_length", "context", "num_ctx"):
+            value = item.get(key)
+            try:
+                if value is not None:
+                    return int(value)
+            except (TypeError, ValueError):
+                continue
+    return None
 
 
 def stop_model(name: str) -> bool:
