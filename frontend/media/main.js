@@ -12,7 +12,7 @@
     const execToggle = $('exec-toggle');
     const noticeEl = $('notice');
     const tabButtons = Array.prototype.slice.call(document.querySelectorAll('.nl-tab-button'));
-    const panels = { chat: $('tab-chat'), missions: $('tab-missions'), engine: $('tab-engine') };
+    const panels = { chat: $('tab-chat'), missions: $('tab-missions'), agents: $('tab-agents'), engine: $('tab-engine') };
 
     const banner = $('mission-banner');
     const bannerTitle = $('banner-title');
@@ -64,6 +64,15 @@
     const chatQueueEl = $('chat-queue');
     const storageListEl = $('storage-list');
     const probeSelectEl = $('probe-model');
+    const specialistSelectEl = $('specialist-list');
+    const specialistProviderEl = $('specialist-provider');
+    const specialistNameEl = $('specialist-name');
+    const specialistModelEl = $('specialist-model');
+    const specialistRoleEl = $('specialist-role');
+    const specialistInstructionsEl = $('specialist-instructions');
+    const specialistToolsEl = $('specialist-tools');
+    const specialistPermissionsEl = $('specialist-permissions');
+    const specialistEnabledEl = $('specialist-enabled');
     let storageSelected = {};
     let chatControlsVisible = true;
     let contextVisible = true;
@@ -345,9 +354,61 @@
         node.value = value === undefined || value === null ? '' : String(value);
     }
 
+    function fillSpecialist(agent) {
+        specialistNameEl.value = agent ? (agent.name || '') : '';
+        specialistProviderEl.value = agent ? (agent.provider || 'ollama') : 'ollama';
+        specialistModelEl.value = agent ? (agent.model || '') : '';
+        specialistRoleEl.value = agent ? (agent.role || 'assistant') : 'assistant';
+        specialistInstructionsEl.value = agent ? (agent.instructions || '') : '';
+        specialistToolsEl.value = agent ? (agent.tools || []).join(', ') : '';
+        specialistPermissionsEl.value = agent ? (agent.permissions || []).join(', ') : '';
+        specialistEnabledEl.checked = agent ? agent.enabled !== false : true;
+    }
+
+    function selectedSpecialist(current) {
+        const agents = current.settings.agents.custom_agents || [];
+        const id = specialistSelectEl.value;
+        return agents.filter(function (agent) { return String(agent.id) === String(id); })[0];
+    }
+
+    function renderSpecialists(current) {
+        const settings = current.settings;
+        const agents = settings.agents.custom_agents || [];
+        const providers = settings.models.providers || [];
+        const selected = specialistSelectEl.value;
+        clear(specialistSelectEl);
+        const empty = el('option', '', agents.length ? 'Select specialist…' : 'No specialist agents yet');
+        empty.value = '';
+        specialistSelectEl.appendChild(empty);
+        agents.forEach(function (agent) {
+            const option = el('option', '', (agent.name || 'Specialist') +
+                (agent.enabled === false ? ' (disabled)' : ''));
+            option.value = String(agent.id || '');
+            specialistSelectEl.appendChild(option);
+        });
+        if (selected && agents.some(function (agent) { return String(agent.id) === selected; })) {
+            specialistSelectEl.value = selected;
+        }
+        const providerSelected = specialistProviderEl.value;
+        clear(specialistProviderEl);
+        const seen = {};
+        [{ provider_id: 'ollama', label: 'Ollama' }].concat(providers).forEach(function (provider) {
+            const id = provider.provider_id || provider.id;
+            if (!id || seen[id]) { return; }
+            seen[id] = true;
+            const option = el('option', '', (provider.label || id) + ' (' + id + ')');
+            option.value = id;
+            specialistProviderEl.appendChild(option);
+        });
+        if (providerSelected && specialistProviderEl.querySelector('option[value="' + providerSelected + '"]')) {
+            specialistProviderEl.value = providerSelected;
+        }
+    }
+
     function renderSettings(current) {
         const settings = current.settings;
         if (!settings) { return; }
+        renderSpecialists(current);
         const providerSelect = $('provider-edit');
         const previous = providerSelect.value;
         clear(providerSelect);
@@ -1264,6 +1325,38 @@
             role: $('role-edit').value,
             model: $('role-model-edit').value
         });
+    });
+    specialistSelectEl.addEventListener('change', function () {
+        if (!state) { return; }
+        fillSpecialist(selectedSpecialist(state));
+    });
+    $('specialist-new').addEventListener('click', function () {
+        specialistSelectEl.value = '';
+        fillSpecialist(null);
+        specialistNameEl.focus();
+    });
+    $('specialist-save').addEventListener('click', function () {
+        postAction('saveSpecialistAgent', {
+            id: specialistSelectEl.value || undefined,
+            name: specialistNameEl.value,
+            provider: specialistProviderEl.value,
+            model: specialistModelEl.value,
+            role: specialistRoleEl.value,
+            instructions: specialistInstructionsEl.value,
+            tools: specialistToolsEl.value,
+            permissions: specialistPermissionsEl.value,
+            enabled: specialistEnabledEl.checked
+        });
+    });
+    $('specialist-duplicate').addEventListener('click', function () {
+        if (specialistSelectEl.value) {
+            postAction('duplicateSpecialistAgent', { agentId: specialistSelectEl.value });
+        }
+    });
+    $('specialist-delete').addEventListener('click', function () {
+        if (specialistSelectEl.value) {
+            postAction('deleteSpecialistAgent', { agentId: specialistSelectEl.value });
+        }
     });
     $('generation-save').addEventListener('click', function () {
         function numberOrNull(id) {

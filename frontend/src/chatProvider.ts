@@ -17,6 +17,7 @@ import {
     ChatQueueItem,
     ChatRoute,
     ChatSession,
+    CustomAgent,
     EngineConnection,
     EngineError,
     EngineSettings,
@@ -208,7 +209,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     }
 
     /** Ask the webview to switch section (used by commands). */
-    postNavigation(tab: 'chat' | 'missions' | 'engine'): void {
+    postNavigation(tab: 'chat' | 'missions' | 'agents' | 'engine'): void {
         this.post({ type: 'navigate', tab });
     }
 
@@ -1034,6 +1035,56 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         this.postChat('system', `Role ${role} now uses ${model}.`);
     }
 
+    async saveSpecialistAgent(payload: Record<string, unknown>): Promise<void> {
+        const name = String(payload.name || '').trim();
+        if (!name) {
+            throw new EngineError('missing-agent-name', 'Specialist name is required.');
+        }
+        const agent: CustomAgent = {
+            id: payload.id ? String(payload.id) : undefined,
+            name,
+            provider: String(payload.provider || 'ollama'),
+            model: String(payload.model || '').trim(),
+            role: String(payload.role || 'assistant').trim() || 'assistant',
+            instructions: String(payload.instructions || '').trim(),
+            tools: String(payload.tools || '').split(',').map((item) => item.trim()).filter(Boolean),
+            permissions: String(payload.permissions || '').split(',').map((item) => item.trim()).filter(Boolean),
+            enabled: payload.enabled !== false
+        };
+        if (agent.model && agent.model.indexOf('/') === -1 && agent.provider) {
+            agent.model = agent.provider + '/' + agent.model;
+        }
+        const result = await this.connection.saveCustomAgent(agent);
+        this.settings = await this.connection.engineSettings(false);
+        this.postState();
+        this.postChat('system', 'Specialist agent saved: ' + result.agent.name + '.');
+    }
+
+    async deleteSpecialistAgent(agentId: string): Promise<void> {
+        if (!agentId) {
+            return;
+        }
+        const choice = await vscode.window.showWarningMessage(
+            'Delete this specialist agent profile?', { modal: true }, 'Delete');
+        if (choice !== 'Delete') {
+            return;
+        }
+        await this.connection.deleteCustomAgent(agentId);
+        this.settings = await this.connection.engineSettings(false);
+        this.postState();
+        this.postChat('system', 'Specialist agent deleted.');
+    }
+
+    async duplicateSpecialistAgent(agentId: string): Promise<void> {
+        if (!agentId) {
+            return;
+        }
+        await this.connection.duplicateCustomAgent(agentId);
+        this.settings = await this.connection.engineSettings(false);
+        this.postState();
+        this.postChat('system', 'Specialist agent duplicated.');
+    }
+
     async saveGenerationParameters(payload: Record<string, unknown>): Promise<void> {
         const scope = String(payload.scope || 'model') as 'global' | 'role' | 'model';
         const params: Record<string, number | string | boolean | null> = {};
@@ -1488,6 +1539,15 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'saveRoleSettings':
                     await this.saveRoleSettings(payload);
+                    break;
+                case 'saveSpecialistAgent':
+                    await this.saveSpecialistAgent(payload);
+                    break;
+                case 'deleteSpecialistAgent':
+                    await this.deleteSpecialistAgent(String(payload.agentId || ''));
+                    break;
+                case 'duplicateSpecialistAgent':
+                    await this.duplicateSpecialistAgent(String(payload.agentId || ''));
                     break;
                 case 'saveGenerationParameters':
                     await this.saveGenerationParameters(payload);

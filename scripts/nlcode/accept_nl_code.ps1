@@ -187,8 +187,26 @@ if ($fgPid -ne $process.Id) {
 Send-Keys '{ESC}' 1500
 $shotReady = Save-Shot 'after-dismiss'
 
+Send-Keys '^%h' 1800
+$shotHome = Save-Shot 'home'
+$results.Add((Write-Result 'NL Code home dashboard captured' (Test-Path $shotHome) $shotHome)) | Out-Null
+
+Send-Keys '^n' 1200
+Send-Keys '^w' 800
+Send-Keys '^w' 800
+Start-Sleep -Milliseconds 900
+$shotWatermark = Save-Shot 'watermark'
+$results.Add((Write-Result 'NL Code editor watermark captured' (Test-Path $shotWatermark) $shotWatermark)) | Out-Null
+
+Send-Keys '^%h' 1200
 Send-Keys '^+p' 900
-Send-Keys 'NL Coder: Start Chat' 900
+Send-Keys 'NL Code: Open Agents' 900
+Send-Keys '{ENTER}' 1800
+$shotAgents = Save-Shot 'agents'
+$results.Add((Write-Result 'Agents and model assignments tab captured' (Test-Path $shotAgents) $shotAgents)) | Out-Null
+
+Send-Keys '^+p' 900
+Send-Keys 'NL Code: Open Chat' 900
 Send-Keys '{ENTER}' 3500
 Send-Keys 'Reply with exactly: NLCODE-GUI-OK' 500
 Send-Keys '{ENTER}' 800
@@ -234,7 +252,7 @@ $resultPath = Join-Path $scratch 'acceptance-result.json'
     dist       = $Dist
     project    = $Project
     dataDir    = $DataDir
-    screenshots = @($shotBefore, $shotSent, $shotReply)
+    screenshots = @($shotBefore, $shotHome, $shotWatermark, $shotAgents, $shotSent, $shotReply)
     results    = $results
     passed     = ($failed.Count -eq 0)
     finishedAt = (Get-Date).ToString('o')

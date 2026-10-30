@@ -15,6 +15,7 @@ import {
     MissionDetail
 } from './backend';
 import { ChatProvider, StartMissionInput } from './chatProvider';
+import { HomeProvider, HomeState } from './homeProvider';
 
 export interface StatusReport {
     state: string;
@@ -32,10 +33,12 @@ export interface StatusReport {
 export interface NlCodingAgentApi {
     connection: EngineConnection;
     chat: ChatProvider;
+    home?: HomeProvider;
     connect(): Promise<void>;
     shutdown(): Promise<void>;
     getStatus(): Promise<StatusReport>;
     refresh(): Promise<void>;
+    refreshWorkbench(): Promise<void>;
     startMission(input: StartMissionInput): Promise<{ missionId: number } | undefined>;
     selectMission(missionId: number): Promise<void>;
     getMissionDetail(missionId: number): Promise<MissionDetail>;
@@ -51,8 +54,13 @@ export interface NlCodingAgentApi {
 
 let connection: EngineConnection | undefined;
 let chat: ChatProvider | undefined;
+let home: HomeProvider | undefined;
 let output: vscode.OutputChannel | undefined;
 let timeoutMs = 180000;
+
+export function isNlCodeStandalone(): boolean {
+    return vscode.env.uriScheme === 'nl-code' || /(^|\b)NL Code\b/i.test(vscode.env.appName || '');
+}
 
 const ENGINE_ENV_KEYS = ['NL_DATA_DIR', 'NL_WORKSPACE_DIR', 'NL_MODELS_CONFIG', 'NL_ENGINE_ROOT'] as const;
 
@@ -127,6 +135,75 @@ async function pickModel(
     return picked ? picked.route : undefined;
 }
 
+async function collectHomeState(): Promise<HomeState> {
+    const base: HomeState = {
+        connected: false,
+        connectionState: connection?.state || 'idle',
+        projectName: '',
+        projectRoot: connection?.projectRoot || '',
+        executionEnabled: Boolean(connection?.executionAllowed),
+        missionTotal: 0,
+        missionActive: 0,
+        missionCompleted: 0,
+        modelCount: 0,
+        configuredModels: [],
+        agentCount: 0,
+        roleNames: [],
+        sessionCount: 0,
+        queueCount: 0,
+        isStandalone: isNlCodeStandalone()
+    };
+    if (!connection) {
+        return base;
+    }
+    try {
+        const context = await connection.projectContext();
+        base.connected = connection.state === 'ready';
+        base.projectId = context.project.id;
+        base.projectName = context.project.name || '';
+        base.projectRoot = context.project.root;
+        base.engineName = connection.engineInfo?.name;
+        base.engineVersion = connection.engineInfo?.version;
+    } catch (error) {
+        base.connected = false;
+        base.error = error instanceof Error ? error.message : String(error);
+    }
+    try {
+        const settings = await connection.engineSettings(false);
+        base.executionEnabled = base.executionEnabled;
+        base.configuredModels = Array.from(new Set(
+            Object.values(settings.models.roles || {})
+                .map((role) => role && role.model)
+                .filter((value): value is string => Boolean(value))));
+        base.roleNames = Object.keys(settings.models.roles || {});
+        base.modelCount = new Set([
+            ...base.configuredModels,
+            ...(settings.models.discovered?.providers.flatMap((provider) =>
+                (provider.models || []).map((model) => `${provider.provider_id}/${model.name}`)) || [])
+        ]).size;
+        base.agentCount = (settings.agents.roles || []).length +
+            (settings.agents.custom_agents || []).length;
+    } catch (error) {
+        base.error = base.error || (error instanceof Error ? error.message : String(error));
+    }
+    try {
+        const missions = await connection.missionList({ includeArchived: true });
+        base.missionTotal = missions.length;
+        base.missionActive = missions.filter((mission) =>
+            mission.status === 'running' || mission.status === 'pending').length;
+        base.missionCompleted = missions.filter((mission) => mission.status === 'completed').length;
+    } catch { /* home remains useful with partial state */ }
+    try {
+        const sessions = await connection.chatSessions(false);
+        base.sessionCount = (sessions.sessions || []).length;
+    } catch { /* optional */ }
+    try {
+        const queue = await connection.chatQueue();
+        base.queueCount = Array.isArray(queue.items) ? queue.items.length : 0;
+    } catch { /* optional */ }
+    return base;
+}
+
 export async function activate(context: vscode.ExtensionContext): Promise<NlCodingAgentApi> {
     output = vscode.window.createOutputChannel('NL Coder');
     context.subscriptions.push(output);
@@ -160,8 +237,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
         })
     );
 
-    const revealChat = async (tab?: 'chat' | 'missions' | 'engine') => {
-        await vscode.commands.executeCommand('workbench.view.extension.nlCodingAgent');
+    home = new HomeProvider(context.extensionUri, collectHomeState);
+
+    const refreshWorkbench = async (): Promise<void> => {
+        try {
+            await home?.refresh();
+        } catch { /* home is optional */ }
+    };
+
+    const revealChat = async (tab?: 'chat' | 'missions' | 'agents' | 'engine') => {
+        await vscode.commands.executeCommand('workbench.view.extension.nlCodingAgentChat');
         await vscode.commands.executeCommand('nlCodingAgent.chat.focus');
         if (tab) {
             chat?.postNavigation(tab);
@@ -172,6 +257,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
     const api: NlCodingAgentApi = {
         connection,
         chat,
+        home: home || undefined,
         connect: () => connection!.connect(),
         shutdown: async () => {
             await connection!.close();
@@ -197,7 +283,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
         },
         refresh: async () => {
             await chat!.refreshAll(false);
+            await refreshWorkbench();
         },
+        refreshWorkbench,
         startMission: (input: StartMissionInput) => chat!.startMission(input, true),
         selectMission: (missionId: number) => chat!.selectMission(missionId),
         getMissionDetail: (missionId: number) => connection!.missionDetail(missionId),
@@ -268,10 +356,91 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
     );
 
     context.subscriptions.push(
+        vscode.commands.registerCommand('nlCodingAgent.openHome', async () => {
+            await home?.openPanel();
+            await home?.refresh();
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nlCodingAgent.openModelHub', async () => {
+            await revealChat('engine');
+            chat?.postNavigation('engine');
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nlCodingAgent.openAgents', async () => {
+            await revealChat('agents');
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nlCodingAgent.openStorage', async () => {
+            await revealChat('engine');
+            chat?.postNavigation('engine');
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nlCodingAgent.selectMission', async (missionId: number) => {
+            await revealChat('missions');
+            await chat!.selectMission(Number(missionId));
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nlCodingAgent.askAboutFile', async () => {
+            if (!vscode.window.activeTextEditor) {
+                void vscode.window.showInformationMessage('Open a file before asking NL Code about it.');
+                return;
+            }
+            await revealChat('chat');
+            await chat!.attachActiveEditor(
+                vscode.window.activeTextEditor.selection.isEmpty ? 'file' : 'selection');
+            await chat!.focusComposer();
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nlCodingAgent.askAboutPath', async (uri?: vscode.Uri) => {
+            if (!uri || uri.scheme !== 'file') {
+                return;
+            }
+            await revealChat('chat');
+            await chat!.attachPaths([uri.fsPath]);
+            await chat!.focusComposer();
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nlCodingAgent.reviewChanges', async () => {
+            await revealChat('chat');
+            await chat!.focusComposer();
+            void vscode.window.showInformationMessage(
+                'Ask NL Code to review the current changes; the engine can read Git state through its authorized tools.');
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nlCodingAgent.applyTheme', async () => {
+            const choice = await vscode.window.showInformationMessage(
+                'Apply the NL Code Dark theme? Code - OSS features and user settings are preserved.',
+                'Apply theme', 'Keep current');
+            if (choice !== 'Apply theme') {
+                return;
+            }
+            await vscode.workspace.getConfiguration('workbench').update(
+                'colorTheme', 'NL Code Dark', vscode.ConfigurationTarget.Global);
+        })
+    );
+
+    context.subscriptions.push(
         vscode.commands.registerCommand('nlCodingAgent.toggleMissionExecution', async () => {
             await chat!.toggleExecution(false);
         })
     );
+
 
     context.subscriptions.push(
         vscode.commands.registerCommand('nlCodingAgent.showStatus', async () => {
@@ -405,6 +574,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
 
     if (!projectRoot) {
         output.appendLine('No folder is open. The engine binds one project per connection; open a folder first.');
+    }
+
+    if (isNlCodeStandalone() && config.get<boolean>('showHomeOnStartup', true)) {
+        setTimeout(() => {
+            void (async () => {
+                try {
+                    await connection?.connect();
+                    await refreshWorkbench();
+                    await home?.openPanel();
+                    await vscode.commands.executeCommand('workbench.view.explorer');
+                    await vscode.commands.executeCommand('workbench.view.extension.nlCodingAgentChat');
+                    await vscode.commands.executeCommand('nlCodingAgent.chat.focus');
+                } catch (error) {
+                    output?.appendLine('[startup-home] ' + String(error));
+                }
+            })();
+        }, 1200);
     }
     return api;
 }

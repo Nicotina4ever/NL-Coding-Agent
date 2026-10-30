@@ -77,11 +77,42 @@ The script performs:
 
 ### First-run behaviour
 
-The upstream Insiders product still ships the GitHub Copilot onboarding dialog on a fresh portable
-profile. `defaultChatAgent`/`trustedExtensionAuthAccess` cannot be removed in this 1.145 build: doing
-so leaves the workbench blank because its agent host expects them. On first launch choose
-**Continue without Signing In** (or press Escape); NL Chat is independent of Copilot. This is a
-branding follow-up, not a functional blocker for NL Chat.
+The portable profile seeds `chat.disableAIFeatures: true`, so the GitHub Copilot chat and inline
+suggestions are hidden on a fresh profile; the NL Chat secondary sidebar takes that place. The
+upstream agent-host fields remain in `product.json` because this 1.145 build expects them, but the
+workbench does not prompt for GitHub sign-in during the NL Code acceptance run. Users can re-enable
+the built-in AI features from Settings without affecting NL Chat.
+
+### Workbench layout (Gate E)
+
+The standalone shell keeps the complete Code - OSS workbench and only reorganizes the experience:
+
+| Area | Content |
+|---|---|
+| Center editor | `NL Code — Home` dashboard on startup: live project/engine state, Chat, new mission, Mission Control, Model Hub, agents, settings, storage, and the normal development commands. The panel can be closed and reopened with `Ctrl+Alt+H`. |
+| Left | Standard Explorer and all built-in developer views. |
+| Right secondary sidebar | The shared NL Chat webview with **Chat**, **Missions**, **Agents** and **Settings** tabs. It replaces the upstream Copilot Chat panel. |
+| Bottom / panels | Terminal, Output, Problems, Debug Console and the rest of Code - OSS are unchanged. |
+| Editor watermark | The Code - OSS letterpress is replaced by the NL Code mark in dark, light and high-contrast variants. |
+
+The extension uses the same `EngineConnection`/MCP contract in VS Code and NL Code. Standalone-only
+personalization is limited to default layout/profile seeding, the Home editor panel, the product
+branding, the NL Code Dark theme and the watermark. No editor, terminal, Git, debugger, search or
+extension subsystem is reimplemented or removed.
+
+### Models, providers and specialist agents
+
+- Any number of `ollama` and `openai_compatible` providers can be configured; each provider has its
+  own endpoint, label, enabled flag and API-key environment variable. Model routes are
+  `provider/model`, so local and online models can be assigned to different roles, missions or
+  specialist profiles.
+- The **Agents** tab assigns models to architect/developer/debugger/reviewer/chat and manages
+  specialist profiles (name, provider, model, specialty, instructions, tools, permissions, enabled).
+  Profiles are stored by the Python engine in `data/custom_agents.json` and exposed through the
+  `custom_agents`/`save_custom_agent`/`duplicate_custom_agent`/`delete_custom_agent` MCP tools.
+- Custom specialist profiles are currently configuration presets; the built-in mission stages remain
+  the execution path until the engine exposes specialist execution explicitly.
+
 
 ## Run
 

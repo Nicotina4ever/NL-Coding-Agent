@@ -155,7 +155,7 @@ async function run() {
     console.log('PASS retained multi-module diff: ' + (diff.stat || ''));
 
     await vscode.commands.executeCommand('nlCodingAgent.startChat');
-    await vscode.commands.executeCommand('workbench.view.extension.nlCodingAgent');
+    await vscode.commands.executeCommand('workbench.view.extension.nlCodingAgentChat');
     await vscode.commands.executeCommand('nlCodingAgent.chat.focus').then(undefined, () => undefined);
     await waitFor(() => api.chat.debugState.resolved, 20000, 'webview view');
     await api.selectMission(missionId);
@@ -179,3 +179,4 @@ async function run() {
 }
 
 module.exports = { run };
+

@@ -47,6 +47,26 @@ def test_model_config_store_updates_provider_role_cloud_atomically(isolated, mon
         store.update_role("developer", model="bad model with spaces")
 
 
+def test_custom_agent_profiles_crud_persist_in_engine_state(isolated):
+    from nl_coding_agent.app.services import AppServices
+    services = AppServices()
+    first = services.create_custom_agent(
+        "Security reviewer", provider="ollama", model="ollama/qwen3.5:9b",
+        role="security", instructions="Review injection and permission boundaries.",
+        tools=["read", "diff"], permissions=["read-only"])
+    assert first["id"]
+    second = services.duplicate_custom_agent(first["id"], name="Security reviewer copy")
+    assert second["id"] != first["id"]
+    updated = services.update_custom_agent(first["id"], model="openai_compatible/gpt-5")
+    assert updated["model"] == "openai_compatible/gpt-5"
+    profiles = {str(item.get("custom_agent_id")): item for item in services.get_agent_roles()}
+    assert profiles[first["id"]]["role"] == "Security reviewer"
+    assert profiles[first["id"]]["execution_supported"] is False
+    assert services.delete_custom_agent(second["id"]) is True
+    assert services.get_custom_agent(second["id"]) is None
+    services._db.close()
+
+
 def test_backup_retention_is_bounded(isolated):
     from nl_coding_agent.core.backup_retention import prune
     backups = isolated / "data" / "backups"

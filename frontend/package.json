@@ -13,16 +13,23 @@
     "Other"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onView:nlCodingAgent.chat",
     "onCommand:nlCodingAgent.startChat",
+    "onCommand:nlCodingAgent.openHome",
     "onCommand:nlCodingAgent.startMission",
     "onCommand:nlCodingAgent.showMissions",
     "onCommand:nlCodingAgent.showEngineSettings",
+    "onCommand:nlCodingAgent.openModelHub",
+    "onCommand:nlCodingAgent.openAgents",
+    "onCommand:nlCodingAgent.openStorage",
     "onCommand:nlCodingAgent.toggleMissionExecution",
     "onCommand:nlCodingAgent.showStatus",
     "onCommand:nlCodingAgent.reconnect",
     "onCommand:nlCodingAgent.steerChat",
-    "onCommand:nlCodingAgent.stopChat"
+    "onCommand:nlCodingAgent.stopChat",
+    "onCommand:nlCodingAgent.askAboutFile",
+    "onCommand:nlCodingAgent.applyTheme"
   ],
   "main": "./out/extension.js",
   "scripts": {
@@ -54,40 +61,88 @@
   "contributes": {
     "commands": [
       {
+        "command": "nlCodingAgent.openHome",
+        "title": "NL Code: Open Home",
+        "icon": "$(home)"
+      },
+      {
         "command": "nlCodingAgent.startChat",
-        "title": "NL Coder: Start Chat"
+        "title": "NL Code: Open Chat",
+        "icon": "$(comment-discussion)"
       },
       {
         "command": "nlCodingAgent.startMission",
-        "title": "NL Coder: Start Mission…"
+        "title": "NL Code: New Mission…",
+        "icon": "$(rocket)"
       },
       {
         "command": "nlCodingAgent.showMissions",
-        "title": "NL Coder: Show Missions"
+        "title": "NL Code: Open Mission Control",
+        "icon": "$(checklist)"
       },
       {
         "command": "nlCodingAgent.showEngineSettings",
-        "title": "NL Coder: Show Engine Settings"
+        "title": "NL Code: Open Engine Settings",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "nlCodingAgent.openModelHub",
+        "title": "NL Code: Open Model Hub",
+        "icon": "$(server)"
+      },
+      {
+        "command": "nlCodingAgent.openAgents",
+        "title": "NL Code: Open Agents",
+        "icon": "$(organization)"
+      },
+      {
+        "command": "nlCodingAgent.openStorage",
+        "title": "NL Code: Open Storage Manager",
+        "icon": "$(database)"
+      },
+      {
+        "command": "nlCodingAgent.selectMission",
+        "title": "NL Code: Select Mission",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "nlCodingAgent.askAboutFile",
+        "title": "NL Code: Ask about this file",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "nlCodingAgent.askAboutPath",
+        "title": "NL Code: Ask about this path",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "nlCodingAgent.reviewChanges",
+        "title": "NL Code: Review changes",
+        "icon": "$(git-pull-request)"
+      },
+      {
+        "command": "nlCodingAgent.applyTheme",
+        "title": "NL Code: Apply NL Code Theme"
       },
       {
         "command": "nlCodingAgent.toggleMissionExecution",
-        "title": "NL Coder: Toggle Mission Execution"
+        "title": "NL Code: Toggle Mission Execution"
       },
       {
         "command": "nlCodingAgent.showStatus",
-        "title": "NL Coder: Show Backend Status"
+        "title": "NL Code: Show Backend Status"
       },
       {
         "command": "nlCodingAgent.reconnect",
-        "title": "NL Coder: Reconnect Backend"
+        "title": "NL Code: Reconnect Backend"
       },
       {
         "command": "nlCodingAgent.steerChat",
-        "title": "NL Coder: Steer Running Chat…"
+        "title": "NL Code: Steer Running Chat…"
       },
       {
         "command": "nlCodingAgent.stopChat",
-        "title": "NL Coder: Stop Running Chat"
+        "title": "NL Code: Stop Running Chat"
       }
     ],
     "configuration": {
@@ -127,26 +182,77 @@
           "default": "manual",
           "scope": "machine-overridable",
           "markdownDescription": "Research auto-review profile passed to the engine (`--research-profile`). `manual` reports needs_approval for external fetches; `trusted-auto-review` can auto-approve a granted web-fetch. Both still require the backend NETWORK and web-fetch grants; the extension never grants permissions."
+        },
+        "nlCodingAgent.showHomeOnStartup": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "Open the NL Code home dashboard when the standalone NL Code window starts."
         }
       }
     },
     "viewsContainers": {
-      "activitybar": [
+      "secondarySidebar": [
         {
-          "id": "nlCodingAgent",
-          "title": "NL Coder",
+          "id": "nlCodingAgentChat",
+          "title": "NL Chat",
           "icon": "assets/icon.png"
         }
       ]
     },
     "views": {
-      "nlCodingAgent": [
+      "nlCodingAgentChat": [
         {
           "id": "nlCodingAgent.chat",
-          "name": "NL Coder",
+          "name": "NL Chat",
           "type": "webview"
         }
       ]
-    }
+    },
+    "viewsWelcome": [],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "nlCodingAgent.askAboutFile",
+          "when": "resourceScheme == file",
+          "group": "navigation@10"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "nlCodingAgent.askAboutPath",
+          "when": "resourceScheme == file",
+          "group": "navigation@10"
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "nlCodingAgent.reviewChanges",
+          "when": "scmProvider == git",
+          "group": "navigation@10"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "nlCodingAgent.openHome",
+        "key": "ctrl+alt+h"
+      },
+      {
+        "command": "nlCodingAgent.startMission",
+        "key": "ctrl+alt+n"
+      },
+      {
+        "command": "nlCodingAgent.startChat",
+        "key": "ctrl+alt+c"
+      }
+    ],
+    "themes": [
+      {
+        "label": "NL Code Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/nl-code-dark.json"
+      }
+    ]
   }
 }

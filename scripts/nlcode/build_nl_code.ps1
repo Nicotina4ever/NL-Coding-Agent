@@ -132,6 +132,21 @@ foreach ($key in $branding.Keys) {
 $product | ConvertTo-Json -Depth 100 | Set-Content -Path $productPath -Encoding UTF8
 Invoke-Native $python @((Join-Path $PSScriptRoot 'make_brand_icon.py'), (Join-Path $src 'resources\win32')) $repoRoot
 
+Write-Step 'Replace the editor watermark with the NL Code identity'
+$watermarkMedia = Join-Path $src 'src\vs\workbench\browser\parts\editor\media'
+$watermarkMap = @{
+    'nl-watermark-light.svg'   = 'letterpress-light.svg'
+    'nl-watermark-dark.svg'    = 'letterpress-dark.svg'
+    'nl-watermark-hcLight.svg' = 'letterpress-hcLight.svg'
+    'nl-watermark-hcDark.svg'  = 'letterpress-hcDark.svg'
+}
+foreach ($sourceName in $watermarkMap.Keys) {
+    $source = Join-Path $repoRoot ('assets\' + $sourceName)
+    if (Test-Path $source) {
+        Copy-Item $source (Join-Path $watermarkMedia $watermarkMap[$sourceName]) -Force
+    }
+}
+
 # ------------------------------------------------------------------ dependencies
 if (-not $SkipDeps) {
     Write-Step 'Install dependencies (scripts skipped; native modules are built explicitly)'
@@ -290,6 +305,19 @@ if (-not (Test-Path $appExe)) {
 }
 $appExeName = Split-Path $appExe -Leaf
 
+Write-Step 'Apply the NL Code watermark to the packaged workbench assets'
+$watermarkTargets = @(
+    (Join-Path $dist 'resources\app\out\media'),
+    (Join-Path $dist 'resources\app\out\vs\workbench\browser\parts\editor\media')
+)
+foreach ($target in $watermarkTargets) {
+    if (-not (Test-Path $target)) { continue }
+    Copy-Item (Join-Path $repoRoot 'assets\nl-watermark-light.svg') (Join-Path $target 'letterpress-light.svg') -Force
+    Copy-Item (Join-Path $repoRoot 'assets\nl-watermark-dark.svg') (Join-Path $target 'letterpress-dark.svg') -Force
+    Copy-Item (Join-Path $repoRoot 'assets\nl-watermark-hcLight.svg') (Join-Path $target 'letterpress-hcLight.svg') -Force
+    Copy-Item (Join-Path $repoRoot 'assets\nl-watermark-hcDark.svg') (Join-Path $target 'letterpress-hcDark.svg') -Force
+}
+
 Write-Step 'Build and install the NL Coding Agent extension into the portable profile'
 $frontend = Join-Path $repoRoot 'frontend'
 if (-not (Test-Path (Join-Path $frontend 'node_modules'))) { Invoke-Native $npm @('install') $frontend }
@@ -298,11 +326,30 @@ $extPackage = Get-Content (Join-Path $frontend 'package.json') -Raw | ConvertFro
 $extDirName = $extPackage.publisher + '.' + $extPackage.name + '-' + $extPackage.version
 $extTarget = Join-Path $dist ('data\extensions\' + $extDirName)
 New-Item -ItemType Directory -Force -Path $extTarget | Out-Null
-foreach ($item in @('package.json', 'package-lock.json', 'out', 'media', 'assets')) {
+foreach ($item in @('package.json', 'package-lock.json', 'out', 'media', 'assets', 'themes')) {
     $from = Join-Path $frontend $item
     if (Test-Path $from) { Copy-Item $from (Join-Path $extTarget $item) -Recurse -Force }
 }
 Invoke-Native $npm @('ci', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund') $extTarget
+
+Write-Step 'Seed NL Code default profile settings (existing user settings are preserved)'
+$userDir = Join-Path $dist 'data\user-data\User'
+New-Item -ItemType Directory -Force -Path $userDir | Out-Null
+$settingsPath = Join-Path $userDir 'settings.json'
+if (-not (Test-Path $settingsPath)) {
+    [ordered]@{
+        'workbench.colorTheme'            = 'NL Code Dark'
+        'workbench.startupEditor'         = 'none'
+        'workbench.tips.enabled'          = $false
+        'workbench.activityBar.location'  = 'top'
+        'workbench.layoutControl.enabled' = $true
+        'workbench.secondarySideBar.defaultVisibility' = 'visibleInWorkspace'
+        'window.commandCenter'            = $true
+        'explorer.compactFolders'         = $false
+        'chat.disableAIFeatures'          = $true
+        'telemetry.telemetryLevel'        = 'off'
+    } | ConvertTo-Json -Depth 5 | Set-Content -Path $settingsPath -Encoding UTF8
+}
 
 Write-Step 'Write launcher and build metadata'
 $launcherTemplate = Get-Content (Join-Path $PSScriptRoot 'launcher.bat') -Raw

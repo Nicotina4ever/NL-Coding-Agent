@@ -51,6 +51,9 @@ function testHtml() {
     assert(html.includes('<script src="vscode-webview://ext/media/main.js">'), 'external webview script');
     assert(!/<script>[\s\S]*?<\/script>/.test(html.replace(/<script src=[^>]*><\/script>/g, '')), 'no inline script body');
     assert(!/\son[a-z]+\s*=/.test(html), 'no inline event handlers');
+    assert(html.includes('data-tab="agents"'), 'Agents tab is present');
+    assert(html.includes('data-tab="engine"'), 'Settings tab is present');
+    assert(html.includes('Specialist agents'), 'specialist agent editor is present');
     for (const id of ['mission-banner', 'mission-list', 'mission-detail', 'engine-content',
         'chat-model', 'dev-model', 'reviewer-model', 'mode', 'exec-toggle',
         'chat-session', 'chat-queue', 'provider-edit', 'provider-save', 'role-save',
@@ -58,6 +61,10 @@ function testHtml() {
         'chat-controls-toggle', 'context-toggle', 'mission-fields-toggle', 'mission-list-toggle',
         'generation-save', 'permission-grant', 'autonomy-save', 'mcp-save',
         'probe-run', 'storage-scan', 'storage-purge', 'storage-vacuum', 'storage-list',
+        'specialist-list', 'specialist-name', 'specialist-provider', 'specialist-model',
+        'specialist-role', 'specialist-instructions', 'specialist-tools',
+        'specialist-permissions', 'specialist-enabled', 'specialist-save',
+        'specialist-new', 'specialist-duplicate', 'specialist-delete',
         'mission-query', 'mission-status-filter', 'mission-archived-toggle']) {
         assert(html.includes(`id="${id}"`), `markup exposes #${id}`);
     }

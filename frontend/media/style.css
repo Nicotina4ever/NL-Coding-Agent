@@ -938,6 +938,49 @@ select option[data-kind='loaded'] {
     font-size: 0.8em;
 }
 
+#tab-agents .nl-settings-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#tab-agents .nl-filter-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 8px;
+    align-items: center;
+    margin: 0;
+}
+
+#tab-agents .nl-filter-row > input,
+#tab-agents .nl-filter-row > select,
+#tab-agents .nl-filter-row > textarea {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+#tab-agents .nl-filter-row > button {
+    width: auto;
+    justify-self: start;
+}
+
+#tab-agents textarea {
+    min-height: 76px;
+    resize: vertical;
+}
+
+#tab-agents .nl-settings-card h3 {
+    margin: 6px 0 0;
+    padding-top: 6px;
+    border-top: 1px solid var(--vscode-panel-border, transparent);
+}
+
+#tab-agents .nl-settings-card h3:first-of-type {
+    border-top: 0;
+    padding-top: 0;
+}
+
 .nl-storage-row {
     display: flex;
     align-items: center;

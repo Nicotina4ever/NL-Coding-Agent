@@ -68,7 +68,7 @@ async function run() {
     assert(status.tools.includes('research_fetch_url'), 'research tool exposed');
 
     await vscode.commands.executeCommand('nlCodingAgent.startChat');
-    await vscode.commands.executeCommand('workbench.view.extension.nlCodingAgent');
+    await vscode.commands.executeCommand('workbench.view.extension.nlCodingAgentChat');
     await vscode.commands.executeCommand('nlCodingAgent.chat.focus').then(undefined, () => undefined);
     await waitFor(() => api.chat.debugState.resolved, 20000, 'webview view');
     await waitFor(() => latestState(api) && latestState(api).payload.settings &&
@@ -178,3 +178,4 @@ async function run() {
 }
 
 module.exports = { run };
+

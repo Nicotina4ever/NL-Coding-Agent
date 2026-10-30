@@ -47,7 +47,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
 <body>
     <header class="nl-header">
         <div class="nl-header-row">
-            <span class="nl-brand">NL Coder</span>
+            <span class="nl-brand">NL Code</span>
             <span id="status" class="nl-status" role="status" aria-live="polite">Starting…</span>
         </div>
         <div class="nl-header-row nl-header-meta">
@@ -58,7 +58,8 @@ export function buildChatHtml(assets: WebviewAssets): string {
         <nav class="nl-tabs" aria-label="Sections">
             <button type="button" class="nl-tab-button active" data-tab="chat">Chat</button>
             <button type="button" class="nl-tab-button" data-tab="missions">Missions</button>
-            <button type="button" class="nl-tab-button" data-tab="engine">Engine</button>
+            <button type="button" class="nl-tab-button" data-tab="agents">Agents</button>
+            <button type="button" class="nl-tab-button" data-tab="engine">Settings</button>
         </nav>
     </header>
 
@@ -197,6 +198,47 @@ export function buildChatHtml(assets: WebviewAssets): string {
             <div id="mission-detail" class="nl-detail hidden"></div>
         </section>
 
+        <section id="tab-agents" class="nl-tab-panel">
+            <div class="nl-section-head">
+                <strong>Agents and model assignments</strong>
+                <span class="nl-muted">Specialists are engine-owned profiles; every model can serve any role.</span>
+            </div>
+            <div class="nl-settings-card">
+                    <h3>Role model assignment</h3>
+                    <div class="nl-filter-row">
+                        <select id="role-edit" aria-label="Role to edit">
+                            <option value="architect">architect</option>
+                            <option value="developer">developer</option>
+                            <option value="debugger">debugger</option>
+                            <option value="reviewer">reviewer</option>
+                            <option value="chat">chat</option>
+                        </select>
+                        <input id="role-model-edit" type="text" placeholder="ollama/model:tag" aria-label="Role model route">
+                        <button id="role-save" type="button">Save role</button>
+                    </div>
+                    <h3>Specialist agents</h3>
+                    <div class="nl-filter-row">
+                        <select id="specialist-list" aria-label="Specialist agent to edit"></select>
+                        <button id="specialist-new" type="button">New</button>
+                        <button id="specialist-duplicate" type="button">Duplicate</button>
+                        <button id="specialist-delete" type="button">Delete</button>
+                    </div>
+                    <div class="nl-filter-row">
+                        <input id="specialist-name" type="text" placeholder="agent name" aria-label="Specialist agent name">
+                        <select id="specialist-provider" aria-label="Specialist agent provider"></select>
+                        <input id="specialist-model" type="text" placeholder="provider/model route" aria-label="Specialist model route">
+                        <input id="specialist-role" type="text" placeholder="specialty (e.g. security reviewer)" aria-label="Specialist role">
+                    </div>
+                    <textarea id="specialist-instructions" rows="3" placeholder="Specialist instructions and boundaries" aria-label="Specialist instructions"></textarea>
+                    <div class="nl-filter-row">
+                        <input id="specialist-tools" type="text" placeholder="tools: read, edit, terminal" aria-label="Specialist tools">
+                        <input id="specialist-permissions" type="text" placeholder="permissions: read-only, project-write" aria-label="Specialist permissions">
+                        <label class="nl-check"><input id="specialist-enabled" type="checkbox"> enabled</label>
+                        <button id="specialist-save" type="button">Save specialist</button>
+                    </div>
+            </div>
+        </section>
+
         <section id="tab-engine" class="nl-tab-panel">
             <div class="nl-section-head">
                 <strong>Engine settings and Model Hub</strong>
@@ -221,18 +263,6 @@ export function buildChatHtml(assets: WebviewAssets): string {
                     </select>
                     <input id="provider-label" type="text" placeholder="label" aria-label="Provider label">
                     <input id="provider-api-key-env" type="text" placeholder="API key env var (optional)" aria-label="API key env var">
-                </div>
-                <h3>Role model assignment</h3>
-                <div class="nl-filter-row">
-                    <select id="role-edit" aria-label="Role to edit">
-                        <option value="architect">architect</option>
-                        <option value="developer">developer</option>
-                        <option value="debugger">debugger</option>
-                        <option value="reviewer">reviewer</option>
-                        <option value="chat">chat</option>
-                    </select>
-                    <input id="role-model-edit" type="text" placeholder="ollama/model:tag" aria-label="Role model route">
-                    <button id="role-save" type="button">Save role</button>
                 </div>
                 <h3>Generation parameters</h3>
                 <div class="nl-filter-row">

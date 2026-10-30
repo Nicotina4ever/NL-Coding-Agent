@@ -96,7 +96,7 @@ async function run() {
 
     // 3. NL Chat view is created inside the real workbench and receives real results.
     await vscode.commands.executeCommand('nlCodingAgent.startChat');
-    await vscode.commands.executeCommand('workbench.view.extension.nlCodingAgent');
+    await vscode.commands.executeCommand('workbench.view.extension.nlCodingAgentChat');
     await vscode.commands.executeCommand('nlCodingAgent.chat.focus').then(undefined, () => undefined);
     await waitFor(() => api.chat.debugState.resolved, 20000, 'NL Chat webview view');
     await waitFor(() => api.chat.debugState.posted.some((message) =>
@@ -126,6 +126,17 @@ async function run() {
     assert.strictEqual(stateMessage.payload.project.id, context.project.id, 'dashboard project id');
     console.log('PASS NL Chat webview created; it received project #' + context.project.id +
         ' and the engine settings/model catalog');
+
+    await vscode.commands.executeCommand('nlCodingAgent.openHome');
+    await waitFor(() => Boolean(api.home && api.home.renderedHtml), 15000, 'NL Code home webview');
+    const homeHtml = api.home.renderedHtml || '';
+    for (const id of ['connection', 'project', 'execution', 'mission-count', 'model-count',
+        'agent-count', 'session-count', 'details', 'theme']) {
+        assert(homeHtml.includes('id="' + id + '"'), 'home dashboard exposes #' + id);
+    }
+    assert(homeHtml.includes('nlCodingAgent.startChat'), 'home exposes real command cards');
+    assert(homeHtml.includes("default-src 'none'"), 'home dashboard has a strict CSP');
+    console.log('PASS NL Code home dashboard rendered with real commands and live status');
 
     // 4. A real user turn reaches a configured Ollama model and is displayed.
     await api.chat.handleUserMessage('Reply with exactly: EXT-OK');
@@ -158,3 +169,4 @@ async function run() {
 
 // VS Code's extension-test harness imports this module and awaits `run()`.
 module.exports = { run };
+

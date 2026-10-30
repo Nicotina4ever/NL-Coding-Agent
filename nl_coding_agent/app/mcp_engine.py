@@ -394,6 +394,61 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
             str(scope), bool(granted), project_id=bound_project_id, source="mcp-approved")}
 
     @server.tool(annotations=read_only)
+    def custom_agents() -> dict:
+        """List specialist agent profiles (configuration presets, not hidden execution)."""
+        require_read()
+        return {"ok": True, "agents": services.list_custom_agents()}
+
+    @server.tool()
+    def save_custom_agent(agent_id: str | None = None,
+                          name: str = "Specialist agent",
+                          provider: str = "ollama",
+                          model: str = "",
+                          role: str = "assistant",
+                          instructions: str = "",
+                          tools: list[str] | None = None,
+                          permissions: list[str] | None = None,
+                          enabled: bool = True,
+                          approved: bool = False) -> dict:
+        """Create or update a specialist agent profile with a model assignment."""
+        require_execution(approved)
+        fields = {
+            "name": str(name or "Specialist agent").strip() or "Specialist agent",
+            "provider": str(provider or "ollama"),
+            "model": str(model or ""),
+            "role": str(role or "assistant"),
+            "instructions": str(instructions or ""),
+            "tools": [str(item) for item in (tools or [])],
+            "permissions": [str(item) for item in (permissions or [])],
+            "enabled": bool(enabled),
+        }
+        if agent_id:
+            saved = services.update_custom_agent(str(agent_id), **fields)
+            if saved is None:
+                raise ValueError("Custom agent not found")
+        else:
+            saved = services.create_custom_agent(fields.pop("name"), **fields)
+        return {"ok": True, "agent": saved}
+
+    @server.tool()
+    def delete_custom_agent(agent_id: str, approved: bool = False) -> dict:
+        """Delete one specialist agent profile."""
+        require_execution(approved)
+        if not services.delete_custom_agent(str(agent_id)):
+            raise ValueError("Custom agent not found")
+        return {"ok": True}
+
+    @server.tool()
+    def duplicate_custom_agent(agent_id: str, name: str | None = None,
+                               approved: bool = False) -> dict:
+        """Duplicate one specialist agent profile under a new name."""
+        require_execution(approved)
+        saved = services.duplicate_custom_agent(str(agent_id), name=name)
+        if saved is None:
+            raise ValueError("Custom agent not found")
+        return {"ok": True, "agent": saved}
+
+    @server.tool(annotations=read_only)
     def autonomy_settings() -> dict:
         """Read persisted autonomy mode/budgets for the bound project."""
         require_read()

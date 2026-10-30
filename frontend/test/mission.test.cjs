@@ -125,7 +125,7 @@ async function run() {
 
     // The dashboard must receive the detail + diff like the real chat UI.
     await vscode.commands.executeCommand('nlCodingAgent.startChat');
-    await vscode.commands.executeCommand('workbench.view.extension.nlCodingAgent');
+    await vscode.commands.executeCommand('workbench.view.extension.nlCodingAgentChat');
     await vscode.commands.executeCommand('nlCodingAgent.chat.focus').then(undefined, () => undefined);
     await waitFor(() => api.chat.debugState.resolved, 20000, 'webview view');
     await api.selectMission(missionId);
@@ -149,3 +149,4 @@ async function run() {
 }
 
 module.exports = { run };
+

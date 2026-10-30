@@ -256,6 +256,23 @@ async function main() {
             assert.strictEqual(customProvider.kind, 'openai_compatible', 'custom provider kind');
             assert.strictEqual(customProvider.enabled, false, 'custom provider disabled');
             await writer.saveRoleSettings('chat', { model: configuredModel });
+            const savedSpecialist = await writer.saveCustomAgent({
+                name: 'Security reviewer', provider: 'ollama', model: configuredModel,
+                role: 'security', instructions: 'Review for injection and permissions.',
+                tools: ['read', 'diff'], permissions: ['read-only'], enabled: true
+            });
+            assert(savedSpecialist.agent.id, 'specialist id assigned');
+            const settingsWithSpecialist = await writer.engineSettings(false);
+            const specialist = (settingsWithSpecialist.agents.custom_agents || [])
+                .find((item) => item.name === 'Security reviewer');
+            assert(specialist, 'specialist agent persisted');
+            assert.strictEqual(specialist.role, 'security', 'specialist role persisted');
+            const duplicated = await writer.duplicateCustomAgent(specialist.id);
+            assert(duplicated.agent.id !== specialist.id, 'specialist duplicated with a new id');
+            await writer.deleteCustomAgent(duplicated.agent.id);
+            const settingsAfterDelete = await writer.engineSettings(false);
+            assert(!(settingsAfterDelete.agents.custom_agents || [])
+                .some((item) => item.id === duplicated.agent.id), 'duplicated specialist deleted');
             await writer.saveCloudEscalation(false);
             await writer.savePermissionScope('read', true);
             const autonomy = await writer.autonomySettings();

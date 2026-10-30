@@ -277,6 +277,20 @@ export interface ChatRoute {
     automatic: boolean;
 }
 
+export interface CustomAgent {
+    id?: string;
+    name: string;
+    provider?: string;
+    model?: string;
+    role?: string;
+    instructions?: string;
+    tools?: string[];
+    permissions?: string[];
+    enabled?: boolean;
+    kind?: string;
+    [key: string]: unknown;
+}
+
 export interface EngineSettings {
     schema_version: number;
     project: { id: number; root: string };
@@ -327,7 +341,7 @@ export interface EngineSettings {
     };
     agents: {
         roles: Array<{ role: string; model: string; kind: string; note?: string }>;
-        custom_agents: Array<Record<string, unknown>>;
+        custom_agents: CustomAgent[];
     };
     permissions: {
         scopes: string[];
@@ -1015,6 +1029,37 @@ export class EngineConnection {
             mode: input.mode, max_missions: input.maxMissions, attempts: input.attempts,
             max_wall_time_s: input.maxWallTimeS,
             mission_wall_time_s: input.missionWallTimeS, approved: true
+        }, 30_000);
+    }
+
+    async customAgents(): Promise<{ ok: boolean; agents: CustomAgent[] }> {
+        return this.callJson<{ ok: boolean; agents: CustomAgent[] }>('custom_agents', {}, 30_000);
+    }
+
+    async saveCustomAgent(agent: CustomAgent): Promise<{ ok: boolean; agent: CustomAgent }> {
+        return this.callJson<{ ok: boolean; agent: CustomAgent }>('save_custom_agent', {
+            agent_id: agent.id,
+            name: agent.name,
+            provider: agent.provider || 'ollama',
+            model: agent.model || '',
+            role: agent.role || 'assistant',
+            instructions: agent.instructions || '',
+            tools: agent.tools || [],
+            permissions: agent.permissions || [],
+            enabled: agent.enabled !== false,
+            approved: true
+        }, 30_000);
+    }
+
+    async deleteCustomAgent(agentId: string): Promise<{ ok: boolean }> {
+        return this.callJson<{ ok: boolean }>('delete_custom_agent', {
+            agent_id: agentId, approved: true
+        }, 30_000);
+    }
+
+    async duplicateCustomAgent(agentId: string, name?: string): Promise<{ ok: boolean; agent: CustomAgent }> {
+        return this.callJson<{ ok: boolean; agent: CustomAgent }>('duplicate_custom_agent', {
+            agent_id: agentId, name, approved: true
         }, 30_000);
     }
 
