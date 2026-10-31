@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { ResourceSnapshot } from './backend';
 
 export interface HomeState {
     connected: boolean;
@@ -19,6 +20,7 @@ export interface HomeState {
     sessionCount: number;
     queueCount: number;
     isStandalone: boolean;
+    resources?: ResourceSnapshot;
     error?: string;
 }
 

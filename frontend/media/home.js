@@ -38,6 +38,24 @@
             ['Configured models', (state.configuredModels || []).join(', ') || '(none)'],
             ['Queued chat turns', String(state.queueCount || 0)]
         ];
+        const resources = state.resources || {};
+        if (resources.ram && resources.ram.available_mb !== undefined) {
+            rows.push(['RAM', String(Math.round(resources.ram.available_mb / 1024)) + ' GB free / ' +
+                String(Math.round((resources.ram.total_mb || 0) / 1024)) + ' GB (' +
+                String(resources.ram.used_percent || 0) + '%)']);
+        }
+        (resources.gpus || []).forEach(function (gpu) {
+            rows.push(['GPU ' + gpu.name,
+                String(Math.round(gpu.free_mb / 1024)) + ' GB free / ' +
+                String(Math.round(gpu.total_mb / 1024)) + ' GB · ' +
+                String(gpu.utilization_percent) + '%']);
+        });
+        if ((resources.loaded_models || []).length) {
+            rows.push(['Loaded models', resources.loaded_models.join(', ')]);
+        }
+        if ((resources.warnings || []).length) {
+            rows.push(['Capacity warnings', resources.warnings.join(' · ')]);
+        }
         rows.forEach(function (entry) {
             const row = document.createElement('div');
             row.className = 'detail-row';

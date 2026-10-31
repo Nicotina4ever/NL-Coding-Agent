@@ -162,10 +162,10 @@
         },
         "nlCodingAgent.requestTimeoutSeconds": {
           "type": "number",
-          "default": 180,
+          "default": 1800,
           "minimum": 30,
-          "maximum": 600,
-          "description": "Timeout for one chat turn. Local models may need to load on the first request."
+          "maximum": 7200,
+          "description": "Timeout for one chat turn. Local models may need minutes to load and reason; long runs are expected."
         },
         "nlCodingAgent.allowExecution": {
           "type": "boolean",

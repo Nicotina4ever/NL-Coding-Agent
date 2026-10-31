@@ -68,7 +68,7 @@ DEFAULT_REVIEWER_MODEL = os.environ.get(
 )
 DEFAULT_DEBUG_MODEL = os.environ.get("NL_DEBUG_MODEL", DEFAULT_DEVELOPER_MODEL)
 
-VERIFY_TIMEOUT_S = int(os.environ.get("NL_VERIFY_TIMEOUT_S", "600"))
+VERIFY_TIMEOUT_S = int(os.environ.get("NL_VERIFY_TIMEOUT_S", "3600"))
 MAX_REPAIR_ATTEMPTS = int(os.environ.get("NL_MAX_REPAIRS", "2"))
 MAX_TOTAL_STAGE_ATTEMPTS = MAX_REPAIR_ATTEMPTS + 3   # hard ceiling across resumes
 HARNESS_VERSION = promotion.HARNESS_VERSION
@@ -1294,6 +1294,7 @@ class MultiAgentOrchestrator:
             baseline,
             timeout_s=VERIFY_TIMEOUT_S,
             report_path=stage.stage_dir / "verification" / "report.json",
+            project_root=self.root,
         )
         for suite in (report.candidate, report.oracle):
             record_verification_run(

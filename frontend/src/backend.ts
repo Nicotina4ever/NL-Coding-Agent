@@ -15,7 +15,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 
-const DEFAULT_TIMEOUT_MS = 180_000;
+const DEFAULT_TIMEOUT_MS = 1_800_000;
 const CONNECT_TIMEOUT_MS = 60_000;
 const LIST_TOOLS_TIMEOUT_MS = 30_000;
 
@@ -275,6 +275,18 @@ export interface ChatRoute {
     model: string;
     requested_spec: string;
     automatic: boolean;
+}
+
+export interface ResourceSnapshot {
+    checked_at: number;
+    ram: { total_mb?: number; available_mb?: number; used_percent?: number; swap_used_mb?: number };
+    cpu: { percent?: number; count?: number };
+    gpus: Array<{
+        index: number; name: string; total_mb: number; used_mb: number;
+        free_mb: number; utilization_percent: number;
+    }>;
+    loaded_models: string[];
+    warnings: string[];
 }
 
 export interface BackgroundJob {
@@ -912,6 +924,8 @@ export class EngineConnection {
         if (allowCoding) {
             params.allow_coding = true;
         }
+        params.max_seconds = Math.max(5, Math.min(3600,
+            Math.floor((timeoutMs || this.timeoutMs) / 1000) - 5));
         const result = await this.callJson<ConverseResult>('nlc_converse', params, timeoutMs || this.timeoutMs);
         if (!result || result.ok !== true || typeof result.reply !== 'string') {
             const detail = (result && (result.reply || (result.error && result.error.message))) ||
@@ -989,8 +1003,11 @@ export class EngineConnection {
         }>('chat_cleanup', { scope, approved: true }, 60_000);
     }
 
-    async jobList(): Promise<{ ok: boolean; jobs: BackgroundJob[] }> {
-        return this.callJson<{ ok: boolean; jobs: BackgroundJob[] }>('job_list', {}, 30_000);
+    async resourceStatus(): Promise<{ ok: boolean } & ResourceSnapshot> {
+        return this.callJson<{ ok: boolean } & ResourceSnapshot>('resource_status', {}, 20_000);
+    }
+
+    async jobList(): Promise<{ ok: boolean; jobs: BackgroundJob[] }> {        return this.callJson<{ ok: boolean; jobs: BackgroundJob[] }>('job_list', {}, 30_000);
     }
 
     async jobOutput(jobId: string): Promise<{

@@ -124,6 +124,18 @@ The launcher starts `NL Code.exe` with the portable `data/` profile and points t
 existing engine. Override the engine with `NLCODE_ENGINE_ROOT`; existing `NL_DATA_DIR` values are
 respected.
 
+## Local capacity HUD and long-running work
+
+The Home dashboard reads a read-only `resource_status` snapshot from the engine: RAM, CPU,
+NVIDIA VRAM/utilization when `nvidia-smi` is available, currently loaded Ollama models and
+bounded capacity warnings. It never loads a model or changes scheduling.
+
+Local inference is expected to be slow. The chat turn timeout defaults to 1800 seconds
+(30 minutes, configurable up to 7200 seconds) and the verification timeout defaults to
+3600 seconds (`NL_VERIFY_TIMEOUT_S`). A long model run is not treated as a failure merely
+because it takes minutes. The HUD exists so the operator can see whether the machine is
+actually saturated instead of guessing.
+
 ## Unified operational Chat and background jobs
 
 When mission execution is enabled, Chat exposes **Auto-code**. The model can call

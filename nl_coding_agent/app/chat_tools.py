@@ -166,7 +166,7 @@ def converse(services, project, *args, **kwargs):
 
 
 def _converse(services, project, text, attachments, history, *, model_spec=None,
-             max_calls=8, max_seconds=180, allow_coding=False, resume=False,
+             max_calls=8, max_seconds=900, allow_coding=False, resume=False,
              protocol="native", research_profile="manual"):
     pid = int(project["id"])
     registered = services.get_project(pid)
@@ -174,8 +174,8 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
         raise ValueError("Chat project identity/root mismatch")
     permissions.require(permissions.READ, project_id=pid)
     max_calls, max_seconds = int(max_calls), float(max_seconds)
-    if not 1 <= max_calls <= 32 or not 5 <= max_seconds <= 600:
-        raise ValueError("Chat budget: 1..32 calls and 5..600 seconds")
+    if not 1 <= max_calls <= 32 or not 5 <= max_seconds <= 3600:
+        raise ValueError("Chat budget: 1..32 calls and 5..3600 seconds")
     if protocol not in ("native", "json"):
         raise ValueError("Select native tool calling or explicit validated JSON mode")
     roles = (services.get_model_config() or {}).get("roles") or {}

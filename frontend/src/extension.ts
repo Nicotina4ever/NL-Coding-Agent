@@ -56,7 +56,7 @@ let connection: EngineConnection | undefined;
 let chat: ChatProvider | undefined;
 let home: HomeProvider | undefined;
 let output: vscode.OutputChannel | undefined;
-let timeoutMs = 180000;
+let timeoutMs = 1_800_000;
 
 export function isNlCodeStandalone(): boolean {
     return vscode.env.uriScheme === 'nl-code' || /(^|\b)NL Code\b/i.test(vscode.env.appName || '');
@@ -194,6 +194,9 @@ async function collectHomeState(): Promise<HomeState> {
         base.missionCompleted = missions.filter((mission) => mission.status === 'completed').length;
     } catch { /* home remains useful with partial state */ }
     try {
+        base.resources = await connection.resourceStatus();
+    } catch { /* resource HUD is optional */ }
+    try {
         const sessions = await connection.chatSessions(false);
         base.sessionCount = (sessions.sessions || []).length;
     } catch { /* optional */ }
@@ -210,7 +213,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
     output.appendLine('NL Coder extension activated.');
 
     const config = vscode.workspace.getConfiguration('nlCodingAgent');
-    const timeoutSeconds = Math.max(30, config.get<number>('requestTimeoutSeconds', 180));
+    const timeoutSeconds = Math.max(30, config.get<number>('requestTimeoutSeconds', 1800));
     timeoutMs = timeoutSeconds * 1000;
     const engineRoot = config.get<string>('engineRoot', '') || process.env.NL_ENGINE_ROOT || '';
     const pythonPath = config.get<string>('pythonPath', '') || process.env.NL_PYTHON_PATH || '';

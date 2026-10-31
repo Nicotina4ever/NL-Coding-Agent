@@ -483,7 +483,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                      attachment_ids: list[int] | None = None,
                      tools_enabled: bool = True,
                      allow_coding: bool = False,
-                     max_calls: int = 8, max_seconds: int = 180,
+                     max_calls: int = 8, max_seconds: int = 900,
                      resume: bool = False,
                      tool_protocol: str = "native",
                      session_id: str | None = None) -> dict:
@@ -810,6 +810,13 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         require_execution(approved)
         from nl_coding_agent.core import job_manager
         return {"ok": True, "job": job_manager.stop_job(bound_project_id, str(job_id))}
+
+    @server.tool(annotations=read_only)
+    def resource_status() -> dict:
+        """Read RAM, CPU, GPU memory and loaded local models (observation only)."""
+        require_read()
+        from nl_coding_agent.core import resource_monitor
+        return {"ok": True, **resource_monitor.snapshot()}
 
     @server.tool(annotations=read_only)
     def storage_scan() -> dict:

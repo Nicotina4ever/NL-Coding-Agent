@@ -122,7 +122,8 @@ def _write_text(path: Path, content: str) -> None:
 
 
 def prepare_copies(
-    stage_workspace: Path, stage_dir: Path, baseline: dict[str, str]
+    stage_workspace: Path, stage_dir: Path, baseline: dict[str, str],
+    project_root: Path | None = None,
 ) -> tuple[Path, Path, list[str]]:
     stage_workspace = Path(stage_workspace).resolve()
     stage_dir = Path(stage_dir).resolve()
@@ -136,6 +137,8 @@ def prepare_copies(
     verify_dir.mkdir(parents=True)
     shutil.copytree(stage_workspace, candidate, symlinks=False)
     shutil.copytree(stage_workspace, oracle, symlinks=False)
+    _overlay_dependencies(project_root, candidate)
+    _overlay_dependencies(project_root, oracle)
     overlay_ops = overlay_oracle(oracle, baseline)
     for suite in ("candidate", "oracle"):
         (verify_dir / "data" / suite).mkdir(parents=True, exist_ok=True)
@@ -213,6 +216,127 @@ def parse_junit(junit_path: Path) -> tuple[int, int, list[str]]:
     return tests, failed, failures
 
 
+def _is_node_project(root: Path) -> bool:
+    package = Path(root) / "package.json"
+    if not package.is_file():
+        return False
+    try:
+        data = json.loads(package.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(data, dict) and bool((data.get("scripts") or {}).get("test"))
+
+
+def _overlay_dependencies(project_root: Path | None, copy_root: Path) -> None:
+    """Make installed dependencies available to an isolated JS candidate copy.
+
+    The workspace snapshot intentionally excludes node_modules. Node resolution in
+    the verification copy must not silently depend on the live checkout, so the
+    relevant dependency trees are copied into the candidate/oracle copy.
+    """
+    if project_root is None:
+        return
+    project_root = Path(project_root).resolve()
+    candidates = [project_root / "node_modules"]
+    for package in sorted((project_root / "packages").glob("*/node_modules")):
+        candidates.append(package)
+    for source in candidates:
+        if not source.is_dir():
+            continue
+        relative = source.relative_to(project_root)
+        target = Path(copy_root) / relative
+        if target.exists():
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.copytree(source, target, symlinks=False)
+        except (OSError, shutil.Error):
+            # A missing dependency tree must surface as a real test failure, not
+            # as a silent pass.
+            continue
+
+
+def _node_test_count(stdout: str) -> int:
+    import re
+    matches = re.findall(r"(?m)^(?:ℹ|#)\s*tests\s+(\d+)", stdout or "")
+    return max((int(item) for item in matches), default=0)
+
+
+def run_node_suite(
+    copy_root: Path,
+    *,
+    suite: str,
+    data_dir: Path,
+    timeout_s: int,
+) -> SuiteResult:
+    copy_root = Path(copy_root).resolve()
+    started = time.time()
+    timed_out = False
+    exit_code: int | None = None
+    stdout = ""
+    stderr = ""
+    error: str | None = None
+    command = ["npm test"]
+    try:
+        proc = subprocess.run(
+            "npm test",
+            cwd=str(copy_root),
+            env=scrubbed_env(data_dir),
+            capture_output=True,
+            timeout=timeout_s,
+            check=False,
+            shell=True,
+        )
+        exit_code = int(proc.returncode)
+        stdout = _decode(proc.stdout)
+        stderr = _decode(proc.stderr)
+    except subprocess.TimeoutExpired as exc:
+        timed_out = True
+        stdout = _decode(exc.stdout)
+        stderr = _decode(exc.stderr)
+        error = "timeout after " + str(timeout_s) + "s"
+    except Exception as exc:  # noqa: BLE001
+        error = str(exc)
+    duration = round(time.time() - started, 2)
+    tests = _node_test_count(stdout)
+    failures: list[str] = []
+    if not timed_out and error is None:
+        if exit_code != 0:
+            error = "Node test command failed with exit " + str(exit_code)
+            failures = [line.strip() for line in stdout.splitlines()
+                        if line.strip().startswith("✖")][:50]
+        elif tests == 0:
+            error = "suite collected zero Node tests"
+    if suite == "oracle" and not timed_out and tests == 0:
+        # The oracle exists to catch weakened baseline tests. A brand-new project
+        # with no baseline tests cannot weaken them; the candidate suite remains
+        # mandatory and the skip is recorded explicitly.
+        error = "skipped: no baseline Node tests"
+        failures = []
+        passed = True
+    else:
+        passed = bool(
+            exit_code == 0
+            and not timed_out
+            and tests > 0
+            and not failures
+        )
+    return SuiteResult(
+        suite=suite,
+        command=command,
+        cwd=str(copy_root),
+        exit_code=exit_code,
+        passed=passed,
+        timed_out=timed_out,
+        duration_s=duration,
+        stdout_tail=stdout[-8000:],
+        stderr_tail=stderr[-8000:],
+        failures=failures,
+        junit_path=None,
+        error=error,
+    )
+
+
 def run_suite(
     copy_root: Path,
     *,
@@ -223,6 +347,9 @@ def run_suite(
     junit_path: Path,
 ) -> SuiteResult:
     copy_root = Path(copy_root).resolve()
+    if _is_node_project(copy_root):
+        return run_node_suite(copy_root, suite=suite, data_dir=data_dir,
+                              timeout_s=timeout_s)
     junit_path = Path(junit_path).resolve()
     junit_path.parent.mkdir(parents=True, exist_ok=True)
     command = [
@@ -302,10 +429,12 @@ def verify_candidate(
     python_executable: str | None = None,
     timeout_s: int = DEFAULT_TIMEOUT_S,
     report_path: Path | None = None,
+    project_root: Path | None = None,
 ) -> VerificationReport:
     started_at = datetime.now().isoformat(timespec="seconds")
     python_executable = python_executable or sys.executable
-    candidate, oracle, overlay_ops = prepare_copies(stage_workspace, stage_dir, baseline)
+    candidate, oracle, overlay_ops = prepare_copies(
+        stage_workspace, stage_dir, baseline, project_root=project_root)
     verify_dir = Path(stage_dir).resolve() / "verification"
     evidence = verify_dir / "evidence"
     candidate_result = run_suite(
