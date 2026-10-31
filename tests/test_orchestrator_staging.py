@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from nl_coding_agent.agents.crew_backend import CrewRuntimeError
 from nl_coding_agent.agents import orchestrator as orchestrator_module
 from nl_coding_agent.agents.orchestrator import MultiAgentOrchestrator
 from nl_coding_agent.persistence import database
@@ -142,6 +143,39 @@ def project(mission_env, tmp_path):
     tests.mkdir()
     (tests / "test_calc.py").write_text(TEST_SOURCE, encoding="utf-8", newline="")
     return root
+
+
+def test_tool_loop_recovery_retries_with_write_only_tools(project, mission_env):
+    mission_id = new_mission(project)
+
+    class LoopThenWrite(ScriptedModel):
+        def __init__(self):
+            super().__init__({
+                MODEL_DEVELOPER: [write_block("src/calc.py", CALC_WITH_SUB)],
+                MODEL_REVIEWER: ["APPROVE\nRecovered candidate is verified.\n"],
+            })
+            self.developer_calls = 0
+
+        def __call__(self, role, model_name, prompt, **kwargs):
+            if role == MODEL_DEVELOPER:
+                self.developer_calls += 1
+                if self.developer_calls == 1:
+                    raise CrewRuntimeError(
+                        "Agent 'Implementation Developer' called 'read_file' with the same "
+                        "arguments 5 times and got the same result each time. Stopped because "
+                        "it is not making progress.")
+            return super().__call__(role, model_name, prompt, **kwargs)
+
+    orch = MultiAgentOrchestrator(project)
+    model = LoopThenWrite()
+    orch._call_model = model
+    result = orch.run_mission(mission_id)
+    assert result["status"] == "completed", result
+    assert "def sub(a, b):" in read_text(project / "src" / "calc.py")
+    assert model.developer_calls == 2
+    recovery_call = model.calls[0]
+    assert "RECOVERY AFTER A REPEATED-TOOL LOOP" in recovery_call["prompt"]
+    assert {item.name for item in recovery_call["tools"]} == {"write_file", "patch_file"}
 
 
 def test_happy_path_promotes_only_after_review_approval(project, mission_env):

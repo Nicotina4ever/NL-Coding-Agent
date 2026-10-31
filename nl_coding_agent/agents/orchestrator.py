@@ -2255,7 +2255,7 @@ ACCEPTANCE TESTS ARE AUTHORITATIVE — do not edit tests; implement exactly the 
 {tests_context or '(no test files found)'}
 
 INSTRUCTIONS:
-1. Read the relevant existing files first, including their imports and dependent modules.
+1. Read the relevant existing files first, including their imports and dependent modules. read_file is paged: if it reports more lines, continue with start_line; never call it repeatedly with the same arguments.
 2. Implement the requested change directly in the staged workspace files.
 3. The target files already exist. You MUST modify them with patch_file (possibly several patch_file calls) and preserve every existing class/function. Do NOT replace an existing file with write_file and do NOT delete/rename existing public definitions: the validation gate rejects that as a destructive change. write_file is only for genuinely new files, or as the exact ```write:path``` fallback when no patch can express the change.
 4. Do NOT edit files outside this subtask's declared write scope: the candidate is rejected if you do.
@@ -2313,7 +2313,7 @@ INSTRUCTIONS:
                     expected_output="Summary of files actually modified in the staged workspace and the changes made.",
                     tools=tools,
                 )
-            except Exception:
+            except Exception as exc:
                 # A fake/constrained model may not provide a second response. The
                 # first validation verdict is still authoritative and blocked.
                 if first_verdict is not None:
@@ -2330,7 +2330,51 @@ INSTRUCTIONS:
                         promotion.normalize_staged_newlines(stage)
                     output = first_output
                     break
-                raise
+                message = str(exc).lower()
+                if "not making progress" not in message and "same arguments" not in message:
+                    raise
+                # Local models can loop on a repeated read/list call. Recover with
+                # write-only tools and the exact current content instead of losing
+                # the whole mission to a tool-usage loop.
+                recovery_context: list[str] = []
+                for rel_path in write_paths:
+                    target = stage.workspace / str(rel_path)
+                    if target.is_file():
+                        try:
+                            recovery_context.append(
+                                "--- " + str(rel_path) + " (current content) ---\n" +
+                                _truncate(target.read_text(encoding="utf-8", errors="replace"), 6000))
+                        except OSError:
+                            pass
+                    else:
+                        recovery_context.append(
+                            "--- " + str(rel_path) + " (new file; create it with write_file) ---")
+                write_tools = [item for item in tools
+                               if getattr(item, "name", "") in ("write_file", "patch_file")]
+                recovery_prompt = (
+                    base_prompt +
+                    "\n\nRECOVERY AFTER A REPEATED-TOOL LOOP:\n"
+                    "The previous attempt spent its turn repeating the same read/list call. "
+                    "Do not call read_file, list_dir or any discovery tool again. "
+                    "You already have the task; write the target file now with write_file, "
+                    "or patch it with patch_file using an exact target snippet.\n\n" +
+                    "\n\n".join(recovery_context)
+                )
+                try:
+                    output = self._call_model_with_textual_tools(
+                        "Implementation Developer", model_name, recovery_prompt,
+                        workspace=stage.workspace,
+                        goal=f"Recover a tool-loop and write the requested change: {goal}",
+                        backstory=(
+                            "You are an expert autonomous software engineer recovering from a "
+                            "tool loop. You must write the target files immediately and must not "
+                            "read or list files again."
+                        ),
+                        expected_output="Summary of files actually modified in the staged workspace.",
+                        tools=write_tools,
+                    )
+                except Exception:
+                    raise exc
             actions = _apply_text_actions(
                 stage.workspace, output,
                 project_id=self.project_id, mission_id=mission_id,

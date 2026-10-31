@@ -86,10 +86,28 @@ def get_project_tools(project_root: Path | str, *, read_only: bool = False,
     root = Path(project_root).resolve()
 
     @tool("read_file")
-    def read_file(path: str) -> str:
-        """Read text content from a file relative to the project root."""
+    def read_file(path: str, start_line: int = 1, end_line: int = 0) -> str:
+        """Read a paged range of a project file.
+
+        Large files are returned in pages. Omit end_line for the first 400-line
+        page; use start_line/end_line to continue instead of re-reading the file.
+        """
         try:
-            return scoped_read_file(root, path)
+            content = scoped_read_file(root, path, max_chars=1_000_000)
+            lines = content.splitlines()
+            total = len(lines)
+            if total == 0:
+                return f"{path}: (empty file)"
+            start = max(1, min(int(start_line or 1), total))
+            end = int(end_line or 0)
+            if end <= 0:
+                end = min(total, start + 399)
+            end = max(start, min(end, total))
+            body = "\n".join(lines[start - 1:end])
+            header = f"[{path}: lines {start}-{end} of {total}]"
+            if end < total:
+                header += f" Next page: start_line={end + 1}"
+            return header + "\n" + body
         except Exception as e:
             return f"Error reading file '{path}': {e}"
 
@@ -116,7 +134,14 @@ def get_project_tools(project_root: Path | str, *, read_only: bool = False,
             entries = scoped_list_dir(root, path)
             return "\n".join(entries) if entries else "(Empty directory)"
         except Exception as e:
-            return f"Error listing directory '{path}': {e}"
+            hint = ""
+            try:
+                hint = "\nTop-level entries: " + ", ".join(scoped_list_dir(root, ".")[:30])
+            except Exception:
+                pass
+            return (f"Error listing directory '{path}': {e}. "
+                    "Do not repeat the same list_dir call; write the file with write_file/patch_file "
+                    "or list a directory that exists." + hint)
 
     tools = [read_file, list_dir]
     if read_only:
