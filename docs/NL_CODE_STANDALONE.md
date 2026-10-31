@@ -140,6 +140,17 @@ Context length is optional and task/profile-scoped. **Application default** omit
 the Ollama application setting remains authoritative; choosing 4k–256k sends an explicit override
 for that model/role only. The default is never silently changed.
 
+## VS Code extension 0.4.0
+
+The current extension build is `frontend` version `0.4.0`, packaged as
+`.workspace/dist/NL-Coding-Agent-0.4.0.vsix`. Install it through VS Code's
+“Install from VSIX…” so the extensions metadata is updated.
+
+If a portable profile was edited by copying an extension directory manually and
+the Chat panel stays empty, VS Code is still using stale `data/extensions/extensions.json`
+or `data/extensions/.obsolete` entries. Close NL Code, remove those two metadata files
+(and the extension cache directories), then restart; the new extension is rescanned.
+
 ## Unified operational Chat and background jobs
 
 When mission execution is enabled, Chat exposes **Auto-code**. The model can call

@@ -343,6 +343,15 @@ foreach ($item in @('package.json', 'package-lock.json', 'out', 'media', 'assets
 }
 Invoke-Native $npm @('ci', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund') $extTarget
 
+# A manually replaced extension directory leaves VS Code's extension index and
+# .obsolete marker pointing at the previous version; Chat then opens empty.
+# Drop those derived files so the next launch rescans the installed extension.
+$extRoot = Join-Path $dist 'data\extensions'
+foreach ($derived in @('extensions.json', '.obsolete')) {
+    $derivedPath = Join-Path $extRoot $derived
+    if (Test-Path $derivedPath) { Remove-Item $derivedPath -Force }
+}
+
 Write-Step 'Seed NL Code default profile settings (existing user settings are preserved)'
 $userDir = Join-Path $dist 'data\user-data\User'
 New-Item -ItemType Directory -Force -Path $userDir | Out-Null
