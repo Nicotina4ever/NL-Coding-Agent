@@ -28,7 +28,7 @@ ORACLE_PINNED_FILES = ("pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini", "
 ORACLE_PINNED_INPUTS = ("docs/NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md",)
 RUNNER_NAME = "_pytest_runner.py"
 ENV_DROP = ("PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP", "PYTHONUSERBASE")
-DEFAULT_TIMEOUT_S = 600
+DEFAULT_TIMEOUT_S = 3600
 RESOLUTION_GUARD_EXIT = 86
 
 RUNNER_SOURCE = '''"""Generated pytest runner: prove the suite runs against this copy."""

@@ -477,6 +477,7 @@
         setValueIfIdle('generation-repeat', generation.repeat_penalty);
         setValueIfIdle('generation-seed', generation.seed);
         setValueIfIdle('generation-max', generation.max_tokens);
+        setValueIfIdle('generation-context', generation.num_ctx || '');
         const autonomy = current.autonomy || {};
         $('autonomy-mode').value = autonomy.mode || 'off';
         setValueIfIdle('autonomy-missions', autonomy.max_missions_per_run);
@@ -1411,7 +1412,8 @@
             min_p: numberOrNull('generation-min-p'),
             repeat_penalty: numberOrNull('generation-repeat'),
             seed: numberOrNull('generation-seed'),
-            max_tokens: numberOrNull('generation-max')
+            max_tokens: numberOrNull('generation-max'),
+            num_ctx: numberOrNull('generation-context')
         });
     });
     $('permission-grant').addEventListener('click', function () {

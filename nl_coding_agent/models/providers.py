@@ -178,7 +178,7 @@ class OllamaProvider:
         assert_model_permitted(model, self.base_url, project_id=project_id)
 
     def _generation_options(self, model: str, role: str = "chat") -> dict:
-        """Return only explicitly persisted generation options (never num_ctx)."""
+        """Return explicitly persisted generation options, including optional num_ctx."""
         try:
             from nl_coding_agent.models.generation_params import effective_params
             params = effective_params(model_name=model, role=role)
@@ -187,7 +187,7 @@ class OllamaProvider:
         allowed = {"temperature", "top_p", "top_k", "min_p", "repeat_penalty",
                    "repeat_last_n", "seed", "num_predict", "frequency_penalty",
                    "presence_penalty", "tfs_z", "typical_p", "mirostat",
-                   "mirostat_tau", "mirostat_eta"}
+                   "mirostat_tau", "mirostat_eta", "num_ctx"}
         return {key: value for key, value in params.items() if key in allowed}
 
     def generate(self, model: str, prompt: str, timeout: float = 120.0, *,

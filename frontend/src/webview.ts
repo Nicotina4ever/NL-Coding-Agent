@@ -285,6 +285,18 @@ export function buildChatHtml(assets: WebviewAssets): string {
                     <input id="generation-repeat" type="number" step="0.01" placeholder="repeat_penalty">
                     <input id="generation-seed" type="number" placeholder="seed">
                     <input id="generation-max" type="number" placeholder="max_tokens">
+                    <label class="nl-field">Context
+                        <select id="generation-context">
+                            <option value="">Application default (Ollama)</option>
+                            <option value="4096">4k</option>
+                            <option value="8192">8k</option>
+                            <option value="16384">16k</option>
+                            <option value="32768">32k</option>
+                            <option value="65536">64k</option>
+                            <option value="131072">128k</option>
+                            <option value="262144">256k</option>
+                        </select>
+                    </label>
                     <button id="generation-save" type="button">Save parameters</button>
                 </div>
                 <h3>Permissions and autonomy</h3>

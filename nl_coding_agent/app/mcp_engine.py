@@ -338,7 +338,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                                    model_name: str = "", role: str = "",
                                    provider_id: str = "ollama",
                                    approved: bool = False) -> dict:
-        """Persist explicit generation params; no num_ctx or Ollama server mutation."""
+        """Persist explicit generation params; unset num_ctx preserves Ollama defaults."""
         require_execution(approved)
         return {"ok": True, "saved": services.save_generation_params(
             parameters, scope=scope, provider_id=provider_id,

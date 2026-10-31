@@ -148,6 +148,7 @@ _DIRECT_LLM_PARAMS = {
 _OLLAMA_OPTION_PARAMS = {
     "top_k", "min_p", "repeat_penalty", "repeat_last_n", "mirostat",
     "mirostat_tau", "mirostat_eta", "num_predict", "tfs_z", "typical_p",
+    "num_ctx",
 }
 
 
@@ -157,8 +158,7 @@ def _llm_generation_kwargs(params: dict | None) -> dict:
     kwargs: dict = {}
     options: dict = {}
     for key, value in selected.items():
-        if key == "num_ctx":
-            # Context length belongs to the Ollama application, never to NL Code.
+        if key == "num_ctx" and value is None:
             continue
         if key in _DIRECT_LLM_PARAMS:
             kwargs[key] = value

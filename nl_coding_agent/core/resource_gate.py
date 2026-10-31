@@ -191,7 +191,28 @@ def decide(config, *, project_id: int | None) -> ResourceDecision:
         held = supervisor_store.get_machine_lease(INFERENCE_RESOURCE)
     except supervisor_store.StoreError:
         held = None
-    observed["machine_lease"] = held
+    if held is not None:
+        expired = False
+        try:
+            from datetime import datetime
+            expired = datetime.fromisoformat(str(held.get("expires_at"))) < datetime.now()
+        except (TypeError, ValueError):
+            expired = False
+        same_host = str(held.get("owner_host") or "") == supervisor_store._hostname()
+        owner_alive = same_host and supervisor_store._pid_alive(
+            int(held.get("owner_pid") or 0))
+        if expired and not owner_alive:
+            # A dead/expired owner must not block every project forever. The
+            # acquire path already has this rule; the decision path must mirror it.
+            try:
+                supervisor_store.release_machine_lease(
+                    INFERENCE_RESOURCE, owner_id=str(held.get("owner_id")))
+            except supervisor_store.StoreError:
+                pass
+            held = None
+        observed["machine_lease"] = held
+    else:
+        observed["machine_lease"] = None
     if held is not None:
         return ResourceDecision(
             "wait",

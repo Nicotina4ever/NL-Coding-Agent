@@ -136,6 +136,10 @@ Local inference is expected to be slow. The chat turn timeout defaults to 1800 s
 because it takes minutes. The HUD exists so the operator can see whether the machine is
 actually saturated instead of guessing.
 
+Context length is optional and task/profile-scoped. **Application default** omits `num_ctx`, so
+the Ollama application setting remains authoritative; choosing 4k–256k sends an explicit override
+for that model/role only. The default is never silently changed.
+
 ## Unified operational Chat and background jobs
 
 When mission execution is enabled, Chat exposes **Auto-code**. The model can call

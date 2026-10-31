@@ -1,9 +1,9 @@
 """Persistent per-model/per-role generation parameters.
 
 Only explicitly configured values are stored. Unconfigured values are omitted
-from LLM requests so the provider/Ollama server keeps its own defaults.
-Context length (num_ctx) is deliberately not accepted here: it belongs to the
-Ollama application settings, never to NL Coding Agent.
+from LLM requests so the provider/Ollama server keeps its own defaults. Context
+length (num_ctx) is optional: when set it is sent as an explicit per-request
+override; when absent Ollama application settings remain authoritative.
 """
 from __future__ import annotations
 
@@ -30,9 +30,10 @@ ALLOWED: dict[str, tuple[str, float | int | None, float | int | None]] = {
     "mirostat": ("int", 0, 2),
     "mirostat_tau": ("float", 0.0, 10.0),
     "mirostat_eta": ("float", 0.0, 1.0),
+    "num_ctx": ("int", 512, 1_048_576),
 }
 #: Keys that must never be accepted from model/role settings.
-FORBIDDEN = {"num_ctx", "context_length", "context_window"}
+FORBIDDEN = {"context_length", "context_window"}
 
 
 class GenerationParamsError(ValueError):

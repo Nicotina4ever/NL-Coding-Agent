@@ -1138,9 +1138,12 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     async saveGenerationParameters(payload: Record<string, unknown>): Promise<void> {
         const scope = String(payload.scope || 'model') as 'global' | 'role' | 'model';
         const params: Record<string, number | string | boolean | null> = {};
-        for (const key of ['temperature', 'top_p', 'top_k', 'min_p', 'repeat_penalty', 'seed', 'max_tokens']) {
+        for (const key of ['temperature', 'top_p', 'top_k', 'min_p', 'repeat_penalty', 'seed', 'max_tokens', 'num_ctx']) {
             const value = payload[key];
             if (value === '' || value === null || value === undefined) {
+                if (key === 'num_ctx') {
+                    params[key] = null;
+                }
                 continue;
             }
             const numeric = Number(value);
