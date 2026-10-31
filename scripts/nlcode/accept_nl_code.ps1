@@ -188,6 +188,7 @@ Send-Keys '{ESC}' 1500
 $shotReady = Save-Shot 'after-dismiss'
 
 Send-Keys '^%h' 1800
+Start-Sleep -Seconds 4
 $shotHome = Save-Shot 'home'
 $results.Add((Write-Result 'NL Code home dashboard captured' (Test-Path $shotHome) $shotHome)) | Out-Null
 
