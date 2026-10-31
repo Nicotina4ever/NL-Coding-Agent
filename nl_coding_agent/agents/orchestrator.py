@@ -2314,13 +2314,69 @@ INSTRUCTIONS:
                     tools=tools,
                 )
             except Exception as exc:
-                # A fake/constrained model may not provide a second response. The
-                # first validation verdict is still authoritative and blocked.
-                if first_verdict is not None:
+                message = str(exc).lower()
+                no_progress = ("not making progress" in message
+                               or "same arguments" in message)
+                if no_progress:
+                    # Local models can loop on a repeated read/list call. Recover
+                    # with write-only tools and the exact current content, even
+                    # when a previous candidate was already rejected.
+                    recovery_context: list[str] = []
+                    for rel_path in write_paths:
+                        target = stage.workspace / str(rel_path)
+                        if target.is_file():
+                            try:
+                                recovery_context.append(
+                                    "--- " + str(rel_path) + " (current content) ---\n" +
+                                    _truncate(target.read_text(encoding="utf-8", errors="replace"), 6000))
+                            except OSError:
+                                pass
+                        else:
+                            recovery_context.append(
+                                "--- " + str(rel_path) + " (new file; create it with write_file) ---")
+                    write_tools = [item for item in tools
+                                   if getattr(item, "name", "") in ("write_file", "patch_file")]
+                    recovery_prompt = (
+                        base_prompt +
+                        "\n\nRECOVERY AFTER A REPEATED-TOOL LOOP:\n"
+                        "The previous attempt spent its turn repeating the same read/list call. "
+                        "Do not call read_file, list_dir or any discovery tool again. "
+                        "You already have the task; write the target file now with write_file, "
+                        "or patch it with patch_file using an exact target snippet.\n\n" +
+                        "\n\n".join(recovery_context)
+                    )
+                    try:
+                        output = self._call_model_with_textual_tools(
+                            "Implementation Developer", model_name, recovery_prompt,
+                            workspace=stage.workspace,
+                            goal=f"Recover a tool-loop and write the requested change: {goal}",
+                            backstory=(
+                                "You are an expert autonomous software engineer recovering from a "
+                                "tool loop. You must write the target files immediately and must not "
+                                "read or list files again."
+                            ),
+                            expected_output="Summary of files actually modified in the staged workspace.",
+                            tools=write_tools,
+                        )
+                    except Exception:
+                        if first_verdict is None:
+                            raise exc
+                        output = first_output
+                        verdict = first_verdict
+                        changed = list(first_changed)
+                        if first_output:
+                            _apply_text_actions(
+                                stage.workspace, first_output,
+                                project_id=self.project_id, mission_id=mission_id,
+                                role="developer", model=model_name,
+                            )
+                            promotion.normalize_staged_newlines(stage)
+                        break
+                elif first_verdict is not None:
+                    # A fake/constrained model may not provide a second response.
+                    # The first validation verdict is still authoritative.
                     verdict = first_verdict
                     changed = list(first_changed)
-                    # Preserve the rejected candidate for diagnosis instead of
-                    # leaving only the restored baseline.
                     if first_output:
                         _apply_text_actions(
                             stage.workspace, first_output,
@@ -2330,51 +2386,8 @@ INSTRUCTIONS:
                         promotion.normalize_staged_newlines(stage)
                     output = first_output
                     break
-                message = str(exc).lower()
-                if "not making progress" not in message and "same arguments" not in message:
+                else:
                     raise
-                # Local models can loop on a repeated read/list call. Recover with
-                # write-only tools and the exact current content instead of losing
-                # the whole mission to a tool-usage loop.
-                recovery_context: list[str] = []
-                for rel_path in write_paths:
-                    target = stage.workspace / str(rel_path)
-                    if target.is_file():
-                        try:
-                            recovery_context.append(
-                                "--- " + str(rel_path) + " (current content) ---\n" +
-                                _truncate(target.read_text(encoding="utf-8", errors="replace"), 6000))
-                        except OSError:
-                            pass
-                    else:
-                        recovery_context.append(
-                            "--- " + str(rel_path) + " (new file; create it with write_file) ---")
-                write_tools = [item for item in tools
-                               if getattr(item, "name", "") in ("write_file", "patch_file")]
-                recovery_prompt = (
-                    base_prompt +
-                    "\n\nRECOVERY AFTER A REPEATED-TOOL LOOP:\n"
-                    "The previous attempt spent its turn repeating the same read/list call. "
-                    "Do not call read_file, list_dir or any discovery tool again. "
-                    "You already have the task; write the target file now with write_file, "
-                    "or patch it with patch_file using an exact target snippet.\n\n" +
-                    "\n\n".join(recovery_context)
-                )
-                try:
-                    output = self._call_model_with_textual_tools(
-                        "Implementation Developer", model_name, recovery_prompt,
-                        workspace=stage.workspace,
-                        goal=f"Recover a tool-loop and write the requested change: {goal}",
-                        backstory=(
-                            "You are an expert autonomous software engineer recovering from a "
-                            "tool loop. You must write the target files immediately and must not "
-                            "read or list files again."
-                        ),
-                        expected_output="Summary of files actually modified in the staged workspace.",
-                        tools=write_tools,
-                    )
-                except Exception:
-                    raise exc
             actions = _apply_text_actions(
                 stage.workspace, output,
                 project_id=self.project_id, mission_id=mission_id,
