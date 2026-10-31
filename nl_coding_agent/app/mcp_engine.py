@@ -399,6 +399,15 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         require_read()
         return {"ok": True, "agents": services.list_custom_agents()}
 
+    @server.tool(annotations=read_only)
+    def consult_specialist(agent: str, question: str, context: str = "",
+                           timeout_s: int = 120) -> dict:
+        """Ask one specialist profile for a read-only second opinion."""
+        require_read()
+        return {"ok": True, "consultation": services.consult_specialist(
+            bound_project_id, agent, question, context=context,
+            timeout=max(5, min(int(timeout_s), 300)))}
+
     @server.tool()
     def save_custom_agent(agent_id: str | None = None,
                           name: str = "Specialist agent",

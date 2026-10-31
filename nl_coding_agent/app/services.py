@@ -520,6 +520,56 @@ class AppServices:
                 return dict(item)
         return None
 
+    def consult_specialist(self, project_id: int, agent: str, question: str,
+                           *, context: str = "", timeout: float = 120.0) -> dict:
+        """Run one explicit read-only consultation through a specialist profile."""
+        from nl_coding_agent.core import permissions
+        permissions.require(permissions.READ, project_id=int(project_id))
+        needle = str(agent or "").strip().lower()
+        if not needle:
+            raise ValueError("A specialist agent id or name is required")
+        profile = None
+        for item in self.list_custom_agents():
+            if needle in (str(item.get("id") or "").lower(),
+                          str(item.get("name") or "").lower()):
+                profile = item
+                break
+        if profile is None:
+            raise ValueError("Specialist agent not found")
+        if not profile.get("enabled", True):
+            raise ValueError("Specialist agent is disabled")
+        prompt = str(question or "").strip()
+        if not prompt:
+            raise ValueError("Specialist question is required")
+        model_spec = str(profile.get("model") or "").strip()
+        if not model_spec:
+            roles = (self.get_model_config() or {}).get("roles") or {}
+            model_spec = str((roles.get("chat") or roles.get("developer") or {}).get("model") or "")
+        provider, model, _, error = self._resolve_chat_provider(
+            model_spec, project_id=int(project_id))
+        if error:
+            raise ValueError(error)
+        instructions = str(profile.get("instructions") or "").strip()
+        system = ("You are " + str(profile.get("name") or "a specialist") +
+                  ", a specialist advisor inside NL Code. Answer as a second expert opinion. "
+                  "Do not edit files or claim tool execution; provide analysis, risks and concrete recommendations. ")
+        if instructions:
+            system += "\nSpecialist instructions:\n" + instructions[:12000]
+        body = str(context or "").strip()
+        user = (("Context supplied by the primary assistant:\n" + body[:24000] + "\n\n")
+                if body else "") + "Question:\n" + prompt[:12000]
+        reply = provider.generate(
+            model, user, timeout=max(5.0, min(float(timeout), 300.0)),
+            project_id=int(project_id),
+            messages=[{"role": "system", "content": system},
+                      {"role": "user", "content": user}])
+        return {
+            "agent_id": profile.get("id"), "agent_name": profile.get("name"),
+            "provider_id": str(getattr(provider, "provider_id", "") or ""),
+            "model": str(model or ""), "reply": str(reply or ""),
+            "specialty": profile.get("role") or "",
+        }
+
     def create_custom_agent(self, name: str, **fields) -> dict:
         import uuid
         agent = {

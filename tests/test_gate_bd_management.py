@@ -110,6 +110,33 @@ def test_operational_probe_runs_through_an_openai_compatible_provider():
     assert by_name["structured_output"].state == "measured"
 
 
+def test_specialist_consultation_uses_the_configured_profile_model(isolated, monkeypatch):
+    from nl_coding_agent.app.services import AppServices
+    services = AppServices()
+    project_dir = isolated / "project"
+    project_dir.mkdir()
+    (project_dir / "README.md").write_text("# Project", encoding="utf-8")
+    project = services.open_project(project_dir)
+    agent = services.create_custom_agent(
+        "Security reviewer", provider="ollama", model="ollama/qwen3.5:9b",
+        role="security", instructions="Focus on injection and permissions.")
+
+    class FakeProvider:
+        provider_id = "ollama"
+
+        def generate(self, model, prompt, **kwargs):
+            return "SECOND-OPINION: " + model
+
+    monkeypatch.setattr(services, "_resolve_chat_provider",
+                        lambda *args, **kwargs: (FakeProvider(), "qwen3.5:9b", None, None))
+    result = services.consult_specialist(
+        project["id"], agent["id"], "Review this plan", context="candidate")
+    assert result["agent_name"] == "Security reviewer"
+    assert result["model"] == "qwen3.5:9b"
+    assert result["reply"] == "SECOND-OPINION: qwen3.5:9b"
+    services._db.close()
+
+
 def test_backup_retention_is_bounded(isolated):
     from nl_coding_agent.core.backup_retention import prune
     backups = isolated / "data" / "backups"
