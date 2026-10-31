@@ -64,6 +64,7 @@
     const sessionSelectEl = $('chat-session');
     const chatQueueEl = $('chat-queue');
     const storageListEl = $('storage-list');
+    const jobsListEl = $('jobs-list');
     const probeSelectEl = $('probe-model');
     const specialistSelectEl = $('specialist-list');
     const specialistProviderEl = $('specialist-provider');
@@ -406,10 +407,40 @@
         }
     }
 
+    function renderJobs(current) {
+        if (!jobsListEl) { return; }
+        clear(jobsListEl);
+        const jobs = current.jobs || [];
+        if (!jobs.length) {
+            jobsListEl.appendChild(el('div', 'nl-muted', 'No background jobs for this project.'));
+            return;
+        }
+        jobs.forEach(function (job) {
+            const row = el('div', 'nl-queue-row');
+            row.appendChild(el('span', 'nl-queue-mode', String(job.status || 'unknown')));
+            row.appendChild(el('span', 'nl-queue-text', String(job.label || job.id) +
+                ' · ' + (job.argv || []).join(' ')));
+            const output = el('button', '', 'Output');
+            output.addEventListener('click', function () {
+                postAction('jobOutput', { jobId: job.id });
+            });
+            row.appendChild(output);
+            if (job.status === 'running' || job.status === 'starting') {
+                const stop = el('button', '', 'Stop');
+                stop.addEventListener('click', function () {
+                    postAction('stopJob', { jobId: job.id });
+                });
+                row.appendChild(stop);
+            }
+            jobsListEl.appendChild(row);
+        });
+    }
+
     function renderSettings(current) {
         const settings = current.settings;
         if (!settings) { return; }
         renderSpecialists(current);
+        renderJobs(current);
         const providerSelect = $('provider-edit');
         const previous = providerSelect.value;
         clear(providerSelect);
@@ -1413,6 +1444,7 @@
         postAction('probeModel', { model: $('probe-model').value });
     });
     $('storage-scan').addEventListener('click', function () { postAction('scanStorage', {}); });
+    $('jobs-refresh').addEventListener('click', function () { postAction('refreshJobs', {}); });
     $('storage-vacuum').addEventListener('click', function () { postAction('vacuumStorage', {}); });
     $('storage-cleanup-orphans').addEventListener('click', function () {
         postAction('cleanupChatSessions', { scope: 'orphaned' });

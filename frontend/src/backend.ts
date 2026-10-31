@@ -277,6 +277,17 @@ export interface ChatRoute {
     automatic: boolean;
 }
 
+export interface BackgroundJob {
+    id: string;
+    label: string;
+    argv: string[];
+    status: string;
+    exit_code?: number | null;
+    started_at?: number;
+    pid?: number | null;
+    [key: string]: unknown;
+}
+
 export interface CustomAgent {
     id?: string;
     name: string;
@@ -976,6 +987,24 @@ export class EngineConnection {
         return this.callJson<{
             ok: boolean; result: { scope: string; sessions: number; messages: number };
         }>('chat_cleanup', { scope, approved: true }, 60_000);
+    }
+
+    async jobList(): Promise<{ ok: boolean; jobs: BackgroundJob[] }> {
+        return this.callJson<{ ok: boolean; jobs: BackgroundJob[] }>('job_list', {}, 30_000);
+    }
+
+    async jobOutput(jobId: string): Promise<{
+        ok: boolean; job: BackgroundJob; output: string; truncated: boolean;
+    }> {
+        return this.callJson<{
+            ok: boolean; job: BackgroundJob; output: string; truncated: boolean;
+        }>('job_output', { job_id: jobId }, 30_000);
+    }
+
+    async jobStop(jobId: string): Promise<{ ok: boolean; job: BackgroundJob }> {
+        return this.callJson<{ ok: boolean; job: BackgroundJob }>('job_stop', {
+            job_id: jobId, approved: true
+        }, 30_000);
     }
 
     async generationParameters(modelName = '', role = '', providerId = 'ollama'): Promise<GenerationParametersResult> {

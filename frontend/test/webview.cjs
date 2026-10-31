@@ -61,7 +61,7 @@ function testHtml() {
         'chat-controls-toggle', 'context-toggle', 'mission-fields-toggle', 'mission-list-toggle',
         'generation-save', 'permission-grant', 'autonomy-save', 'mcp-save', 'auto-coding',
         'probe-run', 'storage-scan', 'storage-purge', 'storage-vacuum', 'storage-list',
-        'storage-cleanup-orphans', 'storage-cleanup-archived',
+        'storage-cleanup-orphans', 'storage-cleanup-archived', 'jobs-refresh', 'jobs-list',
         'specialist-list', 'specialist-name', 'specialist-provider', 'specialist-model',
         'specialist-role', 'specialist-instructions', 'specialist-tools',
         'specialist-permissions', 'specialist-enabled', 'specialist-save',

@@ -320,6 +320,12 @@ export function buildChatHtml(assets: WebviewAssets): string {
                     <button id="probe-run" type="button">Probe capabilities</button>
                     <span id="probe-result" class="nl-muted"></span>
                 </div>
+                <h3>Background jobs</h3>
+                <div class="nl-filter-row">
+                    <button id="jobs-refresh" type="button">Refresh jobs</button>
+                    <span class="nl-muted">Allowlisted project scripts · bounded logs</span>
+                </div>
+                <div id="jobs-list" class="nl-list"></div>
                 <h3>Storage Manager</h3>
                 <div class="nl-filter-row">
                     <button id="storage-scan" type="button">Scan storage</button>

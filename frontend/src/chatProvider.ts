@@ -12,6 +12,7 @@ import {
     AttachmentInput,
     AttachmentView,
     AutonomySettings,
+    BackgroundJob,
     CandidateDiff,
     ChatHistoryResult,
     ChatQueueItem,
@@ -95,6 +96,7 @@ export interface DashboardState {
     generationParams?: GenerationParametersResult;
     autonomy?: AutonomySettings;
     storage?: StorageScanResult;
+    jobs?: BackgroundJob[];
     capabilityProbe?: ModelCapabilityProbe;
     mcpConfig?: Record<string, unknown>;
     research?: ResearchFetchResult;
@@ -151,6 +153,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     private generationParams: GenerationParametersResult | undefined;
     private autonomy: AutonomySettings | undefined;
     private storage: StorageScanResult | undefined;
+    private jobs: BackgroundJob[] = [];
     private capabilityProbe: ModelCapabilityProbe | undefined;
     private mcpConfig: Record<string, unknown> | undefined;
     private editorContext: EditorContext | undefined;
@@ -1244,6 +1247,39 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             : 'SQLite compaction failed: ' + (result.error || 'unknown error'));
     }
 
+    async refreshJobs(): Promise<void> {
+        try {
+            const result = await this.connection.jobList();
+            this.jobs = result.jobs || [];
+            this.postState();
+        } catch (error) {
+            this.output.appendLine('[jobs] ' + this.errorText(error));
+        }
+    }
+
+    async stopJob(jobId: string): Promise<void> {
+        if (!jobId) {
+            return;
+        }
+        const choice = await vscode.window.showWarningMessage(
+            'Stop background job ' + jobId + '?', { modal: true }, 'Stop');
+        if (choice !== 'Stop') {
+            return;
+        }
+        await this.connection.jobStop(jobId);
+        await this.refreshJobs();
+        this.postChat('system', 'Background job stopped: ' + jobId);
+    }
+
+    async showJobOutput(jobId: string): Promise<void> {
+        if (!jobId) {
+            return;
+        }
+        const result = await this.connection.jobOutput(jobId);
+        this.postChat('system', 'Job ' + jobId + ' [' + result.job.status + ']\n' +
+            (result.output || '(no output yet)') + (result.truncated ? '\n… output truncated' : ''));
+    }
+
 
     async refreshModels(): Promise<void> {
         try {
@@ -1314,6 +1350,11 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             this.mcpConfig = (await this.connection.mcpServers()).config || {};
         } catch (error) {
             this.output.appendLine('[mcp] ' + this.errorText(error));
+        }
+        try {
+            this.jobs = (await this.connection.jobList()).jobs || [];
+        } catch (error) {
+            this.output.appendLine('[jobs] ' + this.errorText(error));
         }
         if (!this.missionModels.developerModel) {
             this.missionModels = {
@@ -1632,6 +1673,15 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 case 'scanStorage':
                     await this.scanStorage();
                     break;
+                case 'refreshJobs':
+                    await this.refreshJobs();
+                    break;
+                case 'stopJob':
+                    await this.stopJob(String(payload.jobId || ''));
+                    break;
+                case 'jobOutput':
+                    await this.showJobOutput(String(payload.jobId || ''));
+                    break;
                 case 'purgeStorage':
                     await this.purgeStorage(Array.isArray(payload.ids)
                         ? (payload.ids as unknown[]).map(String) : []);
@@ -1806,6 +1856,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             generationParams: this.generationParams,
             autonomy: this.autonomy,
             storage: this.storage,
+            jobs: this.jobs.slice(),
             capabilityProbe: this.capabilityProbe,
             mcpConfig: this.mcpConfig,
             research: this.research,
