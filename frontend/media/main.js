@@ -379,17 +379,20 @@
         node.value = selected || '';
     }
 
-    function selectedValues(node) {
-        return Array.prototype.slice.call(node.selectedOptions || [])
-            .map(function (option) { return option.value; })
+    function checkedValues(container) {
+        if (!container) { return []; }
+        return Array.prototype.slice.call(container.querySelectorAll('input[type="checkbox"]'))
+            .filter(function (input) { return input.checked; })
+            .map(function (input) { return input.value; })
             .filter(Boolean);
     }
 
-    function setSelectedValues(node, values) {
+    function setCheckedValues(container, values) {
+        if (!container) { return; }
         const wanted = {};
         (values || []).forEach(function (value) { wanted[String(value)] = true; });
-        Array.prototype.forEach.call(node.options || [], function (option) {
-            option.selected = Boolean(wanted[option.value]);
+        Array.prototype.forEach.call(container.querySelectorAll('input[type="checkbox"]'), function (input) {
+            input.checked = Boolean(wanted[input.value]);
         });
     }
 
@@ -399,8 +402,8 @@
         specialistModelEl.value = agent ? (agent.model || '') : '';
         specialistRoleEl.value = agent ? (agent.role || 'assistant') : 'assistant';
         specialistInstructionsEl.value = agent ? (agent.instructions || '') : '';
-        setSelectedValues(specialistToolsEl, agent ? (agent.tools || []) : []);
-        setSelectedValues(specialistPermissionsEl, agent ? (agent.permissions || []) : []);
+        setCheckedValues(specialistToolsEl, agent ? (agent.tools || []) : []);
+        setCheckedValues(specialistPermissionsEl, agent ? (agent.permissions || []) : []);
         specialistEnabledEl.checked = agent ? agent.enabled !== false : true;
     }
 
@@ -1433,8 +1436,8 @@
             model: specialistModelEl.value,
             role: specialistRoleEl.value,
             instructions: specialistInstructionsEl.value,
-            tools: selectedValues(specialistToolsEl),
-            permissions: selectedValues(specialistPermissionsEl),
+            tools: checkedValues(specialistToolsEl),
+            permissions: checkedValues(specialistPermissionsEl),
             enabled: specialistEnabledEl.checked
         });
     });

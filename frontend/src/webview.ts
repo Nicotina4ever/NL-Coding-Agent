@@ -236,30 +236,28 @@ export function buildChatHtml(assets: WebviewAssets): string {
                         <input id="specialist-role" type="text" placeholder="specialty (e.g. security reviewer)" aria-label="Specialist role">
                     </div>
                     <textarea id="specialist-instructions" rows="3" placeholder="Specialist instructions and boundaries" aria-label="Specialist instructions"></textarea>
-                    <div class="nl-filter-row nl-multiselect-row">
-                        <label class="nl-field">Tools (multi-select)
-                            <select id="specialist-tools" multiple size="5" aria-label="Specialist tools">
-                                <option value="read_file">read_file — read project files</option>
-                                <option value="list_dir">list_dir — list folders</option>
-                                <option value="write_file">write_file — create/replace files</option>
-                                <option value="patch_file">patch_file — exact snippet patches</option>
-                                <option value="run_tests">run_tests — execute project tests</option>
-                                <option value="run_command">run_command — allowlisted shell</option>
-                                <option value="git_status">git_status — working tree</option>
-                                <option value="git_diff">git_diff — real diff</option>
-                                <option value="research_fetch_url">research_fetch_url — authorized fetch</option>
-                                <option value="mcp_list_tools">mcp_list_tools — discover MCP</option>
-                            </select>
-                        </label>
-                        <label class="nl-field">Permissions (multi-select)
-                            <select id="specialist-permissions" multiple size="5" aria-label="Specialist permissions">
-                                <option value="read-only">read-only</option>
-                                <option value="project-write">project-write</option>
-                                <option value="execute">execute</option>
-                                <option value="network">network</option>
-                                <option value="cloud">cloud</option>
-                            </select>
-                        </label>
+                    <div class="nl-filter-row nl-check-row">
+                        <fieldset id="specialist-tools" class="nl-check-grid">
+                            <legend>Tools</legend>
+                            <label class="nl-check"><input type="checkbox" value="read_file"> read_file</label>
+                            <label class="nl-check"><input type="checkbox" value="list_dir"> list_dir</label>
+                            <label class="nl-check"><input type="checkbox" value="write_file"> write_file</label>
+                            <label class="nl-check"><input type="checkbox" value="patch_file"> patch_file</label>
+                            <label class="nl-check"><input type="checkbox" value="run_tests"> run_tests</label>
+                            <label class="nl-check"><input type="checkbox" value="run_command"> run_command</label>
+                            <label class="nl-check"><input type="checkbox" value="git_status"> git_status</label>
+                            <label class="nl-check"><input type="checkbox" value="git_diff"> git_diff</label>
+                            <label class="nl-check"><input type="checkbox" value="research_fetch_url"> research_fetch_url</label>
+                            <label class="nl-check"><input type="checkbox" value="mcp_list_tools"> mcp_list_tools</label>
+                        </fieldset>
+                        <fieldset id="specialist-permissions" class="nl-check-grid">
+                            <legend>Permissions</legend>
+                            <label class="nl-check"><input type="checkbox" value="read-only"> read-only</label>
+                            <label class="nl-check"><input type="checkbox" value="project-write"> project-write</label>
+                            <label class="nl-check"><input type="checkbox" value="execute"> execute</label>
+                            <label class="nl-check"><input type="checkbox" value="network"> network</label>
+                            <label class="nl-check"><input type="checkbox" value="cloud"> cloud</label>
+                        </fieldset>
                         <label class="nl-check"><input id="specialist-enabled" type="checkbox"> enabled</label>
                         <button id="specialist-save" type="button">Save specialist</button>
                     </div>

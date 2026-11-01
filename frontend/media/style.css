@@ -1010,3 +1010,22 @@ select option[data-kind='loaded'] {
     cursor: pointer;
     padding: 1px 4px;
 }
+
+.nl-check-grid {
+    border: 1px solid var(--vscode-input-border, rgba(128, 128, 128, 0.35));
+    border-radius: 4px;
+    padding: 6px 8px;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+    gap: 2px 12px;
+    min-width: 220px;
+}
+.nl-check-grid legend {
+    padding: 0 4px;
+    color: var(--vscode-descriptionForeground);
+    font-size: 0.8em;
+}
+.nl-check-grid .nl-check {
+    font-size: 0.84em;
+}
