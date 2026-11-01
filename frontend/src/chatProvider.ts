@@ -319,7 +319,8 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                         } else {
                             this.postChat('system',
                                 `URL fetch was not completed for ${url}: ` +
-                                (page.reason || page.outcome || 'permission or network policy denied') + '.');
+                                (page.reason || page.outcome || 'permission or network policy denied') +
+                                '. Grant NETWORK in Settings → Permissions and autonomy, or use the Fetch button after granting it.');
                         }
                     } catch (error) {
                         this.postChat('system',
