@@ -93,9 +93,12 @@ def validate(config: Mapping[str, Any]) -> dict:
             raise ModelConfigError("Provider base_url must be an http(s) URL")
         if "@" in url.split("://", 1)[-1].split("/", 1)[0]:
             raise ModelConfigError("Provider URL must not embed credentials")
-        if "api_key_env" in entry and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*",
-                                                       str(entry["api_key_env"] or "")):
-            raise ModelConfigError("api_key_env must be an environment variable name")
+        if "api_key_env" in entry:
+            value = str(entry.get("api_key_env") or "").strip()
+            if value and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value):
+                raise ModelConfigError("api_key_env must be an environment variable name")
+            if not value:
+                entry.pop("api_key_env", None)
     for role, entry in roles.items():
         if role not in ROLE_NAMES:
             raise ModelConfigError("Unsupported role: " + str(role))

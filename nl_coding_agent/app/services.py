@@ -310,6 +310,56 @@ class AppServices:
                              payload={"scope": str(scope), "project_id": project_id}))
         return self.get_permissions(project_id)
 
+    ACCESS_PROFILES = {
+        "read-only": {"read": True, "write": False, "execute": False,
+                      "delete": False, "network": False, "cloud": False},
+        "workspace-write": {"read": True, "write": True, "execute": True,
+                            "delete": False, "network": False, "cloud": False},
+        "full-access": {"read": True, "write": True, "execute": True,
+                        "delete": True, "network": True, "cloud": True},
+        "auto-review": {"read": True, "write": True, "execute": True,
+                        "delete": False, "network": True, "cloud": False},
+    }
+
+    def access_profile(self, project_id: int) -> dict:
+        from nl_coding_agent.persistence import database
+        from nl_coding_agent.core import auto_review
+        stored = database.get_json_setting("access.profile." + str(int(project_id)), {})
+        profile = str(stored.get("profile") or "")
+        if profile not in self.ACCESS_PROFILES:
+            profile = ""
+        return {"ok": True, "project_id": int(project_id), "profile": profile,
+                "profiles": [
+                    {"id": key, "controls": dict(value),
+                     "label": {"read-only": "Read Only",
+                               "workspace-write": "Workspace Write",
+                               "full-access": "Full access",
+                               "auto-review": "Auto review"}[key]}
+                    for key, value in self.ACCESS_PROFILES.items()],
+                "auto_review_profile": stored.get("auto_review_profile"),
+                "descriptors": auto_review.list_profiles()}
+
+    def set_access_profile(self, project_id: int, profile: str) -> dict:
+        from nl_coding_agent.persistence import database
+        from nl_coding_agent.core import permissions
+        name = str(profile or "").strip().lower()
+        if name not in self.ACCESS_PROFILES:
+            raise ValueError("Unknown access profile: " + repr(profile))
+        scopes = self.ACCESS_PROFILES[name]
+        for scope, granted in scopes.items():
+            if granted:
+                permissions.grant(scope, project_id=int(project_id), source="access-profile")
+            else:
+                permissions.revoke(scope, project_id=int(project_id), source="access-profile")
+        database.set_json_setting("access.profile." + str(int(project_id)), {
+            "profile": name,
+            "auto_review_profile": "trusted-auto-review" if name == "auto-review" else "manual",
+        })
+        self._bus.emit(Event(source="permissions", level="info",
+                             message="Access profile saved",
+                             payload={"project_id": int(project_id), "profile": name}))
+        return self.access_profile(int(project_id))
+
     def probe_model_capabilities(self, model: str, *, timeout: float = 90.0,
                                  allow_cloud: bool = False) -> dict:
         from nl_coding_agent.core import permissions

@@ -101,6 +101,7 @@ export interface DashboardState {
     capabilityProbe?: ModelCapabilityProbe;
     mcpConfig?: Record<string, unknown>;
     speech?: Record<string, unknown>;
+    accessProfile?: Record<string, unknown>;
     research?: ResearchFetchResult;
     researchProfile: string;
     historyCount: number;
@@ -160,6 +161,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     private capabilityProbe: ModelCapabilityProbe | undefined;
     private mcpConfig: Record<string, unknown> | undefined;
     private speech: Record<string, unknown> | undefined;
+    private accessProfile: Record<string, unknown> | undefined;
     private editorContext: EditorContext | undefined;
     private lastEditor: vscode.TextEditor | undefined;
     private lastRoute: ChatRoute | undefined;
@@ -243,6 +245,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 await this.ensureCloudGrant(this.chatModel);
             }
             await this.refreshSpeechSettings();
+            await this.refreshAccessProfile();
             await this.loadSessions();
             await this.loadHistory();
             await this.refreshQueue(false);
@@ -273,6 +276,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     async handleUserMessage(text: string, attachment?: AttachmentInput | null,
                             queuedAttachmentIds: number[] = []): Promise<void> {
         let message = String(text || '').trim();
+        let planningOnly = false;
         if (!message) {
             return;
         }
@@ -303,8 +307,15 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             await this.runAgentTask(agentTask[1], agentTask[2].trim());
             return;
         }
+        if (/^\/team$/i.test(message.trim())) {
+            await this.generateSpecialistTeam();
+            return;
+        }
         const planTask = /^\/plan\s+([\s\S]+)$/i.exec(message);
         if (planTask) {
+            planningOnly = true;
+            this.postChat('system',
+                'Planning mode: NL Code will inspect and plan only. No mission is created and no files are changed.');
             message = [
                 'PLANNING MODE: do not edit files, do not start a mission, and do not claim execution.',
                 'Inspect the available documentation and project files with your read-only tools, then return:',
@@ -362,7 +373,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             const result = await this.connection.converse(
                 context.project.id, message, legacyAttachments, this.requestTimeoutMs,
                 this.chatModel || 'auto', effectiveAttachmentIds,
-                this.autoCoding && this.connection.executionAllowed
+                !planningOnly && this.autoCoding && this.connection.executionAllowed
             );
             if (result.route) {
                 this.lastRoute = result.route;
@@ -398,6 +409,31 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             this.postState();
             // A queued turn is dispatched only after this one is genuinely idle.
             void this.refreshQueue(true);
+        }
+    }
+
+    async refreshAccessProfile(): Promise<void> {
+        try {
+            this.accessProfile = await this.connection.accessProfile() as Record<string, unknown>;
+            this.postState();
+        } catch (error) {
+            this.output.appendLine('[access-profile] ' + this.errorText(error));
+        }
+    }
+
+    async setAccessMode(profile: string): Promise<void> {
+        const name = String(profile || '').trim();
+        if (!name) {
+            return;
+        }
+        try {
+            await this.connection.setAccessProfile(name);
+            this.accessProfile = await this.connection.accessProfile() as Record<string, unknown>;
+            await this.refreshAll(false);
+            this.postChat('system',
+                'Project access profile applied to every agent: ' + name);
+        } catch (error) {
+            this.reportError(error, 'access-profile');
         }
     }
 
@@ -437,6 +473,19 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         } catch (error) {
             this.reportError(error, 'speech-external');
         }
+    }
+
+    async browseSpeechFolder(): Promise<void> {
+        const picked = await vscode.window.showOpenDialog({
+            canSelectFiles: false,
+            canSelectFolders: true,
+            canSelectMany: false,
+            openLabel: 'Use this ASR folder'
+        });
+        if (!picked || !picked.length) {
+            return;
+        }
+        await this.setSpeechExternalHome(picked[0].fsPath);
     }
 
     /** Start/stop local microphone dictation and insert the editable transcript. */
@@ -1455,62 +1504,95 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         this.settings = settings;
         const existing = new Set((settings.agents.custom_agents || [])
             .map((agent) => String(agent.name || '').toLowerCase()));
-        const chosen = this.modelOptions().find((option) => option.value);
-        const model = chosen?.value || settings.models.chat_default_spec || '';
-        if (!model) {
+        const available = this.modelOptions().filter((option) => option.value);
+        const local = available.filter((option) => !this.isCloudRoute(option.value));
+        const pool = local.length ? local : available;
+        if (!pool.length) {
             this.postChat('error', 'Probe at least one model before generating a specialist team.');
             return;
         }
-        if (this.isCloudRoute(model)) {
-            await this.ensureCloudGrant(model);
-        }
-        const slash = model.indexOf('/');
-        const provider = slash > 0 ? model.slice(0, slash) : 'ollama';
+        const score = (option: ModelOption, wanted: RegExp[]): number => {
+            const text = (option.value + ' ' + option.label).toLowerCase();
+            let value = 0;
+            wanted.forEach((pattern, index) => { if (pattern.test(text)) { value += (wanted.length - index) * 10; } });
+            if (option.loaded) { value += 2; }
+            return value;
+        };
+        const pick = (used: Set<string>, wanted: RegExp[]): ModelOption => {
+            const ranked = pool.slice().sort((a, b) => score(b, wanted) - score(a, wanted));
+            const found = ranked.find((item) => !used.has(item.value)) || ranked[0];
+            used.add(found.value);
+            return found;
+        };
+        const used = new Set<string>();
+        const architect = pick(used, [/qwen3\.5|qwen3|muse|reason|think|architect|120b|30b/i, /large|70b/i]);
+        const developer = pick(used, [/coder|code|qwen2\.5-coder|deepseek-coder|devstral/i]);
+        const tester = pick(used, [/coder|code|qwen2\.5-coder|test/i]);
+        const reviewer = pick(used, [/qwen3\.5|qwen3|muse|review|reason/i]);
+        const researcher = pick(used, [/qwen3\.5|qwen3|muse|instruct|reason/i]);
         const definitions = [
             {
-                name: 'Project Architect',
+                name: 'Project Architect', model: architect.value,
                 role: 'software architect',
                 instructions: 'Inspect structure, contracts and risks; propose the smallest coherent plan and explicit verification targets. Read-only.',
                 tools: ['read_file', 'list_dir', 'git_diff'],
                 permissions: ['read-only']
             },
             {
-                name: 'Test Engineer',
+                name: 'Lead Developer', model: developer.value,
+                role: 'lead developer',
+                instructions: 'Implement precise, minimal patches; preserve existing behavior; cite files and tests. Use the mission staging gates.',
+                tools: ['read_file', 'list_dir', 'write_file', 'patch_file', 'run_tests', 'git_diff'],
+                permissions: ['read-only']
+            },
+            {
+                name: 'Test Engineer', model: tester.value,
                 role: 'test engineer',
                 instructions: 'Design and review automated tests, reproduce failures and report exact commands/results. Prefer existing project test conventions.',
                 tools: ['read_file', 'list_dir', 'run_tests', 'git_diff'],
                 permissions: ['read-only']
             },
             {
-                name: 'Security Reviewer',
+                name: 'Security Reviewer', model: reviewer.value,
                 role: 'security reviewer',
                 instructions: 'Review trust boundaries, filesystem/network permissions and secret handling; report concrete risks and mitigations. Read-only.',
                 tools: ['read_file', 'list_dir', 'git_diff'],
                 permissions: ['read-only']
+            },
+            {
+                name: 'Documentation Researcher', model: researcher.value,
+                role: 'documentation researcher',
+                instructions: 'Read project docs and official sources; separate measured facts from guesses and produce a concise, cited plan.',
+                tools: ['read_file', 'list_dir', 'research_fetch_url', 'git_diff'],
+                permissions: ['read-only']
             }
         ];
         let created = 0;
+        const assigned: string[] = [];
         for (const definition of definitions) {
             if (existing.has(definition.name.toLowerCase())) {
                 continue;
             }
+            const slash = definition.model.indexOf('/');
+            const provider = slash > 0 ? definition.model.slice(0, slash) : 'ollama';
             await this.connection.saveCustomAgent({
                 name: definition.name,
                 provider,
-                model,
+                model: definition.model,
                 role: definition.role,
                 instructions: definition.instructions,
                 tools: definition.tools,
                 permissions: definition.permissions,
                 enabled: true
             });
+            assigned.push(definition.name + ' → ' + definition.model);
             created += 1;
         }
         this.settings = await this.connection.engineSettings(false);
         this.postState();
         this.postChat('system', created
-            ? `Generated ${created} specialist profile(s) using ${model}. They are editable in Agents.`
-            : 'Recommended specialist profiles already exist.');
+            ? `Generated ${created} specialist profile(s) across the available providers:\n` + assigned.join('\n')
+            : 'Recommended specialist profiles already exist. Edit one or delete it and press Generate team again.');
     }
 
     async saveSpecialistAgent(payload: Record<string, unknown>): Promise<void> {
@@ -2120,6 +2202,12 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 case 'setSpeechExternalHome':
                     await this.setSpeechExternalHome(String(payload.path || ''));
                     break;
+                case 'browseSpeechFolder':
+                    await this.browseSpeechFolder();
+                    break;
+                case 'setAccessMode':
+                    await this.setAccessMode(String(payload.profile || ''));
+                    break;
                 case 'renameChatSession':
                     await this.renameChatSession();
                     break;
@@ -2382,6 +2470,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             capabilityProbe: this.capabilityProbe,
             mcpConfig: this.mcpConfig,
             speech: this.speech,
+            accessProfile: this.accessProfile,
             research: this.research,
             researchProfile: this.connection.researchProfile,
             historyCount: this.historyCount,

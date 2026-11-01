@@ -254,7 +254,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                             <label class="nl-check"><input type="checkbox" value="mcp_list_tools"> mcp_list_tools</label>
                         </fieldset>
                         <button id="specialist-tools-all" type="button">Select all tools</button>
-                        <fieldset id="specialist-permissions" class="nl-check-grid">
+                        <fieldset id="specialist-permissions" class="nl-check-grid" hidden>
                             <legend>Permissions</legend>
                             <label class="nl-check"><input type="checkbox" value="read-only"> read-only</label>
                             <label class="nl-check"><input type="checkbox" value="project-write"> project-write</label>
@@ -262,7 +262,8 @@ export function buildChatHtml(assets: WebviewAssets): string {
                             <label class="nl-check"><input type="checkbox" value="network"> network</label>
                             <label class="nl-check"><input type="checkbox" value="cloud"> cloud</label>
                         </fieldset>
-                        <button id="specialist-permissions-all" type="button">Select all permissions</button>
+                        <p class="nl-hint">Permissions are project-wide and apply to every agent. Configure the Access profile in Settings.</p>
+                        <button id="specialist-permissions-all" type="button" hidden>Select all permissions</button>
                         <label class="nl-check"><input id="specialist-enabled" type="checkbox"> enabled</label>
                         <button id="specialist-save" type="button">Save specialist</button>
                     </div>
@@ -285,6 +286,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                     <label class="nl-check"><input id="provider-enabled" type="checkbox"> enabled</label>
                     <input id="provider-url" type="url" placeholder="http://127.0.0.1:11434" aria-label="Provider URL">
                     <button id="provider-new" type="button">Add provider</button>
+                    <button id="provider-preset-llamacpp" type="button">Add llama.cpp</button>
                     <button id="provider-save" type="button">Save provider</button>
                 </div>
                 <div class="nl-filter-row">
@@ -306,8 +308,10 @@ export function buildChatHtml(assets: WebviewAssets): string {
                     </div>
                     <div class="nl-filter-row">
                         <input id="speech-home" type="text" placeholder="external ASR folder, e.g. J:\ZLinkdaC\Qwen3ASR" aria-label="External ASR folder">
+                        <button id="speech-browse" type="button">Browse…</button>
                         <button id="speech-external" type="button">Use external folder</button>
                     </div>
+                    <div id="speech-engines" class="nl-list"></div>
                     <p class="nl-hint">External models stay in place and are never copied or deleted. Models downloaded into NL Code live under <code>data/speech/models</code>. Dictation records locally and inserts editable text into the composer.</p>
                 </div>
                 <details class="nl-advanced">
@@ -345,6 +349,19 @@ export function buildChatHtml(assets: WebviewAssets): string {
                 </details>
                 <h3>Permissions and autonomy</h3>
                 <p class="nl-hint"><strong>Mission execution</strong> is the master switch for code-changing missions. Read-only Chat can inspect and plan; enabling execution lets Chat stage a candidate, run verification and ask the reviewer before promotion. Permissions below are narrower grants for read, write, execute, network and cloud. Cloud escalation is opt-in and never runs automatically; cloud models stay hidden from the Chat picker until CLOUD is explicitly granted.</p>
+                <div class="nl-filter-row">
+                    <label class="nl-field">Project-wide access
+                        <select id="access-profile" aria-label="Project-wide access profile">
+                            <option value="">— select —</option>
+                            <option value="read-only">Read Only</option>
+                            <option value="workspace-write">Workspace Write</option>
+                            <option value="full-access">Full access</option>
+                            <option value="auto-review">Auto review</option>
+                        </select>
+                    </label>
+                    <button id="access-apply" type="button">Apply to all agents</button>
+                    <span id="access-status" class="nl-muted"></span>
+                </div>
                 <div class="nl-filter-row">
                     <select id="permission-scope">
                         <option value="read">read</option>

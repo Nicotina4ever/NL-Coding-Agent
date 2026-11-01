@@ -29,12 +29,13 @@ __all__ = [
     "DEFAULT_ENGINES", "DEFAULT_MAX_RECORDING_SECONDS",
 ]
 
-DEFAULT_ENGINES = ("faster-whisper", "vosk", "qwen3-asr")
+DEFAULT_ENGINES = ("faster-whisper", "vosk", "qwen3-asr", "whisper.cpp")
 DEFAULT_MAX_RECORDING_SECONDS = 120
 ASR_INSTALL_HINTS = {
-    "faster-whisper": "pip install faster-whisper (human action) + a local CTranslate2 model dir",
-    "vosk": "pip install vosk (human action) + a local Vosk model dir",
-    "qwen3-asr": "configure a local qwen3-asr package/model directory (human action)",
+    "faster-whisper": "optional Python package and a local CTranslate2 Whisper model.",
+    "vosk": "lightweight offline Vosk model; used by NL Code when present.",
+    "qwen3-asr": "external qwen3-asr-cli plus a local GGUF model (reused in place).",
+    "whisper.cpp": "optional whisper-cli/whisper.cpp binary plus a local GGUF/bin model.",
 }
 
 

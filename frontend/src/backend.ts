@@ -1138,6 +1138,22 @@ export class EngineConnection {
         }, 30_000);
     }
 
+    async accessProfile(): Promise<{
+        ok: boolean; profile?: string; profiles?: Array<{ id: string; label: string; controls: Record<string, boolean> }>;
+    }> {
+        return this.callJson<{
+            ok: boolean; profile?: string; profiles?: Array<{ id: string; label: string; controls: Record<string, boolean> }>;
+        }>('access_profile', {}, 30_000);
+    }
+
+    async setAccessProfile(profile: string): Promise<{
+        ok: boolean; profile?: string; profiles?: Array<{ id: string; label: string; controls: Record<string, boolean> }>;
+    }> {
+        return this.callJson<{
+            ok: boolean; profile?: string; profiles?: Array<{ id: string; label: string; controls: Record<string, boolean> }>;
+        }>('set_access_profile', { profile }, 30_000);
+    }
+
     async probeModelCapabilities(model: string, timeoutS = 90): Promise<ModelCapabilityProbe> {
         return this.callJson<ModelCapabilityProbe>('probe_model_capabilities', {
             model, timeout_s: timeoutS, approved: true

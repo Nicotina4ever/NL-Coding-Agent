@@ -70,6 +70,9 @@
     const probeSelectEl = $('probe-model');
     const speechModelEl = $('speech-model');
     const speechStatusEl = $('speech-status');
+    const speechEnginesEl = $('speech-engines');
+    const accessProfileEl = $('access-profile');
+    const accessStatusEl = $('access-status');
     const specialistSelectEl = $('specialist-list');
     const specialistProviderEl = $('specialist-provider');
     const specialistNameEl = $('specialist-name');
@@ -527,12 +530,34 @@
             ? 'Local ASR: ' + engines.join(', ') + ' · ' + audio + ' · ' + models.length + ' model(s)'
             : 'No local ASR engine detected. Register an external folder or install a local engine.';
         if (active.path) { speechStatusEl.textContent += ' · active: ' + active.path; }
+        clear(speechEnginesEl);
+        (catalog.engines || []).forEach(function (engine) {
+            const row = el('div', 'nl-list-row');
+            row.appendChild(el('strong', '', engine.engine));
+            row.appendChild(el('span', engine.installed ? 'nl-chip ok' : 'nl-muted',
+                engine.installed ? 'installed' : 'optional / not installed'));
+            if (engine.hint) { row.appendChild(el('span', 'nl-muted', engine.hint)); }
+            speechEnginesEl.appendChild(row);
+        });
+        if (!catalog.engines || !catalog.engines.length) {
+            speechEnginesEl.appendChild(el('p', 'nl-muted',
+                'No speech engine catalog available. Vosk, Qwen3-ASR, Faster-Whisper and Whisper.cpp can be supplied as local engines/models.'));
+        }
+    }
+
+    function renderAccess(current) {
+        const payload = (current && current.accessProfile) || {};
+        accessProfileEl.value = payload.profile || '';
+        accessStatusEl.textContent = payload.profile
+            ? 'applied to every agent' + (payload.auto_review_profile ? ' · auto-review: ' + payload.auto_review_profile : '')
+            : 'no project-wide profile applied';
     }
 
     function renderSettings(current) {
         const settings = current.settings;
         if (!settings) { return; }
         renderSpecialists(current);
+        renderAccess(current);
         renderSpeech(current);
         renderJobs(current);
         const providerSelect = $('provider-edit');
@@ -1282,6 +1307,7 @@
         { name: '/fetch', insert: '/fetch ', label: 'Fetch a URL', detail: 'Paste a URL after the command; Chat fetches it as untrusted context.' },
         { name: '/agent', insert: '/agent ', label: 'Send a task to one agent', detail: 'Pick a specialist; one task runs at a time.' },
         { name: '/plan', insert: '/plan ', label: 'Plan without editing', detail: 'Analyse docs and files, then return a concrete plan; no mission starts.' },
+        { name: '/team', insert: '/team', label: 'Build the specialist team', detail: 'Assign the best available models/providers to project roles.' },
         { name: '/help', insert: '/help', label: 'Show commands', detail: 'List the available Chat commands.' }
     ];
     let slashMatches = [];
@@ -1603,6 +1629,16 @@
         const role = roles[$('role-edit').value] || {};
         $('role-model-edit').value = role.model || '';
     });
+    $('provider-preset-llamacpp').addEventListener('click', function () {
+        postAction('saveProviderSettings', {
+            providerId: 'llama_cpp',
+            enabled: true,
+            kind: 'openai_compatible',
+            label: 'llama.cpp',
+            baseUrl: 'http://127.0.0.1:8080/v1',
+            apiKeyEnv: ''
+        });
+    });
     $('provider-new').addEventListener('click', function () {
         $('provider-edit').value = '';
         $('provider-id').value = '';
@@ -1620,6 +1656,9 @@
     $('speech-external').addEventListener('click', function () {
         postAction('setSpeechExternalHome', { path: $('speech-home').value });
     });
+    $('speech-browse').addEventListener('click', function () {
+        postAction('browseSpeechFolder', {});
+    });
     $('specialist-tools-all').addEventListener('click', function () {
         const values = Array.prototype.slice.call(
             specialistToolsEl.querySelectorAll('input[type="checkbox"]'))
@@ -1631,6 +1670,9 @@
             specialistPermissionsEl.querySelectorAll('input[type="checkbox"]'))
             .map(function (input) { return input.value; });
         setCheckedValues(specialistPermissionsEl, values);
+    });
+    $('access-apply').addEventListener('click', function () {
+        postAction('setAccessMode', { profile: accessProfileEl.value });
     });
     $('provider-save').addEventListener('click', function () {
         postAction('saveProviderSettings', {

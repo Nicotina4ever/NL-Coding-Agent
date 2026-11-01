@@ -400,6 +400,18 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
             str(scope), bool(granted), project_id=bound_project_id, source="mcp-approved")}
 
     @server.tool(annotations=read_only)
+    def access_profile() -> dict:
+        """Read the project-wide access profile shared by every agent."""
+        require_read()
+        return services.access_profile(bound_project_id)
+
+    @server.tool()
+    def set_access_profile(profile: str) -> dict:
+        """Apply one project-wide access profile to read/write/execute/network/cloud/delete."""
+        require_read()
+        return services.set_access_profile(bound_project_id, str(profile))
+
+    @server.tool(annotations=read_only)
     def custom_agents() -> dict:
         """List specialist agent profiles (configuration presets, not hidden execution)."""
         require_read()

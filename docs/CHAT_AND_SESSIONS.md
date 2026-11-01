@@ -47,3 +47,10 @@ Mostrare tool calls eseguite, agent role/model, file letti/creati, candidate dif
 - Un cloud con quota esaurita, 429/401/403 o endpoint indisponibile non viene ritentato; si passa a un'alternativa locale autorizzata.
 - La classificazione cloud usa provider/endpoint (`openai_compatible` remoto) oltre al token nel nome del modello.
 - Cambiando modello la storia messaggi/tool resta la stessa; viene aggiunta solo una nota di sistema sul fallback, senza perdere contesto o ripetere tool completati.
+
+## Profili di accesso e team (1 novembre 2026)
+
+- Le permission dei singoli specialisti non sono più il punto di controllo: è stato introdotto un profilo di progetto (`read-only`, `workspace-write`, `full-access`, `auto-review`) applicato a tutti gli agenti.
+- `auto-review` registra anche il profilo trusted e mantiene separati cloud/delete.
+- `Generate team` valuta tutti i modelli locali scoperti e assegna ruoli distinti (architect, lead developer, test, security, documentation); i provider possono essere mescolati.
+- `Add llama.cpp` registra il provider OpenAI-compatible e usa `/v1/models` per il discovery quando il server è attivo.
