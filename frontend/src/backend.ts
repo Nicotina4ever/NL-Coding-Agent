@@ -1202,6 +1202,19 @@ export class EngineConnection {
         return this.callJson<{ ok: boolean; mission: MissionRow }>('archive_mission', { mission_id: missionId, approved: true }, 30_000);
     }
 
+    async acceptMission(missionId: number): Promise<{ ok: boolean; promotion_status?: string; accepted?: boolean }> {
+        return this.callJson<{ ok: boolean; promotion_status?: string; accepted?: boolean }>(
+            'accept_mission', { mission_id: missionId, approved: true }, 30_000);
+    }
+
+    async revertMission(missionId: number): Promise<{
+        ok: boolean; restored?: string[]; removed?: string[]; backup_dir?: string; promotion_status?: string;
+    }> {
+        return this.callJson<{
+            ok: boolean; restored?: string[]; removed?: string[]; backup_dir?: string; promotion_status?: string;
+        }>('revert_mission', { mission_id: missionId, approved: true }, 60_000);
+    }
+
     async unarchiveMission(missionId: number): Promise<{ ok: boolean; mission: MissionRow }> {
         return this.callJson<{ ok: boolean; mission: MissionRow }>('unarchive_mission', { mission_id: missionId, approved: true }, 30_000);
     }

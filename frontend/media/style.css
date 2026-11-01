@@ -1093,3 +1093,10 @@ body .nl-primary {
 }
 .nl-slash-row strong { color: var(--vscode-textLink-foreground, #b9a5ff); }
 .nl-slash-label { color: var(--vscode-foreground); font-weight: 600; }
+
+body button.nl-danger,
+body .nl-danger {
+    background: var(--vscode-inputValidation-errorBackground, #5a1f2b);
+    color: var(--vscode-errorForeground, #ffd7dc);
+    border-color: var(--vscode-inputValidation-errorBorder, #b3475e);
+}

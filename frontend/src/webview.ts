@@ -101,6 +101,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
 
             <div class="nl-session-bar">
                 <select id="chat-session" aria-label="Conversation session"></select>
+                <button id="session-history" type="button">History</button>
                 <button id="session-new" type="button">New</button>
                 <button id="session-rename" type="button">Rename</button>
                 <button id="session-archive" type="button">Archive</button>

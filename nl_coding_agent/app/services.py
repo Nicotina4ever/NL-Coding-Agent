@@ -1394,6 +1394,89 @@ class AppServices:
                                       "ok": result.get("ok")}))
         return result
 
+    def accept_mission(self, mission_id: int, *, project_id: int) -> dict:
+        """Explicitly keep a promoted mission's changes and record the decision."""
+        from nl_coding_agent.core import permissions
+        from nl_coding_agent.persistence.missions import get_mission, set_promotion_status
+        permissions.require(permissions.READ, project_id=project_id)
+        mission = get_mission(mission_id)
+        if not mission or mission.get("project_id") != project_id:
+            raise ValueError("Mission does not belong to the selected project")
+        if mission.get("promotion_status") != "promoted":
+            return {"ok": True, "mission_id": mission_id,
+                    "promotion_status": mission.get("promotion_status"),
+                    "accepted": False}
+        set_promotion_status(mission_id, "accepted")
+        return {"ok": True, "mission_id": mission_id,
+                "promotion_status": "accepted", "accepted": True}
+
+    def revert_mission(self, mission_id: int, *, project_id: int) -> dict:
+        """Restore the pre-mission baseline for a promoted mission.
+
+        Current files are backed up first; only paths recorded as changed by
+        that mission are touched.
+        """
+        from datetime import datetime
+        from nl_coding_agent.core import permissions
+        from nl_coding_agent.persistence.database import db_path
+        from nl_coding_agent.persistence.missions import (
+            get_mission, set_promotion_status, update_mission_result,
+        )
+        permissions.require(permissions.READ, project_id=project_id)
+        permissions.require(permissions.WRITE, project_id=project_id)
+        mission = get_mission(mission_id)
+        project = self.get_project(project_id)
+        if not mission or not project or mission.get("project_id") != project_id:
+            raise ValueError("Mission does not belong to the selected project")
+        if mission.get("promotion_status") != "promoted":
+            raise ValueError("Only a promoted mission can be rejected/reverted")
+        if mission.get("status") != "completed":
+            raise ValueError("Only a completed mission can be reverted")
+        root = Path(project["root"]).resolve()
+        baseline_path = db_path().parent / "mission_baselines" / f"{mission_id}.json"
+        if not baseline_path.is_file():
+            raise ValueError("Mission baseline is not available")
+        baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+        if not isinstance(baseline, dict):
+            raise ValueError("Mission baseline is invalid")
+        try:
+            changed = json.loads(mission.get("changed_paths") or "[]")
+        except ValueError:
+            changed = []
+        changed = [str(item) for item in changed if str(item)]
+        if not changed:
+            raise ValueError("Mission has no recorded changed paths")
+        backup_dir = db_path().parent / "reversions" / (
+            f"mission-{mission_id}-" + datetime.now().strftime("%Y%m%d-%H%M%S-%f"))
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        restored: list[str] = []
+        removed: list[str] = []
+        for rel in changed:
+            target = (root / rel).resolve()
+            if not target.is_relative_to(root):
+                raise ValueError("Baseline path escapes project root: " + rel)
+            if target.is_symlink() or (target.exists() and not target.is_file()):
+                raise ValueError("Refusing to replace a non-regular path: " + rel)
+            backup = backup_dir / rel
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            if target.is_file():
+                backup.write_bytes(target.read_bytes())
+            if rel in baseline:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(str(baseline[rel]), encoding="utf-8", newline="")
+                restored.append(rel)
+            elif target.exists():
+                target.unlink()
+                removed.append(rel)
+        set_promotion_status(mission_id, "reverted")
+        update_mission_result(
+            mission_id, "completed",
+            result_summary="Changes reverted to the pre-mission baseline; backup at "
+                           + str(backup_dir))
+        return {"ok": True, "mission_id": mission_id, "restored": restored,
+                "removed": removed, "backup_dir": str(backup_dir),
+                "promotion_status": "reverted"}
+
     def mission_candidate_diff(self, mission_id: int, *, project_id: int) -> dict:
         """Read an existing candidate without approving, promoting or executing it."""
         from nl_coding_agent.core import permissions, promotion

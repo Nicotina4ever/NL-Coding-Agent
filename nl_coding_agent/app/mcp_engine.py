@@ -763,6 +763,19 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
             status=status, query=query)}
 
     @server.tool()
+    def accept_mission(mission_id: int, approved: bool = False) -> dict:
+        """Explicitly keep a promoted mission's changes; no files are modified."""
+        mission(mission_id)
+        return services.accept_mission(int(mission_id), project_id=bound_project_id)
+
+    @server.tool()
+    def revert_mission(mission_id: int, approved: bool = False) -> dict:
+        """Reject a promoted mission and restore its pre-mission baseline."""
+        require_execution(approved)
+        mission(mission_id)
+        return services.revert_mission(int(mission_id), project_id=bound_project_id)
+
+    @server.tool()
     def archive_mission(mission_id: int, approved: bool = False) -> dict:
         """Archive a terminal mission; data is retained and the action is reversible."""
         require_execution(approved)

@@ -614,25 +614,69 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         this.postState();
     }
 
+    async showChatHistory(): Promise<void> {
+        try {
+            const result = await this.connection.chatSessions(true);
+            const sessions = (result.sessions || []).map((session) => ({
+                label: (session.archived_at ? '$(archive) ' : '$(comment-discussion) ') +
+                    (session.title || '(untitled)'),
+                description: [
+                    typeof session.message_count === 'number' ? session.message_count + ' messages' : '',
+                    session.archived_at ? 'archived' : 'active'
+                ].filter(Boolean).join(' · '),
+                detail: session.id,
+                session
+            }));
+            if (!sessions.length) {
+                this.postChat('system', 'No saved conversations for this project yet.');
+                return;
+            }
+            const picked = await vscode.window.showQuickPick(sessions, {
+                title: 'Conversation history',
+                placeHolder: 'Open an active or archived conversation'
+            });
+            if (!picked) {
+                return;
+            }
+            if (picked.session.archived_at && !this.showArchivedSessions) {
+                this.showArchivedSessions = true;
+                await this.loadSessions(picked.session.id);
+            }
+            await this.switchSession(picked.session.id);
+        } catch (error) {
+            this.reportError(error, 'chat-history');
+        }
+    }
+
     async deleteChatSession(): Promise<void> {
         if (!this.currentSessionId) {
             return;
         }
         const current = this.chatSessions.find((item) => item.id === this.currentSessionId);
-        if (!current?.archived_at) {
-            this.postChat('system', 'Archive the conversation before deleting it.');
+        const alreadyArchived = Boolean(current?.archived_at);
+        const choice = await vscode.window.showWarningMessage(
+            alreadyArchived
+                ? 'Permanently delete this archived conversation and its messages?'
+                : 'Delete this conversation and its messages?',
+            {
+                modal: true,
+                detail: alreadyArchived
+                    ? 'This removes the session and every message. It cannot be undone.'
+                    : 'The conversation is archived first, then the session and all its messages are permanently removed.'
+            },
+            'Delete permanently');
+        if (choice !== 'Delete permanently') {
             return;
         }
-        const choice = await vscode.window.showWarningMessage(
-            'Delete this archived conversation and its messages?',
-            { modal: true }, 'Delete');
-        if (choice !== 'Delete') {
-            return;
+        if (!alreadyArchived) {
+            await this.connection.chatSessionArchive(this.currentSessionId);
         }
         await this.connection.chatSessionDelete(this.currentSessionId);
+        this.currentSessionId = undefined;
         await this.loadSessions();
         await this.loadHistory();
         this.postState();
+        this.postChat('system', 'Conversation and messages deleted.');
     }
 
     async toggleArchivedSessions(): Promise<void> {
@@ -1034,8 +1078,24 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 query: this.missionQuery || undefined
             });
             const projectId = this.projectContext?.project.id;
-            this.missions = projectId === undefined ? rows : rows.filter((row) =>
+            const next = projectId === undefined ? rows : rows.filter((row) =>
                 row.project_id === undefined || Number(row.project_id) === Number(projectId));
+            const previous = new Map(this.missions.map((row) => [Number(row.id), String(row.status || '')]));
+            for (const row of next) {
+                const id = Number(row.id);
+                const before = previous.get(id);
+                const after = String(row.status || '');
+                if (before && before !== after && TERMINAL_STATUSES.has(after)) {
+                    if (after === 'completed' && row.promotion_status === 'promoted') {
+                        this.postChat('system',
+                            `Mission #${id} completed and the candidate was promoted. ` +
+                            'Open Missions → the mission, review the diff, then choose Keep changes or Reject changes.');
+                    } else {
+                        this.postChat('system', `Mission #${id} is now ${after}. Open Missions for details and recovery options.`);
+                    }
+                }
+            }
+            this.missions = next;
         } catch (error) {
             this.output.appendLine('[missions] ' + this.errorText(error));
         }
@@ -1053,6 +1113,42 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         }
         await this.refreshMissions();
         this.postState();
+    }
+
+    async acceptMissionChanges(missionId: number): Promise<void> {
+        const choice = await vscode.window.showWarningMessage(
+            'Keep the changes from mission #' + missionId + '?',
+            { modal: true, detail: 'This records your decision. It does not modify files.' },
+            'Keep changes');
+        if (choice !== 'Keep changes') {
+            return;
+        }
+        await this.connection.acceptMission(missionId);
+        await this.selectMission(missionId);
+        this.postChat('system', 'Mission #' + missionId + ' changes marked as accepted.');
+    }
+
+    async revertMissionChanges(missionId: number): Promise<void> {
+        const choice = await vscode.window.showWarningMessage(
+            'Reject and revert the changes from mission #' + missionId + '?',
+            {
+                modal: true,
+                detail: 'Only the paths recorded by this mission are restored from its pre-mission baseline. ' +
+                    'Current files are backed up first under data/reversions; nothing else is touched.'
+            },
+            'Revert changes');
+        if (choice !== 'Revert changes') {
+            return;
+        }
+        try {
+            const result = await this.connection.revertMission(missionId);
+            await this.selectMission(missionId);
+            this.postChat('system', 'Mission #' + missionId + ' reverted: '
+                + (result.restored || []).length + ' restored, '
+                + (result.removed || []).length + ' removed. Backup: ' + (result.backup_dir || 'n/a'));
+        } catch (error) {
+            this.reportError(error, 'mission-revert');
+        }
     }
 
     async archiveMissionById(missionId: number): Promise<void> {
@@ -1758,6 +1854,9 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 case 'newChatSession':
                     await this.newChatSession();
                     break;
+                case 'showChatHistory':
+                    await this.showChatHistory();
+                    break;
                 case 'renameChatSession':
                     await this.renameChatSession();
                     break;
@@ -1843,6 +1942,12 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                         status: typeof payload.status === 'string' ? payload.status : undefined,
                         query: typeof payload.query === 'string' ? payload.query : undefined
                     });
+                    break;
+                case 'acceptMission':
+                    await this.acceptMissionChanges(Number(payload.missionId));
+                    break;
+                case 'revertMission':
+                    await this.revertMissionChanges(Number(payload.missionId));
                     break;
                 case 'archiveMission':
                     await this.archiveMissionById(Number(payload.missionId));

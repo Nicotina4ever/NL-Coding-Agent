@@ -1029,6 +1029,15 @@
             resume.addEventListener('click', function () { postAction('resumeMission', { missionId: mission.id }); });
             actions.appendChild(resume);
         }
+        if (mission.status === 'completed' && mission.promotion_status === 'promoted') {
+            const keep = el('button', 'nl-primary', 'Keep changes');
+            keep.addEventListener('click', function () { postAction('acceptMission', { missionId: mission.id }); });
+            actions.appendChild(keep);
+            const reject = el('button', 'nl-danger', 'Reject changes');
+            reject.title = 'Restore only the paths changed by this mission from its pre-mission baseline.';
+            reject.addEventListener('click', function () { postAction('revertMission', { missionId: mission.id }); });
+            actions.appendChild(reject);
+        }
         missionDetailEl.appendChild(actions);
 
         missionDetailEl.appendChild(el('div', 'nl-muted', 'Objective'));
@@ -1474,6 +1483,7 @@
     sessionSelectEl.addEventListener('change', function () {
         postAction('selectChatSession', { sessionId: sessionSelectEl.value });
     });
+    $('session-history').addEventListener('click', function () { postAction('showChatHistory', {}); });
     $('session-new').addEventListener('click', function () { postAction('newChatSession', {}); });
     $('session-rename').addEventListener('click', function () { postAction('renameChatSession', {}); });
     $('session-archive').addEventListener('click', function () { postAction('archiveChatSession', {}); });
