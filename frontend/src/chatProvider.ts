@@ -271,8 +271,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         const pendingAttachments = this.attachments.slice();
         const attachmentIds = queuedAttachmentIds.length
             ? queuedAttachmentIds.slice()
-            : pendingAttachments.map((item) => item.id);
-        if (this.busyChat || this.busyMission) {
+            : pendingAttachments.map((item) => item.id);        if (this.busyChat || this.busyMission) {
             if (/^\/steer\s+/i.test(message)) {
                 await this.steerChat(message.replace(/^\/steer\s+/i, ''));
                 return;
@@ -297,13 +296,46 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         try {
             await this.connection.connect();
             const context = await this.requireBoundProject();
-            const legacyAttachments = !attachmentIds.length && attachment && attachment.extracted_text &&
+            const effectiveAttachmentIds = attachmentIds.slice();
+            const pastedUrls = this.extractUrls(message);
+            if (pastedUrls.length) {
+                this.busyPhase = 'fetching';
+                this.postState();
+                for (const url of pastedUrls.slice(0, 3)) {
+                    try {
+                        const page = await this.connection.researchFetch(url);
+                        if (page.ok && page.text) {
+                            const ingested = await this.connection.attachmentIngest({
+                                text: page.text,
+                                name: (page.title || url).slice(0, 120)
+                            });
+                            const item = (ingested.attachments || [])[0];
+                            if (item) {
+                                effectiveAttachmentIds.push(item.id);
+                                this.postChat('system',
+                                    `Fetched ${page.url || url} as UNTRUSTED context` +
+                                    (page.title ? `: ${page.title}` : '') + '.');
+                            }
+                        } else {
+                            this.postChat('system',
+                                `URL fetch was not completed for ${url}: ` +
+                                (page.reason || page.outcome || 'permission or network policy denied') + '.');
+                        }
+                    } catch (error) {
+                        this.postChat('system',
+                            `URL fetch failed for ${url}: ` + this.errorText(error));
+                    }
+                }
+                this.busyPhase = 'thinking';
+                this.postState();
+            }
+            const legacyAttachments = !effectiveAttachmentIds.length && attachment && attachment.extracted_text &&
                 attachment.extracted_text.trim()
                 ? [attachment]
                 : [];
             const result = await this.connection.converse(
                 context.project.id, message, legacyAttachments, this.requestTimeoutMs,
-                this.chatModel || 'auto', attachmentIds,
+                this.chatModel || 'auto', effectiveAttachmentIds,
                 this.autoCoding && this.connection.executionAllowed
             );
             if (result.route) {
@@ -1447,6 +1479,41 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         await this.refreshMissions();
         this.errorMessage = undefined;
         this.postState();
+    }
+
+    private extractUrls(text: string): string[] {
+        const corpus = String(text || '');
+        const found: string[] = [];
+        const patterns = [
+            /https?:\/\/[^\s<>"']+/gi,
+            /(?<![\w./-])(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|it|org|net|io|dev|ai|app|co|uk|de|fr|eu|cloud|tech|me)(?:\/[^\s<>"']*)?/gi
+        ];
+        for (const pattern of patterns) {
+            let match: RegExpExecArray | null;
+            while ((match = pattern.exec(corpus)) !== null) {
+                let candidate = String(match[0] || '').trim()
+                    .replace(/[),.;!?]+$/g, '');
+                if (!candidate) {
+                    continue;
+                }
+                if (!/^https?:\/\//i.test(candidate)) {
+                    candidate = 'https://' + candidate;
+                }
+                try {
+                    const parsed = new URL(candidate);
+                    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+                        continue;
+                    }
+                    parsed.hash = '';
+                    if (!found.includes(parsed.toString())) {
+                        found.push(parsed.toString());
+                    }
+                } catch {
+                    // Not a URL after all (for example a filename with a dotted name).
+                }
+            }
+        }
+        return found;
     }
 
     private isInsideRoot(filePath: string, root: string): boolean {
