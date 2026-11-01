@@ -28,7 +28,8 @@
     "onCommand:nlCodingAgent.reconnect",
     "onCommand:nlCodingAgent.steerChat",
     "onCommand:nlCodingAgent.stopChat",
-    "onCommand:nlCodingAgent.askAboutFile"
+    "onCommand:nlCodingAgent.askAboutFile",
+    "onCommand:nlCodingAgent.restoreTheme"
   ],
   "main": "./out/extension.js",
   "scripts": {
@@ -122,6 +123,10 @@
       {
         "command": "nlCodingAgent.toggleMissionExecution",
         "title": "NL Code: Toggle Mission Execution"
+      },
+      {
+        "command": "nlCodingAgent.restoreTheme",
+        "title": "NL Code: Restore VS Code Theme"
       },
       {
         "command": "nlCodingAgent.showStatus",

@@ -132,7 +132,7 @@ async function run() {
     await waitFor(() => Boolean(api.home && api.home.renderedHtml), 15000, 'NL Code home webview');
     const homeHtml = api.home.renderedHtml || '';
     for (const id of ['connection', 'project', 'execution', 'mission-count', 'model-count',
-        'agent-count', 'session-count', 'details']) {
+        'agent-count', 'session-count', 'details', 'restore-theme']) {
         assert(homeHtml.includes('id="' + id + '"'), 'home dashboard exposes #' + id);
     }
     assert(homeHtml.includes('nlCodingAgent.startChat'), 'home exposes real command cards');

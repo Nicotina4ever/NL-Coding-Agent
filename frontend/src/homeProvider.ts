@@ -176,6 +176,7 @@ export class HomeProvider implements vscode.WebviewViewProvider {
         <div id="error" class="error hidden"></div>
     </section>
     <footer>
+        <button id="restore-theme" type="button" class="text-button" data-command="nlCodingAgent.restoreTheme">Restore VS Code theme</button>
         <span id="standalone" class="muted"></span>
     </footer>
 </main>

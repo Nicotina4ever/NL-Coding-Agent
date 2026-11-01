@@ -1029,3 +1029,67 @@ select option[data-kind='loaded'] {
 .nl-check-grid .nl-check {
     font-size: 0.84em;
 }
+
+/* Editable controls: clearer borders and focus than VS Code defaults. */
+body input[type="text"],
+body input[type="number"],
+body input[type="url"],
+body input[type="search"],
+body textarea,
+body select {
+    border: 1px solid var(--vscode-input-border, rgba(150, 150, 160, 0.55));
+    background: var(--vscode-input-background, rgba(30, 30, 36, 0.92));
+    color: var(--vscode-input-foreground, #e8e8ef);
+    border-radius: 4px;
+    padding: 4px 6px;
+    box-sizing: border-box;
+}
+body input:focus,
+body textarea:focus,
+body select:focus {
+    outline: 1px solid var(--vscode-focusBorder, #7c5cff);
+    outline-offset: 1px;
+    border-color: var(--vscode-focusBorder, #7c5cff);
+}
+body button {
+    border: 1px solid var(--vscode-button-border, rgba(160, 150, 200, 0.4));
+    background: var(--vscode-button-secondaryBackground, #2c2a38);
+    color: var(--vscode-button-secondaryForeground, #f0eef8);
+    border-radius: 4px;
+    padding: 4px 9px;
+    cursor: pointer;
+}
+body button:hover {
+    border-color: var(--vscode-focusBorder, #7c5cff);
+}
+body button[type="submit"],
+body .nl-primary {
+    background: var(--vscode-button-background, #6c47d8);
+    color: var(--vscode-button-foreground, #ffffff);
+}
+
+.nl-slash-menu {
+    border: 1px solid var(--vscode-focusBorder, #7c5cff);
+    border-radius: 5px;
+    background: var(--vscode-editorWidget-background, #1c1b22);
+    max-height: 190px;
+    overflow-y: auto;
+    margin: 2px 0 4px;
+}
+.nl-slash-row {
+    display: grid;
+    grid-template-columns: 88px 160px minmax(0, 1fr);
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 5px 9px;
+}
+.nl-slash-row:hover,
+.nl-slash-row[data-first="true"] {
+    background: var(--vscode-list-hoverBackground, rgba(124, 92, 255, 0.16));
+}
+.nl-slash-row strong { color: var(--vscode-textLink-foreground, #b9a5ff); }
+.nl-slash-label { color: var(--vscode-foreground); font-weight: 600; }

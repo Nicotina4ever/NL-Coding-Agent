@@ -144,7 +144,8 @@ export function buildChatHtml(assets: WebviewAssets): string {
                     </div>
 
                     <label class="nl-visually-hidden" for="input">Message NL Coder</label>
-                    <textarea id="input" rows="3" placeholder="Ask NL Coder…  (/mission &lt;objective&gt; starts a mission)"></textarea>
+                    <textarea id="input" rows="3" placeholder="Ask NL Coder…  Type / for commands (/mission, /steer, /fetch)"></textarea>
+                    <div id="slash-menu" class="nl-slash-menu hidden" role="listbox" aria-label="Slash commands"></div>
 
                     <div class="nl-mission-toggle-row">
                         <button id="mission-fields-toggle" type="button" class="nl-collapse-button hidden">▾ mission model selection</button>
@@ -274,10 +275,12 @@ export function buildChatHtml(assets: WebviewAssets): string {
             </div>
             <div class="nl-settings-card">
                 <h3>Provider</h3>
+                <p class="nl-hint">Any number of local or OpenAI-compatible providers can be configured. Use <strong>Add provider</strong> for a new id, then save; model routes use <code>provider/model</code>.</p>
                 <div class="nl-filter-row">
                     <select id="provider-edit" aria-label="Provider to edit"></select>
                     <label class="nl-check"><input id="provider-enabled" type="checkbox"> enabled</label>
                     <input id="provider-url" type="url" placeholder="http://127.0.0.1:11434" aria-label="Provider URL">
+                    <button id="provider-new" type="button">Add provider</button>
                     <button id="provider-save" type="button">Save provider</button>
                 </div>
                 <div class="nl-filter-row">

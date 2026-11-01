@@ -941,7 +941,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     }
 
     /** Resume an interrupted/blocked mission with the same persisted objective. */
-    async resumeMission(missionId: number, confirmed = false): Promise<boolean> {
+    async resumeMission(missionId: number, confirmed = false, fromTaskId?: number): Promise<boolean> {
         try {
             const detail = await this.connection.missionDetail(missionId);
             if (detail.mission.harness_version !== 2) {
@@ -965,6 +965,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                         `Objective: ${String(detail.mission.goal || '').slice(0, 500)}`,
                         `Developer: ${this.missionModels.developerModel}`,
                         `Reviewer: ${this.missionModels.reviewerModel}`,
+                        fromTaskId ? `Retry from task #${fromTaskId}: that task and all later tasks are reset to pending.` : '',
                         '',
                         'Resume keeps the existing objective and mission row; the engine re-runs the remaining stages.'
                     ].join('\n'),
@@ -981,7 +982,8 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 goal: String(detail.mission.goal || ''),
                 developerModel: this.missionModels.developerModel,
                 reviewerModel: this.missionModels.reviewerModel,
-                resumeMissionId: missionId
+                resumeMissionId: missionId,
+                fromTaskId
             });
             this.activeMissionId = result.mission_id;
             this.postChat('system', `Mission #${result.mission_id} resume dispatched (${result.dispatch || 'queued'}).`);
@@ -1683,7 +1685,10 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                     await this.cancelMission(Number(payload.missionId));
                     break;
                 case 'resumeMission':
-                    await this.resumeMission(Number(payload.missionId));
+                    await this.resumeMission(
+                        Number(payload.missionId),
+                        false,
+                        payload.fromTaskId === undefined ? undefined : Number(payload.fromTaskId));
                     break;
                 case 'selectMission':
                     await this.selectMission(Number(payload.missionId));

@@ -1238,6 +1238,7 @@ export class EngineConnection {
         developerModel: string;
         reviewerModel: string;
         resumeMissionId?: number;
+        fromTaskId?: number;
     }): Promise<{ mission_id: number; dispatch?: string; task_id?: string }> {
         const goal = String(input.goal || '').trim();
         if (!goal) {
@@ -1254,6 +1255,9 @@ export class EngineConnection {
         };
         if (input.resumeMissionId !== undefined) {
             params.resume_mission_id = input.resumeMissionId;
+        }
+        if (input.fromTaskId !== undefined) {
+            params.from_task_id = input.fromTaskId;
         }
         const result = await this.callJson<{ mission_id?: number; dispatch?: string; task_id?: string }>(
             'start_mission', params, 60_000

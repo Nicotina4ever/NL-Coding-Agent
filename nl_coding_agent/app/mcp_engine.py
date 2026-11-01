@@ -978,7 +978,8 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
     def start_mission(goal: str, developer_model: str, reviewer_model: str,
                       approved: bool = False, resume_mission_id: int | None = None,
                       architect_model: str | None = None,
-                      pipeline: str = "flow") -> dict:
+                      pipeline: str = "flow",
+                      from_task_id: int | None = None) -> dict:
         """Start/resume through the resource-gated engine only with owner-enabled execution.
 
         Exact model routes are required; this does not approve a candidate or bypass tests.
@@ -995,6 +996,11 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
             if details["goal"] != goal:
                 raise ValueError("Resume preserves the original objective")
             mission_id = int(resume_mission_id)
+            if from_task_id is not None:
+                from nl_coding_agent.persistence.missions import reset_tasks_from
+                reset_ids = reset_tasks_from(mission_id, int(from_task_id))
+                if not reset_ids:
+                    raise ValueError("No task at or after the requested retry point")
         else:
             mission_id = services.create_mission(bound_project_id, goal[:80], goal)
         active.add(mission_id)

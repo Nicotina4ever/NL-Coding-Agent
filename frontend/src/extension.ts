@@ -426,6 +426,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
     );
 
     context.subscriptions.push(
+        vscode.commands.registerCommand('nlCodingAgent.restoreTheme', async () => {
+            const current = vscode.workspace.getConfiguration('workbench').get<string>('colorTheme');
+            if (current !== 'NL Code Dark') {
+                void vscode.window.showInformationMessage(
+                    'The workbench is not using NL Code Dark; no theme change was made.');
+                return;
+            }
+            const choice = await vscode.window.showWarningMessage(
+                'Restore the default VS Code dark theme?',
+                { modal: true, detail: 'Only workbench.colorTheme changes. NL Code itself keeps its own webview styling.' },
+                'Restore theme');
+            if (choice !== 'Restore theme') {
+                return;
+            }
+            await vscode.workspace.getConfiguration('workbench').update(
+                'colorTheme', 'Default Dark Modern', vscode.ConfigurationTarget.Global);
+        })
+    );
+
+    context.subscriptions.push(
         vscode.commands.registerCommand('nlCodingAgent.toggleMissionExecution', async () => {
             await chat!.toggleExecution(false);
         })

@@ -57,6 +57,7 @@
     const missionNote = $('mission-note');
     const hintEl = $('hint');
     const sendEl = $('send');
+    const slashMenuEl = $('slash-menu');
 
     const missionListEl = $('mission-list');
     const missionDetailEl = $('mission-detail');
@@ -856,6 +857,17 @@
             row.appendChild(chip(task.status || '—', statusKind(task.status)));
             row.appendChild(el('span', 'nl-muted', 'attempts ' + (task.attempts || 0)
                 + (task.last_error ? ' · ' + String(task.last_error).slice(0, 160) : '')));
+            const mission = (detail && detail.mission) || {};
+            if (mission.harness_version === 2 &&
+                ['failed', 'blocked', 'interrupted', 'pending'].indexOf(task.status) >= 0 &&
+                !['running', 'pending'].includes(mission.status)) {
+                const retry = el('button', 'nl-task-retry', 'Retry from here');
+                retry.title = 'Reset this task and every later task to pending, then resume the mission.';
+                retry.addEventListener('click', function () {
+                    postAction('resumeMission', { missionId: mission.id, fromTaskId: task.id });
+                });
+                row.appendChild(retry);
+            }
             wrap.appendChild(row);
         });
         return wrap;
@@ -1199,10 +1211,101 @@
         }
     }
 
+    const slashCommands = [
+        { name: '/mission', insert: '/mission ', label: 'Start a mission', detail: 'Plan, implement, verify and review a concrete change.' },
+        { name: '/steer', insert: '/steer ', label: 'Steer the running turn', detail: 'Redirect the current Chat or mission at the next checkpoint.' },
+        { name: '/fetch', insert: '/fetch ', label: 'Fetch a URL', detail: 'Paste a URL after the command; Chat fetches it as untrusted context.' },
+        { name: '/help', insert: '/help', label: 'Show commands', detail: 'List the available Chat commands.' }
+    ];
+    let slashMatches = [];
+
+    function hideSlashMenu() {
+        slashMatches = [];
+        if (slashMenuEl) {
+            slashMenuEl.classList.add('hidden');
+            clear(slashMenuEl);
+        }
+    }
+
+    function applySlashCommand(command) {
+        if (!command || !inputEl) { return; }
+        if (command.name === '/help') {
+            hideSlashMenu();
+            inputEl.value = '';
+            postChatLocal('system', slashCommands.map(function (item) {
+                return item.name + ' — ' + item.label + ': ' + item.detail;
+            }).join('\n'));
+            return;
+        }
+        inputEl.value = command.insert;
+        hideSlashMenu();
+        if (command.name === '/mission') {
+            modeEl.value = 'mission';
+            setMode('mission');
+        }
+        inputEl.focus();
+        inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+    }
+
+    function updateSlashMenu() {
+        if (!slashMenuEl || !inputEl) { return; }
+        const value = inputEl.value;
+        if (!value.startsWith('/') || value.indexOf('\n') !== -1 || value.indexOf(' ') !== -1) {
+            hideSlashMenu();
+            return;
+        }
+        const query = value.slice(1).toLowerCase();
+        slashMatches = slashCommands.filter(function (item) {
+            return !query || item.name.slice(1).indexOf(query) === 0;
+        });
+        clear(slashMenuEl);
+        if (!slashMatches.length) {
+            hideSlashMenu();
+            return;
+        }
+        slashMatches.forEach(function (command, index) {
+            const row = el('button', 'nl-slash-row', '');
+            row.type = 'button';
+            row.setAttribute('role', 'option');
+            row.appendChild(el('strong', '', command.name));
+            row.appendChild(el('span', 'nl-slash-label', command.label));
+            row.appendChild(el('span', 'nl-muted', command.detail));
+            row.addEventListener('mousedown', function (event) {
+                event.preventDefault();
+                applySlashCommand(command);
+            });
+            if (index === 0) { row.dataset.first = 'true'; }
+            slashMenuEl.appendChild(row);
+        });
+        slashMenuEl.classList.remove('hidden');
+    }
+
+    function handleSlashKey(event) {
+        if (!slashMenuEl || slashMenuEl.classList.contains('hidden')) { return false; }
+        if (event.key === 'Tab' || event.key === 'Enter') {
+            event.preventDefault();
+            applySlashCommand(slashMatches[0]);
+            return true;
+        }
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            hideSlashMenu();
+            return true;
+        }
+        return false;
+    }
+
+    function postChatLocal(role, text) {
+        append(role, text);
+    }
+
     function submit() {
-        const text = inputEl.value.trim();
+        let text = inputEl.value.trim();
         if (!text) {
             return;
+        }
+        if (text.indexOf('/fetch ') === 0) {
+            text = text.slice('/fetch '.length).trim();
         }
         if (mode === 'mission') {
             if (state && (state.busyChat || state.busyMission)) {
@@ -1249,10 +1352,17 @@
     });
 
     inputEl.addEventListener('keydown', function (event) {
+        if (handleSlashKey(event)) {
+            return;
+        }
         if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault();
             submit();
         }
+    });
+    inputEl.addEventListener('input', updateSlashMenu);
+    inputEl.addEventListener('blur', function () {
+        window.setTimeout(hideSlashMenu, 120);
     });
 
     modeEl.addEventListener('change', function () { setMode(modeEl.value); });
@@ -1396,6 +1506,16 @@
         const roles = (state && state.settings && state.settings.models.roles) || {};
         const role = roles[$('role-edit').value] || {};
         $('role-model-edit').value = role.model || '';
+    });
+    $('provider-new').addEventListener('click', function () {
+        $('provider-edit').value = '';
+        $('provider-id').value = '';
+        $('provider-label').value = '';
+        $('provider-url').value = '';
+        $('provider-api-key-env').value = '';
+        $('provider-kind').value = 'openai_compatible';
+        $('provider-enabled').checked = true;
+        $('provider-id').focus();
     });
     $('provider-save').addEventListener('click', function () {
         postAction('saveProviderSettings', {
