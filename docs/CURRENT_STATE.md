@@ -1,3 +1,4 @@
+**Checkpoint 1 novembre 2026 — estensione 0.5.1.** Chat e missioni condividono lo stesso motore e la stessa sessione persistita; la Chat ora supporta /plan, /agent, /mission, /fetch, menu slash nel mezzo della composizione, rewind/modifica dei messaggi, storico con archivio, Keep/Reject delle modifiche missione e dettatura locale (richiede un modello ASR locale). Cloud resta opt-in; nessun fallback cloud automatico. Stato dettagliato sotto.
 # Stato corrente — NL Coding Agent / NL Code
 
 **Punto di riferimento: 30 ottobre 2026; checkpoint più recente riportato `1655cbb`.** La versione **1.0 STABLE non è stata raggiunta**. Questo file separa esecuzione dichiarata, difetti osservati dall'utente e lavoro ancora da dimostrare; non sostituisce prove sul repository vivo.
