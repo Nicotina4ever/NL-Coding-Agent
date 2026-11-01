@@ -356,6 +356,29 @@
         node.value = value === undefined || value === null ? '' : String(value);
     }
 
+    function modelChoices(provider) {
+        return (stateModelOptions() || []).filter(function (option) {
+            return option.value && (!provider || option.provider === provider);
+        }).map(function (option) {
+            return { value: option.value, label: option.value };
+        });
+    }
+
+    function populateModelSelect(node, options, selected) {
+        if (!node) { return; }
+        clear(node);
+        const items = options.slice();
+        if (selected && !items.some(function (item) { return item.value === selected; })) {
+            items.push({ value: selected, label: selected });
+        }
+        items.forEach(function (item) {
+            const option = el('option', '', item.label);
+            option.value = item.value;
+            node.appendChild(option);
+        });
+        node.value = selected || '';
+    }
+
     function fillSpecialist(agent) {
         specialistNameEl.value = agent ? (agent.name || '') : '';
         specialistProviderEl.value = agent ? (agent.provider || 'ollama') : 'ollama';
@@ -405,6 +428,9 @@
         if (providerSelected && specialistProviderEl.querySelector('option[value="' + providerSelected + '"]')) {
             specialistProviderEl.value = providerSelected;
         }
+        const selectedAgent = selectedSpecialist(current);
+        const chosenModel = selectedAgent ? selectedAgent.model : specialistModelEl.value;
+        populateModelSelect(specialistModelEl, modelChoices(specialistProviderEl.value), chosenModel);
     }
 
     function renderJobs(current) {
@@ -467,8 +493,9 @@
         }
         const role = $('role-edit').value;
         const roleConfig = (settings.models.roles || {})[role];
-        setValueIfIdle('role-model-edit', roleConfig && roleConfig.model);
-        setValueIfIdle('generation-model', current.chatModel || settings.models.chat_default_spec || '');
+        populateModelSelect($('role-model-edit'), modelChoices(''), roleConfig && roleConfig.model);
+        populateModelSelect($('generation-model'), modelChoices(''),
+            current.chatModel || settings.models.chat_default_spec || '');
         const generation = current.generationParams && current.generationParams.effective || {};
         setValueIfIdle('generation-temperature', generation.temperature);
         setValueIfIdle('generation-top-p', generation.top_p);
@@ -554,8 +581,8 @@
         autoCodingEl.checked = Boolean(current.autoCoding);
         autoCodingEl.disabled = !current.executionEnabled;
 
-        const providers = [];
-        const seenProviders = {};
+        const providers = [{ value: '', label: 'All providers' }];
+        const seenProviders = { '': true };
         function addProvider(id, label) {
             if (!id || seenProviders[id]) { return; }
             seenProviders[id] = true;
@@ -566,29 +593,28 @@
         options.forEach(function (option) {
             if (option.value) { addProvider(option.provider, option.provider); }
         });
-        const selectedProvider = auto ? '' : (routeProvider(current.chatModel) || (providers[0] && providers[0].value) || '');
-        if (auto) {
-            populateSelect(providerSelectEl, [{ value: '', label: 'Automatic' }], '');
-        } else {
-            populateSelect(providerSelectEl, providers, selectedProvider);
-        }
-        providerSelectEl.disabled = auto;
-        chatModelEl.disabled = auto;
-        if (auto) {
-            populateSelect(chatModelEl, [{
-                value: '',
-                label: 'Automatic — ' + (current.defaultChatSpec || 'engine default')
-                    + (current.chatRole ? ' (' + current.chatRole + ')' : '')
-            }], '');
-        } else {
-            const models = options.filter(function (option) {
-                return option.value && option.provider === selectedProvider;
-            });
-            if (!models.some(function (option) { return option.value === current.chatModel; })) {
-                models.push({ value: current.chatModel, label: current.chatModel });
-            }
-            populateSelect(chatModelEl, models, current.chatModel);
-        }
+        const selectedProvider = auto ? '' : (routeProvider(current.chatModel) || '');
+        populateSelect(providerSelectEl, providers, selectedProvider);
+        // Keep both selectors usable even in Automatic mode: choosing a model
+        // is how the user leaves Automatic, without hunting for a checkbox.
+        providerSelectEl.disabled = false;
+        chatModelEl.disabled = false;
+        const automaticOption = {
+            value: '',
+            label: 'Automatic — ' + (current.defaultChatSpec || 'engine default')
+                + (current.chatRole ? ' (' + current.chatRole + ')' : '')
+        };
+        const models = options.filter(function (option) {
+            return option.value && (!selectedProvider || option.provider === selectedProvider);
+        }).map(function (option) {
+            return {
+                value: option.value,
+                label: (selectedProvider ? '' : (option.provider ? option.provider + ' · ' : ''))
+                    + option.label
+            };
+        });
+        models.unshift(automaticOption);
+        populateSelect(chatModelEl, models, current.chatModel || '');
         modelCurrentEl.textContent = auto
             ? 'Automatic · ' + (current.defaultChatSpec || 'engine default')
             : 'Explicit · ' + current.chatModel;
@@ -1223,20 +1249,25 @@
     }
 
     providerSelectEl.addEventListener('change', function () {
-        if (!state || autoModelEl.checked) { return; }
+        if (!state) { return; }
         const provider = providerSelectEl.value;
         const candidate = stateModelOptions().filter(function (option) {
             return option.value && option.provider === provider;
         })[0];
         if (candidate) {
+            autoModelEl.checked = false;
             postModelRoute(candidate.value);
         }
     });
 
     chatModelEl.addEventListener('change', function () {
-        if (!state || autoModelEl.checked) { return; }
+        if (!state) { return; }
         if (chatModelEl.value) {
+            autoModelEl.checked = false;
             postModelRoute(chatModelEl.value);
+        } else {
+            autoModelEl.checked = true;
+            postModelRoute('');
         }
     });
 
@@ -1374,6 +1405,12 @@
         fillSpecialist(null);
         specialistNameEl.focus();
     });
+    specialistProviderEl.addEventListener('change', function () {
+        populateModelSelect(specialistModelEl, modelChoices(specialistProviderEl.value), '');
+    });
+    $('specialist-generate').addEventListener('click', function () {
+        postAction('generateSpecialists', {});
+    });
     $('specialist-save').addEventListener('click', function () {
         postAction('saveSpecialistAgent', {
             id: specialistSelectEl.value || undefined,
@@ -1489,6 +1526,7 @@
     $('refresh-missions').addEventListener('click', function () { postAction('refreshMissions', {}); });
     $('refresh-engine').addEventListener('click', function () { postAction('refreshEngine', {}); });
     $('refresh-models').addEventListener('click', function () { postAction('refreshEngine', {}); });
+    $('chat-refresh-models').addEventListener('click', function () { postAction('refreshModels', {}); });
     bannerStop.addEventListener('click', function () {
         if (state && state.activeMissionId) { postAction('cancelMission', { missionId: state.activeMissionId }); }
     });

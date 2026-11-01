@@ -136,6 +136,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                             <select id="chat-model"></select>
                         </label>
                         <label class="nl-check"><input id="auto-model" type="checkbox"> Automatic</label>
+                        <button id="chat-refresh-models" type="button" title="Probe providers and refresh the model dropdown">↻ models</button>
                         <label class="nl-check" title="Let Chat delegate an explicit coding goal to a verified mission when execution is enabled">
                             <input id="auto-coding" type="checkbox"> Auto-code
                         </label>
@@ -182,6 +183,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                     <button id="refresh-missions" type="button">Refresh</button>
                 </span>
             </div>
+            <p class="nl-hint">Only missions belonging to the open project are listed. Switching project switches this list; archived missions remain available under the filter.</p>
             <div class="nl-filter-row">
                 <input id="mission-query" type="search" placeholder="Filter title/goal…" aria-label="Mission filter">
                 <select id="mission-status-filter" aria-label="Mission status filter">
@@ -216,20 +218,21 @@ export function buildChatHtml(assets: WebviewAssets): string {
                             <option value="reviewer">reviewer</option>
                             <option value="chat">chat</option>
                         </select>
-                        <input id="role-model-edit" type="text" placeholder="ollama/model:tag" aria-label="Role model route">
+                        <select id="role-model-edit" aria-label="Role model route"></select>
                         <button id="role-save" type="button">Save role</button>
                     </div>
                     <h3>Specialist agents</h3>
                     <div class="nl-filter-row">
                         <select id="specialist-list" aria-label="Specialist agent to edit"></select>
                         <button id="specialist-new" type="button">New</button>
+                        <button id="specialist-generate" type="button" title="Create a recommended team appropriate to the project">Generate team</button>
                         <button id="specialist-duplicate" type="button">Duplicate</button>
                         <button id="specialist-delete" type="button">Delete</button>
                     </div>
                     <div class="nl-filter-row">
                         <input id="specialist-name" type="text" placeholder="agent name" aria-label="Specialist agent name">
                         <select id="specialist-provider" aria-label="Specialist agent provider"></select>
-                        <input id="specialist-model" type="text" placeholder="provider/model route" aria-label="Specialist model route">
+                        <select id="specialist-model" aria-label="Specialist model route"></select>
                         <input id="specialist-role" type="text" placeholder="specialty (e.g. security reviewer)" aria-label="Specialist role">
                     </div>
                     <textarea id="specialist-instructions" rows="3" placeholder="Specialist instructions and boundaries" aria-label="Specialist instructions"></textarea>
@@ -267,14 +270,15 @@ export function buildChatHtml(assets: WebviewAssets): string {
                     <input id="provider-label" type="text" placeholder="label" aria-label="Provider label">
                     <input id="provider-api-key-env" type="text" placeholder="API key env var (optional)" aria-label="API key env var">
                 </div>
-                <h3>Generation parameters</h3>
+                <details class="nl-advanced">
+                <summary>Advanced generation parameters</summary>
                 <div class="nl-filter-row">
                     <select id="generation-scope">
                         <option value="model">model</option>
                         <option value="role">role</option>
                         <option value="global">global</option>
                     </select>
-                    <input id="generation-model" type="text" placeholder="ollama/model" aria-label="Generation model">
+                    <select id="generation-model" aria-label="Generation model"></select>
                     <input id="generation-role" type="text" placeholder="role" aria-label="Generation role">
                 </div>
                 <div class="nl-filter-row">
@@ -299,7 +303,9 @@ export function buildChatHtml(assets: WebviewAssets): string {
                     </label>
                     <button id="generation-save" type="button">Save parameters</button>
                 </div>
+                </details>
                 <h3>Permissions and autonomy</h3>
+                <p class="nl-hint"><strong>Mission execution</strong> is the master switch for code-changing missions. Read-only Chat can inspect and plan; enabling execution lets Chat stage a candidate, run verification and ask the reviewer before promotion. Permissions below are narrower grants for read, write, execute, network and cloud. Cloud escalation is opt-in and never runs automatically.</p>
                 <div class="nl-filter-row">
                     <select id="permission-scope">
                         <option value="read">read</option>
@@ -324,6 +330,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                     <button id="autonomy-save" type="button">Save autonomy</button>
                 </div>
                 <h3>MCP servers (JSON)</h3>
+                <p class="nl-hint">MCP servers are trusted local tools. The <strong>rea</strong> reverse-engineering server is configured with a curated allowlist; discovery is read-only and tool invocation is permission-gated. JSON edits are saved through the engine.</p>
                 <textarea id="mcp-json" rows="5" aria-label="MCP servers JSON"></textarea>
                 <button id="mcp-save" type="button">Save MCP</button>
                 <h3>Model capability probe</h3>

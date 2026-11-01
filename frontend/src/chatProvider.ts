@@ -1085,6 +1085,71 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         this.postChat('system', `Role ${role} now uses ${model}.`);
     }
 
+    /**
+     * Create a small, project-appropriate specialist team with one action.
+     * The profiles are ordinary editable engine records; generating them never
+     * changes project files or grants execution permissions.
+     */
+    async generateSpecialistTeam(): Promise<void> {
+        const settings = this.settings || await this.connection.engineSettings(false);
+        this.settings = settings;
+        const existing = new Set((settings.agents.custom_agents || [])
+            .map((agent) => String(agent.name || '').toLowerCase()));
+        const chosen = this.modelOptions().find((option) => option.value);
+        const model = chosen?.value || settings.models.chat_default_spec || '';
+        if (!model) {
+            this.postChat('error', 'Probe at least one model before generating a specialist team.');
+            return;
+        }
+        const slash = model.indexOf('/');
+        const provider = slash > 0 ? model.slice(0, slash) : 'ollama';
+        const definitions = [
+            {
+                name: 'Project Architect',
+                role: 'software architect',
+                instructions: 'Inspect structure, contracts and risks; propose the smallest coherent plan and explicit verification targets. Read-only.',
+                tools: ['read_file', 'list_dir', 'git_diff'],
+                permissions: ['read-only']
+            },
+            {
+                name: 'Test Engineer',
+                role: 'test engineer',
+                instructions: 'Design and review automated tests, reproduce failures and report exact commands/results. Prefer existing project test conventions.',
+                tools: ['read_file', 'list_dir', 'run_tests', 'git_diff'],
+                permissions: ['read-only']
+            },
+            {
+                name: 'Security Reviewer',
+                role: 'security reviewer',
+                instructions: 'Review trust boundaries, filesystem/network permissions and secret handling; report concrete risks and mitigations. Read-only.',
+                tools: ['read_file', 'list_dir', 'git_diff'],
+                permissions: ['read-only']
+            }
+        ];
+        let created = 0;
+        for (const definition of definitions) {
+            if (existing.has(definition.name.toLowerCase())) {
+                continue;
+            }
+            await this.connection.saveCustomAgent({
+                name: definition.name,
+                provider,
+                model,
+                role: definition.role,
+                instructions: definition.instructions,
+                tools: definition.tools,
+                permissions: definition.permissions,
+                enabled: true
+            });
+            created += 1;
+        }
+        this.settings = await this.connection.engineSettings(false);
+        this.postState();
+        this.postChat('system', created
+            ? `Generated ${created} specialist profile(s) using ${model}. They are editable in Agents.`
+            : 'Recommended specialist profiles already exist.');
+    }
+
     async saveSpecialistAgent(payload: Record<string, unknown>): Promise<void> {
         const name = String(payload.name || '').trim();
         if (!name) {
@@ -1561,6 +1626,9 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'refreshModels':
                     await this.refreshModels();
+                    break;
+                case 'generateSpecialists':
+                    await this.generateSpecialistTeam();
                     break;
                 case 'refreshHistory':
                     await this.loadHistory();

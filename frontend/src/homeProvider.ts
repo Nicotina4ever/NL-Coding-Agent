@@ -156,6 +156,7 @@ export class HomeProvider implements vscode.WebviewViewProvider {
         <span id="project" class="pill soft">no project</span>
         <span id="execution" class="pill soft">read-only</span>
     </div>
+    <p class="hint">Read-only is safe Chat. Enable mission execution when you want Chat to stage, verify and promote code changes through the review gates.</p>
 </header>
 <main>
     <section class="metrics" aria-label="Engine status">        <div class="metric"><span id="mission-count">0</span><small>missions</small></div>
@@ -175,7 +176,6 @@ export class HomeProvider implements vscode.WebviewViewProvider {
         <div id="error" class="error hidden"></div>
     </section>
     <footer>
-        <button id="theme" type="button" class="text-button" data-command="nlCodingAgent.applyTheme">Apply NL Code theme</button>
         <span id="standalone" class="muted"></span>
     </footer>
 </main>

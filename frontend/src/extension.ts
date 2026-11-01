@@ -426,19 +426,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand('nlCodingAgent.applyTheme', async () => {
-            const choice = await vscode.window.showInformationMessage(
-                'Apply the NL Code Dark theme? Code - OSS features and user settings are preserved.',
-                'Apply theme', 'Keep current');
-            if (choice !== 'Apply theme') {
-                return;
-            }
-            await vscode.workspace.getConfiguration('workbench').update(
-                'colorTheme', 'NL Code Dark', vscode.ConfigurationTarget.Global);
-        })
-    );
-
-    context.subscriptions.push(
         vscode.commands.registerCommand('nlCodingAgent.toggleMissionExecution', async () => {
             await chat!.toggleExecution(false);
         })

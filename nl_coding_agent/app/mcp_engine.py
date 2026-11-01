@@ -339,7 +339,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                                    provider_id: str = "ollama",
                                    approved: bool = False) -> dict:
         """Persist explicit generation params; unset num_ctx preserves Ollama defaults."""
-        require_execution(approved)
+        require_read()
         return {"ok": True, "saved": services.save_generation_params(
             parameters, scope=scope, provider_id=provider_id,
             model_name=model_name, role=role)}
@@ -351,7 +351,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                                api_key_env: str | None = None,
                                approved: bool = False) -> dict:
         """Persist provider enabled/endpoint/label/kind; never returns or stores secrets."""
-        require_execution(approved)
+        require_read()
         changes = {key: value for key, value in {
             "enabled": enabled, "base_url": base_url, "label": label,
             "kind": kind, "api_key_env": api_key_env,
@@ -364,7 +364,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                            temperature: float | None = None,
                            approved: bool = False) -> dict:
         """Persist a role's model route and optional generation temperature."""
-        require_execution(approved)
+        require_read()
         changes = {key: value for key, value in {
             "model": model, "temperature": temperature,
         }.items() if value is not None}
@@ -420,7 +420,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                           enabled: bool = True,
                           approved: bool = False) -> dict:
         """Create or update a specialist agent profile with a model assignment."""
-        require_execution(approved)
+        require_read()
         fields = {
             "name": str(name or "Specialist agent").strip() or "Specialist agent",
             "provider": str(provider or "ollama"),
@@ -442,7 +442,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
     @server.tool()
     def delete_custom_agent(agent_id: str, approved: bool = False) -> dict:
         """Delete one specialist agent profile."""
-        require_execution(approved)
+        require_read()
         if not services.delete_custom_agent(str(agent_id)):
             raise ValueError("Custom agent not found")
         return {"ok": True}
@@ -451,7 +451,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
     def duplicate_custom_agent(agent_id: str, name: str | None = None,
                                approved: bool = False) -> dict:
         """Duplicate one specialist agent profile under a new name."""
-        require_execution(approved)
+        require_read()
         saved = services.duplicate_custom_agent(str(agent_id), name=name)
         if saved is None:
             raise ValueError("Custom agent not found")
@@ -471,7 +471,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                                mission_wall_time_s: int | None = None,
                                approved: bool = False) -> dict:
         """Persist validated autonomy settings; never starts a run."""
-        require_execution(approved)
+        require_read()
         return services.save_autonomy_settings(
             bound_project_id, mode=mode, max_missions=max_missions,
             attempts=attempts, max_wall_time_s=max_wall_time_s,
@@ -630,28 +630,28 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
     @server.tool()
     def chat_session_create(title: str = "New conversation",
                             approved: bool = False) -> dict:
-        """Create a new durable Chat session."""
-        require_execution(approved)
+        """Create a durable Chat session; history works in read-only mode."""
+        require_read()
         return {"ok": True, "session": services.create_chat_session(
             bound_project_id, title)}
 
     @server.tool()
     def chat_session_rename(session_id: str, title: str,
                             approved: bool = False) -> dict:
-        """Rename a Chat session."""
-        require_execution(approved)
+        """Rename a Chat session; history works in read-only mode."""
+        require_read()
         return {"ok": True, "session": services.rename_chat_session(session_id, title)}
 
     @server.tool()
     def chat_session_archive(session_id: str, approved: bool = False) -> dict:
-        """Archive one Chat session; history is retained."""
-        require_execution(approved)
+        """Archive one Chat session; history is retained and allowed in read-only mode."""
+        require_read()
         return {"ok": True, "session": services.archive_chat_session(session_id)}
 
     @server.tool()
     def chat_session_delete(session_id: str, approved: bool = False) -> dict:
         """Delete one previously archived Chat session and its messages."""
-        require_execution(approved)
+        require_read()
         return {"ok": True, "session": services.delete_chat_session(
             bound_project_id, session_id)}
 
@@ -665,7 +665,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
     @server.tool()
     def chat_cleanup(scope: str = "orphaned", approved: bool = False) -> dict:
         """Delete archived sessions or conversations whose project was removed."""
-        require_execution(approved)
+        require_read()
         if str(scope) == "archived":
             project_id = bound_project_id
         else:
