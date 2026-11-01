@@ -706,6 +706,8 @@ def check_selfbuild_readiness(
     db_path: str | Path,
     state_path: str | Path,
     project_root: str | Path,
+    *,
+    require_state: bool = True,
 ) -> dict:
     """Fail-closed guard used before any Self-Build Mode run.
 
@@ -773,12 +775,18 @@ def check_selfbuild_readiness(
                         "last_completed_fingerprint": entry.get("last_completed_fingerprint"),
                     }
             else:
-                result["ok"] = False
-                result["errors"].append(
+                message = (
                     "data/selfbuild_state.json has no entry for " + repr(root)
                     + " (existing keys: " + repr(sorted(projects)) + "). "
                     "Run scripts/migrate_project_root.py --apply before self-build."
                 )
+                if require_state:
+                    result["ok"] = False
+                    result["errors"].append(message)
+                else:
+                    result["warnings"].append(
+                        "External project has no self-build state entry; "
+                        "the self-build relocation guard does not apply.")
     return result
 
 

@@ -649,8 +649,11 @@ class Supervisor:
         try:
             from nl_coding_agent.core.relocation import check_selfbuild_readiness
 
+            application_root = Path(__file__).resolve().parents[2]
+            is_application_root = Path(self.root).resolve() == application_root
             readiness = check_selfbuild_readiness(
-                db_path(), db_path().parent / "selfbuild_state.json", self.root
+                db_path(), db_path().parent / "selfbuild_state.json", self.root,
+                require_state=is_application_root,
             )
             if not readiness.get("ok", True):
                 report.blockers.append(

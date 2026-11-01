@@ -33,6 +33,7 @@ internal static class NLCodeLauncher
             engine = @"K:\AI\NL Coding Agent";
         }
         Environment.SetEnvironmentVariable("NL_ENGINE_ROOT", engine);
+        Environment.SetEnvironmentVariable("ELECTRON_RUN_AS_NODE", null);
         string data = Path.Combine(engine, "data");
         if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NL_DATA_DIR")) && Directory.Exists(data))
         {
