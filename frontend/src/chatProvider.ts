@@ -993,11 +993,14 @@ export class ChatProvider implements vscode.WebviewViewProvider {
 
     async refreshMissions(): Promise<void> {
         try {
-            this.missions = await this.connection.missionList({
+            const rows = await this.connection.missionList({
                 includeArchived: this.missionShowArchived,
                 status: this.missionStatusFilter || undefined,
                 query: this.missionQuery || undefined
             });
+            const projectId = this.projectContext?.project.id;
+            this.missions = projectId === undefined ? rows : rows.filter((row) =>
+                row.project_id === undefined || Number(row.project_id) === Number(projectId));
         } catch (error) {
             this.output.appendLine('[missions] ' + this.errorText(error));
         }
@@ -1162,8 +1165,8 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             model: String(payload.model || '').trim(),
             role: String(payload.role || 'assistant').trim() || 'assistant',
             instructions: String(payload.instructions || '').trim(),
-            tools: String(payload.tools || '').split(',').map((item) => item.trim()).filter(Boolean),
-            permissions: String(payload.permissions || '').split(',').map((item) => item.trim()).filter(Boolean),
+            tools: this.stringList(payload.tools),
+            permissions: this.stringList(payload.permissions),
             enabled: payload.enabled !== false
         };
         if (agent.model && agent.model.indexOf('/') === -1 && agent.provider) {
@@ -1823,6 +1826,11 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             );
         }
         return context;
+    }
+
+    private stringList(value: unknown): string[] {
+        const items = Array.isArray(value) ? value : String(value || '').split(',');
+        return items.map((item) => String(item).trim()).filter(Boolean);
     }
 
     private modelOptions(): ModelOption[] {

@@ -379,14 +379,28 @@
         node.value = selected || '';
     }
 
+    function selectedValues(node) {
+        return Array.prototype.slice.call(node.selectedOptions || [])
+            .map(function (option) { return option.value; })
+            .filter(Boolean);
+    }
+
+    function setSelectedValues(node, values) {
+        const wanted = {};
+        (values || []).forEach(function (value) { wanted[String(value)] = true; });
+        Array.prototype.forEach.call(node.options || [], function (option) {
+            option.selected = Boolean(wanted[option.value]);
+        });
+    }
+
     function fillSpecialist(agent) {
         specialistNameEl.value = agent ? (agent.name || '') : '';
         specialistProviderEl.value = agent ? (agent.provider || 'ollama') : 'ollama';
         specialistModelEl.value = agent ? (agent.model || '') : '';
         specialistRoleEl.value = agent ? (agent.role || 'assistant') : 'assistant';
         specialistInstructionsEl.value = agent ? (agent.instructions || '') : '';
-        specialistToolsEl.value = agent ? (agent.tools || []).join(', ') : '';
-        specialistPermissionsEl.value = agent ? (agent.permissions || []).join(', ') : '';
+        setSelectedValues(specialistToolsEl, agent ? (agent.tools || []) : []);
+        setSelectedValues(specialistPermissionsEl, agent ? (agent.permissions || []) : []);
         specialistEnabledEl.checked = agent ? agent.enabled !== false : true;
     }
 
@@ -1419,8 +1433,8 @@
             model: specialistModelEl.value,
             role: specialistRoleEl.value,
             instructions: specialistInstructionsEl.value,
-            tools: specialistToolsEl.value,
-            permissions: specialistPermissionsEl.value,
+            tools: selectedValues(specialistToolsEl),
+            permissions: selectedValues(specialistPermissionsEl),
             enabled: specialistEnabledEl.checked
         });
     });

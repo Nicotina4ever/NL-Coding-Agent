@@ -236,9 +236,30 @@ export function buildChatHtml(assets: WebviewAssets): string {
                         <input id="specialist-role" type="text" placeholder="specialty (e.g. security reviewer)" aria-label="Specialist role">
                     </div>
                     <textarea id="specialist-instructions" rows="3" placeholder="Specialist instructions and boundaries" aria-label="Specialist instructions"></textarea>
-                    <div class="nl-filter-row">
-                        <input id="specialist-tools" type="text" placeholder="tools: read, edit, terminal" aria-label="Specialist tools">
-                        <input id="specialist-permissions" type="text" placeholder="permissions: read-only, project-write" aria-label="Specialist permissions">
+                    <div class="nl-filter-row nl-multiselect-row">
+                        <label class="nl-field">Tools (multi-select)
+                            <select id="specialist-tools" multiple size="5" aria-label="Specialist tools">
+                                <option value="read_file">read_file — read project files</option>
+                                <option value="list_dir">list_dir — list folders</option>
+                                <option value="write_file">write_file — create/replace files</option>
+                                <option value="patch_file">patch_file — exact snippet patches</option>
+                                <option value="run_tests">run_tests — execute project tests</option>
+                                <option value="run_command">run_command — allowlisted shell</option>
+                                <option value="git_status">git_status — working tree</option>
+                                <option value="git_diff">git_diff — real diff</option>
+                                <option value="research_fetch_url">research_fetch_url — authorized fetch</option>
+                                <option value="mcp_list_tools">mcp_list_tools — discover MCP</option>
+                            </select>
+                        </label>
+                        <label class="nl-field">Permissions (multi-select)
+                            <select id="specialist-permissions" multiple size="5" aria-label="Specialist permissions">
+                                <option value="read-only">read-only</option>
+                                <option value="project-write">project-write</option>
+                                <option value="execute">execute</option>
+                                <option value="network">network</option>
+                                <option value="cloud">cloud</option>
+                            </select>
+                        </label>
                         <label class="nl-check"><input id="specialist-enabled" type="checkbox"> enabled</label>
                         <button id="specialist-save" type="button">Save specialist</button>
                     </div>
