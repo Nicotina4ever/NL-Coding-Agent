@@ -549,7 +549,8 @@
         const payload = (current && current.accessProfile) || {};
         accessProfileEl.value = payload.profile || 'auto-review';
         accessStatusEl.textContent = payload.profile
-            ? 'applied to every agent' + (payload.auto_review_profile ? ' · auto-review: ' + payload.auto_review_profile : '')
+            ? 'applied to every agent' + (payload.auto_review_profile ? ' · auto-review: ' + payload.auto_review_profile : '') +
+              (payload.profile === 'auto-review' ? ' · deletes move to da_eliminare' : '')
             : 'applying Auto review to every agent';
     }
 
