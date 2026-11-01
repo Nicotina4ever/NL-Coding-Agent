@@ -743,16 +743,23 @@ select option[data-kind='loaded'] {
 
 .nl-access-bar {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     gap: 8px;
     flex-wrap: wrap;
-    padding: 2px 0 4px;
+    padding: 5px 2px 2px;
     border-top: 1px solid var(--vscode-panel-border);
-    margin-top: 2px;
+    margin-top: 4px;
 }
 
-.nl-access-bar .nl-field-small {
-    flex: 0 1 180px;
+.nl-access-bar .nl-access-label {
+    font-size: 0.78em;
+    color: var(--vscode-descriptionForeground);
+    white-space: nowrap;
+}
+
+.nl-access-bar select {
+    max-width: 220px;
+    padding: 2px 4px;
 }
 
 .nl-check {

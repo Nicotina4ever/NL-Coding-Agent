@@ -375,6 +375,27 @@ Write-Step 'Write launcher and build metadata'
 $launcherTemplate = Get-Content (Join-Path $PSScriptRoot 'launcher.bat') -Raw
 $launcher = $launcherTemplate.Replace('__ENGINE_ROOT__', $repoRoot).Replace('__APP_EXE__', $appExeName)
 Set-Content -Path (Join-Path $dist 'NL Code.bat') -Value $launcher -Encoding ASCII
+
+Write-Step 'Compile the NL Code Launcher executable'
+$launcherSource = Join-Path $PSScriptRoot 'NLCodeLauncher.cs'
+$cscCandidates = @(
+    (Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'),
+    (Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe')
+)
+$csc = $cscCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($csc -and (Test-Path $launcherSource)) {
+    Invoke-Native $csc @('/nologo', '/target:winexe',
+        ('/out:' + (Join-Path $dist 'NL Code Launcher.exe')), $launcherSource) $dist
+    $shortcutPath = Join-Path $dist 'NL Code Launcher.lnk'
+    $shell = New-Object -ComObject WScript.Shell
+    $shortcut = $shell.CreateShortcut($shortcutPath)
+    $shortcut.TargetPath = Join-Path $dist 'NL Code Launcher.exe'
+    $shortcut.WorkingDirectory = $dist
+    $shortcut.IconLocation = ($appExe + ',0')
+    $shortcut.Save()
+} else {
+    Write-Warning 'C# compiler not available; portable launcher falls back to NL Code.bat.'
+}
 $commitInfo = (& git -C $Source rev-parse HEAD 2>$null)
 if ($commitInfo) { $commitInfo = $commitInfo.Trim() }
 $buildInfo = [ordered]@{

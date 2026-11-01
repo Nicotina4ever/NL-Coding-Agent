@@ -142,8 +142,8 @@ for that model/role only. The default is never silently changed.
 
 ## VS Code extension 0.4.0
 
-The current extension build is `frontend` version `0.7.0`, packaged as
-`.workspace/dist/NL-Coding-Agent-0.7.0.vsix`. Install it through VS Code's
+The current extension build is `frontend` version `0.7.1`, packaged as
+`.workspace/dist/NL-Coding-Agent-0.7.1.vsix`. Install it through VS Code's
 “Install from VSIX…” so the extensions metadata is updated.
 
 If a portable profile was edited by copying an extension directory manually and
@@ -231,3 +231,14 @@ read-only allowlist (binary/Mach-O/WASM/JavaScript inspection, disassembly,
 xrefs and analysis) so Chat can discover it without loading 229 tools into one
 context. Tool invocation remains permission-gated; no execution permission is
 granted just by configuring it.
+
+## Executables
+
+The staged standalone folder contains:
+
+- NL Code.exe — Code - OSS workbench;
+- NL Code Launcher.exe — sets NL_ENGINE_ROOT/NL_DATA_DIR from BUILD_INFO.json and starts the workbench;
+- NL Code Launcher.lnk — shortcut for the launcher;
+- NL Code.bat — fallback batch launcher.
+
+Double-click NL Code Launcher.exe (or the .lnk). The launcher keeps the existing engine installation and its data; it does not duplicate the Python runtime.

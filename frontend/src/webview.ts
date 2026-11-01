@@ -144,17 +144,6 @@ export function buildChatHtml(assets: WebviewAssets): string {
                         </label>
                         <span id="model-current" class="nl-muted"></span>
                     </div>
-                    <div class="nl-access-bar">
-                        <label class="nl-field nl-field-small">Project access
-                            <select id="chat-access-profile" aria-label="Project-wide access profile">
-                                <option value="read-only">Read Only</option>
-                                <option value="workspace-write">Workspace Write</option>
-                                <option value="full-access">Full access</option>
-                                <option value="auto-review">Auto review</option>
-                            </select>
-                        </label>
-                        <span id="chat-access-status" class="nl-muted">applies to every agent</span>
-                    </div>
 
                     <label class="nl-visually-hidden" for="input">Message NL Coder</label>
                     <textarea id="input" rows="3" placeholder="Ask NL Coder…  Type / for commands (/mission, /steer, /fetch)"></textarea>
@@ -185,6 +174,16 @@ export function buildChatHtml(assets: WebviewAssets): string {
                         </div>
                         <button id="btn-chat-stop" type="button" class="hidden">Stop chat</button>
                         <button id="send" type="submit">Send</button>
+                    </div>
+                    <div class="nl-access-bar">
+                        <span class="nl-access-label">Project access</span>
+                        <select id="chat-access-profile" aria-label="Project-wide access profile">
+                            <option value="read-only">Read Only</option>
+                            <option value="workspace-write">Workspace Write</option>
+                            <option value="full-access">Full access</option>
+                            <option value="auto-review">Auto review</option>
+                        </select>
+                        <span id="chat-access-status" class="nl-muted">applies to every agent</span>
                     </div>
                 </div>
             </form>
