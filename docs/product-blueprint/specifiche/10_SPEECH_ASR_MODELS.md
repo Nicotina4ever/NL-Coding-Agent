@@ -18,3 +18,11 @@ Installazione on-demand: elenco di modelli predefiniti verificati e custom HF/re
 Speech-to-mission: registra da microfono o allega audio, trascrizione locale, lingua auto/manuale, editing prima invio, timestamp/diarizzazione solo quando supportati. Download/offline failure non deve impedire chat testuale e coding.
 
 **Accettazione:** senza ASR installato app funziona; install 0.6B Qwen o Vosk testabile; toggle off preserva file; unload libera risorse; cache cleanup mostra ownership e chiede conferma; forced aligner non scaricato se non richiesto.
+
+## Stato operativo (1 novembre 2026)
+
+- **Vosk**: adaptatore locale attivo; modello italiano small in `data/speech/models/vosk-model-small-it-0.22` (circa 87 MB). È la dettatura leggera predefinita quando presente.
+- **Qwen3-ASR**: riuso in place dell'installazione esistente `J:\ZLinkdaC\Qwen3ASR`, senza copiare il modello GGUF. La cartella può essere registrata da Settings o con `NL_QWEN3_ASR_HOME`; modelli esterni non vengono cancellati.
+- **Faster-Whisper**: adapter mantenuto opzionale; richiede installazione locale esplicita.
+- Il pulsante Dictate nella Chat registra localmente, trascrive e inserisce il testo nel composer; il testo resta modificabile e non viene inviato automaticamente.
+- I modelli scaricati da NL Code restano sotto `data/speech/models`; quelli esterni sono referenziati per percorso.
