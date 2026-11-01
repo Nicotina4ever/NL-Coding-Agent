@@ -353,6 +353,16 @@ class AppServices:
                 permissions.grant(scope, project_id=int(project_id), source="access-profile")
             else:
                 permissions.revoke(scope, project_id=int(project_id), source="access-profile")
+        if name == "auto-review":
+            # Auto review explicitly authorizes cloud inference for this project;
+            # it never authorizes direct destructive delete (quarantine is used).
+            try:
+                permissions.grant_capability(
+                    permissions.CAPABILITY_MODEL_INFERENCE_CLOUD,
+                    project_id=int(project_id), decision="project",
+                    source="access-profile")
+            except Exception:
+                pass
         database.set_json_setting("access.profile." + str(int(project_id)), {
             "profile": name,
             "auto_review_profile": "trusted-auto-review" if name == "auto-review" else "manual",
@@ -763,7 +773,10 @@ class AppServices:
             description=str(description or ""),
             context={"project_id": int(project_id)},
         )
-        decision = auto_review.evaluate_action(action, profile_name)
+        controls = {}
+        if profile_name == auto_review.PROFILE_TRUSTED:
+            controls[auto_review.CONTROL_CLOUD_LLM] = True
+        decision = auto_review.evaluate_action(action, profile_name, controls=controls)
         return {"ok": True, "decision": {
             "outcome": decision.outcome, "reason": decision.reason,
             "reason_code": decision.reason_code, "profile": decision.profile,

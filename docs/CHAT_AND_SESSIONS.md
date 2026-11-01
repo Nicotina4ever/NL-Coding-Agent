@@ -75,3 +75,9 @@ Mostrare tool calls eseguite, agent role/model, file letti/creati, candidate dif
 - Avvio MCP smoke: `python\python.exe scripts\nlcode\mcp_smoke.py --project <cartella>`.
 - Autopilota: `python\python.exe scripts\nlcode\autopilot.py --project <cartella> --objective "<obiettivo>" --model <provider/modello> --dry-run` (piano), poi senza `--dry-run` per creare il Goal e avviare il Supervisor.
 - Checkpoint: `/checkpoint`, `/checkpoints`, `/restore <id>` oppure History → File checkpoints.
+
+## Auto review 0.7.1
+
+- Auto review grants the project cloud-inference capability and the trusted review profile; cloud actions are not blocked by the profile.
+- Direct delete remains denied; project deletions are moved to `da_eliminare` with a manifest.
+- Autopilot recovery is bounded by `autopilot_supervise.py`; create `STOP` in the job directory to stop before the next retry.
