@@ -1876,6 +1876,7 @@ class AppServices:
         )
         permissions.require(permissions.READ, project_id=project_id)
         permissions.require(permissions.WRITE, project_id=project_id)
+        permissions.require(permissions.DELETE, project_id=project_id)
         mission = get_mission(mission_id)
         project = self.get_project(project_id)
         if not mission or not project or mission.get("project_id") != project_id:

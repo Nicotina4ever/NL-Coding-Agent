@@ -69,3 +69,9 @@ Mostrare tool calls eseguite, agent role/model, file letti/creati, candidate dif
 - `scripts/nlcode/autopilot.py --dry-run` produced a plan for ParcoTest without changing project files.
 - Git checkpoint capture/restore verified on an isolated repository; file restore and conversation rewind remain separate operations.
 - Installed VSIX acceptance: mission developer→tester→reviewer→promotion PASS.
+
+## Note operative 0.7.0
+
+- Avvio MCP smoke: `python\python.exe scripts\nlcode\mcp_smoke.py --project <cartella>`.
+- Autopilota: `python\python.exe scripts\nlcode\autopilot.py --project <cartella> --objective "<obiettivo>" --model <provider/modello> --dry-run` (piano), poi senza `--dry-run` per creare il Goal e avviare il Supervisor.
+- Checkpoint: `/checkpoint`, `/checkpoints`, `/restore <id>` oppure History → File checkpoints.

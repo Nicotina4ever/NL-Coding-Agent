@@ -372,6 +372,9 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             this.busyPhase = 'thinking';
             this.postState();
             try {
+                if (this.isCloudRoute(model)) {
+                    await this.ensureCloudGrant(model);
+                }
                 this.postChat('system',
                     'Planning only: the planner will read the project and produce milestones. It will not edit files or create missions.');
                 const plan = await this.connection.planGenerate(model, planTask[1].trim());
