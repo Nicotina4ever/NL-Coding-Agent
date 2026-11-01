@@ -570,6 +570,27 @@ class AppServices:
             "specialty": profile.get("role") or "",
         }
 
+    def agent_task(self, project_id: int, agent: str, task: str,
+                   *, session_id: str | None = None, timeout: float = 180.0) -> dict:
+        """Run one explicit task through a named specialist and persist the turn."""
+        from nl_coding_agent.core import permissions
+        permissions.require(permissions.READ, project_id=int(project_id))
+        message = str(task or "").strip()
+        if not message:
+            raise ValueError("Agent task is required")
+        self._append_chat_message(int(project_id), "user", message,
+                                  session_id=session_id, agent_target=str(agent or ""))
+        result = self.consult_specialist(
+            int(project_id), agent, message, timeout=timeout)
+        self._append_chat_message(
+            int(project_id), "assistant", str(result.get("reply") or ""),
+            session_id=session_id,
+            model=result.get("model"), provider_id=result.get("provider_id"),
+            agent_id=result.get("agent_id"), agent_name=result.get("agent_name"))
+        result["messages"] = self.list_chat_messages(
+            project_id=int(project_id), session_id=session_id)
+        return result
+
     def create_custom_agent(self, name: str, **fields) -> dict:
         import uuid
         agent = {

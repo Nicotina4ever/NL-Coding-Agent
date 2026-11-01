@@ -995,6 +995,24 @@ export class EngineConnection {
         return this.callJson<{ ok: boolean; messages: Array<Record<string, unknown>> }>('chat_search', { query, limit }, 30_000);
     }
 
+    async agentTask(agent: string, task: string, sessionId?: string): Promise<{
+        ok: boolean;
+        task: {
+            agent_id?: string; agent_name?: string; model?: string; provider_id?: string;
+            reply?: string; specialty?: string; messages?: Array<Record<string, unknown>>;
+        };
+    }> {
+        return this.callJson<{
+            ok: boolean;
+            task: {
+                agent_id?: string; agent_name?: string; model?: string; provider_id?: string;
+                reply?: string; specialty?: string; messages?: Array<Record<string, unknown>>;
+            };
+        }>('agent_task', {
+            agent, task, session_id: sessionId, approved: true
+        }, 240_000);
+    }
+
     async chatCleanup(scope: 'orphaned' | 'archived' = 'orphaned'): Promise<{
         ok: boolean; result: { scope: string; sessions: number; messages: number };
     }> {

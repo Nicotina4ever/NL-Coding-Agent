@@ -142,8 +142,8 @@ for that model/role only. The default is never silently changed.
 
 ## VS Code extension 0.4.0
 
-The current extension build is `frontend` version `0.4.1`, packaged as
-`.workspace/dist/NL-Coding-Agent-0.4.1.vsix`. Install it through VS Code's
+The current extension build is `frontend` version `0.5.0`, packaged as
+`.workspace/dist/NL-Coding-Agent-0.5.0.vsix`. Install it through VS Code's
 “Install from VSIX…” so the extensions metadata is updated.
 
 If a portable profile was edited by copying an extension directory manually and

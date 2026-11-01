@@ -415,6 +415,14 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
             timeout=max(5, min(int(timeout_s), 300)))}
 
     @server.tool()
+    def agent_task(agent: str, task: str, session_id: str | None = None) -> dict:
+        """Send one task directly to a named specialist, executed alone and persisted."""
+        require_read()
+        return {"ok": True, "task": services.agent_task(
+            bound_project_id, agent, task, session_id=session_id,
+            timeout=180.0)}
+
+    @server.tool()
     def save_custom_agent(agent_id: str | None = None,
                           name: str = "Specialist agent",
                           provider: str = "ollama",

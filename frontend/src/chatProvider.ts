@@ -290,6 +290,11 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             await this.refreshQueue(false);
             return;
         }
+        const agentTask = /^\/agent\s+(\S+)\s+([\s\S]+)$/i.exec(message);
+        if (agentTask) {
+            await this.runAgentTask(agentTask[1], agentTask[2].trim());
+            return;
+        }
         this.busyChat = true;
         this.busyPhase = 'thinking';
         this.postState();
@@ -372,6 +377,41 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             this.busyPhase = this.busyMission ? 'mission' : 'idle';
             this.postState();
             // A queued turn is dispatched only after this one is genuinely idle.
+            void this.refreshQueue(true);
+        }
+    }
+
+    /** Send one explicit task to a named specialist; only one Chat turn runs at a time. */
+    async runAgentTask(agent: string, task: string): Promise<void> {
+        if (!agent || !task) {
+            this.postChat('error', 'Usage: /agent <agent-name-or-id> <task>');
+            return;
+        }
+        this.busyChat = true;
+        this.busyPhase = 'thinking';
+        this.postState();
+        this.postChat('user', `/agent ${agent} ${task}`);
+        try {
+            await this.connection.connect();
+            const context = await this.requireBoundProject();
+            const result = await this.connection.agentTask(agent, task, this.currentSessionId);
+            const reply = result.task.reply || '';
+            this.lastRoute = {
+                provider_id: result.task.provider_id,
+                model: result.task.model,
+                automatic: false
+            } as ChatRoute;
+            this.postChat('assistant', reply || '(The specialist returned no text.)');
+            await this.loadHistory();
+            this.postState();
+            this.output.appendLine(`[agent] ${agent} (${result.task.agent_name || '?'}) ` +
+                `via ${result.task.provider_id || '?'}/${result.task.model || '?'}`);
+        } catch (error) {
+            this.reportError(error, 'agent-task');
+        } finally {
+            this.busyChat = false;
+            this.busyPhase = 'idle';
+            this.postState();
             void this.refreshQueue(true);
         }
     }
@@ -1585,8 +1625,14 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         const found: string[] = [];
         const patterns = [
             /https?:\/\/[^\s<>"']+/gi,
-            /(?<![\w./-])(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|it|org|net|io|dev|ai|app|co|uk|de|fr|eu|cloud|tech|me)(?:\/[^\s<>"']*)?/gi
+            /(?<![\w./-])(?:www\.)?(?:[a-z0-9-]+\.)+[a-z]{2,24}(?:\/[^\s<>"']*)?/gi
         ];
+        const fileExtensions = new Set([
+            'md', 'json', 'py', 'js', 'ts', 'tsx', 'jsx', 'yaml', 'yml', 'txt',
+            'html', 'css', 'sh', 'ps1', 'toml', 'lock', 'xml', 'csv', 'png',
+            'jpg', 'jpeg', 'pdf', 'zip', 'sql', 'ini', 'cfg', 'env', 'go',
+            'rs', 'java', 'c', 'cpp', 'h', 'hpp'
+        ]);
         for (const pattern of patterns) {
             let match: RegExpExecArray | null;
             while ((match = pattern.exec(corpus)) !== null) {
@@ -1597,6 +1643,15 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 }
                 if (!/^https?:\/\//i.test(candidate)) {
                     candidate = 'https://' + candidate;
+                }
+                try {
+                    const host = new URL(candidate).hostname.toLowerCase();
+                    const tld = host.split('.').pop() || '';
+                    if (fileExtensions.has(tld) || !host.includes('.')) {
+                        continue;
+                    }
+                } catch {
+                    continue;
                 }
                 try {
                     const parsed = new URL(candidate);

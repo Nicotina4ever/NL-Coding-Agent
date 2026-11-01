@@ -1224,6 +1224,7 @@
         { name: '/mission', insert: '/mission ', label: 'Start a mission', detail: 'Plan, implement, verify and review a concrete change.' },
         { name: '/steer', insert: '/steer ', label: 'Steer the running turn', detail: 'Redirect the current Chat or mission at the next checkpoint.' },
         { name: '/fetch', insert: '/fetch ', label: 'Fetch a URL', detail: 'Paste a URL after the command; Chat fetches it as untrusted context.' },
+        { name: '/agent', insert: '/agent ', label: 'Send a task to one agent', detail: 'Pick a specialist; one task runs at a time.' },
         { name: '/help', insert: '/help', label: 'Show commands', detail: 'List the available Chat commands.' }
     ];
     let slashMatches = [];
@@ -1267,6 +1268,19 @@
         slashMatches = slashCommands.filter(function (item) {
             return !query || item.name.slice(1).indexOf(query) === 0;
         });
+        if (!query || 'agent'.indexOf(query) === 0) {
+            const agents = (state && state.settings && state.settings.agents &&
+                state.settings.agents.custom_agents) || [];
+            agents.slice(0, 12).forEach(function (agent) {
+                if (!agent || !agent.id) { return; }
+                slashMatches.push({
+                    name: '/agent ' + agent.id,
+                    insert: '/agent ' + agent.id + ' ',
+                    label: agent.name || agent.id,
+                    detail: (agent.role || 'specialist') + ' · ' + (agent.model || 'default model')
+                });
+            });
+        }
         clear(slashMenuEl);
         if (!slashMatches.length) {
             hideSlashMenu();
