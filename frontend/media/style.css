@@ -1100,3 +1100,34 @@ body .nl-danger {
     color: var(--vscode-errorForeground, #ffd7dc);
     border-color: var(--vscode-inputValidation-errorBorder, #b3475e);
 }
+
+/* The generic agents grid is wrong for the two checkbox groups: fixed
+   min-width fieldsets overflow their grid cell and their legends collide. */
+#tab-agents .nl-filter-row.nl-check-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 10px;
+}
+#tab-agents .nl-filter-row.nl-check-row .nl-check-grid {
+    flex: 1 1 260px;
+    min-width: 240px;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+#tab-agents .nl-filter-row.nl-check-row .nl-check-grid .nl-check {
+    flex: none;
+    width: auto;
+}
+
+.nl-message-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+    opacity: 0.65;
+}
+.nl-message:hover .nl-message-actions { opacity: 1; }
+.nl-message-actions button {
+    font-size: 0.76em;
+    padding: 2px 6px;
+}

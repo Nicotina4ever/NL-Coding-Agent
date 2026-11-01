@@ -422,6 +422,12 @@ class AppServices:
         from nl_coding_agent.app import chat_sessions
         return chat_sessions.delete_session(int(project_id), session_id)
 
+    def rewind_chat_session(self, project_id: int, session_id: str, message_id: int,
+                            replacement: str | None = None) -> dict:
+        from nl_coding_agent.app import chat_sessions
+        return chat_sessions.rewind(int(project_id), str(session_id), int(message_id),
+                                    replacement=replacement)
+
     def search_chat_messages(self, project_id: int, query: str, limit: int = 100) -> list[dict]:
         from nl_coding_agent.app import chat_sessions
         return chat_sessions.search(int(project_id), query, limit=limit)
@@ -542,8 +548,14 @@ class AppServices:
         if not prompt:
             raise ValueError("Specialist question is required")
         model_spec = str(profile.get("model") or "").strip()
+        roles = (self.get_model_config() or {}).get("roles") or {}
+        if (model_spec and "cloud" in model_spec.lower()
+                and not self.is_cloud_escalation_enabled()):
+            # A specialist must not fail just because its stored model is a cloud
+            # route that has not been granted. Use the configured local chat/developer
+            # fallback; an explicit CLOUD grant keeps the cloud route.
+            model_spec = str((roles.get("chat") or roles.get("developer") or {}).get("model") or "")
         if not model_spec:
-            roles = (self.get_model_config() or {}).get("roles") or {}
             model_spec = str((roles.get("chat") or roles.get("developer") or {}).get("model") or "")
         provider, model, _, error = self._resolve_chat_provider(
             model_spec, project_id=int(project_id))

@@ -211,7 +211,7 @@ def messages(project_id: int, session_id: str | None = None) -> list[dict]:
         conn.close()
     result = []
     for row in rows:
-        item = {"role": row["role"], "content": row["content"],
+        item = {"id": row["id"], "role": row["role"], "content": row["content"],
                 "created_at": row["created_at"]}
         try:
             metadata = json.loads(row["metadata_json"] or "{}")
@@ -239,6 +239,42 @@ def append_message(project_id: int, role: str, content: str,
     finally:
         conn.close()
     return item
+
+
+def rewind(project_id: int, session_id: str, message_id: int,
+           replacement: str | None = None) -> dict:
+    """Delete one message and everything after it, after backing the session up."""
+    session = get_session(session_id)
+    if session.get("project_id") != int(project_id):
+        raise ChatSessionError("Session belongs to another project")
+    conn = database.init_db()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM chat_messages WHERE session_id=? ORDER BY id",
+            (str(session_id),),
+        ).fetchall()
+        backup_rows = [dict(row) for row in rows]
+        target = next((row for row in rows if int(row["id"]) == int(message_id)), None)
+        if target is None:
+            raise ChatSessionError("Chat message not found in this session")
+        from datetime import datetime
+        backup = database.db_path().parent / "backups" / "chat" / (
+            "rewind-" + str(session_id) + "-" + datetime.now().strftime("%Y%m%d-%H%M%S-%f") + ".json")
+        backup.parent.mkdir(parents=True, exist_ok=True)
+        backup.write_text(json.dumps(backup_rows, ensure_ascii=False, indent=2), encoding="utf-8")
+        with conn:
+            conn.execute("DELETE FROM chat_messages WHERE session_id=? AND id>=?",
+                         (str(session_id), int(message_id)))
+            if replacement is not None and str(replacement).strip():
+                _insert_message(conn, str(session_id), {
+                    "role": "user", "content": str(replacement).strip(), "created_at": _now(),
+                })
+            conn.execute("UPDATE chat_sessions SET updated_at=? WHERE id=?",
+                         (_now(), str(session_id)))
+    finally:
+        conn.close()
+    return {"ok": True, "session_id": str(session_id), "rewound_from": int(message_id),
+            "backup": str(backup), "messages": messages(int(project_id), str(session_id))}
 
 
 def search(project_id: int, query: str, *, limit: int = 100) -> list[dict]:

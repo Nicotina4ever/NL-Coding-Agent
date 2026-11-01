@@ -669,6 +669,42 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         return {"ok": True, "session": services.delete_chat_session(
             bound_project_id, session_id)}
 
+    @server.tool()
+    def chat_rewind(session_id: str, message_id: int, replacement: str = "",
+                    approved: bool = False) -> dict:
+        """Delete one persisted message and everything after it; optional edited user text."""
+        require_read()
+        return services.rewind_chat_session(
+            bound_project_id, session_id, int(message_id),
+            replacement=(str(replacement) if str(replacement).strip() else None))
+
+    @server.tool(annotations=read_only)
+    def speech_status() -> dict:
+        """Report local ASR/TTS availability without downloading anything."""
+        require_read()
+        return {"ok": True, "speech": services.speech_status(),
+                "catalog": services.speech_catalog()}
+
+    @server.tool()
+    def speech_start_recording(max_seconds: int = 60) -> dict:
+        """Start one explicit local microphone recording."""
+        require_read()
+        return {"ok": True, "recording": services.speech_start_recording(
+            max_seconds=max(1, min(int(max_seconds), 120)))}
+
+    @server.tool()
+    def speech_stop_recording(session_id: str) -> dict:
+        """Stop a recording and return its local WAV path."""
+        require_read()
+        return {"ok": True, "recording": services.speech_stop_recording(str(session_id))}
+
+    @server.tool()
+    def speech_transcribe(wav_path: str, language: str = "") -> dict:
+        """Transcribe an existing local WAV with the selected local ASR model."""
+        require_read()
+        return {"ok": True, "transcript": services.speech_transcribe(
+            str(wav_path), language=(str(language) or None))}
+
     @server.tool(annotations=read_only)
     def chat_search(query: str, limit: int = 100) -> dict:
         """Search persisted Chat messages in the bound project."""

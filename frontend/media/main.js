@@ -48,6 +48,7 @@
     const editorContextEl = $('editor-context');
     const attachmentChipsEl = $('attachment-chips');
     const attachFilesEl = $('attach-files');
+    const dictateEl = $('dictate');
     const attachCurrentEl = $('attach-current');
     const attachSelectionEl = $('attach-selection');
     const dropOverlay = $('drop-overlay');
@@ -187,6 +188,25 @@
         const body = el('div', 'nl-message-body');
         renderLinks(body, item.text);
         wrap.appendChild(body);
+        if (item.id) {
+            const actions = el('div', 'nl-message-actions');
+            if (item.role === 'user') {
+                const edit = el('button', '', 'Edit & rewind');
+                edit.title = 'Edit this request and discard it plus every later message.';
+                edit.addEventListener('click', function () {
+                    postAction('rewindMessage', { messageId: item.id, edit: true });
+                });
+                actions.appendChild(edit);
+            } else if (item.role === 'assistant') {
+                const rewind = el('button', '', 'Rewind');
+                rewind.title = 'Discard this reply and every later message; the request before it stays.';
+                rewind.addEventListener('click', function () {
+                    postAction('rewindMessage', { messageId: item.id, edit: false });
+                });
+                actions.appendChild(rewind);
+            }
+            if (actions.children.length) { wrap.appendChild(actions); }
+        }
         const attachments = item.attachments || [];
         if (attachments.length) {
             const chips = el('div', 'nl-message-attachments');
@@ -210,6 +230,7 @@
         transcript.length = 0;
         (messages || []).forEach(function (message) {
             renderMessage({
+                id: message.id,
                 role: message.role,
                 text: message.content,
                 created_at: message.created_at,
@@ -721,6 +742,11 @@
         attachFilesEl.disabled = busy;
         attachCurrentEl.disabled = busy || !current.editor;
         attachSelectionEl.disabled = busy || !current.editor || !current.editor.hasSelection;
+        if (dictateEl) {
+            dictateEl.disabled = busy;
+            dictateEl.textContent = current.dictating ? '■ Stop dictation' : '🎤 Dictate';
+            dictateEl.classList.toggle('nl-danger', Boolean(current.dictating));
+        }
     }
 
     function renderResearch(current) {
@@ -805,35 +831,14 @@
                 });
                 actions.appendChild(resume);
             }
-            if (!mission.archived_at && ['completed', 'failed', 'blocked', 'interrupted'].indexOf(mission.status) >= 0) {
-                const archive = el('button', '', 'Archive');
-                archive.addEventListener('click', function (event) {
-                    event.stopPropagation();
-                    postAction('archiveMission', { missionId: mission.id });
-                });
-                actions.appendChild(archive);
-            }
-            if (mission.archived_at) {
-                const unarchive = el('button', '', 'Unarchive');
-                unarchive.addEventListener('click', function (event) {
-                    event.stopPropagation();
-                    postAction('unarchiveMission', { missionId: mission.id });
-                });
-                actions.appendChild(unarchive);
-                const remove = el('button', '', 'Delete');
+            if (['completed', 'failed', 'blocked', 'interrupted'].indexOf(mission.status) >= 0) {
+                const remove = el('button', 'nl-danger', 'Delete');
+                remove.title = 'Archive (if needed) and permanently delete this mission record.';
                 remove.addEventListener('click', function (event) {
                     event.stopPropagation();
                     postAction('deleteMission', { missionId: mission.id });
                 });
                 actions.appendChild(remove);
-            }
-            if (['pending', 'running', 'interrupted', 'blocked'].indexOf(mission.status) >= 0) {
-                const steer = el('button', '', 'Steer');
-                steer.addEventListener('click', function (event) {
-                    event.stopPropagation();
-                    postAction('steerMission', { missionId: mission.id });
-                });
-                actions.appendChild(steer);
             }
             row.appendChild(actions);
             row.addEventListener('click', function () {
@@ -1038,6 +1043,28 @@
             reject.addEventListener('click', function () { postAction('revertMission', { missionId: mission.id }); });
             actions.appendChild(reject);
         }
+        const more = el('details', 'nl-more-actions');
+        more.appendChild(el('summary', 'nl-muted', 'More mission actions'));
+        const moreRow = el('div', 'nl-actions');
+        if (!mission.archived_at) {
+            const archive = el('button', '', 'Archive');
+            archive.addEventListener('click', function () { postAction('archiveMission', { missionId: mission.id }); });
+            moreRow.appendChild(archive);
+        } else {
+            const unarchive = el('button', '', 'Unarchive');
+            unarchive.addEventListener('click', function () { postAction('unarchiveMission', { missionId: mission.id }); });
+            moreRow.appendChild(unarchive);
+        }
+        if (['pending', 'running', 'interrupted', 'blocked'].indexOf(mission.status) >= 0) {
+            const steer = el('button', '', 'Steer');
+            steer.addEventListener('click', function () { postAction('steerMission', { missionId: mission.id }); });
+            moreRow.appendChild(steer);
+        }
+        const remove = el('button', 'nl-danger', 'Delete mission');
+        remove.addEventListener('click', function () { postAction('deleteMission', { missionId: mission.id }); });
+        moreRow.appendChild(remove);
+        more.appendChild(moreRow);
+        actions.appendChild(more);
         missionDetailEl.appendChild(actions);
 
         missionDetailEl.appendChild(el('div', 'nl-muted', 'Objective'));
@@ -1225,12 +1252,15 @@
         { name: '/steer', insert: '/steer ', label: 'Steer the running turn', detail: 'Redirect the current Chat or mission at the next checkpoint.' },
         { name: '/fetch', insert: '/fetch ', label: 'Fetch a URL', detail: 'Paste a URL after the command; Chat fetches it as untrusted context.' },
         { name: '/agent', insert: '/agent ', label: 'Send a task to one agent', detail: 'Pick a specialist; one task runs at a time.' },
+        { name: '/plan', insert: '/plan ', label: 'Plan without editing', detail: 'Analyse docs and files, then return a concrete plan; no mission starts.' },
         { name: '/help', insert: '/help', label: 'Show commands', detail: 'List the available Chat commands.' }
     ];
     let slashMatches = [];
+    let slashContext = null;
 
     function hideSlashMenu() {
         slashMatches = [];
+        slashContext = null;
         if (slashMenuEl) {
             slashMenuEl.classList.add('hidden');
             clear(slashMenuEl);
@@ -1247,24 +1277,34 @@
             }).join('\n'));
             return;
         }
-        inputEl.value = command.insert;
+        const value = inputEl.value;
+        const context = slashContext;
+        const before = context ? value.slice(0, context.start) : '';
+        const after = context ? value.slice(context.end) : '';
+        inputEl.value = before + command.insert + after;
+        const caret = before.length + command.insert.length;
         hideSlashMenu();
         if (command.name === '/mission') {
             modeEl.value = 'mission';
             setMode('mission');
         }
         inputEl.focus();
-        inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+        inputEl.setSelectionRange(caret, caret);
     }
 
     function updateSlashMenu() {
         if (!slashMenuEl || !inputEl) { return; }
         const value = inputEl.value;
-        if (!value.startsWith('/') || value.indexOf('\n') !== -1 || value.indexOf(' ') !== -1) {
+        const caret = inputEl.selectionStart === null
+            ? value.length : inputEl.selectionStart;
+        const before = value.slice(0, caret);
+        const match = /(^|\s)\/([^\s/]*)$/.exec(before);
+        if (!match) {
             hideSlashMenu();
             return;
         }
-        const query = value.slice(1).toLowerCase();
+        const query = match[2].toLowerCase();
+        slashContext = { start: caret - match[2].length - 1, end: caret };
         slashMatches = slashCommands.filter(function (item) {
             return !query || item.name.slice(1).indexOf(query) === 0;
         });
@@ -1450,6 +1490,9 @@
     attachFilesEl.addEventListener('click', function () { postAction('attachFiles', {}); });
     attachCurrentEl.addEventListener('click', function () { postAction('attachEditor', { kind: 'file' }); });
     attachSelectionEl.addEventListener('click', function () { postAction('attachEditor', { kind: 'selection' }); });
+    if (dictateEl) {
+        dictateEl.addEventListener('click', function () { postAction('toggleDictation', {}); });
+    }
     researchUse.addEventListener('click', function () { postAction('useResearch', {}); });
     researchDismiss.addEventListener('click', function () { postAction('dismissResearch', {}); });
 
@@ -1718,6 +1761,10 @@
             setStatus(message.label || '', message.state || '');
         } else if (message.type === 'focus') {
             inputEl.focus();
+        } else if (message.type === 'setComposer') {
+            inputEl.value = String(message.text || '');
+            inputEl.focus();
+            updateSlashMenu();
         }
     });
 

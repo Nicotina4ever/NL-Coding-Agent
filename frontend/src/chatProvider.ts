@@ -75,6 +75,7 @@ export interface DashboardState {
     busyChat: boolean;
     busyMission: boolean;
     busyPhase: string;
+    dictating?: boolean;
     chatModel: string;
     autoCoding: boolean;
     missionModels: { developerModel: string; reviewerModel: string };
@@ -133,6 +134,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     private missions: MissionRow[] = [];
     private selected: MissionSelection | undefined;
     private activeMissionId: number | undefined;
+    private dictationSessionId: string | undefined;
     private busyChat = false;
     private busyMission = false;
     private busyPhase = 'idle';
@@ -264,7 +266,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     /** One chat turn; the webview appends the user message locally until history reload. */
     async handleUserMessage(text: string, attachment?: AttachmentInput | null,
                             queuedAttachmentIds: number[] = []): Promise<void> {
-        const message = String(text || '').trim();
+        let message = String(text || '').trim();
         if (!message) {
             return;
         }
@@ -294,6 +296,18 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         if (agentTask) {
             await this.runAgentTask(agentTask[1], agentTask[2].trim());
             return;
+        }
+        const planTask = /^\/plan\s+([\s\S]+)$/i.exec(message);
+        if (planTask) {
+            message = [
+                'PLANNING MODE: do not edit files, do not start a mission, and do not claim execution.',
+                'Inspect the available documentation and project files with your read-only tools, then return:',
+                '1) understood objective and constraints; 2) current state; 3) phased plan with concrete files/commands;',
+                '4) risks and unknowns; 5) recommended first mission and acceptance criteria.',
+                '',
+                'User request:',
+                planTask[1].trim()
+            ].join('\n');
         }
         this.busyChat = true;
         this.busyPhase = 'thinking';
@@ -378,6 +392,45 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             this.postState();
             // A queued turn is dispatched only after this one is genuinely idle.
             void this.refreshQueue(true);
+        }
+    }
+
+    /** Start/stop local microphone dictation and insert the editable transcript. */
+    async toggleDictation(): Promise<void> {
+        try {
+            if (this.dictationSessionId) {
+                const sessionId = this.dictationSessionId;
+                this.dictationSessionId = undefined;
+                const stopped = await this.connection.speechStopRecording(sessionId);
+                const wavPath = stopped.recording?.wav_path;
+                if (!wavPath) {
+                    throw new EngineError('recording-empty', 'No WAV recording was produced.');
+                }
+                const result = await this.connection.speechTranscribe(wavPath);
+                const text = String(result.transcript?.text || '').trim();
+                this.post({ type: 'setComposer', text });
+                this.postChat('system', text
+                    ? `Dictation inserted (${result.transcript?.engine || 'local ASR'}).`
+                    : 'Dictation produced no text.');
+                this.postState();
+                return;
+            }
+            const status = await this.connection.speechStatus();
+            const speech = (status.speech || {}) as Record<string, unknown>;
+            if (!speech.audio_available) {
+                throw new EngineError('audio-unavailable',
+                    'No local microphone backend is available. Install QtMultimedia/sounddevice audio support first.');
+            }
+            const started = await this.connection.speechStartRecording(60);
+            this.dictationSessionId = started.recording?.session_id;
+            if (!this.dictationSessionId) {
+                throw new EngineError('recording-not-started', 'The microphone recording did not start.');
+            }
+            this.postChat('system', 'Recording locally… click Stop dictation when finished.');
+            this.postState();
+        } catch (error) {
+            this.dictationSessionId = undefined;
+            this.reportError(error, 'dictation');
         }
     }
 
@@ -652,6 +705,41 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         await this.loadSessions();
         await this.loadHistory();
         this.postState();
+    }
+
+    async rewindChatMessage(messageId: number, edit: boolean): Promise<void> {
+        if (!this.currentSessionId || !Number.isInteger(messageId)) {
+            return;
+        }
+        const target = this.history.find((item) => Number(item['id']) === messageId);
+        if (!target) {
+            this.postChat('error', 'That message is no longer in the loaded history; reload the conversation.');
+            return;
+        }
+        const choice = await vscode.window.showWarningMessage(
+            edit ? 'Edit this request and rewind the conversation?'
+                 : 'Rewind this reply and all later messages?',
+            {
+                modal: true,
+                detail: 'A backup of the conversation is written before the messages are removed. ' +
+                    (edit ? 'The original request will be placed in the composer so you can edit and resend it.'
+                          : 'The request before this reply is kept.')
+            },
+            edit ? 'Rewind to edit' : 'Rewind');
+        if (!choice) {
+            return;
+        }
+        try {
+            await this.connection.chatRewind(this.currentSessionId, messageId);
+            await this.loadHistory();
+            if (edit) {
+                this.post({ type: 'setComposer', text: String(target.content || '') });
+            }
+            this.postState();
+            this.postChat('system', 'Rewound conversation' + (edit ? '; request loaded in the composer.' : '.'));
+        } catch (error) {
+            this.reportError(error, 'chat-rewind');
+        }
     }
 
     async showChatHistory(): Promise<void> {
@@ -1213,12 +1301,17 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     }
 
     async deleteMissionById(missionId: number): Promise<void> {
+        const mission = this.missions.find((item) => Number(item.id) === missionId);
         const choice = await vscode.window.showWarningMessage(
-            'Delete archived mission #' + missionId + ' from the mission database? '
+            'Permanently delete mission #' + missionId + ' from the mission database? '
+            + (mission?.archived_at ? '' : 'It will be archived first. ')
             + 'Staged files remain for the Storage Manager.',
-            { modal: true }, 'Delete');
-        if (choice !== 'Delete') {
+            { modal: true }, 'Delete permanently');
+        if (choice !== 'Delete permanently') {
             return;
+        }
+        if (mission && !mission.archived_at) {
+            await this.connection.archiveMission(missionId);
         }
         await this.connection.deleteMission(missionId);
         if (this.selected?.detail.mission.id === missionId) {
@@ -1226,6 +1319,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         }
         await this.refreshMissions();
         this.postState();
+        this.postChat('system', 'Mission #' + missionId + ' deleted.');
     }
 
     async saveProviderSettings(payload: Record<string, unknown>): Promise<void> {
@@ -1912,6 +2006,13 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 case 'showChatHistory':
                     await this.showChatHistory();
                     break;
+                case 'rewindMessage':
+                    await this.rewindChatMessage(
+                        Number(payload.messageId), Boolean(payload.edit));
+                    break;
+                case 'toggleDictation':
+                    await this.toggleDictation();
+                    break;
                 case 'renameChatSession':
                     await this.renameChatSession();
                     break;
@@ -2082,8 +2183,13 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             automatic: true
         }];
         const seen = new Set<string>(['']);
+        const cloudAllowed = Boolean(settings?.permissions?.cloud_escalation_enabled ||
+            settings?.permissions?.policy?.cloud);
         const add = (value: string, label: string, group: string, loaded = false) => {
             if (!value || seen.has(value)) {
+                return;
+            }
+            if (!cloudAllowed && /(^|[\/_:-])cloud($|[\/_:-])|:cloud$/i.test(value)) {
                 return;
             }
             seen.add(value);
@@ -2142,6 +2248,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             busyChat: this.busyChat,
             busyMission: this.busyMission,
             busyPhase: this.busyPhase,
+            dictating: Boolean(this.dictationSessionId),
             chatModel: this.chatModel,
             autoCoding: this.autoCoding,
             missionModels: this.missionModels,

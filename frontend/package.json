@@ -2,7 +2,7 @@
   "name": "nl-coding-agent",
   "displayName": "NL Coder",
   "description": "NL Coder — NL Chat and mission control for the local NL Coding Engine: provider/model selection, project-scoped attachments, editor context, authorized URL research, persisted history, persistent missions, diffs, candidate/oracle verification and reviewer verdicts. The Python engine remains the single source of truth.",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "publisher": "nlcodingagent",
   "icon": "assets/icon.png",
   "engines": {
@@ -46,7 +46,7 @@
     "test:vsix": "node test/runInstalledVsixTests.cjs",
     "test:chat-features": "node test/runChatFeatureTests.cjs",
     "test:installed-chat": "node test/runInstalledChatFeatureTests.cjs",
-    "package:vsix": "vsce package --out ../.workspace/dist/NL-Coding-Agent-0.5.0.vsix"
+    "package:vsix": "vsce package --out ../.workspace/dist/NL-Coding-Agent-0.5.1.vsix"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",

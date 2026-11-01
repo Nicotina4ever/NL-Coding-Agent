@@ -121,6 +121,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                         <button id="attach-files" type="button" title="Attach workspace files">＋ File</button>
                         <button id="attach-current" type="button" title="Attach the active editor content">Current file</button>
                         <button id="attach-selection" type="button" title="Attach the active editor selection">Selection</button>
+                        <button id="dictate" type="button" title="Local microphone dictation (requires a local ASR model)">🎤 Dictate</button>
                     </div>
                 </div>
 
@@ -328,7 +329,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                 </div>
                 </details>
                 <h3>Permissions and autonomy</h3>
-                <p class="nl-hint"><strong>Mission execution</strong> is the master switch for code-changing missions. Read-only Chat can inspect and plan; enabling execution lets Chat stage a candidate, run verification and ask the reviewer before promotion. Permissions below are narrower grants for read, write, execute, network and cloud. Cloud escalation is opt-in and never runs automatically.</p>
+                <p class="nl-hint"><strong>Mission execution</strong> is the master switch for code-changing missions. Read-only Chat can inspect and plan; enabling execution lets Chat stage a candidate, run verification and ask the reviewer before promotion. Permissions below are narrower grants for read, write, execute, network and cloud. Cloud escalation is opt-in and never runs automatically; cloud models stay hidden from the Chat picker until CLOUD is explicitly granted.</p>
                 <div class="nl-filter-row">
                     <select id="permission-scope">
                         <option value="read">read</option>

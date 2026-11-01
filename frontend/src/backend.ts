@@ -224,6 +224,7 @@ export interface HistoryAttachment {
 }
 
 export interface HistoryMessage {
+    id?: number;
     index: number;
     role: string;
     content: string;
@@ -993,6 +994,46 @@ export class EngineConnection {
 
     async chatSearch(query: string, limit = 100): Promise<{ ok: boolean; messages: Array<Record<string, unknown>> }> {
         return this.callJson<{ ok: boolean; messages: Array<Record<string, unknown>> }>('chat_search', { query, limit }, 30_000);
+    }
+
+    async chatRewind(sessionId: string, messageId: number, replacement = ''): Promise<{
+        ok: boolean; backup?: string; messages?: Array<Record<string, unknown>>;
+    }> {
+        return this.callJson<{ ok: boolean; backup?: string; messages?: Array<Record<string, unknown>> }>(
+            'chat_rewind', {
+                session_id: sessionId, message_id: messageId,
+                replacement, approved: true
+            }, 30_000);
+    }
+
+    async speechStatus(): Promise<{
+        ok: boolean; speech?: Record<string, unknown>; catalog?: Record<string, unknown>;
+    }> {
+        return this.callJson<{ ok: boolean; speech?: Record<string, unknown>; catalog?: Record<string, unknown> }>(
+            'speech_status', {}, 30_000);
+    }
+
+    async speechStartRecording(maxSeconds = 60): Promise<{
+        ok: boolean; recording?: { session_id?: string; max_seconds?: number; backend?: string };
+    }> {
+        return this.callJson<{
+            ok: boolean; recording?: { session_id?: string; max_seconds?: number; backend?: string };
+        }>('speech_start_recording', { max_seconds: maxSeconds }, 30_000);
+    }
+
+    async speechStopRecording(sessionId: string): Promise<{
+        ok: boolean; recording?: { wav_path?: string; duration_s?: number };
+    }> {
+        return this.callJson<{ ok: boolean; recording?: { wav_path?: string; duration_s?: number } }>(
+            'speech_stop_recording', { session_id: sessionId }, 60_000);
+    }
+
+    async speechTranscribe(wavPath: string, language = ''): Promise<{
+        ok: boolean; transcript?: { text?: string; engine?: string; model?: string };
+    }> {
+        return this.callJson<{
+            ok: boolean; transcript?: { text?: string; engine?: string; model?: string };
+        }>('speech_transcribe', { wav_path: wavPath, language }, 180_000);
     }
 
     async agentTask(agent: string, task: string, sessionId?: string): Promise<{
