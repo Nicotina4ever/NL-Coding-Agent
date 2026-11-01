@@ -142,8 +142,8 @@ for that model/role only. The default is never silently changed.
 
 ## VS Code extension 0.4.0
 
-The current extension build is `frontend` version `0.4.0`, packaged as
-`.workspace/dist/NL-Coding-Agent-0.4.0.vsix`. Install it through VS Code's
+The current extension build is `frontend` version `0.4.1`, packaged as
+`.workspace/dist/NL-Coding-Agent-0.4.1.vsix`. Install it through VS Code's
 “Install from VSIX…” so the extensions metadata is updated.
 
 If a portable profile was edited by copying an extension directory manually and
@@ -222,3 +222,12 @@ will be introduced for it.
   engine installation or `NLCODE_ENGINE_ROOT`.
 - Branding uses the generated NL Code icon and product names; deeper UI theming and removal of the
   upstream Copilot onboarding dialog are later increments.
+
+## REA MCP server
+
+The installed `rea` package is registered as the trusted local stdio server `rea`
+in the active user configuration `data/mcp_servers.json`. It exposes a curated
+read-only allowlist (binary/Mach-O/WASM/JavaScript inspection, disassembly,
+xrefs and analysis) so Chat can discover it without loading 229 tools into one
+context. Tool invocation remains permission-gated; no execution permission is
+granted just by configuring it.
