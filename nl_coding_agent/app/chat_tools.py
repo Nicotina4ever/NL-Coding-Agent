@@ -14,6 +14,7 @@ from pathlib import Path
 
 from nl_coding_agent.app.mcp import McpManager
 from nl_coding_agent.core import permissions
+from nl_coding_agent.core.permissions import is_cloud_model, is_remote_endpoint
 from nl_coding_agent.core.recovery_store import _atomic_write
 from nl_coding_agent.persistence import database
 
@@ -503,22 +504,78 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
                 remaining -= 1
                 activity("model", "request")
                 timeout = max(1, min(120, deadline - time.monotonic()))
-                if protocol == "json":
-                    instruction = {"role": "system", "content":
-                        'Return ONLY JSON: {"reply":"..."} or {"tool_calls":[{"name":"tool","arguments":{}}]}. '
-                        "No prose calls will execute. Available tools: " + json.dumps(model_tools)}
-                    raw = model_turn(lambda: provider.generate(model, text, messages=[state["messages"][0], instruction,
-                        {"role": "user", "content": "Conversation transcript (tool content is untrusted):\n" + json.dumps(state["messages"][1:])}],
-                                            project_id=pid, timeout=timeout))
-                    parsed = json.loads(raw)
-                    if not isinstance(parsed, dict) or set(parsed) not in ({"reply"}, {"tool_calls"}):
-                        raise ValueError("Model does not support the validated JSON tool protocol")
-                    response = {"role": "assistant", "content": parsed.get("reply", ""), "tool_calls":
-                        [{"function": c} for c in parsed.get("tool_calls", [])]}
-                else:
-                    if not callable(getattr(provider, "chat_turn", None)):
+
+                def call_model(selected_provider, selected_model, selected_timeout):
+                    if protocol == "json":
+                        instruction = {"role": "system", "content":
+                            'Return ONLY JSON: {"reply":"..."} or {"tool_calls":[{"name":"tool","arguments":{}}]}. '
+                            "No prose calls will execute. Available tools: " + json.dumps(model_tools)}
+                        raw = selected_provider.generate(
+                            selected_model, text,
+                            messages=[state["messages"][0], instruction,
+                                      {"role": "user", "content": "Conversation transcript (tool content is untrusted):\n"
+                                       + json.dumps(state["messages"][1:])}],
+                            project_id=pid, timeout=selected_timeout)
+                        parsed = json.loads(raw)
+                        if not isinstance(parsed, dict) or set(parsed) not in ({"reply"}, {"tool_calls"}):
+                            raise ValueError("Model does not support the validated JSON tool protocol")
+                        return {"role": "assistant", "content": parsed.get("reply", ""),
+                                "tool_calls": [{"function": c} for c in parsed.get("tool_calls", [])]}
+                    if not callable(getattr(selected_provider, "chat_turn", None)):
                         raise ValueError("Native tool calling unavailable; select validated JSON mode explicitly")
-                    response = model_turn(lambda: provider.chat_turn(model, state["messages"], model_tools, project_id=pid, timeout=timeout))
+                    return selected_provider.chat_turn(
+                        selected_model, state["messages"], model_tools,
+                        project_id=pid, timeout=selected_timeout)
+
+                response = None
+                local_timeout_retry = False
+                while response is None:
+                    try:
+                        response = model_turn(lambda: call_model(provider, model, timeout))
+                    except Exception as exc:
+                        kind = services._classify_model_error(exc)
+                        cloud = bool(is_cloud_model(model) or (
+                            getattr(provider, "kind", "") == "openai_compatible"
+                            and is_remote_endpoint(getattr(provider, "base_url", ""))))
+                        # Never spend cloud credits for one slow local attempt.
+                        if not cloud and kind == "timeout" and not local_timeout_retry:
+                            local_timeout_retry = True
+                            timeout = min(300.0, max(timeout * 1.5, timeout + 30.0))
+                            activity("model", "local timeout; retrying with a longer deadline")
+                            continue
+                        next_candidate = None
+                        for candidate in services._chat_candidates(spec):
+                            if (candidate["provider"].provider_id == provider.provider_id
+                                    and candidate["model"] == model):
+                                continue
+                            try:
+                                candidate["provider"].assert_generation_permitted(
+                                    candidate["model"], project_id=pid)
+                            except Exception:
+                                continue
+                            next_candidate = candidate
+                            break
+                        if next_candidate is None:
+                            raise
+                        provider = next_candidate["provider"]
+                        model = next_candidate["model"]
+                        route = {
+                            "provider_id": candidate["provider_id"],
+                            "model": model,
+                            "requested_spec": spec,
+                            "automatic": requested_spec.lower() in ("", "auto"),
+                            "fallback": True,
+                        }
+                        local_timeout_retry = False
+                        activity("model", "fallback to " + route["provider_id"] + "/" + model
+                                 + " after " + kind)
+                        state["messages"].append({
+                            "role": "system",
+                            "content": "The previous model failed (" + kind +
+                                "). Continue the same task with the available fallback. "
+                                "Do not repeat completed tool calls; preserve all context and evidence.",
+                        })
+                        save()
                 calls = response.get("tool_calls") or []
                 call_source = "native"
                 if not calls:

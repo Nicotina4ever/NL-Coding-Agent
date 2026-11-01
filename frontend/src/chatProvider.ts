@@ -1030,7 +1030,19 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     }
 
     private isCloudRoute(value: string): boolean {
-        return /(^|[\/_:-])cloud($|[\/_:-])|[:-]cloud$/i.test(String(value || ''));
+        const route = String(value || '');
+        if (/(^|[\/_:-])cloud($|[\/_:-])|[:-]cloud$/i.test(route)) {
+            return true;
+        }
+        const slash = route.indexOf('/');
+        const providerId = slash > 0 ? route.slice(0, slash) : '';
+        const provider = (this.settings?.models.providers || []).find((item) =>
+            item.provider_id === providerId);
+        if (!provider || provider.kind !== 'openai_compatible') {
+            return false;
+        }
+        const base = String(provider.base_url || '');
+        return Boolean(base) && !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(base);
     }
 
     /** Explicit user selection of a cloud model is the owner grant action. */
@@ -2282,7 +2294,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             if (!value || seen.has(value)) {
                 return;
             }
-            const cloud = /(^|[\/_:-])cloud($|[\/_:-])|[:-]cloud$/i.test(value);
+            const cloud = this.isCloudRoute(value);
             seen.add(value);
             const slash = value.indexOf('/');
             options.push({

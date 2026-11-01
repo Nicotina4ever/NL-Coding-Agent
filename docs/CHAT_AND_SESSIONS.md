@@ -39,3 +39,11 @@ Mostrare tool calls eseguite, agent role/model, file letti/creati, candidate dif
 ## Fallback locale/cloud (1 novembre 2026)
 
 `_resolve_chat_provider` prova prima la route richiesta. Se è locale e fallisce, può usare `fallback_cloud` solo quando la politica è abilitata e CLOUD è concesso. Se è cloud e il permesso manca, usa la route locale chat/developer. La selezione esplicita di un modello cloud nella GUI attiva il grant CLOUD di progetto; nessun modello può concederselo da solo. Il fallback cloud automatico resta disattivato finché l'owner non abilita la politica.
+
+## Fallback operativo (1 novembre 2026, dettaglio)
+
+- Un timeout locale viene ritentato una volta con deadline maggiore; non è di per sé un errore e non autorizza il cloud.
+- Dopo un errore locale reale, la catena prova gli altri ruoli/modelli locali prima del cloud.
+- Un cloud con quota esaurita, 429/401/403 o endpoint indisponibile non viene ritentato; si passa a un'alternativa locale autorizzata.
+- La classificazione cloud usa provider/endpoint (`openai_compatible` remoto) oltre al token nel nome del modello.
+- Cambiando modello la storia messaggi/tool resta la stessa; viene aggiunta solo una nota di sistema sul fallback, senza perdere contesto o ripetere tool completati.

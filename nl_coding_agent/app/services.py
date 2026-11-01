@@ -549,18 +549,8 @@ class AppServices:
             raise ValueError("Specialist question is required")
         model_spec = str(profile.get("model") or "").strip()
         roles = (self.get_model_config() or {}).get("roles") or {}
-        if (model_spec and "cloud" in model_spec.lower()
-                and not self.is_cloud_escalation_enabled()):
-            # A specialist must not fail just because its stored model is a cloud
-            # route that has not been granted. Use the configured local chat/developer
-            # fallback; an explicit CLOUD grant keeps the cloud route.
-            model_spec = str((roles.get("chat") or roles.get("developer") or {}).get("model") or "")
         if not model_spec:
             model_spec = str((roles.get("chat") or roles.get("developer") or {}).get("model") or "")
-        provider, model, _, error = self._resolve_chat_provider(
-            model_spec, project_id=int(project_id))
-        if error:
-            raise ValueError(error)
         instructions = str(profile.get("instructions") or "").strip()
         system = ("You are " + str(profile.get("name") or "a specialist") +
                   ", a specialist advisor inside NL Code. Answer as a second expert opinion. "
@@ -570,16 +560,21 @@ class AppServices:
         body = str(context or "").strip()
         user = (("Context supplied by the primary assistant:\n" + body[:24000] + "\n\n")
                 if body else "") + "Question:\n" + prompt[:12000]
-        reply = provider.generate(
-            model, user, timeout=max(5.0, min(float(timeout), 300.0)),
-            project_id=int(project_id),
-            messages=[{"role": "system", "content": system},
-                      {"role": "user", "content": user}])
+        messages = [{"role": "system", "content": system},
+                    {"role": "user", "content": user}]
+        try:
+            result = self._generate_with_fallback(
+                int(project_id), model_spec, prompt,
+                messages=messages, timeout=max(5.0, min(float(timeout), 300.0)),
+                role="chat")
+        except Exception as exc:
+            raise ValueError(str(exc)) from exc
         return {
             "agent_id": profile.get("id"), "agent_name": profile.get("name"),
-            "provider_id": str(getattr(provider, "provider_id", "") or ""),
-            "model": str(model or ""), "reply": str(reply or ""),
+            "provider_id": result["provider_id"],
+            "model": result["model"], "reply": str(result["reply"] or ""),
             "specialty": profile.get("role") or "",
+            "fallback": bool(result.get("fallback")),
         }
 
     def agent_task(self, project_id: int, agent: str, task: str,
@@ -864,9 +859,6 @@ class AppServices:
         roles = config.get("roles") or {}
         spec = model_spec or str(((roles.get("chat") or roles.get("developer") or {}).get("model")) or "").strip()
         project_id = (project or {}).get("id")
-        provider, model, _, error = self._resolve_chat_provider(spec, project_id=project_id)
-        if error:
-            raise ValueError(error)
         messages = [{"role": "system", "content": (
             "You are the NL Coding Agent assistant. Reply in the user's language. "
             "Conversation has no execution tools. Never claim to have edited files or run commands. "
@@ -902,17 +894,16 @@ class AppServices:
                 messages.append({"role": item["role"], "content": content})
         context = attachment_context(attachments)
         messages.append({"role": "user", "content": text + ("\n\n" + context if context else "")})
-        reply = provider.generate(model, text, timeout=120.0,
-                                  project_id=project_id, messages=messages).strip()
-        if not reply:
-            raise ValueError("Model returned no response")
+        result = self._generate_with_fallback(
+            project_id, spec, text, messages=messages, timeout=120.0, role="chat")
         route = {
-            "provider_id": str(getattr(provider, "provider_id", "") or ""),
-            "model": str(model or ""),
+            "provider_id": str(result.get("provider_id") or ""),
+            "model": str(result.get("model") or ""),
             "requested_spec": str(spec or ""),
             "automatic": not bool(str(model_spec or "").strip()),
+            "fallback": bool(result.get("fallback")),
         }
-        return {"reply": reply, "route": route}
+        return {"reply": str(result["reply"]), "route": route}
 
     @staticmethod
     def chat_workflow(text: str) -> str:
@@ -929,66 +920,141 @@ class AppServices:
             return "coding"
         return "chat"
 
-    def _resolve_chat_provider(self, provider_spec: str, *, project_id=None):
-        """Resolve one configured route, with an explicit local/cloud fallback chain.
-
-        Local routes may fall back to the configured cloud role only when the owner
-        enabled cloud escalation and granted CLOUD. Cloud routes that are not
-        permitted fall back to the configured local chat/developer role.
-        """
+    def _chat_candidates(self, provider_spec: str) -> list[dict]:
+        """Ordered, permission-untested candidates: requested, locals, cloud last."""
         providers = build_providers(self.get_model_config() or {})
-        by_id = {provider.provider_id: provider for provider in providers}
+        requested = str(provider_spec or "").strip()
+        if requested and "/" in requested:
+            requested_provider = requested.split("/", 1)[0]
+            if requested_provider not in {item.provider_id for item in providers}:
+                raise ValueError("Unknown or disabled provider: " + requested_provider)
         roles = (self.get_model_config() or {}).get("roles") or {}
-        local_spec = str((roles.get("chat") or roles.get("developer") or {}).get("model") or "").strip()
         fallback = roles.get("fallback_cloud") or {}
+        specs: list[str] = [str(provider_spec or "").strip()]
+        for role in ("chat", "developer", "architect", "reviewer"):
+            model = str((roles.get(role) or {}).get("model") or "").strip()
+            if model and model not in specs:
+                specs.append(model)
         cloud_spec = str(fallback.get("model") or "").strip()
-        candidates: list[str] = []
-        for candidate in (str(provider_spec or "").strip(), local_spec, cloud_spec):
-            if candidate and candidate not in candidates:
-                candidates.append(candidate)
-        # Cloud is never attempted before the explicit local route. A cloud
-        # route that is denied still benefits from the local fallback above.
-        if cloud_spec and cloud_spec in candidates and not bool(fallback.get("enabled", False)):
-            candidates = [item for item in candidates if item != cloud_spec]
-        if not candidates:
-            return None, "", None, "No chat model configured."
-
-        def resolve_one(spec: str):
+        if cloud_spec and bool(fallback.get("enabled", False)) and cloud_spec not in specs:
+            specs.append(cloud_spec)
+        candidates = []
+        for spec in specs:
+            if not spec:
+                continue
             if "/" in spec:
                 provider_id, model = spec.split("/", 1)
             elif len(providers) == 1:
                 provider_id, model = providers[0].provider_id, spec
             else:
-                return None, spec, None, "Select an explicit provider/model route."
-            provider = by_id.get(provider_id)
-            if provider is None:
-                return None, model, provider_id, "Unknown or disabled provider: " + provider_id
-            if not model.strip():
-                return None, model, provider_id, "No chat model configured."
-            provider.assert_generation_permitted(model, project_id)
-            snapshot = provider.probe(timeout=5.0)
-            if not snapshot.reachable:
-                return None, model, provider_id, snapshot.error or "Provider unavailable"
-            if model not in {item.name for item in snapshot.models}:
-                return None, model, provider_id, "Model unavailable on selected provider: " + model
-            return provider, model, provider_id, ""
+                continue
+            provider = next((item for item in providers
+                             if item.provider_id == provider_id), None)
+            if provider is None or not str(model).strip():
+                continue
+            from nl_coding_agent.core.permissions import (
+                is_cloud_model, is_remote_endpoint,
+            )
+            cloud = bool(is_cloud_model(model) or (
+                getattr(provider, "kind", "") == "openai_compatible"
+                and is_remote_endpoint(getattr(provider, "base_url", ""))))
+            if cloud and spec == cloud_spec and not bool(fallback.get("enabled", False)):
+                continue
+            candidates.append({"provider": provider, "model": str(model),
+                               "provider_id": provider_id, "spec": spec,
+                               "cloud": cloud})
+        return candidates
 
+    @staticmethod
+    def _classify_model_error(exc: Exception) -> str:
+        text = str(exc).lower()
+        if isinstance(exc, (TimeoutError,)) or "timed out" in text or "timeout" in text:
+            return "timeout"
+        if any(term in text for term in ("429", "quota", "rate limit", "credit",
+                                         "insufficient", "too many requests")):
+            return "quota"
+        if any(term in text for term in ("401", "403", "unauthorized", "forbidden",
+                                         "api key", "authentication")):
+            return "auth"
+        if any(term in text for term in ("connection", "refused", "unreachable",
+                                         "unavailable", "502", "503", "504", "5xx")):
+            return "unavailable"
+        return "error"
+
+    def _generate_with_fallback(self, project_id, requested_spec: str, prompt: str,
+                                *, messages=None, timeout: float = 120.0,
+                                role: str = "chat") -> dict:
+        """Generate with local recovery first; escalate to cloud only after real failure."""
         errors: list[str] = []
-        for spec in candidates:
+        permission_error = None
+        candidates = self._chat_candidates(requested_spec)
+        for index, candidate in enumerate(candidates):
+            provider = candidate["provider"]
+            model = candidate["model"]
+            cloud = candidate["cloud"]
+            attempts = 1 if cloud else 2
+            for attempt in range(attempts):
+                try:
+                    provider.assert_generation_permitted(model, project_id=project_id)
+                    reply = provider.generate(
+                        model, prompt,
+                        timeout=float(timeout if attempt == 0 else min(300.0, timeout * 1.5)),
+                        project_id=project_id, messages=messages)
+                    text = str(reply or "").strip()
+                    if not text:
+                        raise ValueError("Model returned no response")
+                    fallback = (index > 0)
+                    if fallback:
+                        self._bus.emit(Event(
+                            source="model_hub", level="warning",
+                            message="Model fallback selected",
+                            payload={"requested": requested_spec,
+                                     "used": candidate["spec"],
+                                     "reason": errors[-1] if errors else "",
+                                     "cloud": cloud}))
+                    return {"provider": provider, "model": model,
+                            "provider_id": candidate["provider_id"],
+                            "spec": candidate["spec"], "reply": text,
+                            "fallback": fallback, "errors": errors}
+                except Exception as exc:  # noqa: BLE001 - classify provider failures
+                    from nl_coding_agent.core.permissions import PermissionDenied
+                    if isinstance(exc, PermissionDenied):
+                        permission_error = exc
+                    kind = self._classify_model_error(exc)
+                    errors.append(f"{candidate['spec']}: {kind}: {exc}")
+                    # A local timeout may simply be a long thinking model. Retry it
+                    # once with a longer deadline before trying any fallback.
+                    if not cloud and kind == "timeout" and attempt == 0:
+                        continue
+                    # Auth/quota cloud routes are exhausted immediately; never
+                    # retry a cloud request that cannot succeed.
+                    if cloud or kind in ("auth", "quota"):
+                        break
+                    break
+        if permission_error is not None:
+            raise permission_error
+        raise ValueError("No model route could complete the turn: " + " | ".join(errors[-4:]))
+
+    def _resolve_chat_provider(self, provider_spec: str, *, project_id=None):
+        """Resolve the first available route without hiding a real failure."""
+        candidates = self._chat_candidates(provider_spec)
+        if not candidates:
+            return None, "", None, "No chat model configured."
+        errors: list[str] = []
+        for candidate in candidates:
+            provider, model, provider_id = candidate["provider"], candidate["model"], candidate["provider_id"]
             try:
-                provider, model, provider_id, error = resolve_one(spec)
-            except Exception as exc:  # permission and provider errors fall through
+                provider.assert_generation_permitted(model, project_id)
+            except Exception as exc:
                 errors.append(str(exc))
                 continue
-            if error:
-                errors.append(error)
+            snapshot = provider.probe(timeout=5.0)
+            if not snapshot.reachable:
+                errors.append(snapshot.error or "Provider unavailable")
                 continue
-            if spec != candidates[0]:
-                self._bus.emit(Event(
-                    source="model_hub", level="warning",
-                    message="Model fallback selected",
-                    payload={"requested": candidates[0], "used": spec,
-                             "reason": errors[-1] if errors else ""}))
+            if model not in {item.name for item in snapshot.models}:
+                errors.append("Model unavailable on selected provider: " + model)
+                continue
             return provider, model, provider_id, ""
         return None, "", None, errors[-1] if errors else "No permitted model route."
 
