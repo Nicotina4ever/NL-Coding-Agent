@@ -930,29 +930,67 @@ class AppServices:
         return "chat"
 
     def _resolve_chat_provider(self, provider_spec: str, *, project_id=None):
-        """Resolve exactly one configured route and enforce permissions before I/O."""
+        """Resolve one configured route, with an explicit local/cloud fallback chain.
+
+        Local routes may fall back to the configured cloud role only when the owner
+        enabled cloud escalation and granted CLOUD. Cloud routes that are not
+        permitted fall back to the configured local chat/developer role.
+        """
         providers = build_providers(self.get_model_config() or {})
         by_id = {provider.provider_id: provider for provider in providers}
-        if not provider_spec:
+        roles = (self.get_model_config() or {}).get("roles") or {}
+        local_spec = str((roles.get("chat") or roles.get("developer") or {}).get("model") or "").strip()
+        fallback = roles.get("fallback_cloud") or {}
+        cloud_spec = str(fallback.get("model") or "").strip()
+        candidates: list[str] = []
+        for candidate in (str(provider_spec or "").strip(), local_spec, cloud_spec):
+            if candidate and candidate not in candidates:
+                candidates.append(candidate)
+        # Cloud is never attempted before the explicit local route. A cloud
+        # route that is denied still benefits from the local fallback above.
+        if cloud_spec and cloud_spec in candidates and not bool(fallback.get("enabled", False)):
+            candidates = [item for item in candidates if item != cloud_spec]
+        if not candidates:
             return None, "", None, "No chat model configured."
-        if "/" in provider_spec:
-            provider_id, model = provider_spec.split("/", 1)
-        elif len(providers) == 1:
-            provider_id, model = providers[0].provider_id, provider_spec
-        else:
-            return None, provider_spec, None, "Select an explicit provider/model route."
-        provider = by_id.get(provider_id)
-        if provider is None:
-            return None, model, provider_id, "Unknown or disabled provider: " + provider_id
-        if not model.strip():
-            return None, model, provider_id, "No chat model configured."
-        provider.assert_generation_permitted(model, project_id)
-        snapshot = provider.probe(timeout=5.0)
-        if not snapshot.reachable:
-            return None, model, provider_id, snapshot.error or "Provider unavailable"
-        if model not in {item.name for item in snapshot.models}:
-            return None, model, provider_id, "Model unavailable on selected provider: " + model
-        return provider, model, provider_id, ""
+
+        def resolve_one(spec: str):
+            if "/" in spec:
+                provider_id, model = spec.split("/", 1)
+            elif len(providers) == 1:
+                provider_id, model = providers[0].provider_id, spec
+            else:
+                return None, spec, None, "Select an explicit provider/model route."
+            provider = by_id.get(provider_id)
+            if provider is None:
+                return None, model, provider_id, "Unknown or disabled provider: " + provider_id
+            if not model.strip():
+                return None, model, provider_id, "No chat model configured."
+            provider.assert_generation_permitted(model, project_id)
+            snapshot = provider.probe(timeout=5.0)
+            if not snapshot.reachable:
+                return None, model, provider_id, snapshot.error or "Provider unavailable"
+            if model not in {item.name for item in snapshot.models}:
+                return None, model, provider_id, "Model unavailable on selected provider: " + model
+            return provider, model, provider_id, ""
+
+        errors: list[str] = []
+        for spec in candidates:
+            try:
+                provider, model, provider_id, error = resolve_one(spec)
+            except Exception as exc:  # permission and provider errors fall through
+                errors.append(str(exc))
+                continue
+            if error:
+                errors.append(error)
+                continue
+            if spec != candidates[0]:
+                self._bus.emit(Event(
+                    source="model_hub", level="warning",
+                    message="Model fallback selected",
+                    payload={"requested": candidates[0], "used": spec,
+                             "reason": errors[-1] if errors else ""}))
+            return provider, model, provider_id, ""
+        return None, "", None, errors[-1] if errors else "No permitted model route."
 
     def create_mission(self, project_id: int | None, title: str, goal: str) -> int:
         from nl_coding_agent.persistence.missions import create_mission as _create_m
@@ -1027,6 +1065,9 @@ class AppServices:
 
     def speech_switch_model(self, model_id: str) -> dict:
         return self.speech_manager().switch_model(model_id)
+
+    def speech_set_external_home(self, path: str) -> dict:
+        return self.speech_manager().set_external_home(path)
 
     def speech_unload_model(self) -> dict:
         return self.speech_manager().unload_model()

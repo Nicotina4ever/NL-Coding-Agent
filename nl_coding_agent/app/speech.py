@@ -9,7 +9,10 @@ verification remains manual.
 from __future__ import annotations
 
 import importlib.util
+import audioop
+import json
 import os
+import time
 import shutil
 import tempfile
 import wave
@@ -115,6 +118,38 @@ def _default_model_root() -> Path:
     return database.data_root() / "speech" / "models"
 
 
+def _qwen3_external_homes() -> list[Path]:
+    """Discover an existing Qwen3-ASR CLI/model install without copying it."""
+    homes: list[Path] = []
+    raw = os.environ.get("NL_QWEN3_ASR_HOME", "").strip()
+    if raw:
+        homes.append(Path(raw).expanduser())
+    try:
+        configured = database.get_json_setting("speech.qwen3_home") if hasattr(
+            database, "get_json_setting") else None
+        if isinstance(configured, dict) and configured.get("path"):
+            homes.append(Path(str(configured["path"])).expanduser())
+    except Exception:
+        pass
+    candidates = [Path(r"J:\ZLinkdaC\Qwen3ASR")] if os.name == "nt" else []
+    for candidate in candidates:
+        if candidate.is_dir():
+            homes.append(candidate)
+    return [path.resolve() for path in homes if path.is_dir()]
+
+
+def _qwen3_cli(home: Path | None = None) -> Path | None:
+    homes = [home] if home else _qwen3_external_homes()
+    for root in homes:
+        if root is None:
+            continue
+        for name in ("qwen3-asr-cli.exe", "qwen3-asr-cli", "qwen3_asr_cli"):
+            candidate = root / name
+            if candidate.is_file():
+                return candidate
+    return None
+
+
 def _recordings_root() -> Path:
     return database.data_root() / "speech" / "recordings"
 
@@ -123,11 +158,18 @@ def detect_capabilities(*, probes: dict | None = None,
                         tts_probes: dict | None = None,
                         device_probe_error: str | None = None) -> SpeechCapabilities:
     probes = dict(probes or {})
+    qwen3_cli = _qwen3_cli()
     engines = {
         engine: bool(probes.get(engine, _importable(engine.replace("-", "_"))))
         for engine in DEFAULT_ENGINES
     }
+    if "qwen3-asr" in engines:
+        engines["qwen3-asr"] = bool(probes.get("qwen3-asr", qwen3_cli is not None))
     local_dirs = [str(_default_model_root()), *[str(path) for path in _env_model_dirs()]]
+    for home in _qwen3_external_homes():
+        candidate = home / "models"
+        if candidate.is_dir() and str(candidate) not in local_dirs:
+            local_dirs.append(str(candidate))
     audio = {
         "qtaudio": bool(probes.get("qtaudio", _importable("PySide6.QtMultimedia"))),
         "sounddevice": bool(probes.get("sounddevice", _importable("sounddevice"))),
@@ -195,7 +237,14 @@ class SpeechManager:
             if not root.is_dir():
                 continue
             for child in sorted(root.iterdir()):
-                if not child.is_dir() or str(child) in seen:
+                if str(child) in seen:
+                    continue
+                if child.is_file() and child.suffix.lower() == ".gguf":
+                    seen.add(str(child))
+                    models.append(SpeechModel(child.name, "qwen3-asr", str(child),
+                                             child.stat().st_size / (1024 * 1024)))
+                    continue
+                if not child.is_dir():
                     continue
                 if not _is_model_dir(child):
                     continue
@@ -252,6 +301,15 @@ class SpeechManager:
     def active_model(self) -> dict | None:
         raw = database.get_json_setting(self.SETTING_MODEL, {})
         if not raw:
+            # A discovered local model is enough for an explicitly initiated
+            # dictation; prefer the first available model rather than making the
+            # user configure a purely technical selection first.
+            discovered = self.discover_models()
+            if discovered:
+                first = discovered[0]
+                self.switch_model(first.model_id)
+                raw = database.get_json_setting(self.SETTING_MODEL, {})
+        if not raw:
             return None
         model_id = str(raw.get("model_id") or "")
         for model in self.discover_models():
@@ -279,6 +337,27 @@ class SpeechManager:
     def unload_model(self) -> dict:
         database.set_json_setting(self.SETTING_MODEL, {})
         return {"unloaded": True, "active_model": None}
+
+    def set_external_home(self, path: str) -> dict:
+        """Register an existing external engine/model folder without copying it."""
+        root = Path(str(path or "")).expanduser().resolve()
+        if not root.is_dir():
+            raise SpeechError("external-folder-missing", "External folder does not exist: " + str(root))
+        cli = _qwen3_cli(root)
+        models = {}
+        if cli is not None:
+            model_dir = root / "models"
+            if model_dir.is_dir():
+                models = {"qwen3-asr": sorted(
+                    str(item) for item in model_dir.glob("*.gguf"))}
+        if cli is None and not models:
+            raise SpeechError("external-folder-invalid",
+                              "Expected qwen3-asr-cli next to a models/ folder with GGUF files.")
+        database.set_json_setting("speech.qwen3_home", {"path": str(root), "set_at": _now()})
+        self.capabilities = detect_capabilities()
+        self._model_dirs = [Path(item).expanduser() for item in self.capabilities.local_model_dirs]
+        return {"external_home": str(root), "cli": str(cli) if cli else None,
+                "catalog": self.catalog()}
 
     # ------------------------------------------------------------------ devices
     def list_input_devices(self) -> dict:
@@ -394,9 +473,71 @@ class SpeechManager:
                 "duration_s": result.get("duration_s"),
                 "language": result.get("language")}
 
+    def _run_qwen3_asr(self, wav_path: str, model_path: str, *, language=None) -> dict:
+        """Run an existing Qwen3-ASR GGUF CLI in place; never copy the model."""
+        model = Path(model_path).expanduser()
+        if not model.is_file():
+            raise SpeechError("model-not-local", "Qwen3-ASR model file is missing: " + str(model))
+        home = model.parent.parent if model.parent.name.lower() == "models" else model.parent
+        cli = _qwen3_cli(home) or _qwen3_cli()
+        if cli is None:
+            raise SpeechError("asr-unavailable",
+                              "qwen3-asr-cli was not found; point NL_QWEN3_ASR_HOME at the install.")
+        import subprocess
+        source = Path(wav_path)
+        temp_wav: Path | None = None
+        try:
+            with wave.open(str(source), "rb") as reader:
+                channels = reader.getnchannels()
+                width = reader.getsampwidth()
+                rate = reader.getframerate()
+                frames = reader.readframes(reader.getnframes())
+            if rate != 16000 or channels != 1:
+                if width != 2:
+                    raise SpeechError("unsupported-audio", "Qwen3-ASR requires 16-bit WAV audio.")
+                if channels != 1:
+                    frames = audioop.tomono(frames, width, 0.5, 0.5)
+                if rate != 16000:
+                    frames, _ = audioop.ratecv(frames, width, 1, rate, 16000, None)
+                temp_fd, temp_name = tempfile.mkstemp(prefix="nl-asr-", suffix=".wav")
+                os.close(temp_fd)
+                temp_wav = Path(temp_name)
+                with wave.open(str(temp_wav), "wb") as writer:
+                    writer.setnchannels(1)
+                    writer.setsampwidth(width)
+                    writer.setframerate(16000)
+                    writer.writeframes(frames)
+                source = temp_wav
+            command = [str(cli), "-m", str(model), "-f", str(source),
+                       "--no-timing", "--threads", "4"]
+            if language:
+                command.extend(["-l", str(language)])
+            try:
+                completed = subprocess.run(command, capture_output=True, text=True,
+                                           timeout=300, encoding="utf-8", errors="replace")
+            except subprocess.TimeoutExpired as exc:
+                raise SpeechError("asr-timeout", "Qwen3-ASR timed out.") from exc
+            if completed.returncode != 0:
+                detail = (completed.stderr or completed.stdout or "").strip()[-800:]
+                raise SpeechError("asr-failed", "Qwen3-ASR failed: " + detail)
+            lines = [line.strip() for line in (completed.stdout or "").splitlines()]
+            skip = ("qwen3-asr-cli", "model:", "audio:", "threads:", "language:")
+            text = " ".join(line for line in lines
+                            if line and not line.lower().startswith(skip))
+            return {"text": text, "engine": "qwen3-asr", "model": model.name,
+                    "segments": [], "language": language}
+        finally:
+            if temp_wav is not None:
+                try:
+                    temp_wav.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
     def _run_local_asr(self, path: str, active: dict, *, language=None) -> dict:
         engine = str(active.get("engine") or "")
         model_path = str(active.get("path") or "")
+        if engine == "qwen3-asr":
+            return self._run_qwen3_asr(path, model_path, language=language)
         if engine == "faster-whisper":
             try:
                 from faster_whisper import WhisperModel
@@ -408,9 +549,39 @@ class SpeechManager:
             rows = [{"start": seg.start, "end": seg.end, "text": seg.text} for seg in segments]
             return {"text": " ".join(row["text"].strip() for row in rows),
                     "segments": rows}
+        if engine == "vosk":
+            return self._run_vosk_asr(path, model_path)
         raise SpeechError("asr-unavailable",
                           "No local ASR adapter for engine " + repr(engine)
                           + "; install/configure it explicitly.")
+
+    def _run_vosk_asr(self, wav_path: str, model_path: str) -> dict:
+        """Lightweight offline Vosk adapter for a local model directory."""
+        try:
+            from vosk import KaldiRecognizer, Model, SetLogLevel
+        except ImportError as exc:
+            raise SpeechError("asr-unavailable", "vosk is not installed.") from exc
+        root = Path(model_path)
+        if not root.is_dir():
+            raise SpeechError("model-not-local", "Vosk model directory is missing: " + str(root))
+        SetLogLevel(-1)
+        with wave.open(wav_path, "rb") as reader:
+            channels = reader.getnchannels()
+            width = reader.getsampwidth()
+            rate = reader.getframerate()
+            frames = reader.readframes(reader.getnframes())
+        if width != 2:
+            raise SpeechError("unsupported-audio", "Vosk requires 16-bit PCM WAV audio.")
+        if channels != 1:
+            frames = audioop.tomono(frames, width, 0.5, 0.5)
+        if rate != 16000:
+            frames = audioop.ratecv(frames, width, 1, rate, 16000, None)[0]
+        model = Model(str(root))
+        recognizer = KaldiRecognizer(model, 16000)
+        recognizer.AcceptWaveform(frames)
+        payload = json.loads(recognizer.FinalResult() or "{}")
+        return {"text": str(payload.get("text") or "").strip(),
+                "engine": "vosk", "model": root.name, "segments": []}
 
     # -------------------------------------------------------------------- TTS
     def tts_status(self) -> dict:
@@ -471,11 +642,15 @@ class _QtAudioRecorder:
         self._path = None
         self._timer = None
         self._started = None
+        self._app = None
 
     def start(self, max_seconds: int) -> None:
-        from PySide6.QtCore import QTimer  # noqa: F401 - availability check
+        from PySide6.QtCore import QCoreApplication  # noqa: F401 - availability check
         from PySide6.QtMultimedia import QAudioFormat, QAudioSource, QMediaDevices
 
+        # The MCP engine is headless: QtMultimedia still needs an application
+        # instance and explicit event processing for QAudioSource callbacks.
+        self._app = QCoreApplication.instance() or QCoreApplication([])
         device = QMediaDevices.defaultAudioInput()
         if device is None or device.isNull():
             raise SpeechError("audio-device-unavailable", "No default microphone input device.")
@@ -509,6 +684,12 @@ class _QtAudioRecorder:
 
     def stop(self) -> dict:
         if self._source is not None:
+            # Let readyRead callbacks deliver buffered audio before closing.
+            for _ in range(20):
+                if self._app is not None:
+                    self._app.processEvents()
+                self._drain()
+                time.sleep(0.01)
             self._source.stop()
             self._source = None
         if self._wav is not None:

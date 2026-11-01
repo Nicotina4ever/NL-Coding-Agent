@@ -68,6 +68,8 @@
     const storageListEl = $('storage-list');
     const jobsListEl = $('jobs-list');
     const probeSelectEl = $('probe-model');
+    const speechModelEl = $('speech-model');
+    const speechStatusEl = $('speech-status');
     const specialistSelectEl = $('specialist-list');
     const specialistProviderEl = $('specialist-provider');
     const specialistNameEl = $('specialist-name');
@@ -501,10 +503,37 @@
         });
     }
 
+    function renderSpeech(current) {
+        const payload = (current && current.speech) || {};
+        const speech = payload.speech || payload;
+        const catalog = payload.catalog || {};
+        const models = catalog.models || [];
+        const active = speech.active_model || catalog.active_model || {};
+        const previous = speechModelEl.value;
+        clear(speechModelEl);
+        models.forEach(function (model) {
+            const option = el('option', '', model.model_id + ' · ' + model.engine);
+            option.value = model.model_id;
+            option.title = model.path || '';
+            speechModelEl.appendChild(option);
+        });
+        const activeId = active.model_id || previous;
+        if (activeId) { speechModelEl.value = activeId; }
+        const engines = (catalog.engines || []).filter(function (engine) {
+            return engine.installed;
+        }).map(function (engine) { return engine.engine; });
+        const audio = speech.audio_available ? 'microphone ready' : 'no microphone backend';
+        speechStatusEl.textContent = engines.length
+            ? 'Local ASR: ' + engines.join(', ') + ' · ' + audio + ' · ' + models.length + ' model(s)'
+            : 'No local ASR engine detected. Register an external folder or install a local engine.';
+        if (active.path) { speechStatusEl.textContent += ' · active: ' + active.path; }
+    }
+
     function renderSettings(current) {
         const settings = current.settings;
         if (!settings) { return; }
         renderSpecialists(current);
+        renderSpeech(current);
         renderJobs(current);
         const providerSelect = $('provider-edit');
         const previous = providerSelect.value;
@@ -1583,6 +1612,25 @@
         $('provider-kind').value = 'openai_compatible';
         $('provider-enabled').checked = true;
         $('provider-id').focus();
+    });
+    $('speech-refresh').addEventListener('click', function () { postAction('refreshSpeech', {}); });
+    $('speech-select').addEventListener('click', function () {
+        postAction('selectSpeechModel', { modelId: speechModelEl.value });
+    });
+    $('speech-external').addEventListener('click', function () {
+        postAction('setSpeechExternalHome', { path: $('speech-home').value });
+    });
+    $('specialist-tools-all').addEventListener('click', function () {
+        const values = Array.prototype.slice.call(
+            specialistToolsEl.querySelectorAll('input[type="checkbox"]'))
+            .map(function (input) { return input.value; });
+        setCheckedValues(specialistToolsEl, values);
+    });
+    $('specialist-permissions-all').addEventListener('click', function () {
+        const values = Array.prototype.slice.call(
+            specialistPermissionsEl.querySelectorAll('input[type="checkbox"]'))
+            .map(function (input) { return input.value; });
+        setCheckedValues(specialistPermissionsEl, values);
     });
     $('provider-save').addEventListener('click', function () {
         postAction('saveProviderSettings', {

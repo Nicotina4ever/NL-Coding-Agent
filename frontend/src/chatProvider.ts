@@ -100,6 +100,7 @@ export interface DashboardState {
     jobs?: BackgroundJob[];
     capabilityProbe?: ModelCapabilityProbe;
     mcpConfig?: Record<string, unknown>;
+    speech?: Record<string, unknown>;
     research?: ResearchFetchResult;
     researchProfile: string;
     historyCount: number;
@@ -158,6 +159,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     private jobs: BackgroundJob[] = [];
     private capabilityProbe: ModelCapabilityProbe | undefined;
     private mcpConfig: Record<string, unknown> | undefined;
+    private speech: Record<string, unknown> | undefined;
     private editorContext: EditorContext | undefined;
     private lastEditor: vscode.TextEditor | undefined;
     private lastRoute: ChatRoute | undefined;
@@ -237,6 +239,10 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             }
             this.setupEditorTracking();
             await this.refreshAll(true);
+            if (this.chatModel && this.isCloudRoute(this.chatModel)) {
+                await this.ensureCloudGrant(this.chatModel);
+            }
+            await this.refreshSpeechSettings();
             await this.loadSessions();
             await this.loadHistory();
             await this.refreshQueue(false);
@@ -395,6 +401,44 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    async refreshSpeechSettings(): Promise<void> {
+        try {
+            this.speech = await this.connection.speechStatus() as Record<string, unknown>;
+            this.postState();
+        } catch (error) {
+            this.output.appendLine('[speech] ' + this.errorText(error));
+            this.postChat('error', 'Speech status could not be read: ' + this.errorText(error));
+        }
+    }
+
+    async selectSpeechModel(modelId: string): Promise<void> {
+        const id = String(modelId || '').trim();
+        if (!id) {
+            return;
+        }
+        try {
+            await this.connection.speechSwitchModel(id);
+            await this.refreshSpeechSettings();
+            this.postChat('system', 'Local ASR model selected: ' + id);
+        } catch (error) {
+            this.reportError(error, 'speech-model');
+        }
+    }
+
+    async setSpeechExternalHome(path: string): Promise<void> {
+        const folder = String(path || '').trim();
+        if (!folder) {
+            return;
+        }
+        try {
+            await this.connection.speechSetExternalHome(folder);
+            await this.refreshSpeechSettings();
+            this.postChat('system', 'External ASR folder registered in place: ' + folder);
+        } catch (error) {
+            this.reportError(error, 'speech-external');
+        }
+    }
+
     /** Start/stop local microphone dictation and insert the editable transcript. */
     async toggleDictation(): Promise<void> {
         try {
@@ -439,6 +483,11 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         if (!agent || !task) {
             this.postChat('error', 'Usage: /agent <agent-name-or-id> <task>');
             return;
+        }
+        const profile = (this.settings?.agents.custom_agents || []).find((item) =>
+            String(item.id) === String(agent) || String(item.name).toLowerCase() === String(agent).toLowerCase());
+        if (profile?.model && this.isCloudRoute(profile.model)) {
+            await this.ensureCloudGrant(profile.model);
         }
         this.busyChat = true;
         this.busyPhase = 'thinking';
@@ -974,7 +1023,35 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         }
         this.chatModel = value;
         void this.workspaceState?.update('nlCodingAgent.chatModel', value);
+        if (this.isCloudRoute(value)) {
+            void this.ensureCloudGrant(value);
+        }
         this.postState();
+    }
+
+    private isCloudRoute(value: string): boolean {
+        return /(^|[\/_:-])cloud($|[\/_:-])|[:-]cloud$/i.test(String(value || ''));
+    }
+
+    /** Explicit user selection of a cloud model is the owner grant action. */
+    private async ensureCloudGrant(model: string): Promise<void> {
+        if (!this.isCloudRoute(model)) {
+            return;
+        }
+        try {
+            const current = Boolean(this.settings?.permissions?.policy?.cloud);
+            if (current) {
+                return;
+            }
+            await this.connection.savePermissionScope('cloud', true);
+            await this.refreshAll(false);
+            this.postChat('system',
+                'CLOUD permission granted automatically for the explicitly selected cloud model: ' + model);
+        } catch (error) {
+            this.output.appendLine('[cloud-grant] ' + this.errorText(error));
+            this.postChat('error',
+                'Could not activate CLOUD for ' + model + ': ' + this.errorText(error));
+        }
     }
 
     setAutoCoding(value: boolean): void {
@@ -1349,6 +1426,9 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             model,
             temperature: typeof payload.temperature === 'number' ? payload.temperature : undefined
         });
+        if (this.isCloudRoute(model)) {
+            await this.ensureCloudGrant(model);
+        }
         await this.refreshAll(false);
         this.postChat('system', `Role ${role} now uses ${model}.`);
     }
@@ -1368,6 +1448,9 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         if (!model) {
             this.postChat('error', 'Probe at least one model before generating a specialist team.');
             return;
+        }
+        if (this.isCloudRoute(model)) {
+            await this.ensureCloudGrant(model);
         }
         const slash = model.indexOf('/');
         const provider = slash > 0 ? model.slice(0, slash) : 'ollama';
@@ -1438,6 +1521,9 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             agent.model = agent.provider + '/' + agent.model;
         }
         const result = await this.connection.saveCustomAgent(agent);
+        if (this.isCloudRoute(agent.model || '')) {
+            await this.ensureCloudGrant(agent.model || '');
+        }
         this.settings = await this.connection.engineSettings(false);
         this.postState();
         this.postChat('system', 'Specialist agent saved: ' + result.agent.name + '.');
@@ -2013,6 +2099,15 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 case 'toggleDictation':
                     await this.toggleDictation();
                     break;
+                case 'refreshSpeech':
+                    await this.refreshSpeechSettings();
+                    break;
+                case 'selectSpeechModel':
+                    await this.selectSpeechModel(String(payload.modelId || ''));
+                    break;
+                case 'setSpeechExternalHome':
+                    await this.setSpeechExternalHome(String(payload.path || ''));
+                    break;
                 case 'renameChatSession':
                     await this.renameChatSession();
                     break;
@@ -2183,20 +2278,16 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             automatic: true
         }];
         const seen = new Set<string>(['']);
-        const cloudAllowed = Boolean(settings?.permissions?.cloud_escalation_enabled ||
-            settings?.permissions?.policy?.cloud);
         const add = (value: string, label: string, group: string, loaded = false) => {
             if (!value || seen.has(value)) {
                 return;
             }
-            if (!cloudAllowed && /(^|[\/_:-])cloud($|[\/_:-])|:cloud$/i.test(value)) {
-                return;
-            }
+            const cloud = /(^|[\/_:-])cloud($|[\/_:-])|[:-]cloud$/i.test(value);
             seen.add(value);
             const slash = value.indexOf('/');
             options.push({
                 value,
-                label,
+                label: cloud ? label + ' ☁' : label,
                 group,
                 loaded,
                 provider: slash > 0 ? value.slice(0, slash) : '',
@@ -2278,6 +2369,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             jobs: this.jobs.slice(),
             capabilityProbe: this.capabilityProbe,
             mcpConfig: this.mcpConfig,
+            speech: this.speech,
             research: this.research,
             researchProfile: this.connection.researchProfile,
             historyCount: this.historyCount,

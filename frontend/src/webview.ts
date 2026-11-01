@@ -253,6 +253,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                             <label class="nl-check"><input type="checkbox" value="research_fetch_url"> research_fetch_url</label>
                             <label class="nl-check"><input type="checkbox" value="mcp_list_tools"> mcp_list_tools</label>
                         </fieldset>
+                        <button id="specialist-tools-all" type="button">Select all tools</button>
                         <fieldset id="specialist-permissions" class="nl-check-grid">
                             <legend>Permissions</legend>
                             <label class="nl-check"><input type="checkbox" value="read-only"> read-only</label>
@@ -261,6 +262,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                             <label class="nl-check"><input type="checkbox" value="network"> network</label>
                             <label class="nl-check"><input type="checkbox" value="cloud"> cloud</label>
                         </fieldset>
+                        <button id="specialist-permissions-all" type="button">Select all permissions</button>
                         <label class="nl-check"><input id="specialist-enabled" type="checkbox"> enabled</label>
                         <button id="specialist-save" type="button">Save specialist</button>
                     </div>
@@ -294,9 +296,22 @@ export function buildChatHtml(assets: WebviewAssets): string {
                     <input id="provider-label" type="text" placeholder="label" aria-label="Provider label">
                     <input id="provider-api-key-env" type="text" placeholder="API key env var (optional)" aria-label="API key env var">
                 </div>
+                <div class="nl-settings-card">
+                    <h3>Dictation and local ASR</h3>
+                    <p id="speech-status" class="nl-hint">Checking local speech engines…</p>
+                    <div class="nl-filter-row">
+                        <select id="speech-model" aria-label="Local ASR model"></select>
+                        <button id="speech-select" type="button">Use model</button>
+                        <button id="speech-refresh" type="button">Refresh speech</button>
+                    </div>
+                    <div class="nl-filter-row">
+                        <input id="speech-home" type="text" placeholder="external ASR folder, e.g. J:\ZLinkdaC\Qwen3ASR" aria-label="External ASR folder">
+                        <button id="speech-external" type="button">Use external folder</button>
+                    </div>
+                    <p class="nl-hint">External models stay in place and are never copied or deleted. Models downloaded into NL Code live under <code>data/speech/models</code>. Dictation records locally and inserts editable text into the composer.</p>
+                </div>
                 <details class="nl-advanced">
-                <summary>Advanced generation parameters</summary>
-                <div class="nl-filter-row">
+                <summary>Advanced generation parameters</summary>                <div class="nl-filter-row">
                     <select id="generation-scope">
                         <option value="model">model</option>
                         <option value="role">role</option>

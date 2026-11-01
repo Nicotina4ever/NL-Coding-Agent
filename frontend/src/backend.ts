@@ -1036,6 +1036,16 @@ export class EngineConnection {
         }>('speech_transcribe', { wav_path: wavPath, language }, 180_000);
     }
 
+    async speechSwitchModel(modelId: string): Promise<{ ok: boolean; model?: Record<string, unknown> }> {
+        return this.callJson<{ ok: boolean; model?: Record<string, unknown> }>(
+            'speech_switch_model', { model_id: modelId }, 30_000);
+    }
+
+    async speechSetExternalHome(path: string): Promise<{ ok: boolean; speech?: Record<string, unknown> }> {
+        return this.callJson<{ ok: boolean; speech?: Record<string, unknown> }>(
+            'speech_set_external_home', { path }, 60_000);
+    }
+
     async agentTask(agent: string, task: string, sessionId?: string): Promise<{
         ok: boolean;
         task: {

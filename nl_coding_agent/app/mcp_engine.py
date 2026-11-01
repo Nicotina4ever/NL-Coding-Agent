@@ -392,7 +392,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         # Research/network is a read-only capability, not code execution. Let the
         # owner grant NETWORK from a read-only session so pasted URLs can be fetched;
         # write/execute/cloud still require an execution-enabled server.
-        if str(scope).lower() in ("read", "network"):
+        if str(scope).lower() in ("read", "network", "cloud"):
             require_read()
         else:
             require_execution(approved)
@@ -697,6 +697,19 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         """Stop a recording and return its local WAV path."""
         require_read()
         return {"ok": True, "recording": services.speech_stop_recording(str(session_id))}
+
+    @server.tool()
+    def speech_switch_model(model_id: str) -> dict:
+        """Select one discovered local ASR model."""
+        require_read()
+        return {"ok": True, "model": services.speech_switch_model(str(model_id)),
+                "catalog": services.speech_catalog()}
+
+    @server.tool()
+    def speech_set_external_home(path: str) -> dict:
+        """Register an existing external ASR folder (for example Qwen3-ASR) in place."""
+        require_read()
+        return {"ok": True, "speech": services.speech_manager().set_external_home(str(path))}
 
     @server.tool()
     def speech_transcribe(wav_path: str, language: str = "") -> dict:
