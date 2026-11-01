@@ -741,6 +741,20 @@ select option[data-kind='loaded'] {
     min-width: 100px;
 }
 
+.nl-access-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 2px 0 4px;
+    border-top: 1px solid var(--vscode-panel-border);
+    margin-top: 2px;
+}
+
+.nl-access-bar .nl-field-small {
+    flex: 0 1 180px;
+}
+
 .nl-check {
     display: inline-flex;
     align-items: center;

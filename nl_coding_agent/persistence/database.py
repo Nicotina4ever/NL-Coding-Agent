@@ -162,6 +162,20 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 CREATE INDEX IF NOT EXISTS idx_chat_messages_session
     ON chat_messages(session_id, id);
 
+CREATE TABLE IF NOT EXISTS chat_checkpoints (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id   TEXT NOT NULL,
+    project_id   INTEGER,
+    message_id   INTEGER,
+    kind         TEXT NOT NULL DEFAULT 'manual',
+    git_ref      TEXT,
+    archive_path TEXT,
+    manifest_json TEXT NOT NULL DEFAULT '{}',
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_chat_checkpoints_session
+    ON chat_checkpoints(session_id, id DESC);
+
 CREATE TABLE IF NOT EXISTS events (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     source      TEXT NOT NULL DEFAULT 'system',

@@ -1006,6 +1006,25 @@ export class EngineConnection {
             }, 30_000);
     }
 
+    async checkpointCreate(sessionId: string, kind = 'manual', messageId?: number): Promise<{
+        ok: boolean; checkpoint?: Record<string, unknown>;
+    }> {
+        return this.callJson<{ ok: boolean; checkpoint?: Record<string, unknown> }>(
+            'checkpoint_create', { session_id: sessionId, kind, message_id: messageId }, 30_000);
+    }
+
+    async checkpointList(sessionId: string, limit = 50): Promise<{
+        ok: boolean; checkpoints?: Array<Record<string, unknown>>;
+    }> {
+        return this.callJson<{ ok: boolean; checkpoints?: Array<Record<string, unknown>> }>(
+            'checkpoint_list', { session_id: sessionId, limit }, 30_000);
+    }
+
+    async checkpointRestore(checkpointId: number): Promise<{ ok: boolean; [key: string]: unknown }> {
+        return this.callJson<{ ok: boolean; [key: string]: unknown }>(
+            'checkpoint_restore', { checkpoint_id: checkpointId, approved: true }, 120_000);
+    }
+
     async speechStatus(): Promise<{
         ok: boolean; speech?: Record<string, unknown>; catalog?: Record<string, unknown>;
     }> {
@@ -1177,6 +1196,26 @@ export class EngineConnection {
 
     async customAgents(): Promise<{ ok: boolean; agents: CustomAgent[] }> {
         return this.callJson<{ ok: boolean; agents: CustomAgent[] }>('custom_agents', {}, 30_000);
+    }
+
+    async teamPlan(model: string, focus = ''): Promise<{
+        ok: boolean; roles?: Array<Record<string, unknown>>; summary?: string;
+        analyst_model?: string; fallback?: boolean; resources?: Record<string, unknown>;
+    }> {
+        return this.callJson<{
+            ok: boolean; roles?: Array<Record<string, unknown>>; summary?: string;
+            analyst_model?: string; fallback?: boolean; resources?: Record<string, unknown>;
+        }>('team_plan', { model, focus }, 240_000);
+    }
+
+    async planGenerate(model: string, objective: string): Promise<Record<string, unknown>> {
+        return this.callJson<Record<string, unknown>>(
+            'plan_generate', { model, objective }, 240_000);
+    }
+
+    async planApply(plan: Record<string, unknown>, activate = false): Promise<Record<string, unknown>> {
+        return this.callJson<Record<string, unknown>>(
+            'plan_apply', { plan, activate, approved: true }, 60_000);
     }
 
     async saveCustomAgent(agent: CustomAgent): Promise<{ ok: boolean; agent: CustomAgent }> {

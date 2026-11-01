@@ -162,6 +162,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     private mcpConfig: Record<string, unknown> | undefined;
     private speech: Record<string, unknown> | undefined;
     private accessProfile: Record<string, unknown> | undefined;
+    private lastPlan: Record<string, unknown> | undefined;
     private editorContext: EditorContext | undefined;
     private lastEditor: vscode.TextEditor | undefined;
     private lastRoute: ChatRoute | undefined;
@@ -311,23 +312,98 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             await this.generateSpecialistTeam();
             return;
         }
+        if (/^\/checkpoint$/i.test(message.trim())) {
+            if (!this.currentSessionId) {
+                this.postChat('error', 'No active conversation to checkpoint.');
+                return;
+            }
+            const result = await this.connection.checkpointCreate(this.currentSessionId, 'manual');
+            this.postChat('system', 'Filesystem checkpoint created: #' +
+                String(result.checkpoint?.id || '?') + '. Chat history was not changed.');
+            return;
+        }
+        if (/^\/checkpoints$/i.test(message.trim())) {
+            if (!this.currentSessionId) {
+                this.postChat('error', 'No active conversation.');
+                return;
+            }
+            const result = await this.connection.checkpointList(this.currentSessionId);
+            const rows = result.checkpoints || [];
+            this.postChat('system', rows.length
+                ? 'Checkpoints (newest first):\n' + rows.map((row) =>
+                    '#' + String(row.id) + ' ' + String(row.created_at || '') +
+                    ' ' + String(row.kind || '') + ' ' + String(row.git_ref || row.archive_path || ''))
+                    .join('\n')
+                : 'No filesystem checkpoints for this conversation.');
+            return;
+        }
+        const restoreCheckpoint = /^\/restore\s+(\d+)$/i.exec(message.trim());
+        if (restoreCheckpoint) {
+            const result = await this.connection.checkpointRestore(Number(restoreCheckpoint[1]));
+            this.postChat('system', 'Files restored from checkpoint #' +
+                String(result.checkpoint_id || restoreCheckpoint[1]) +
+                '. Chat messages were not rewound.');
+            return;
+        }
+        if (/^\/apply$/i.test(message.trim())) {
+            if (!this.lastPlan) {
+                this.postChat('error', 'No generated plan is available. Run /plan <objective> first.');
+                return;
+            }
+            try {
+                const result = await this.connection.planApply(this.lastPlan, false);
+                this.postChat('system', 'Plan applied as a Goal (not executed): ' +
+                    JSON.stringify(result.goal || result));
+            } catch (error) {
+                this.reportError(error, 'plan-apply');
+            }
+            return;
+        }
         const planTask = /^\/plan\s+([\s\S]+)$/i.exec(message);
         if (planTask) {
-            planningOnly = true;
-            this.postChat('system',
-                'Planning mode: NL Code will inspect and plan only. No mission is created and no files are changed.');
-            message = [
-                'PLANNING MODE: do not edit files, do not start a mission, and do not claim execution.',
-                'Inspect the available documentation and project files with your read-only tools, then return:',
-                '1) understood objective and constraints; 2) current state; 3) phased plan with concrete files/commands;',
-                '4) risks and unknowns; 5) recommended first mission and acceptance criteria.',
-                '',
-                'User request:',
-                planTask[1].trim()
-            ].join('\n');
+            const model = this.chatModel || this.settings?.models.chat_default_spec || '';
+            if (!model) {
+                this.postChat('error', 'Select an explicit model before planning.');
+                return;
+            }
+            this.busyChat = true;
+            this.busyPhase = 'thinking';
+            this.postState();
+            try {
+                this.postChat('system',
+                    'Planning only: the planner will read the project and produce milestones. It will not edit files or create missions.');
+                const plan = await this.connection.planGenerate(model, planTask[1].trim());
+                this.lastPlan = plan;
+                const milestones = Array.isArray(plan.milestones) ? plan.milestones : [];
+                const lines = milestones.map((item, index) => {
+                    const row = item as Record<string, unknown>;
+                    return (index + 1) + '. ' + String(row.title || row.key || '') +
+                        (row.dependencies && Array.isArray(row.dependencies) && row.dependencies.length
+                            ? ' [after ' + (row.dependencies as unknown[]).join(', ') + ']' : '') +
+                        '\n   ' + String(row.mission_intent || row.description || '');
+                });
+                this.postChat('assistant',
+                    'PLAN (not executed)\n' + String(plan.title || 'Execution plan') + '\n' +
+                    String(plan.objective || '') + '\n\n' + lines.join('\n') +
+                    '\n\nReply /apply to create the Goal and its milestones. Nothing runs until you start it.');
+            } catch (error) {
+                this.reportError(error, 'plan');
+            } finally {
+                this.busyChat = false;
+                this.busyPhase = this.busyMission ? 'mission' : 'idle';
+                this.postState();
+            }
+            return;
         }
         this.busyChat = true;
         this.busyPhase = 'thinking';
+        if (this.currentSessionId) {
+            try {
+                await this.connection.checkpointCreate(this.currentSessionId, 'before-user-turn');
+            } catch (error) {
+                this.output.appendLine('[checkpoint] ' + this.errorText(error));
+            }
+        }
         this.postState();
         try {
             await this.connection.connect();
@@ -414,7 +490,12 @@ export class ChatProvider implements vscode.WebviewViewProvider {
 
     async refreshAccessProfile(): Promise<void> {
         try {
-            this.accessProfile = await this.connection.accessProfile() as Record<string, unknown>;
+            let profile = await this.connection.accessProfile() as Record<string, unknown>;
+            if (!profile.profile) {
+                await this.connection.setAccessProfile('auto-review');
+                profile = await this.connection.accessProfile() as Record<string, unknown>;
+            }
+            this.accessProfile = profile;
             this.postState();
         } catch (error) {
             this.output.appendLine('[access-profile] ' + this.errorText(error));
@@ -1460,6 +1541,54 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         this.postChat('system', 'Mission #' + missionId + ' deleted.');
     }
 
+    async addProviderDialog(): Promise<void> {
+        const kindPick = await vscode.window.showQuickPick([
+            { label: 'Ollama', description: 'local Ollama server', id: 'ollama' },
+            { label: 'OpenAI-compatible', description: 'LM Studio, vLLM, hosted API…', id: 'openai_compatible' },
+            { label: 'llama.cpp', description: 'llama.cpp server with /v1/models', id: 'llama.cpp' }
+        ], { title: 'Add model provider', placeHolder: 'Provider type' });
+        if (!kindPick) {
+            return;
+        }
+        const defaults = kindPick.id === 'llama.cpp'
+            ? { id: 'llama_cpp', label: 'llama.cpp', url: 'http://127.0.0.1:8080/v1' }
+            : kindPick.id === 'ollama'
+                ? { id: 'ollama', label: 'Ollama', url: 'http://127.0.0.1:11434' }
+                : { id: '', label: 'OpenAI-compatible', url: 'http://127.0.0.1:1234/v1' };
+        const providerId = await vscode.window.showInputBox({
+            title: 'Provider id',
+            prompt: 'Lowercase letters, digits and underscores',
+            value: defaults.id,
+            validateInput: (value) => /^[a-z][a-z0-9_]*$/.test(value)
+                ? undefined : 'Use lowercase letters, digits or underscores.'
+        });
+        if (!providerId) { return; }
+        const label = await vscode.window.showInputBox({
+            title: 'Provider label', value: defaults.label
+        });
+        if (label === undefined) { return; }
+        const baseUrl = await vscode.window.showInputBox({
+            title: 'Provider base URL',
+            prompt: 'Usually ends in /v1 for OpenAI-compatible servers',
+            value: defaults.url,
+            validateInput: (value) => /^https?:\/\/\S+$/.test(value) ? undefined : 'Enter an http(s) URL.'
+        });
+        if (!baseUrl) { return; }
+        const apiKeyEnv = await vscode.window.showInputBox({
+            title: 'API key environment variable (optional)',
+            prompt: 'Leave empty for local providers. The secret itself is never stored here.',
+            value: ''
+        });
+        if (apiKeyEnv === undefined) { return; }
+        await this.connection.saveProviderSettings(providerId, {
+            enabled: true, baseUrl, label: label || providerId,
+            kind: kindPick.id === 'llama.cpp' ? 'openai_compatible' : kindPick.id,
+            apiKeyEnv
+        });
+        await this.refreshAll(true);
+        this.postChat('system', 'Provider added: ' + providerId + ' (' + (label || providerId) + ').');
+    }
+
     async saveProviderSettings(payload: Record<string, unknown>): Promise<void> {
         const providerId = String(payload.providerId || '').trim();
         if (!/^[a-z][a-z0-9_]*$/.test(providerId)) {
@@ -1473,7 +1602,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             kind: typeof payload.kind === 'string' ? payload.kind : undefined,
             apiKeyEnv: typeof payload.apiKeyEnv === 'string' ? payload.apiKeyEnv : undefined
         });
-        await this.refreshAll(false);
+        await this.refreshAll(true);
         this.postChat('system', 'Provider settings saved for ' + providerId + '.');
     }
 
@@ -1502,97 +1631,70 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     async generateSpecialistTeam(): Promise<void> {
         const settings = this.settings || await this.connection.engineSettings(false);
         this.settings = settings;
-        const existing = new Set((settings.agents.custom_agents || [])
-            .map((agent) => String(agent.name || '').toLowerCase()));
         const available = this.modelOptions().filter((option) => option.value);
-        const local = available.filter((option) => !this.isCloudRoute(option.value));
-        const pool = local.length ? local : available;
-        if (!pool.length) {
+        if (!available.length) {
             this.postChat('error', 'Probe at least one model before generating a specialist team.');
             return;
         }
-        const score = (option: ModelOption, wanted: RegExp[]): number => {
-            const text = (option.value + ' ' + option.label).toLowerCase();
-            let value = 0;
-            wanted.forEach((pattern, index) => { if (pattern.test(text)) { value += (wanted.length - index) * 10; } });
-            if (option.loaded) { value += 2; }
-            return value;
-        };
-        const pick = (used: Set<string>, wanted: RegExp[]): ModelOption => {
-            const ranked = pool.slice().sort((a, b) => score(b, wanted) - score(a, wanted));
-            const found = ranked.find((item) => !used.has(item.value)) || ranked[0];
-            used.add(found.value);
-            return found;
-        };
-        const used = new Set<string>();
-        const architect = pick(used, [/qwen3\.5|qwen3|muse|reason|think|architect|120b|30b/i, /large|70b/i]);
-        const developer = pick(used, [/coder|code|qwen2\.5-coder|deepseek-coder|devstral/i]);
-        const tester = pick(used, [/coder|code|qwen2\.5-coder|test/i]);
-        const reviewer = pick(used, [/qwen3\.5|qwen3|muse|review|reason/i]);
-        const researcher = pick(used, [/qwen3\.5|qwen3|muse|instruct|reason/i]);
-        const definitions = [
-            {
-                name: 'Project Architect', model: architect.value,
-                role: 'software architect',
-                instructions: 'Inspect structure, contracts and risks; propose the smallest coherent plan and explicit verification targets. Read-only.',
-                tools: ['read_file', 'list_dir', 'git_diff'],
-                permissions: ['read-only']
-            },
-            {
-                name: 'Lead Developer', model: developer.value,
-                role: 'lead developer',
-                instructions: 'Implement precise, minimal patches; preserve existing behavior; cite files and tests. Use the mission staging gates.',
-                tools: ['read_file', 'list_dir', 'write_file', 'patch_file', 'run_tests', 'git_diff'],
-                permissions: ['read-only']
-            },
-            {
-                name: 'Test Engineer', model: tester.value,
-                role: 'test engineer',
-                instructions: 'Design and review automated tests, reproduce failures and report exact commands/results. Prefer existing project test conventions.',
-                tools: ['read_file', 'list_dir', 'run_tests', 'git_diff'],
-                permissions: ['read-only']
-            },
-            {
-                name: 'Security Reviewer', model: reviewer.value,
-                role: 'security reviewer',
-                instructions: 'Review trust boundaries, filesystem/network permissions and secret handling; report concrete risks and mitigations. Read-only.',
-                tools: ['read_file', 'list_dir', 'git_diff'],
-                permissions: ['read-only']
-            },
-            {
-                name: 'Documentation Researcher', model: researcher.value,
-                role: 'documentation researcher',
-                instructions: 'Read project docs and official sources; separate measured facts from guesses and produce a concise, cited plan.',
-                tools: ['read_file', 'list_dir', 'research_fetch_url', 'git_diff'],
-                permissions: ['read-only']
-            }
-        ];
-        let created = 0;
+        const analyst = await vscode.window.showQuickPick(
+            available.map((option) => ({
+                label: option.label,
+                description: option.value,
+                detail: option.provider || '',
+                route: option.value
+            })),
+            { title: 'Team Architect model', placeHolder: 'Choose the model that will analyse the project and assign the team' }
+        );
+        if (!analyst) {
+            return;
+        }
+        this.postChat('system', 'Team Architect is analysing project documentation, files, models and resources with ' + analyst.route + '...');
+        if (this.isCloudRoute(analyst.route)) {
+            await this.ensureCloudGrant(analyst.route);
+        }
+        const plan = await this.connection.teamPlan(analyst.route,
+            'Design the best specialist team for this project. Add vertical roles when needed; do not cap at five.');
+        const roles = (plan.roles || []).filter((item) => item && item.name);
+        if (!roles.length) {
+            this.postChat('error', 'The Team Architect returned no usable roles.');
+            return;
+        }
+        const existing = new Map((settings.agents.custom_agents || []).map((agent) =>
+            [String(agent.name || '').toLowerCase(), agent]));
         const assigned: string[] = [];
-        for (const definition of definitions) {
-            if (existing.has(definition.name.toLowerCase())) {
-                continue;
-            }
-            const slash = definition.model.indexOf('/');
-            const provider = slash > 0 ? definition.model.slice(0, slash) : 'ollama';
+        let created = 0;
+        let updated = 0;
+        for (const raw of roles) {
+            const name = String(raw.name || '').trim();
+            if (!name) { continue; }
+            const route = String(raw.model || '').trim() || analyst.route;
+            const slash = route.indexOf('/');
+            const provider = slash > 0 ? route.slice(0, slash) : 'ollama';
+            const tools = Array.isArray(raw.tools) && raw.tools.length
+                ? raw.tools.map(String) : ['read_file', 'list_dir', 'git_diff'];
+            const current = existing.get(name.toLowerCase());
             await this.connection.saveCustomAgent({
-                name: definition.name,
+                id: current?.id,
+                name,
                 provider,
-                model: definition.model,
-                role: definition.role,
-                instructions: definition.instructions,
-                tools: definition.tools,
-                permissions: definition.permissions,
+                model: route,
+                role: String(raw.role || 'specialist'),
+                instructions: String(raw.instructions || raw.reason || ''),
+                tools,
+                permissions: ['read-only'],
                 enabled: true
             });
-            assigned.push(definition.name + ' → ' + definition.model);
-            created += 1;
+            assigned.push(name + ' -> ' + route +
+                (raw.reason ? ' | ' + String(raw.reason).slice(0, 140) : ''));
+            if (current) { updated += 1; } else { created += 1; }
         }
         this.settings = await this.connection.engineSettings(false);
         this.postState();
-        this.postChat('system', created
-            ? `Generated ${created} specialist profile(s) across the available providers:\n` + assigned.join('\n')
-            : 'Recommended specialist profiles already exist. Edit one or delete it and press Generate team again.');
+        this.postChat('system',
+            'Team Architect: ' + String(plan.summary || 'team assigned') +
+            '\n' + created + ' new, ' + updated + ' updated specialist(s):\n' +
+            assigned.join('\n') +
+            (plan.fallback ? '\n(The analyst response was invalid; a deterministic team was created.)' : ''));
     }
 
     async saveSpecialistAgent(payload: Record<string, unknown>): Promise<void> {
@@ -2235,6 +2337,9 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'saveProviderSettings':
                     await this.saveProviderSettings(payload);
+                    break;
+                case 'addProviderDialog':
+                    await this.addProviderDialog();
                     break;
                 case 'saveRoleSettings':
                     await this.saveRoleSettings(payload);

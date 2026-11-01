@@ -71,8 +71,8 @@
     const speechModelEl = $('speech-model');
     const speechStatusEl = $('speech-status');
     const speechEnginesEl = $('speech-engines');
-    const accessProfileEl = $('access-profile');
-    const accessStatusEl = $('access-status');
+    const accessProfileEl = $('chat-access-profile');
+    const accessStatusEl = $('chat-access-status');
     const specialistSelectEl = $('specialist-list');
     const specialistProviderEl = $('specialist-provider');
     const specialistNameEl = $('specialist-name');
@@ -547,17 +547,16 @@
 
     function renderAccess(current) {
         const payload = (current && current.accessProfile) || {};
-        accessProfileEl.value = payload.profile || '';
+        accessProfileEl.value = payload.profile || 'auto-review';
         accessStatusEl.textContent = payload.profile
             ? 'applied to every agent' + (payload.auto_review_profile ? ' · auto-review: ' + payload.auto_review_profile : '')
-            : 'no project-wide profile applied';
+            : 'applying Auto review to every agent';
     }
 
     function renderSettings(current) {
         const settings = current.settings;
         if (!settings) { return; }
         renderSpecialists(current);
-        renderAccess(current);
         renderSpeech(current);
         renderJobs(current);
         const providerSelect = $('provider-edit');
@@ -1289,6 +1288,7 @@
             renderQueue(state);
             renderBanner(state);
             renderModelBar(state);
+            renderAccess(state);
             renderContext(state);
             renderResearch(state);
             renderMissionList(state);
@@ -1308,6 +1308,9 @@
         { name: '/agent', insert: '/agent ', label: 'Send a task to one agent', detail: 'Pick a specialist; one task runs at a time.' },
         { name: '/plan', insert: '/plan ', label: 'Plan without editing', detail: 'Analyse docs and files, then return a concrete plan; no mission starts.' },
         { name: '/team', insert: '/team', label: 'Build the specialist team', detail: 'Assign the best available models/providers to project roles.' },
+        { name: '/apply', insert: '/apply', label: 'Apply the generated plan', detail: 'Create a Goal and milestones; nothing is executed.' },
+        { name: '/checkpoint', insert: '/checkpoint', label: 'Checkpoint files', detail: 'Save filesystem state without touching chat history.' },
+        { name: '/checkpoints', insert: '/checkpoints', label: 'List checkpoints', detail: 'Show recent filesystem checkpoints.' },
         { name: '/help', insert: '/help', label: 'Show commands', detail: 'List the available Chat commands.' }
     ];
     let slashMatches = [];
@@ -1629,25 +1632,8 @@
         const role = roles[$('role-edit').value] || {};
         $('role-model-edit').value = role.model || '';
     });
-    $('provider-preset-llamacpp').addEventListener('click', function () {
-        postAction('saveProviderSettings', {
-            providerId: 'llama_cpp',
-            enabled: true,
-            kind: 'openai_compatible',
-            label: 'llama.cpp',
-            baseUrl: 'http://127.0.0.1:8080/v1',
-            apiKeyEnv: ''
-        });
-    });
     $('provider-new').addEventListener('click', function () {
-        $('provider-edit').value = '';
-        $('provider-id').value = '';
-        $('provider-label').value = '';
-        $('provider-url').value = '';
-        $('provider-api-key-env').value = '';
-        $('provider-kind').value = 'openai_compatible';
-        $('provider-enabled').checked = true;
-        $('provider-id').focus();
+        postAction('addProviderDialog', {});
     });
     $('speech-refresh').addEventListener('click', function () { postAction('refreshSpeech', {}); });
     $('speech-select').addEventListener('click', function () {
@@ -1671,7 +1657,7 @@
             .map(function (input) { return input.value; });
         setCheckedValues(specialistPermissionsEl, values);
     });
-    $('access-apply').addEventListener('click', function () {
+    accessProfileEl.addEventListener('change', function () {
         postAction('setAccessMode', { profile: accessProfileEl.value });
     });
     $('provider-save').addEventListener('click', function () {

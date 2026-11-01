@@ -318,7 +318,7 @@ class AppServices:
         "full-access": {"read": True, "write": True, "execute": True,
                         "delete": True, "network": True, "cloud": True},
         "auto-review": {"read": True, "write": True, "execute": True,
-                        "delete": False, "network": True, "cloud": False},
+                        "delete": True, "network": True, "cloud": True},
     }
 
     def access_profile(self, project_id: int) -> dict:
@@ -478,6 +478,23 @@ class AppServices:
         return chat_sessions.rewind(int(project_id), str(session_id), int(message_id),
                                     replacement=replacement)
 
+    def checkpoint_create(self, project_id: int, session_id: str, *,
+                          message_id: int | None = None, kind: str = "manual") -> dict:
+        from nl_coding_agent.app import chat_checkpoints
+        return chat_checkpoints.create(int(project_id), str(session_id),
+                                       message_id=message_id, kind=kind)
+
+    def checkpoint_list(self, project_id: int, session_id: str, limit: int = 50) -> dict:
+        from nl_coding_agent.app import chat_checkpoints
+        return {"ok": True, "checkpoints": chat_checkpoints.list_for(
+            int(project_id), str(session_id), int(limit))}
+
+    def checkpoint_restore(self, project_id: int, checkpoint_id: int) -> dict:
+        from nl_coding_agent.core import permissions
+        permissions.require(permissions.WRITE, project_id=int(project_id))
+        from nl_coding_agent.app import chat_checkpoints
+        return chat_checkpoints.restore(int(project_id), int(checkpoint_id))
+
     def search_chat_messages(self, project_id: int, query: str, limit: int = 100) -> list[dict]:
         from nl_coding_agent.app import chat_sessions
         return chat_sessions.search(int(project_id), query, limit=limit)
@@ -558,6 +575,251 @@ class AppServices:
         path = db_path().parent / "custom_agents.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         return path
+
+    def plan_generate(self, project_id: int, model: str, objective: str) -> dict:
+        """Generate a structured execution plan; never create a goal or mission."""
+        from nl_coding_agent.core import permissions
+        permissions.require(permissions.READ, project_id=int(project_id))
+        project = self.get_project(int(project_id))
+        if not project:
+            raise ValueError("Project not found")
+        root = Path(project["root"]).resolve()
+        evidence: list[dict] = []
+        budget = 18000
+        for candidate in sorted(root.rglob("*")):
+            if len(evidence) >= 100 or budget <= 0:
+                break
+            if not candidate.is_file() or candidate.stat().st_size > 400_000:
+                continue
+            if any(part in {".git", "node_modules", "data", ".workspace", "__pycache__",
+                            "dist", "build"} for part in candidate.parts):
+                continue
+            if candidate.suffix.lower() not in {".md", ".txt", ".json", ".yaml", ".yml",
+                                                ".toml", ".ts", ".tsx", ".js", ".py"}:
+                continue
+            try:
+                text = candidate.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            text = text[: min(9000, budget)]
+            budget -= len(text)
+            evidence.append({"path": candidate.relative_to(root).as_posix(), "text": text})
+        system = (
+            "You are the NL Code planner. Read the supplied project evidence and produce "
+            "ONLY a JSON execution plan. No file edits, no missions, no commands. Shape: "
+            '{"title":"...","objective":"...","acceptance_criteria":["..."],'
+            '"milestones":[{"key":"m1","title":"...","description":"...",'
+            '"dependencies":[],"acceptance_criteria":["..."],"mission_intent":"...",'
+            '"suggested_role":"developer","risk":"...","validation_strategy":"..."}]} . '
+            "Order milestones by dependency, keep each mission small and verifiable, "
+            "and include documentation/architecture milestones when appropriate. Do not "
+            "invent APIs or evidence; mark unknowns explicitly."
+        )
+        from nl_coding_agent.core import resource_monitor
+        try:
+            resources = resource_monitor.snapshot()
+        except Exception as exc:
+            resources = {"error": str(exc)}
+        user = json.dumps({"objective": str(objective or ""), "resources": resources,
+                           "files": evidence}, ensure_ascii=False)[:50000]
+        result = self._generate_with_fallback(
+            int(project_id), str(model), user,
+            messages=[{"role": "system", "content": system},
+                      {"role": "user", "content": user}],
+            timeout=180.0, role="architect")
+        reply = str(result.get("reply") or "").strip()
+        if reply.startswith("```"):
+            reply = reply.strip("`")
+            if reply.startswith("json"):
+                reply = reply[4:].lstrip()
+        try:
+            plan = json.loads(reply)
+        except ValueError as exc:
+            raise ValueError("Planner returned invalid JSON: " + str(exc)) from exc
+        if not isinstance(plan, dict) or not isinstance(plan.get("milestones"), list):
+            raise ValueError("Planner returned no milestones")
+        cleaned = []
+        for index, item in enumerate(plan["milestones"][:40]):
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("key") or ("m" + str(index + 1)))[:80]
+            cleaned.append({
+                "key": key,
+                "title": str(item.get("title") or key)[:300],
+                "description": str(item.get("description") or "")[:4000],
+                "dependencies": [str(value) for value in (item.get("dependencies") or [])][:32],
+                "acceptance_criteria": [str(value) for value in
+                                        (item.get("acceptance_criteria") or [])][:32],
+                "mission_intent": str(item.get("mission_intent") or "")[:4000],
+                "suggested_role": str(item.get("suggested_role") or "developer")[:100],
+                "risk": str(item.get("risk") or "")[:2000],
+                "validation_strategy": str(item.get("validation_strategy") or "")[:2000],
+            })
+        if not cleaned:
+            raise ValueError("Planner returned no usable milestones")
+        return {"ok": True, "analyst_model": str(model),
+                "title": str(plan.get("title") or "Execution plan")[:300],
+                "objective": str(plan.get("objective") or objective or "")[:4000],
+                "acceptance_criteria": [str(value) for value in
+                                        (plan.get("acceptance_criteria") or [])][:64],
+                "milestones": cleaned, "executed": False,
+                "resources": resources}
+
+    def plan_apply(self, project_id: int, plan: dict, *, activate: bool = False) -> dict:
+        """Create a Goal from a generated plan; never execute it."""
+        from nl_coding_agent.core import permissions
+        permissions.require(permissions.READ, project_id=int(project_id))
+        if not isinstance(plan, dict) or not isinstance(plan.get("milestones"), list):
+            raise ValueError("A generated plan with milestones is required")
+        allowed_milestone_fields = {
+            "key", "title", "description", "priority", "dependencies",
+            "acceptance_criteria", "risk", "validation_strategy", "mission_intent",
+        }
+        milestones = []
+        for item in plan["milestones"]:
+            if not isinstance(item, dict):
+                continue
+            milestone = {key: value for key, value in item.items()
+                         if key in allowed_milestone_fields}
+            milestones.append(milestone)
+        goal = self._goal_service().create_goal_from_plan(
+            str(plan.get("objective") or plan.get("title") or ""),
+            title=str(plan.get("title") or "Execution plan"),
+            project_id=int(project_id),
+            acceptance_criteria=plan.get("acceptance_criteria") or [],
+            reference_metadata={"source": "chat_plan", "analyst_model": plan.get("analyst_model")},
+            milestones=milestones,
+        )
+        if activate:
+            goal = self._goal_service().activate_goal(int(goal["id"]))
+        return {"ok": True, "goal": goal, "executed": False,
+                "status": goal.get("status"), "milestones": len(plan["milestones"])}
+
+    def team_plan(self, project_id: int, model: str, *, focus: str = "") -> dict:
+        """Ask an explicitly chosen analyst model to design a project team.
+
+        The result is advisory configuration only: it never edits files, starts
+        a mission or grants execution. Model count is intentionally not capped
+        at the legacy five roles.
+        """
+        from nl_coding_agent.core import permissions
+        permissions.require(permissions.READ, project_id=int(project_id))
+        project = self.get_project(int(project_id))
+        if not project:
+            raise ValueError("Project not found")
+        root = Path(project["root"]).resolve()
+        docs: list[dict] = []
+        budget = 24000
+        for candidate in sorted(root.rglob("*")):
+            if len(docs) >= 120 or budget <= 0:
+                break
+            if not candidate.is_file() or candidate.stat().st_size > 500_000:
+                continue
+            if any(part in {".git", "node_modules", "data", ".workspace", "__pycache__",
+                            "dist", "build"} for part in candidate.parts):
+                continue
+            if candidate.suffix.lower() not in {".md", ".txt", ".json", ".yaml", ".yml",
+                                                ".toml", ".ts", ".tsx", ".js", ".py"}:
+                continue
+            try:
+                text = candidate.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            text = text[: min(12000, budget)]
+            budget -= len(text)
+            docs.append({"path": candidate.relative_to(root).as_posix(),
+                         "text": text})
+        try:
+            from nl_coding_agent.core import resource_monitor
+            resources = resource_monitor.snapshot()
+        except Exception as exc:  # resource metrics are advisory
+            resources = {"error": str(exc)}
+        catalog = []
+        try:
+            hub = self.discover_models(timeout=5.0)
+            for provider in getattr(hub, "providers", []):
+                for item in provider.models:
+                    catalog.append({
+                        "route": str(provider.provider_id) + "/" + str(item.name),
+                        "provider": provider.provider_id,
+                        "size_gb": getattr(item, "size_gb", 0),
+                        "loaded": bool(getattr(item, "loaded", False)),
+                        "capabilities": list(getattr(item, "capabilities", ())),
+                    })
+        except Exception as exc:
+            catalog = [{"error": str(exc)}]
+        system = (
+            "You are the NL Code Team Architect. Analyse the supplied project evidence "
+            "and available model/resource inventory. Design the smallest effective team, "
+            "but do NOT cap the team at five: add vertical specialists when the project "
+            "clearly needs them. Return JSON only with this shape: "
+            '{"summary":"...","roles":[{"name":"...","role":"...",'
+            '"instructions":"...","tools":["read_file"],"model":"provider/model",'
+            '"reason":"..."}]} . Every model must be one of the available routes; '
+            "prefer distinct models/providers and respect RAM/VRAM limits. Do not invent "
+            "licenses or capabilities. No missions, no file edits, no permission changes."
+        )
+        user = json.dumps({"focus": str(focus or ""), "resources": resources,
+                           "models": catalog, "files": docs},
+                          ensure_ascii=False)[:60000]
+        result = self._generate_with_fallback(
+            int(project_id), str(model), user,
+            messages=[{"role": "system", "content": system},
+                      {"role": "user", "content": user}],
+            timeout=180.0, role="architect")
+        reply = str(result.get("reply") or "").strip()
+        payload = None
+        if reply.startswith("```"):
+            reply = reply.strip("`")
+            if reply.startswith("json"):
+                reply = reply[4:].lstrip()
+        try:
+            payload = json.loads(reply)
+        except ValueError:
+            payload = None
+        roles = payload.get("roles") if isinstance(payload, dict) else None
+        if not isinstance(roles, list) or not roles:
+            # Deterministic fallback only when the analyst returns unusable text.
+            fallback_routes = [item.get("route") for item in catalog
+                               if isinstance(item, dict) and item.get("route")]
+            default_route = fallback_routes[0] if fallback_routes else ""
+            roles = [
+                {"name": "Project Architect", "role": "software architect",
+                 "model": default_route, "tools": ["read_file", "list_dir", "git_diff"],
+                 "instructions": "Inspect structure and risks; propose a minimal plan."},
+                {"name": "Lead Developer", "role": "lead developer",
+                 "model": default_route, "tools": ["read_file", "list_dir", "write_file", "patch_file", "run_tests"],
+                 "instructions": "Implement precise patches with verification."},
+                {"name": "Test Engineer", "role": "test engineer",
+                 "model": default_route, "tools": ["read_file", "list_dir", "run_tests"],
+                 "instructions": "Design and run focused tests."},
+                {"name": "Security Reviewer", "role": "security reviewer",
+                 "model": default_route, "tools": ["read_file", "list_dir", "git_diff"],
+                 "instructions": "Review trust boundaries and secrets."},
+                {"name": "Documentation Researcher", "role": "documentation researcher",
+                 "model": default_route, "tools": ["read_file", "list_dir", "research_fetch_url"],
+                 "instructions": "Read docs and official sources; cite facts."},
+            ]
+        cleaned = []
+        available = {item.get("route") for item in catalog if isinstance(item, dict)}
+        for item in roles[:32]:
+            if not isinstance(item, dict):
+                continue
+            route = str(item.get("model") or "").strip()
+            if available and route not in available:
+                route = catalog[0].get("route") if catalog and isinstance(catalog[0], dict) else ""
+            cleaned.append({
+                "name": str(item.get("name") or "Specialist")[:120],
+                "role": str(item.get("role") or "specialist")[:160],
+                "instructions": str(item.get("instructions") or "")[:4000],
+                "tools": [str(tool) for tool in (item.get("tools") or [])][:24],
+                "model": route,
+                "reason": str(item.get("reason") or "")[:1000],
+            })
+        return {"ok": True, "analyst_model": str(model),
+                "summary": str((payload or {}).get("summary") or "")[:4000],
+                "roles": cleaned, "resources": resources, "catalog": catalog,
+                "fallback": not bool(isinstance(payload, dict) and payload.get("roles"))}
 
     def list_custom_agents(self) -> list[dict]:
         path = self._custom_agents_path()
@@ -1639,6 +1901,8 @@ class AppServices:
         backup_dir = db_path().parent / "reversions" / (
             f"mission-{mission_id}-" + datetime.now().strftime("%Y%m%d-%H%M%S-%f"))
         backup_dir.mkdir(parents=True, exist_ok=True)
+        from nl_coding_agent.core.quarantine import quarantine_paths
+        quarantine: list[Path] = []
         restored: list[str] = []
         removed: list[str] = []
         for rel in changed:
@@ -1656,8 +1920,10 @@ class AppServices:
                 target.write_text(str(baseline[rel]), encoding="utf-8", newline="")
                 restored.append(rel)
             elif target.exists():
-                target.unlink()
-                removed.append(rel)
+                quarantine.append(target)
+        quarantined = quarantine_paths(root, quarantine, reason=f"mission-{mission_id}-revert") if quarantine else {
+            "moved": [], "destination": "", "skipped": []}
+        removed = [str(item.get("from")) for item in quarantined.get("moved", [])]
         set_promotion_status(mission_id, "reverted")
         update_mission_result(
             mission_id, "completed",
@@ -1665,6 +1931,7 @@ class AppServices:
                            + str(backup_dir))
         return {"ok": True, "mission_id": mission_id, "restored": restored,
                 "removed": removed, "backup_dir": str(backup_dir),
+                "quarantine": quarantined,
                 "promotion_status": "reverted"}
 
     def mission_candidate_diff(self, mission_id: int, *, project_id: int) -> dict:

@@ -412,6 +412,25 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         return services.set_access_profile(bound_project_id, str(profile))
 
     @server.tool(annotations=read_only)
+    def plan_generate(model: str, objective: str) -> dict:
+        """Generate a structured plan only; no goal, mission or file edit is created."""
+        require_read()
+        return services.plan_generate(bound_project_id, str(model), str(objective))
+
+    @server.tool()
+    def plan_apply(plan: dict, activate: bool = False,
+                   approved: bool = False) -> dict:
+        """Create a Goal with milestones from an already generated plan; no execution."""
+        require_read()
+        return services.plan_apply(bound_project_id, plan, activate=bool(activate))
+
+    @server.tool(annotations=read_only)
+    def team_plan(model: str, focus: str = "") -> dict:
+        """Analyse project evidence and propose a dynamic specialist team (no edits)."""
+        require_read()
+        return services.team_plan(bound_project_id, str(model), focus=str(focus or ""))
+
+    @server.tool(annotations=read_only)
     def custom_agents() -> dict:
         """List specialist agent profiles (configuration presets, not hidden execution)."""
         require_read()
@@ -680,6 +699,26 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         require_read()
         return {"ok": True, "session": services.delete_chat_session(
             bound_project_id, session_id)}
+
+    @server.tool(annotations=read_only)
+    def checkpoint_list(session_id: str, limit: int = 50) -> dict:
+        """List file checkpoints for one conversation, newest first."""
+        require_read()
+        return services.checkpoint_list(bound_project_id, str(session_id), int(limit))
+
+    @server.tool()
+    def checkpoint_create(session_id: str, message_id: int | None = None,
+                          kind: str = "manual") -> dict:
+        """Capture a filesystem checkpoint without changing the chat transcript."""
+        require_read()
+        return services.checkpoint_create(
+            bound_project_id, str(session_id), message_id=message_id, kind=str(kind))
+
+    @server.tool()
+    def checkpoint_restore(checkpoint_id: int, approved: bool = False) -> dict:
+        """Restore files to one checkpoint; the chat history is not modified."""
+        require_execution(approved)
+        return services.checkpoint_restore(bound_project_id, int(checkpoint_id))
 
     @server.tool()
     def chat_rewind(session_id: str, message_id: int, replacement: str = "",

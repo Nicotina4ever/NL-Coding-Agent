@@ -54,3 +54,11 @@ Mostrare tool calls eseguite, agent role/model, file letti/creati, candidate dif
 - `auto-review` registra anche il profilo trusted e mantiene separati cloud/delete.
 - `Generate team` valuta tutti i modelli locali scoperti e assegna ruoli distinti (architect, lead developer, test, security, documentation); i provider possono essere mescolati.
 - `Add llama.cpp` registra il provider OpenAI-compatible e usa `/v1/models` per il discovery quando il server è attivo.
+
+## NL Code 0.7 (1 novembre 2026)
+
+- Accesso progetto sotto la Chat, default Auto review; cloud autorizzato non bloccato; le cancellazioni passano da `da_eliminare` con manifest.
+- Team Architect sceglie un modello analista esplicito, legge documentazione/progetto e crea un numero dinamico di specialisti.
+- `/plan` produce un piano JSON e nessuna missione; `/apply` crea il Goal con milestone e non esegue.
+- `/checkpoint`, `/checkpoints`, `/restore` separano il ripristino file dal rewind conversazione; i progetti Git usano ref nascosti.
+- Script `scripts/nlcode/autopilot.py` e `scripts/nlcode/mcp_smoke.py`.

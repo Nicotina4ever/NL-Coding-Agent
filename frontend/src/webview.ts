@@ -144,6 +144,17 @@ export function buildChatHtml(assets: WebviewAssets): string {
                         </label>
                         <span id="model-current" class="nl-muted"></span>
                     </div>
+                    <div class="nl-access-bar">
+                        <label class="nl-field nl-field-small">Project access
+                            <select id="chat-access-profile" aria-label="Project-wide access profile">
+                                <option value="read-only">Read Only</option>
+                                <option value="workspace-write">Workspace Write</option>
+                                <option value="full-access">Full access</option>
+                                <option value="auto-review">Auto review</option>
+                            </select>
+                        </label>
+                        <span id="chat-access-status" class="nl-muted">applies to every agent</span>
+                    </div>
 
                     <label class="nl-visually-hidden" for="input">Message NL Coder</label>
                     <textarea id="input" rows="3" placeholder="Ask NL Coder…  Type / for commands (/mission, /steer, /fetch)"></textarea>
@@ -285,8 +296,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                     <select id="provider-edit" aria-label="Provider to edit"></select>
                     <label class="nl-check"><input id="provider-enabled" type="checkbox"> enabled</label>
                     <input id="provider-url" type="url" placeholder="http://127.0.0.1:11434" aria-label="Provider URL">
-                    <button id="provider-new" type="button">Add provider</button>
-                    <button id="provider-preset-llamacpp" type="button">Add llama.cpp</button>
+                    <button id="provider-new" type="button">Add provider…</button>
                     <button id="provider-save" type="button">Save provider</button>
                 </div>
                 <div class="nl-filter-row">
@@ -348,20 +358,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                 </div>
                 </details>
                 <h3>Permissions and autonomy</h3>
-                <p class="nl-hint"><strong>Mission execution</strong> is the master switch for code-changing missions. Read-only Chat can inspect and plan; enabling execution lets Chat stage a candidate, run verification and ask the reviewer before promotion. Permissions below are narrower grants for read, write, execute, network and cloud. Cloud escalation is opt-in and never runs automatically; cloud models stay hidden from the Chat picker until CLOUD is explicitly granted.</p>
-                <div class="nl-filter-row">
-                    <label class="nl-field">Project-wide access
-                        <select id="access-profile" aria-label="Project-wide access profile">
-                            <option value="">— select —</option>
-                            <option value="read-only">Read Only</option>
-                            <option value="workspace-write">Workspace Write</option>
-                            <option value="full-access">Full access</option>
-                            <option value="auto-review">Auto review</option>
-                        </select>
-                    </label>
-                    <button id="access-apply" type="button">Apply to all agents</button>
-                    <span id="access-status" class="nl-muted"></span>
-                </div>
+                <p class="nl-hint"><strong>Project access is controlled under the Chat composer</strong> and applies to every agent. Mission execution remains the master switch for code-changing missions. Cloud is opt-in through the project policy and explicit model selection; Auto review allows authorized cloud actions without a second block.</p>
                 <div class="nl-filter-row">
                     <select id="permission-scope">
                         <option value="read">read</option>
