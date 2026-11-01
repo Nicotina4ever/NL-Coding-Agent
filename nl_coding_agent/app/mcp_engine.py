@@ -433,6 +433,15 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                                  max_missions=int(max_missions), mode=str(mode))
 
     @server.tool(annotations=read_only)
+    def auto_review_check(capability: str = "read", target_paths: list[str] | None = None,
+                          description: str = "") -> dict:
+        """Evaluate an action against the active project Auto review profile."""
+        require_read()
+        return services.auto_review_check(
+            bound_project_id, capability=capability,
+            target_paths=target_paths or [], description=description)
+
+    @server.tool(annotations=read_only)
     def team_plan(model: str, focus: str = "") -> dict:
         """Analyse project evidence and propose a dynamic specialist team (no edits)."""
         require_read()

@@ -38,6 +38,7 @@ def main() -> int:
     parser.add_argument("--mode", choices=("automatic", "assisted"), default="automatic")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-launch", action="store_true")
+    parser.add_argument("--recoveries", type=int, default=2)
     args = parser.parse_args()
     project_root = Path(args.project).resolve()
     database.init_db().close()
@@ -64,28 +65,24 @@ def main() -> int:
     if args.no_launch:
         return 0
     command = [
-        sys.executable, str(ROOT / "nl_agent.py"), "supervisor", "run",
+        sys.executable, str(ROOT / "scripts" / "nlcode" / "autopilot_supervise.py"),
         "--project", str(project_root),
+        "--goal-id", str(applied["goal"]["id"]),
         "--mode", args.mode,
         "--max-missions", str(max(1, min(args.max_missions, 5))),
-        "--work-source", "goals",
+        "--recoveries", str(max(0, min(args.recoveries, 5))),
+        "--job-root", str(job_root),
     ]
-    log_path = job_root / "supervisor.log"
-    state_path = job_root / "state.json"
-    with log_path.open("a", encoding="utf-8") as log:
-        creationflags = 0
-        if os.name == "nt":
-            creationflags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-        process = subprocess.Popen(command, cwd=str(ROOT), stdout=log, stderr=subprocess.STDOUT,
-                                   stdin=subprocess.DEVNULL, creationflags=creationflags,
-                                   env={**os.environ, "NL_AUTOPILOT_JOB": str(job_root)})
-    state_path.write_text(json.dumps({
-        "pid": process.pid, "command": command, "started_at": datetime.now().isoformat(
-            timespec="seconds"), "goal_id": applied["goal"]["id"], "status": "launched",
-        "log": str(log_path),
-    }, ensure_ascii=False, indent=2), encoding="utf-8")
+    creationflags = 0
+    if os.name == "nt":
+        creationflags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+    with (job_root / "runner.log").open("a", encoding="utf-8") as runner_log:
+        process = subprocess.Popen(command, cwd=str(ROOT), stdout=runner_log,
+                                   stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                                   creationflags=creationflags)
     print(json.dumps({"phase": "launched", "pid": process.pid,
-                      "state": str(state_path), "log": str(log_path)},
+                      "state": str(job_root / "state.json"),
+                      "log": str(job_root / "supervisor.log")},
                      ensure_ascii=False))
     return 0
 

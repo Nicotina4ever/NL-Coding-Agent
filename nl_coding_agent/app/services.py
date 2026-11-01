@@ -320,7 +320,7 @@ class AppServices:
         "full-access": {"read": True, "write": True, "execute": True,
                         "delete": True, "network": True, "cloud": True},
         "auto-review": {"read": True, "write": True, "execute": True,
-                        "delete": True, "network": True, "cloud": True},
+                        "delete": False, "network": True, "cloud": True},
     }
 
     def access_profile(self, project_id: int) -> dict:
@@ -740,6 +740,36 @@ class AppServices:
         return {"ok": True, "goal": goal, "executed": False,
                 "status": goal.get("status"), "milestones": len(plan["milestones"])}
 
+    def auto_review_check(self, project_id: int, *, capability: str = "read",
+                          target_paths=(), description: str = "") -> dict:
+        """Evaluate one action with the persisted Auto review profile (no execution)."""
+        from nl_coding_agent.core import auto_review, permissions
+        from nl_coding_agent.persistence import database
+        capability_aliases = {
+            "cloud": "model-inference-cloud",
+            "network": "web-fetch",
+            "network-write": "network-write",
+        }
+        normalized_capability = capability_aliases.get(str(capability), str(capability))
+        stored = database.get_json_setting("access.profile." + str(int(project_id)), {})
+        profile_name = str(stored.get("auto_review_profile") or "manual")
+        if profile_name not in auto_review.PROFILES:
+            profile_name = "manual"
+        action = auto_review.ActionDescriptor(
+            capability=normalized_capability,
+            scope_kind=permissions.SCOPE_PROJECT,
+            scope_value=str(project_id),
+            target_paths=tuple(str(item) for item in (target_paths or [])),
+            description=str(description or ""),
+            context={"project_id": int(project_id)},
+        )
+        decision = auto_review.evaluate_action(action, profile_name)
+        return {"ok": True, "decision": {
+            "outcome": decision.outcome, "reason": decision.reason,
+            "reason_code": decision.reason_code, "profile": decision.profile,
+            "capability": decision.capability, "risk": decision.risk,
+        }}
+
     def team_plan(self, project_id: int, model: str, *, focus: str = "") -> dict:
         """Ask an explicitly chosen analyst model to design a project team.
 
@@ -780,16 +810,23 @@ class AppServices:
         except Exception as exc:  # resource metrics are advisory
             resources = {"error": str(exc)}
         catalog = []
+        gpu_total = max([float(gpu.get("total_mb") or 0)
+                         for gpu in (resources.get("gpus") or [])] or [0.0]) / 1024.0
+        ram_available = float((resources.get("ram") or {}).get("available_mb") or 0) / 1024.0
         try:
             hub = self.discover_models(timeout=5.0)
             for provider in getattr(hub, "providers", []):
                 for item in provider.models:
+                    size_gb = float(getattr(item, "size_gb", 0) or 0)
                     catalog.append({
                         "route": str(provider.provider_id) + "/" + str(item.name),
                         "provider": provider.provider_id,
-                        "size_gb": getattr(item, "size_gb", 0),
+                        "size_gb": size_gb,
                         "loaded": bool(getattr(item, "loaded", False)),
                         "capabilities": list(getattr(item, "capabilities", ())),
+                        "fits_vram": bool(not size_gb or not gpu_total or size_gb <= gpu_total),
+                        "fits_available_ram": bool(not size_gb or not ram_available
+                                                   or size_gb <= ram_available),
                     })
         except Exception as exc:
             catalog = [{"error": str(exc)}]
@@ -1921,7 +1958,6 @@ class AppServices:
         )
         permissions.require(permissions.READ, project_id=project_id)
         permissions.require(permissions.WRITE, project_id=project_id)
-        permissions.require(permissions.DELETE, project_id=project_id)
         mission = get_mission(mission_id)
         project = self.get_project(project_id)
         if not mission or not project or mission.get("project_id") != project_id:
