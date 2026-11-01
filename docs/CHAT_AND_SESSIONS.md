@@ -81,3 +81,9 @@ Mostrare tool calls eseguite, agent role/model, file letti/creati, candidate dif
 - Auto review grants the project cloud-inference capability and the trusted review profile; cloud actions are not blocked by the profile.
 - Direct delete remains denied; project deletions are moved to `da_eliminare` with a manifest.
 - Autopilot recovery is bounded by `autopilot_supervise.py`; create `STOP` in the job directory to stop before the next retry.
+
+### ParcoTest autopilot smoke (2026-11-01)
+
+- Job: `.workspace/jobs/autopilot-20261101-155503`.
+- Piano applicato, Goal #1 attivato, Supervisor avviato due volte dal wrapper di recovery.
+- Blocco esterno: `data/selfbuild_state.json` non contiene un entry per ParcoTest; il Supervisor richiede `scripts/migrate_project_root.py --apply` prima del self-build. Nessuna modifica applicativa a ParcoTest.
