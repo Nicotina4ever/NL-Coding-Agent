@@ -389,7 +389,13 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
     def save_permission_scope(scope: str, granted: bool,
                               approved: bool = False) -> dict:
         """Explicitly grant/revoke one project permission and return fresh policy."""
-        require_execution(approved)
+        # Research/network is a read-only capability, not code execution. Let the
+        # owner grant NETWORK from a read-only session so pasted URLs can be fetched;
+        # write/execute/cloud still require an execution-enabled server.
+        if str(scope).lower() in ("read", "network"):
+            require_read()
+        else:
+            require_execution(approved)
         return {"ok": True, "permissions": services.set_permission_scope(
             str(scope), bool(granted), project_id=bound_project_id, source="mcp-approved")}
 
