@@ -685,8 +685,11 @@
         options.forEach(function (option) {
             if (option.value) { addProvider(option.provider, option.provider); }
         });
-        const selectedProvider = auto ? '' : (routeProvider(current.chatModel) || '');
+        const selectedProvider = current.providerFilter || '';
         populateSelect(providerSelectEl, providers, selectedProvider);
+        if (selectedProvider && !providers.some(function (provider) { return provider.value === selectedProvider; })) {
+            populateSelect(providerSelectEl, providers, '');
+        }
         // Keep both selectors usable even in Automatic mode: choosing a model
         // is how the user leaves Automatic, without hunting for a checkbox.
         providerSelectEl.disabled = false;
@@ -1497,15 +1500,7 @@
     }
 
     providerSelectEl.addEventListener('change', function () {
-        if (!state) { return; }
-        const provider = providerSelectEl.value;
-        const candidate = stateModelOptions().filter(function (option) {
-            return option.value && option.provider === provider;
-        })[0];
-        if (candidate) {
-            autoModelEl.checked = false;
-            postModelRoute(candidate.value);
-        }
+        postAction('setProviderFilter', { provider: providerSelectEl.value });
     });
 
     chatModelEl.addEventListener('change', function () {

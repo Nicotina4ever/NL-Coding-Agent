@@ -62,3 +62,10 @@ Mostrare tool calls eseguite, agent role/model, file letti/creati, candidate dif
 - `/plan` produce un piano JSON e nessuna missione; `/apply` crea il Goal con milestone e non esegue.
 - `/checkpoint`, `/checkpoints`, `/restore` separano il ripristino file dal rewind conversazione; i progetti Git usano ref nascosti.
 - Script `scripts/nlcode/autopilot.py` e `scripts/nlcode/mcp_smoke.py`.
+
+## Verifica 0.7.0
+
+- `scripts/nlcode/mcp_smoke.py` passes against the project-bound server (72 tools, project_context and engine_settings callable).
+- `scripts/nlcode/autopilot.py --dry-run` produced a plan for ParcoTest without changing project files.
+- Git checkpoint capture/restore verified on an isolated repository; file restore and conversation rewind remain separate operations.
+- Installed VSIX acceptance: mission developer→tester→reviewer→promotion PASS.

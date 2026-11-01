@@ -320,7 +320,7 @@ function testWebviewBehaviour() {
     assert.strictEqual(get('project-badge').textContent, '#7 · project');
     assert.strictEqual(get('exec-toggle').dataset.enabled, 'true');
     assert.strictEqual(get('chat-model').value, 'ollama/dev');
-    assert.strictEqual(get('provider-select').value, 'ollama');
+    assert.strictEqual(get('provider-select').value, '');
     assert.strictEqual(get('auto-model').checked, false);
     assert(collectText(get('model-current')).includes('Explicit'));
     assert.strictEqual(get('dev-model').value, 'ollama/dev');

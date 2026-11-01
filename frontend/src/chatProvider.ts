@@ -77,6 +77,7 @@ export interface DashboardState {
     busyPhase: string;
     dictating?: boolean;
     chatModel: string;
+    providerFilter?: string;
     autoCoding: boolean;
     missionModels: { developerModel: string; reviewerModel: string };
     modelOptions: ModelOption[];
@@ -141,6 +142,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     private busyMission = false;
     private busyPhase = 'idle';
     private chatModel = '';
+    private providerFilter = '';
     private autoCoding = false;
     private missionModels = { developerModel: '', reviewerModel: '' };
     private attachments: AttachmentView[] = [];
@@ -934,25 +936,71 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 detail: session.id,
                 session
             }));
-            if (!sessions.length) {
+            const entries: Array<Record<string, unknown>> = this.currentSessionId
+                ? [{
+                    label: '$(history) File checkpoints…',
+                    description: 'Restore files without changing chat history',
+                    checkpointMenu: true
+                }]
+                : [];
+            entries.push(...sessions);
+            if (!entries.length) {
                 this.postChat('system', 'No saved conversations for this project yet.');
                 return;
             }
-            const picked = await vscode.window.showQuickPick(sessions, {
+            const picked = await vscode.window.showQuickPick(entries as unknown as vscode.QuickPickItem[], {
                 title: 'Conversation history',
-                placeHolder: 'Open an active or archived conversation'
+                placeHolder: 'Open a conversation or restore a filesystem checkpoint'
             });
             if (!picked) {
                 return;
             }
-            if (picked.session.archived_at && !this.showArchivedSessions) {
-                this.showArchivedSessions = true;
-                await this.loadSessions(picked.session.id);
+            if ((picked as unknown as Record<string, unknown>).checkpointMenu) {
+                await this.showFileCheckpoints();
+                return;
             }
-            await this.switchSession(picked.session.id);
+            const session = (picked as unknown as Record<string, unknown>).session as ChatSession;
+            if (session.archived_at && !this.showArchivedSessions) {
+                this.showArchivedSessions = true;
+                await this.loadSessions(session.id);
+            }
+            await this.switchSession(session.id);
         } catch (error) {
             this.reportError(error, 'chat-history');
         }
+    }
+
+    async showFileCheckpoints(): Promise<void> {
+        if (!this.currentSessionId) {
+            return;
+        }
+        const result = await this.connection.checkpointList(this.currentSessionId);
+        const rows = result.checkpoints || [];
+        if (!rows.length) {
+            this.postChat('system', 'No filesystem checkpoints in this conversation.');
+            return;
+        }
+        const picked = await vscode.window.showQuickPick(rows.map((row) => ({
+            label: '#' + String(row.id) + ' · ' + String(row.kind || ''),
+            description: String(row.created_at || ''),
+            detail: String(row.git_ref || row.archive_path || ''),
+            checkpointId: Number(row.id)
+        })), { title: 'File checkpoints', placeHolder: 'Restore files; chat history is not changed' });
+        if (!picked) {
+            return;
+        }
+        const choice = await vscode.window.showWarningMessage(
+            'Restore project files from checkpoint #' + picked.checkpointId + '?',
+            { modal: true, detail: 'The current files are captured as a safety checkpoint first. Chat messages are not rewound.' },
+            'Restore files'
+        );
+        if (choice !== 'Restore files') {
+            return;
+        }
+        const restored = await this.connection.checkpointRestore(picked.checkpointId);
+        this.postChat('system', 'Files restored from checkpoint #' + picked.checkpointId +
+            '. Chat history was not changed.');
+        this.postState();
     }
 
     async deleteChatSession(): Promise<void> {
@@ -1156,6 +1204,11 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         if (this.isCloudRoute(value)) {
             void this.ensureCloudGrant(value);
         }
+        this.postState();
+    }
+
+    setProviderFilter(provider: string): void {
+        this.providerFilter = String(provider || '').trim();
         this.postState();
     }
 
@@ -2243,6 +2296,9 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 case 'setChatModel':
                     this.setChatModel(String(payload.value || ''));
                     break;
+                case 'setProviderFilter':
+                    this.setProviderFilter(String(payload.provider || ''));
+                    break;
                 case 'setAutoCoding':
                     this.setAutoCoding(Boolean(payload.value));
                     break;
@@ -2546,6 +2602,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             busyPhase: this.busyPhase,
             dictating: Boolean(this.dictationSessionId),
             chatModel: this.chatModel,
+            providerFilter: this.providerFilter,
             autoCoding: this.autoCoding,
             missionModels: this.missionModels,
             modelOptions: this.modelOptions(),
