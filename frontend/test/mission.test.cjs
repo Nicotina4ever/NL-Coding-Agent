@@ -16,8 +16,8 @@ const vscode = require('vscode');
 
 const EXTENSION_NAME = 'nl-coding-agent';
 const GOAL = 'In src/calc.py add sub(a, b) returning a - b. Preserve add and all existing tests. Change only src/calc.py.';
-const DEVELOPER = 'ollama/qwen2.5-coder:7b-instruct-q4_K_M';
-const REVIEWER = 'ollama/qwen2.5-coder:7b-instruct-q4_K_M';
+const DEVELOPER = 'ollama/qwen3.5:9b';
+const REVIEWER = 'ollama/qwen3.5:9b';
 
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -69,7 +69,7 @@ async function run() {
     const missionId = started.missionId;
     console.log('PASS mission dispatched: #' + missionId);
 
-    const deadline = Date.now() + 300000;
+    const deadline = Date.now() + 600000;
     let detail = null;
     let lastStatus = '';
     while (Date.now() < deadline) {
