@@ -165,6 +165,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     private speech: Record<string, unknown> | undefined;
     private accessProfile: Record<string, unknown> | undefined;
     private lastPlan: Record<string, unknown> | undefined;
+    private lastPlanGoalId: number | undefined;
     private editorContext: EditorContext | undefined;
     private lastEditor: vscode.TextEditor | undefined;
     private lastRoute: ChatRoute | undefined;
@@ -354,10 +355,28 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             }
             try {
                 const result = await this.connection.planApply(this.lastPlan, false);
+                const goal = (result.goal || {}) as Record<string, unknown>;
+                this.lastPlanGoalId = goal.id ? Number(goal.id) : undefined;
                 this.postChat('system', 'Plan applied as a Goal (not executed): ' +
-                    JSON.stringify(result.goal || result));
+                    JSON.stringify(result.goal || result) +
+                    '\nReply /runplan to start its missions explicitly.');
             } catch (error) {
                 this.reportError(error, 'plan-apply');
+            }
+            return;
+        }
+        if (/^\/runplan$/i.test(message.trim())) {
+            if (!this.lastPlanGoalId) {
+                this.postChat('error', 'Apply a generated plan with /apply first.');
+                return;
+            }
+            try {
+                const result = await this.connection.planRun(this.lastPlanGoalId, 1);
+                this.postChat('system', 'Plan execution launched: goal #' + this.lastPlanGoalId +
+                    ', supervisor pid ' + String(result.pid || '?') +
+                    '\nlog: ' + String(result.log || ''));
+            } catch (error) {
+                this.reportError(error, 'plan-run');
             }
             return;
         }

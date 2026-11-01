@@ -1313,6 +1313,7 @@
         { name: '/plan', insert: '/plan ', label: 'Plan without editing', detail: 'Analyse docs and files, then return a concrete plan; no mission starts.' },
         { name: '/team', insert: '/team', label: 'Build the specialist team', detail: 'Assign the best available models/providers to project roles.' },
         { name: '/apply', insert: '/apply', label: 'Apply the generated plan', detail: 'Create a Goal and milestones; nothing is executed.' },
+        { name: '/runplan', insert: '/runplan', label: 'Run the applied plan', detail: 'Start Supervisor missions explicitly after /apply.' },
         { name: '/checkpoint', insert: '/checkpoint', label: 'Checkpoint files', detail: 'Save filesystem state without touching chat history.' },
         { name: '/checkpoints', insert: '/checkpoints', label: 'List checkpoints', detail: 'Show recent filesystem checkpoints.' },
         { name: '/help', insert: '/help', label: 'Show commands', detail: 'List the available Chat commands.' }

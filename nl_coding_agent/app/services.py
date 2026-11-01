@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 import os
 import queue
+import subprocess
+import sys
 import threading
 from dataclasses import dataclass
 from datetime import datetime
@@ -664,6 +666,49 @@ class AppServices:
                                         (plan.get("acceptance_criteria") or [])][:64],
                 "milestones": cleaned, "executed": False,
                 "resources": resources}
+
+    def plan_run(self, project_id: int, goal_id: int, *, max_missions: int = 1,
+                 mode: str = "automatic") -> dict:
+        """Explicitly start an applied plan; planning alone never reaches this method."""
+        from nl_coding_agent.core import permissions
+        permissions.require(permissions.EXECUTE, project_id=int(project_id))
+        permissions.require(permissions.WRITE, project_id=int(project_id))
+        project = self.get_project(int(project_id))
+        if not project:
+            raise ValueError("Project not found")
+        goal = self._goal_service().get_goal(int(goal_id))
+        if int(goal.get("project_id") or 0) != int(project_id):
+            raise ValueError("Goal does not belong to this project")
+        if goal.get("status") == "planned":
+            goal = self._goal_service().activate_goal(int(goal_id))
+        if goal.get("status") != "active":
+            raise ValueError("Plan goal must be active before starting its missions")
+        root = Path(project["root"]).resolve()
+        job_root = APP_ROOT / ".workspace" / "jobs" / (
+            "plan-run-" + datetime.now().strftime("%Y%m%d-%H%M%S-%f"))
+        job_root.mkdir(parents=True, exist_ok=True)
+        command = [
+            sys.executable, str(APP_ROOT / "nl_agent.py"), "supervisor", "run",
+            "--project", str(root), "--mode", str(mode),
+            "--max-missions", str(max(1, min(int(max_missions), 5))),
+            "--work-source", "goals",
+        ]
+        log_path = job_root / "supervisor.log"
+        creationflags = 0
+        if os.name == "nt":
+            creationflags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        with log_path.open("a", encoding="utf-8") as log:
+            process = subprocess.Popen(
+                command, cwd=str(APP_ROOT), stdout=log, stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL, creationflags=creationflags,
+                env={**os.environ, "NL_PLAN_RUN_JOB": str(job_root)})
+        (job_root / "state.json").write_text(json.dumps({
+            "goal_id": int(goal_id), "project_id": int(project_id), "pid": process.pid,
+            "command": command, "status": "launched",
+            "started_at": datetime.now().isoformat(timespec="seconds"),
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
+        return {"ok": True, "goal_id": int(goal_id), "pid": process.pid,
+                "status": "launched", "log": str(log_path), "job_root": str(job_root)}
 
     def plan_apply(self, project_id: int, plan: dict, *, activate: bool = False) -> dict:
         """Create a Goal from a generated plan; never execute it."""

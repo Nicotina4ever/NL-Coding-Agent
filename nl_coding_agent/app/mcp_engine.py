@@ -424,6 +424,14 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         require_read()
         return services.plan_apply(bound_project_id, plan, activate=bool(activate))
 
+    @server.tool()
+    def plan_run(goal_id: int, max_missions: int = 1, mode: str = "automatic",
+                 approved: bool = False) -> dict:
+        """Explicitly start Supervisor missions for an applied plan; requires execution approval."""
+        require_execution(approved)
+        return services.plan_run(bound_project_id, int(goal_id),
+                                 max_missions=int(max_missions), mode=str(mode))
+
     @server.tool(annotations=read_only)
     def team_plan(model: str, focus: str = "") -> dict:
         """Analyse project evidence and propose a dynamic specialist team (no edits)."""

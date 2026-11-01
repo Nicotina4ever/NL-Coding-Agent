@@ -33,6 +33,7 @@ async def run(project: Path) -> dict:
                 "has_project_context": "project_context" in names,
                 "has_engine_settings": "engine_settings" in names,
                 "has_plan_generate": "plan_generate" in names,
+                "has_plan_run": "plan_run" in names,
                 "has_team_plan": "team_plan" in names,
                 "has_checkpoints": "checkpoint_create" in names,
                 "context_is_error": bool(context.isError),

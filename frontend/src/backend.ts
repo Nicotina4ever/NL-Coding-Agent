@@ -1218,6 +1218,12 @@ export class EngineConnection {
             'plan_apply', { plan, activate, approved: true }, 60_000);
     }
 
+    async planRun(goalId: number, maxMissions = 1): Promise<Record<string, unknown>> {
+        return this.callJson<Record<string, unknown>>(
+            'plan_run', { goal_id: goalId, max_missions: maxMissions, mode: 'automatic', approved: true },
+            60_000);
+    }
+
     async saveCustomAgent(agent: CustomAgent): Promise<{ ok: boolean; agent: CustomAgent }> {
         return this.callJson<{ ok: boolean; agent: CustomAgent }>('save_custom_agent', {
             agent_id: agent.id,
