@@ -21,26 +21,34 @@ intelligence are integrated. The supported interfaces are the NL Coder VS Code e
 NL Code Code - OSS workbench; both use the same Python engine. The PySide6 GUI remains in the
 repository as a legacy interface and is excluded from normal development and acceptance.
 
-Baseline at the 2 November 2026 checkpoint: the Python suite passes (1369 tests; the only failure
-observed was a CI smoke test reading the working tree while it was being edited concurrently).
-Recent work fixed the Team Architect -> specialist execution path, restored the tools each agent
-stage is promised, enforced the mission wall-time budget, removed orphan staging copies on mission
-delete, and implemented the P1 Context Engine: a per-model dynamic window (measured/configured,
-with output and thinking tokens reserved), loss-minimising incremental compaction, persisted
-project profile, selective file retrieval and cross-mission project memory shared by agent roles
-through one context pack. A real multi-agent mission with local Ollama models completed end to end
-(architect, two developers, tester, reviewer; candidate/oracle PASS, reviewer APPROVE, promotion)
-and a new Chat session recalled a decision from the persisted digest.
-Multimodal attachments, Vision handoff, local ASR and web research are implemented and tested.
-See `docs/CURRENT_STATE.md` for what is verified and what is still missing.
+Baseline at the 2 November 2026 checkpoint: the Python suite passes (1387 tests at the previous
+checkpoint, see `docs/CURRENT_STATE.md` for the final count). Recent work fixed the Team Architect
+-> specialist execution path, restored the tools each agent stage is promised, enforced the mission
+wall-time budget, removed orphan staging copies on mission delete, and implemented P1-P5:
 
-The remaining harness-level gaps are explicit: code intelligence is now exposed as read-only
-`search_symbols`/`lsp_diagnostics` tools with a static post-write diagnostics hook, but the repair
-branch after a candidate-introduced failure and real LSP availability still need verification;
-skills and sub-agents are absent, Chat/Missions do not share one routing evidence path yet, and the
-packaged VSIX/portable payload must be rebuilt from the current HEAD. No release claim is made until
-the acceptance gates in `docs/08_ACCEPTANCE_GATES.md` and the release requirements in
-`docs/PRODUCT_BACKLOG.md` pass.
+- a per-model dynamic Context Engine (measured/configured window, output and thinking tokens
+  reserved, loss-minimising incremental digest) with a persisted project profile, selective file
+  retrieval and shared project memory;
+- code intelligence as read-only `search_symbols`/`lsp_diagnostics` model tools (real `pylsp`
+  diagnostics with file/line/column), plus a static post-write gate that rejects a candidate before
+  the tester and a verified autonomous repair path (`tests/test_flow_repair.py`);
+- progressive project skills, isolated sub-agents with structured handoffs, and dynamic multiple
+  read-only advisors consumed by the Supervisor;
+- one ModelRouter-based routing evidence path shared by Chat and Missions, with explicit requests
+  preserved and cloud escalation still opt-in;
+- a rebuilt VSIX (installed acceptance passed) and a rebuilt Code - OSS standalone (GUI acceptance
+  `NLCODE-STANDALONE-ACCEPTANCE-PASS`) with a regenerated portable ZIP.
+
+Real local-model evidence (mission with advisor and skills, repair, Chat continuity) is under
+`docs/evidence/nlcode/`. Multimodal attachments, Vision handoff, local ASR and web research are
+implemented and tested. See `docs/CURRENT_STATE.md` for what is verified and what is still missing.
+
+Remaining declared gaps: the repair branch has not yet been exercised with a real model when the
+candidate itself introduces the failure (deterministic seam plus a real pre-existing red test are
+verified); the standalone payload references the repository engine (`engineRoot`) instead of
+embedding an independent runtime; a full team mission has not yet been run from the installed
+standalone UI. No release claim is made until the acceptance gates in
+`docs/08_ACCEPTANCE_GATES.md` and the release requirements in `docs/PRODUCT_BACKLOG.md` pass.
 
 ## Requirements
 

@@ -57,14 +57,29 @@ class LspServerSpec:
 
 def detect_language_servers(*, which=None) -> list[LspServerSpec]:
     import shutil
+    import sys
+
+    def _runtime_scripts(command: str) -> str | None:
+        """Find console scripts installed in the embedded runtime's Scripts dir."""
+        scripts = Path(sys.executable).resolve().parent / "Scripts"
+        for candidate in (command, command + ".exe", command + ".cmd", command + ".bat"):
+            path = scripts / candidate
+            if path.is_file():
+                return str(path)
+        return None
+
+    explicit = which is not None
     finder = which or shutil.which
     results = []
     for server_id, argv, languages in _SERVERS:
         command = argv[0]
         found = finder(command)
+        source = "which" if found else "missing"
+        if not found and not explicit:
+            found = _runtime_scripts(command)
+            source = "runtime-scripts" if found else "missing"
         results.append(LspServerSpec(server_id, str(found or command), tuple(argv[1:]),
-                                     tuple(languages), bool(found),
-                                     source="which" if found else "missing"))
+                                     tuple(languages), bool(found), source=source))
     return results
 
 
@@ -124,7 +139,12 @@ class StdioLspTransport:
         buffer = b""
         try:
             while True:
-                chunk = self._process.stdout.read(4096) if self._process.stdout else b""
+                # read() on a pipe blocks until the full size or EOF: a short LSP
+                # response would then never be delivered. read1 returns as soon as
+                # data is available.
+                if not self._process.stdout:
+                    return
+                chunk = self._process.stdout.read1(4096)
                 if not chunk:
                     return
                 buffer += chunk
@@ -223,26 +243,56 @@ class LspClient:
         self._initialized = True
         return result
 
-    def diagnostics(self, *, timeout: float | None = None) -> dict:
+    def diagnostics(self, *, timeout: float | None = None,
+                    expected_uris: list[str] | None = None) -> dict:
         if not self._initialized:
             raise LspError("not-initialized", "Start the language client explicitly first.")
         deadline = self.timeout if timeout is None else float(timeout)
-        try:
-            message = self._ensure_transport().receive(deadline)
-            while message is not None:
-                self._absorb(message)
-                message = self._ensure_transport().receive(0.05)
-        except LspError as exc:
-            if exc.code != "timeout":
-                raise
+        import time as _time
+
+        end = _time.monotonic() + deadline
+        while True:
+            if expected_uris and all(uri in self._diagnostics for uri in expected_uris):
+                break
+            remaining = end - _time.monotonic()
+            if remaining <= 0:
+                break
+            try:
+                message = self._ensure_transport().receive(min(0.25, remaining))
+            except LspError as exc:
+                if exc.code != "timeout":
+                    raise
+                continue
+            self._absorb(message)
         result = {}
         for uri, rows in self._diagnostics.items():
             result[uri] = [{"severity": int(row.get("severity") or 1),
                             "message": str(row.get("message") or ""),
                             "line": int((row.get("range") or {}).get("start", {}).get("line", 0)) + 1,
+                            "column": int((row.get("range") or {}).get("start", {}).get("character", 0)) + 1,
                             "source": str(row.get("source") or "lsp")}
                            for row in rows]
         return result
+
+    def open_document(self, path: str, *, language_id: str = "python") -> str:
+        """Open one project file in the language server (diagnostics require didOpen)."""
+        target = (self.root / str(path).replace("\\", "/").lstrip("./")).resolve()
+        try:
+            target.relative_to(self.root)
+        except ValueError as exc:
+            raise LspError("scope", "Document is outside the project root") from exc
+        if not target.is_file():
+            raise LspError("missing", "Document is missing: " + str(path))
+        uri = self._uri(str(path))
+        try:
+            text = target.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            raise LspError("read", "Cannot read document: " + str(exc)) from exc
+        self.notify("textDocument/didOpen", {
+            "textDocument": {"uri": uri, "languageId": language_id,
+                             "version": 1, "text": text[:500_000]},
+        })
+        return uri
 
     def hover(self, path: str, line: int, character: int) -> dict:
         return self.request("textDocument/hover", {
@@ -279,10 +329,12 @@ class LspClient:
 
 
 class LspManager:
-    def __init__(self, project_root: Path, *, detector=None, transport_factory=None):
+    def __init__(self, project_root: Path, *, detector=None, transport_factory=None,
+                 timeout: float = 5.0):
         self.root = Path(project_root).resolve()
         self._detector = detector or detect_language_servers
         self._factory = transport_factory
+        self._timeout = max(1.0, float(timeout))
         self._clients: dict[str, LspClient] = {}
 
     def catalog(self) -> list[dict]:
@@ -305,16 +357,29 @@ class LspManager:
                            "No local language server for " + repr(language)
                            + " is installed; nothing was installed or downloaded.")
         transport = self._factory(server) if self._factory else None
-        client = LspClient(server, self.root, transport=transport)
+        client = LspClient(server, self.root, transport=transport,
+                           timeout=self._timeout)
         client.initialize()
         self._clients[language] = client
         return {"started": True, "language": language, "server": server.to_dict()}
 
-    def diagnostics(self, language: str) -> dict:
+    def diagnostics(self, language: str, *, timeout: float | None = None,
+                    expected_uris: list[str] | None = None) -> dict:
         client = self._clients.get(str(language or "").lower())
         if client is None:
             raise LspError("not-initialized", "Language server is not started for this language.")
-        return client.diagnostics()
+        return client.diagnostics(timeout=timeout, expected_uris=expected_uris)
+
+    def open_documents(self, language: str, paths) -> list[str]:
+        """Open explicit project-relative files so the server publishes diagnostics."""
+        client = self._clients.get(str(language or "").lower())
+        if client is None:
+            raise LspError("not-initialized", "Language server is not started for this language.")
+        language_id = "python" if str(language).lower() == "python" else str(language)
+        uris: list[str] = []
+        for path in list(paths or []):
+            uris.append(client.open_document(str(path), language_id=language_id))
+        return uris
 
     def close(self) -> None:
         for client in self._clients.values():

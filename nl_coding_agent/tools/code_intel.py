@@ -272,7 +272,7 @@ def format_diagnostics(items: list[dict], *, limit: int = 20) -> str:
 
 
 def lsp_diagnostics(project_root: str | Path, *, language: str = "python",
-                    timeout_s: float = 20.0) -> dict:
+                    timeout_s: float = 20.0, paths=None) -> dict:
     """Bounded diagnostics through an already-available LSP server (no installs)."""
     root = Path(project_root).resolve()
     try:
@@ -280,8 +280,18 @@ def lsp_diagnostics(project_root: str | Path, *, language: str = "python",
     except Exception as exc:  # pragma: no cover - import guard
         return {"available": False, "reason": "LSP module unavailable: " + type(exc).__name__,
                 "diagnostics": []}
+    if not paths:
+        suffix = ".py" if str(language).lower() == "python" else None
+        discovered = []
+        for path in _iter_files(root, max_files=MAX_FILES):
+            if suffix and path.suffix.lower() != suffix:
+                continue
+            discovered.append(_relative(path, root))
+            if len(discovered) >= 30:
+                break
+        paths = discovered
     try:
-        manager = LspManager(root)
+        manager = LspManager(root, timeout=max(5.0, float(timeout_s)))
         catalog = manager.catalog()
         available = [item for item in catalog if item.get("available")]
         if not available:
@@ -290,18 +300,37 @@ def lsp_diagnostics(project_root: str | Path, *, language: str = "python",
                     "diagnostics": [], "catalog": catalog}
         try:
             manager.start(language)
-            payload = manager.diagnostics(language)
+            uris = manager.open_documents(language, list(paths)[:50])
+            payload = manager.diagnostics(language, timeout=max(5.0, float(timeout_s)),
+                                          expected_uris=uris)
         finally:
             try:
                 manager.close()
             except Exception:
                 pass
+        from urllib.parse import unquote
+
+        items: list[dict] = []
         if isinstance(payload, dict):
-            items = payload.get("diagnostics") or payload.get("items") or []
-        else:
-            items = list(payload or [])
+            for uri, rows in payload.items():
+                relative = unquote(str(uri)).replace("file:///", "").replace("file://", "")
+                relative = relative.replace("\\", "/").lstrip("/")
+                try:
+                    relative = Path(relative).resolve().relative_to(root).as_posix()
+                except ValueError:
+                    pass
+                for row in rows or []:
+                    items.append({
+                        "path": relative,
+                        "line": int(row.get("line") or 0),
+                        "column": int(row.get("column") or 0),
+                        "severity": "error" if int(row.get("severity") or 1) == 1 else "warning",
+                        "message": str(row.get("message") or ""),
+                        "source": "lsp:" + str(row.get("source") or language),
+                    })
         return {"available": True, "language": language,
-                "diagnostics": list(items)[:200], "catalog": catalog}
+                "diagnostics": items[:200], "catalog": catalog,
+                "files_analyzed": len(paths)}
     except Exception as exc:
         return {"available": False, "reason": type(exc).__name__ + ": " + str(exc),
                 "diagnostics": []}

@@ -480,8 +480,10 @@ def compact_chat(
             summarized_messages += sum(len(unit) for unit in dropped_units)
             covered += sum(len(unit) for unit in dropped_units)
     # The persisted digest also covers decisions and results still preserved in this
-    # prompt, so a brand-new session can continue from them.
-    if digest_sections or previous_summary:
+    # prompt, so a brand-new session can continue from them. Even a trim-only
+    # compaction must leave this digest behind: the next session cannot see the
+    # preserved turns, only the persisted summary.
+    if digest_sections or previous_summary or over() or max_chars:
         _merge_sections(digest_sections, _collect_sections(units))
         summary, digest = _render_summary(digest_sections, previous=previous_summary,
                                           covered_before=covered)

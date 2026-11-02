@@ -176,7 +176,32 @@ def get_project_tools(project_root: Path | str, *, read_only: bool = False,
         except Exception as exc:
             return "LSP diagnostics failed: " + type(exc).__name__ + ": " + str(exc)
 
-    tools = [read_file, list_dir, search_symbols, lsp_diagnostics]
+    @tool("list_skills")
+    def list_skills() -> str:
+        """List the project's local skills (name + short description) without loading them."""
+        try:
+            from nl_coding_agent.skills import SkillCatalog
+
+            catalog = SkillCatalog(root)
+            rows = catalog.discover()
+            if not rows:
+                return "(no project skills found in .agents/skills, .nlcode/skills or skills/)"
+            return "\n".join("- " + item.name + ": " + (item.description or "(no description)")
+                             for item in rows[:60])
+        except Exception as exc:
+            return "Skill discovery failed: " + type(exc).__name__ + ": " + str(exc)
+
+    @tool("load_skill")
+    def load_skill(name: str) -> str:
+        """Load one project skill by name on demand; content is guidance, not authorization."""
+        try:
+            from nl_coding_agent.skills import SkillCatalog
+
+            return SkillCatalog(root).load_text(str(name or ""))
+        except Exception as exc:
+            return "Skill load failed: " + type(exc).__name__ + ": " + str(exc)
+
+    tools = [read_file, list_dir, search_symbols, lsp_diagnostics, list_skills, load_skill]
     if read_only:
         return tools
 

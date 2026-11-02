@@ -670,8 +670,14 @@ class MultiAgentOrchestrator:
         self._ledger_mission_id: int | None = None
         self._mission_pack = None
         self._team_by_role: dict[str, dict] = {}
+        self._advisors: list[dict] = []
         for profile in project_team_agents(self.project_id):
-            self._team_by_role.setdefault(str(profile.get("role_id") or ""), profile)
+            role_id = str(profile.get("role_id") or "")
+            if role_id == "advisor":
+                # Dynamic advisory specialists: several coexist, each isolated and read-only.
+                self._advisors.append(profile)
+            else:
+                self._team_by_role.setdefault(role_id, profile)
 
     # ------------------------------------------------------------------ helpers
 
@@ -1717,7 +1723,7 @@ class MultiAgentOrchestrator:
         team that exists only in configuration. Debugger/standby roles are marked
         explicitly rather than being invented as fake tasks.
         """
-        if not self._team_by_role:
+        if not self._team_by_role and not self._advisors:
             return []
         tasks = tasks if tasks is not None else []
         tasks_by_role: dict[str, list[int]] = {}
@@ -1742,6 +1748,18 @@ class MultiAgentOrchestrator:
                     if role_id == "debugger"
                     else "no matching task in this mission's plan"
                 ),
+            })
+        for profile in self._advisors:
+            assignments.append({
+                "role_id": "advisor",
+                "name": str(profile.get("name") or "Project Advisor"),
+                "model": str(profile.get("model") or ""),
+                "instructions": str(profile.get("instructions") or ""),
+                "tools": list(profile.get("tools") or []),
+                "task_ids": [],
+                "standby": False,
+                "advisory": True,
+                "standby_reason": "isolated read-only sub-agent; returns a structured handoff",
             })
         return assignments
 
@@ -2473,7 +2491,77 @@ Do not claim that changes were made. The Developer will perform them in a staged
             if str(analysis or "").strip():
                 label = "Architecture" if role == "architect" else "Audit"
                 notes.append(f"[{label}]\n{analysis.strip()}")
+        if self._advisors:
+            advisor_notes = self._run_advisory_subagents(mission_id, goal)
+            if advisor_notes:
+                notes.append(advisor_notes)
         return "\n\n".join(notes)
+
+    def _run_advisory_subagents(self, mission_id: int, goal: str) -> str:
+        """Run each dynamic advisor as an isolated read-only sub-agent and consume its handoff."""
+        from nl_coding_agent.agents.subagents import SubagentRunner
+
+        if not self._advisors:
+            return ""
+        pack = self._mission_pack
+        if pack is None:
+            try:
+                pack = self._context_engine().build_mission_pack(
+                    goal, root_override=self.root, budget_chars=8_000)
+            except Exception:
+                pack = None
+        if pack is not None:
+            context = pack.for_role("architect", budget_chars=6_000)
+        else:
+            context = ""
+        runner = SubagentRunner(self.root, self.project_id, self.crew_runtime)
+        rendered: list[str] = []
+        for profile in self._advisors[:6]:
+            name = str(profile.get("name") or "Project Advisor")
+            instructions = str(profile.get("instructions") or "")
+            objective = (
+                "Advise the mission from your specialty. Mission goal: " + str(goal)
+                + "\nFocus: " + str(profile.get("role") or name)
+            )
+            if instructions:
+                objective += "\nYour standing instructions: " + instructions
+            try:
+                result = runner.run(
+                    name=name, objective=objective, context=context,
+                    model=str(profile.get("model") or ""), role_id="advisor",
+                    instructions=instructions, allowed_tools=profile.get("tools"),
+                    read_only=True,
+                )
+            except Exception as exc:
+                self._emit("advisor", "warning",
+                           "Advisor " + name + " failed: " + type(exc).__name__ + ": " + str(exc),
+                           mission_id=mission_id)
+                record_handoff(
+                    mission_id, "advisor", "developer",
+                    "Advisor " + name + " failed: " + type(exc).__name__,
+                    {"advisor": name, "role_id": "advisor", "error": str(exc)[:1000]},
+                )
+                continue
+            record_handoff(
+                mission_id, "advisor", "developer",
+                "Advisor handoff: " + name,
+                {"advisor": name, "role_id": "advisor", "model": result.model,
+                 "tools": result.tools, "handoff": result.handoff,
+                 "output_sample": result.output[:1_500]},
+            )
+            self._emit("advisor", "info",
+                       "Advisor " + name + " returned a structured handoff.",
+                       mission_id=mission_id,
+                       handoff=result.handoff)
+            rendered.append(
+                "[ADVISOR " + name + "]\n"
+                + (result.handoff.get("summary") or result.output)[:2_500]
+                + ("\nDecisions: " + "; ".join(result.handoff.get("decisions") or [])
+                   if result.handoff.get("decisions") else "")
+                + ("\nRisks: " + "; ".join(result.handoff.get("risks") or [])
+                   if result.handoff.get("risks") else "")
+            )
+        return "\n\n".join(rendered)
 
     def _developer_task_note(self, mission_id: int, task_id: int) -> str:
         """Read the structured handoff of a completed implementation subtask."""

@@ -183,7 +183,9 @@ def test_role_catalog_and_resolution():
         get_role("no-such-role")
     with pytest.raises(UnknownRoleError):
         resolve_role("No Such Display Role")
-    assert len(all_roles()) == len(ROLE_CATALOG) == 7
+    assert len(all_roles()) == len(ROLE_CATALOG) == 8
+    assert get_role("advisor").tools_policy == "read_only"
+    assert resolve_role("Project Advisor").role_id == "advisor"
     assert {spec.role_id for spec in write_stage_roles()} == {"developer", "debugger"}
     with pytest.raises(TypeError):
         ROLE_CATALOG["hacker"] = developer  # type: ignore[index]

@@ -45,22 +45,26 @@ _TEAM_PLAN_IGNORED_DIRS = frozenset({
 #: leave specialists without the tools their profile displayed.
 _TEAM_ROLE_TOOLS = {
     "architect": ("read_file", "list_dir", "git_status", "git_diff",
-                  "search_symbols", "lsp_diagnostics"),
+                  "search_symbols", "lsp_diagnostics", "list_skills", "load_skill"),
     "developer": ("read_file", "list_dir", "write_file", "patch_file",
                   "run_tests", "run_command", "git_status", "git_diff",
-                  "search_symbols", "lsp_diagnostics"),
+                  "search_symbols", "lsp_diagnostics", "list_skills", "load_skill"),
     "debugger": ("read_file", "list_dir", "write_file", "patch_file",
                  "run_tests", "run_command", "git_status", "git_diff",
-                 "search_symbols", "lsp_diagnostics"),
+                 "search_symbols", "lsp_diagnostics", "list_skills", "load_skill"),
     "reviewer": ("read_file", "list_dir", "git_status", "git_diff",
-                 "search_symbols", "lsp_diagnostics"),
+                 "search_symbols", "lsp_diagnostics", "list_skills", "load_skill"),
     "auditor": ("read_file", "list_dir", "git_status", "git_diff",
-                "search_symbols", "lsp_diagnostics"),
+                "search_symbols", "lsp_diagnostics", "list_skills", "load_skill"),
+    # Advisory specialists are read-only by design: they advise, the base roles own
+    # the staged writes and the verification gates.
+    "advisor": ("read_file", "list_dir", "git_status", "git_diff",
+                "search_symbols", "lsp_diagnostics", "list_skills", "load_skill"),
 }
 
 #: Read-only subset used for analysis/review fallbacks (never mutates a candidate).
 _TEAM_READONLY_TOOLS = ("read_file", "list_dir", "git_status", "git_diff",
-                        "search_symbols", "lsp_diagnostics")
+                        "search_symbols", "lsp_diagnostics", "list_skills", "load_skill")
 
 #: A writing specialist that loses these tools can no longer do its declared job, so
 #: they are restored (and reported) instead of silently producing a read-only writer.
@@ -104,6 +108,8 @@ def _team_role_id(item: Mapping) -> str:
         return "reviewer"
     if any(token in text for token in ("architect", "architecture", "design")):
         return "architect"
+    if any(token in text for token in ("advisor", "advisory", "consult", "specialist")):
+        return "advisor"
     if "test engineer" in text or "qa " in text or text.startswith("qa"):
         return ""
     if any(token in text for token in ("developer", "implementation", "coding", "programmer")):
@@ -892,9 +898,13 @@ class AppServices:
             role_id = str(item.get("role_id") or "").strip().lower()
             if role_id not in _TEAM_ROLE_TOOLS:
                 raise ValueError("Unsupported Supervisor specialist role: " + role_id)
-            if role_id in seen_roles:
+            name = str(item.get("name") or "Specialist").strip()[:120] or "Specialist"
+            # Advisory specialists are dynamic: several can coexist, each with its own
+            # name, model and instructions. Base execution roles stay unique.
+            seen_key = role_id if role_id != "advisor" else "advisor:" + name.casefold()
+            if seen_key in seen_roles:
                 raise ValueError("Duplicate Supervisor specialist role: " + role_id)
-            seen_roles.add(role_id)
+            seen_roles.add(seen_key)
             route = str(item.get("model") or "").strip()
             if "/" not in route:
                 raise ValueError("Specialist model route must use provider/model syntax")
@@ -916,7 +926,7 @@ class AppServices:
                     payload={"role_id": role_id, "tools": restored_tools}))
             normalized.append({
                 "role_id": role_id,
-                "name": str(item.get("name") or "Specialist").strip()[:120] or "Specialist",
+                "name": name,
                 "provider": provider_id,
                 "model": route,
                 "role": str(item.get("role") or role_id).strip()[:160],
@@ -941,11 +951,18 @@ class AppServices:
             updated = 0
             saved: list[dict] = []
             for role in normalized:
-                current = next((
-                    profile for profile in project_profiles
-                    if str(profile.get("role_id") or "") == role["role_id"]
-                ), None)
-                if current is None:
+                if role["role_id"] == "advisor":
+                    current = next((
+                        profile for profile in project_profiles
+                        if str(profile.get("role_id") or "") == "advisor"
+                        and str(profile.get("name") or "") == role["name"]
+                    ), None)
+                else:
+                    current = next((
+                        profile for profile in project_profiles
+                        if str(profile.get("role_id") or "") == role["role_id"]
+                    ), None)
+                if current is None and role["role_id"] != "advisor":
                     current = next((
                         profile for profile in agents
                         if not profile.get("project_id")
@@ -1229,18 +1246,22 @@ class AppServices:
             "You are the NL Code Team Architect. Analyse the supplied project evidence "
             "and available model/resource inventory. Design the smallest effective team, "
             "Return JSON only with this shape: "
-            '{"summary":"...","roles":[{"role_id":"architect|developer|debugger|reviewer|auditor",'
+            '{"summary":"...","roles":[{"role_id":"architect|developer|debugger|reviewer|auditor|advisor",'
             '"name":"...","role":"...","instructions":"...","tools":["read_file"],'
-            '"model":"provider/model","reason":"..."}]}. Assign each runtime role at most once. '
-            "Every role_id must be one of architect, developer, debugger, reviewer, auditor; "
-            "these are the specialist roles the Supervisor actually executes. Every model must "
+            '"model":"provider/model","reason":"..."}]}. Assign each runtime role at most once; '
+            "the only exception is advisor, which may appear multiple times with unique names. "
+            "Every role_id must be one of architect, developer, debugger, reviewer, auditor, "
+            "advisor; these are the specialist roles the Supervisor actually executes. "
+            "Advisors are isolated read-only sub-agents used for extra domain expertise "
+            "(security, performance, data, accessibility); they return structured handoffs "
+            "and never write files. Every model must "
             "be one of the available routes; prefer distinct routes when resources allow. "
             "Tools may only be selected from read_file, list_dir, git_status, git_diff, "
-            "search_symbols, lsp_diagnostics, write_file, patch_file, run_tests and "
-            "run_command, appropriate to that role; "
+            "search_symbols, lsp_diagnostics, list_skills, load_skill, write_file, "
+            "patch_file, run_tests and run_command, appropriate to that role; "
             "give the developer/debugger the write and verification tools they need and keep "
-            "architect/auditor/reviewer read-only. Do not invent licenses or capabilities. "
-            "No missions, no file edits, no permission changes."
+            "architect/auditor/reviewer/advisor read-only. Do not invent licenses or "
+            "capabilities. No missions, no file edits, no permission changes."
         )
         user = json.dumps({"focus": str(focus or ""), "resources": resources,
                            "models": catalog, "files": docs},
@@ -1296,10 +1317,12 @@ class AppServices:
                                    + ", ".join(sorted(_TEAM_ROLE_TOOLS))),
                     })
                     continue
-                if role_id in used_roles:
+                seen_key = role_id if role_id != "advisor" else "advisor:" + label.casefold()
+                if seen_key in used_roles:
                     dropped_roles.append({
                         "role_id": role_id, "name": label,
-                        "reason": "duplicate role; the Supervisor runs one specialist per role",
+                        "reason": ("duplicate role; the Supervisor runs one specialist per "
+                                   "execution role (advisors must have unique names)"),
                     })
                     continue
                 if not declared or declared not in _TEAM_ROLE_TOOLS:
@@ -1309,14 +1332,14 @@ class AppServices:
                                    if declared else
                                    "role_id missing; mapped by name/role tokens"),
                     })
-                used_roles.add(role_id)
+                used_roles.add(seen_key)
                 route = str(item.get("model") or "").strip() or fallback_route
                 if available and route not in available:
                     route = fallback_route
                 requested_tools = item.get("tools")
                 tools, restored = _normalize_role_tools(role_id, requested_tools)
                 if restored:
-                    tool_adjustments[role_id] = restored
+                    tool_adjustments[seen_key] = restored
                 cleaned.append({
                     "role_id": role_id,
                     "name": str(item.get("name") or "Specialist")[:120],
@@ -2000,11 +2023,75 @@ class AppServices:
             raise permission_error
         raise ValueError("No model route could complete the turn: " + " | ".join(errors[-4:]))
 
-    def _resolve_chat_provider(self, provider_spec: str, *, project_id=None):
+    def _rank_chat_candidates(self, candidates: list[dict], *, project_id=None,
+                              tools_enabled: bool = False,
+                              preserve_order: bool = False) -> tuple[list[dict], dict]:
+        """Rank Chat routes with the same ModelRouter evidence Mission roles use.
+
+        An explicit user/provider request is never overridden: the router evidence is
+        still recorded, but the requested candidate stays first. Automatic mode ranks.
+        """
+        if not candidates:
+            return candidates, {"strategy": "none", "reason": "no candidates"}
+        try:
+            from nl_coding_agent.models.model_router import ModelRouter
+
+            items = [{
+                "provider_id": candidate["provider_id"],
+                "model_name": candidate["model"],
+                "base_url": str(getattr(candidate["provider"], "base_url", "") or ""),
+            } for candidate in candidates]
+            router = ModelRouter(project_id=project_id)
+            binding = router.auto_select(
+                "chat", items,
+                required_capabilities=(),
+                project_id=project_id,
+                prefer_capabilities=(
+                    ("tool_calling", "structured_output", "reasoning")
+                    if tools_enabled else ("structured_output", "reasoning")
+                ),
+            )
+            chosen = (str(binding.provider_id), str(binding.model_name))
+            if preserve_order:
+                ordered = list(candidates)
+            else:
+                ordered = sorted(
+                    candidates,
+                    key=lambda item: 0 if (item["provider_id"], item["model"]) == chosen else 1,
+                )
+            routing = {
+                "strategy": "model_router.auto_select",
+                "role": "chat",
+                "selected": "/".join(chosen),
+                "preserve_requested_order": bool(preserve_order),
+                "selection": dict(getattr(binding, "selection", {}) or {}),
+                "capabilities": dict(getattr(binding, "capabilities", {}) or {}),
+                "tools_enabled": bool(tools_enabled),
+            }
+            for candidate in ordered:
+                candidate["routing"] = routing
+            return ordered, routing
+        except Exception as exc:
+            routing = {"strategy": "configured_order",
+                       "role": "chat",
+                       "reason": type(exc).__name__ + ": " + str(exc)[:400],
+                       "tools_enabled": bool(tools_enabled)}
+            for candidate in candidates:
+                candidate["routing"] = routing
+            return candidates, routing
+
+    def _resolve_chat_provider(self, provider_spec: str, *, project_id=None,
+                               tools_enabled: bool = False):
         """Resolve the first available route without hiding a real failure."""
         candidates = self._chat_candidates(provider_spec)
         if not candidates:
+            self._last_chat_routing = {"strategy": "none"}
             return None, "", None, "No chat model configured."
+        candidates, routing = self._rank_chat_candidates(
+            candidates, project_id=project_id, tools_enabled=tools_enabled,
+            preserve_order=bool(str(provider_spec or "").strip())
+            and str(provider_spec).strip().lower() not in ("auto", "automatic"))
+        self._last_chat_routing = routing
         errors: list[str] = []
         for candidate in candidates:
             provider, model, provider_id = candidate["provider"], candidate["model"], candidate["provider_id"]
@@ -2020,6 +2107,9 @@ class AppServices:
             if model not in {item.name for item in snapshot.models}:
                 errors.append("Model unavailable on selected provider: " + model)
                 continue
+            routing = dict(routing)
+            routing["resolved_spec"] = str(provider_id) + "/" + str(model)
+            self._last_chat_routing = routing
             return provider, model, provider_id, ""
         return None, "", None, errors[-1] if errors else "No permitted model route."
 

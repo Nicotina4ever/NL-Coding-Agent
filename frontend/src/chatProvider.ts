@@ -2063,12 +2063,14 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 const name = String(raw.name || '').trim();
                 if (!name) { continue; }
                 const roleId = String(raw.role_id || '').trim().toLowerCase();
-                if (!['architect', 'developer', 'debugger', 'reviewer', 'auditor'].includes(roleId)) {
+                if (!['architect', 'developer', 'debugger', 'reviewer', 'auditor', 'advisor'].includes(roleId)) {
                     throw new EngineError('invalid-team-role',
                         'Team Architect returned a role the Supervisor cannot execute: ' + roleId);
                 }
-                if (assignedRoles.has(roleId)) { continue; }
-                assignedRoles.add(roleId);
+                // Advisory specialists are dynamic: several can coexist, unique by name.
+                const dedupeKey = roleId === 'advisor' ? 'advisor:' + name.toLowerCase() : roleId;
+                if (assignedRoles.has(dedupeKey)) { continue; }
+                assignedRoles.add(dedupeKey);
                 const route = String(raw.model || '').trim() || analyst.route;
                 if (!route.includes('/')) {
                     throw new EngineError('invalid-team-route',

@@ -275,9 +275,11 @@ cancellazione senza autorizzazione dell'utente e senza processi/test fermi.
 - [x] Pulizia storage Livello A autorizzata ed eseguita (2.760,8 MB), nessun dato utente toccato.
 - [x] Missione multi-agente reale completata con Ollama locale: architect→2 developer→tester→reviewer, candidato/oracle PASS, APPROVE e promozione (evidenza `docs/evidence/nlcode/real-verification-20261102-165024.json`); nuova sessione Chat reale che recupera una decisione dal digest.
 - [x] Code intelligence di base e diagnostica post-write (P2): tool `search_symbols`/`lsp_diagnostics` in Chat e missioni, hook statico che invalida il candidato prima del tester; missione reale con test rosso preesistente riparata e promossa (evidenza `docs/evidence/nlcode/real-p2-repair-20261102-171636.json`).
-- [ ] P2 residuo: riparazione reale del ramo `repair` dopo un fallimento introdotto dal candidato; LSP reale quando un server è installato.
-- [ ] Skills, subagenti con contesto indipendente e specialisti dinamici oltre i ruoli base (P3).
-- [ ] Routing Chat/missioni unificato con la stessa evidenza e resource gate (P4).
-- [ ] Payload standalone/ZIP rigenerati dallo stesso HEAD e verificati (P5).
-- [ ] Missione end-to-end dall'interfaccia installata (VSIX/standalone) registrata con evidenze, non solo dal motore.
+- [x] LSP reale quando disponibile: `pylsp` installato nel runtime, `didOpen`+diagnostica con file/riga; se manca il server il tool resta onesto (`available:false`).
+- [x] Riparazione autonoma: test Flow con errore introdotto dal developer (regressione semantica → needs_repair → debugger → verifica → APPROVE → promozione) e hook che blocca JSON/sintassi prima del tester — `tests/test_flow_repair.py`.
+- [x] Skills progressive, subagenti isolati con handoff strutturato e specialisti advisory dinamici multipli, usati in una missione completa — `tests/test_skills.py`, `tests/test_subagents.py`, `tests/test_advisors.py`.
+- [x] Routing Chat/missioni unificato sul `ModelRouter` con evidence, richiesta esplicita prioritaria e cloud opt-in — `tests/test_model_routing.py`; verificato con Chat reale.
+- [x] VSIX ricompilata da HEAD e verificata installata: webview PASS, integrazione MCP 16 PASS, `VSIX-INSTALLED-MISSION-PASS`.
+- [x] Standalone Code - OSS ricompilato e accettato end-to-end: **NLCODE-STANDALONE-ACCEPTANCE-PASS**; ZIP portabile rigenerato.
+- [ ] Missione end-to-end dall'interfaccia installata per il percorso **team completo** (la VSIX installata ha eseguito una missione reale; lo standalone ha eseguito chat+dashboard+engine). Residuo minore: il payload standalone referenzia l'engine del repo invece di incorporarne una copia indipendente.
 

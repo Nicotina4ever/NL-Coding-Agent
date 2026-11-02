@@ -330,6 +330,21 @@ _AUDITOR = AgentSpec(
     allow_delegation=False,
 )
 
+_ADVISOR = AgentSpec(
+    role_id="advisor",
+    display_role="Project Advisor",
+    goal_template="Advise the mission on: {goal}",
+    backstory=(
+        "You are an isolated, read-only project advisor. You analyse the mission with "
+        "your own context and return a structured handoff: summary, facts, decisions, "
+        "risks and next steps. You never modify files or grant permissions."
+    ),
+    model_role="advisor",
+    tools_policy="read_only",
+    allow_delegation=False,
+    capability_requirements=("tool_calling",),
+)
+
 _PLANNER = AgentSpec(
     role_id="planner",
     display_role="Mission Planner",
@@ -350,6 +365,7 @@ ROLE_CATALOG: Mapping[str, AgentSpec] = MappingProxyType({
     "tester": _TESTER,
     "architect": _ARCHITECT,
     "auditor": _AUDITOR,
+    "advisor": _ADVISOR,
     "planner": _PLANNER,
 })
 

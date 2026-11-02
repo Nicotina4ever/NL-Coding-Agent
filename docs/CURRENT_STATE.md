@@ -1,4 +1,4 @@
-**Checkpoint 2 novembre 2026 (sessione harness).** Baseline verificata e P1 Context Engine implementato. Suite Python completa **verde** a working tree fermo (dettaglio sotto); acceptance reali eseguite: NL Coder `test:chat-features` PASS con VS Code Insiders e Ollama reale, integrazione MCP 16 PASS, e **missione multi-agente reale completata** (`docs/evidence/nlcode/real-verification-20261102-165024.json`): 5 ruoli (architect, 2 developer, tester, reviewer), candidato+oracle PASS, reviewer APPROVE, promozione di `src/calc.py` e `src/stats.py` con modelli Ollama locali. Pulizia di Livello A autorizzata ed eseguita: **2.760,8 MB** di artefatti rigenerabili rimossi (nessun dato utente). Restano le lacune P2–P5 (code intelligence/hook, skills/subagenti, routing unificato, payload standalone, documentazione storica).
+**Checkpoint 2 novembre 2026 (sessione harness, P1–P5).** P1 Context Engine, P2 Code Intelligence/hook, P3 skills+subagenti+specialisti advisory, P4 routing unificato e P5 distribuzione sono implementati e verificati. Suite Python completa **1405 passed** a working tree fermo. Evidenze reali distinte dai test simulati: missione multi-agente con advisor e skill (`docs/evidence/nlcode/real-e2e-20261102-182320.json`), riparazione Flow di un errore introdotto dall'agente (test dedicato), LSP reale con errori file/riga, Chat con routing ModelRouter e continuità `CHAT-99` (`docs/evidence/nlcode/real-chat-20261102-183029.json`), VSIX installata e missione accettata, standalone Code-OSS ricompilato con **NLCODE-STANDALONE-ACCEPTANCE-PASS**. Restano limiti dichiarati (sotto): riparazione del ramo `repair` non ancora provata con modello reale su errore introdotto, e payload standalone che referenzia l'engine del repo (design attuale) invece di incorporarne una copia indipendente. La 1.0 non è dichiarata.
 # Stato corrente — NL Coding Agent / NL Code
 
 **Verifica aggiornata: 2 novembre 2026.** La versione **1.0 STABLE non è stata raggiunta**. Due audit indipendenti (motore e percorso team) più una verifica frontend hanno classificato lo stato reale; le affermazioni di questo file sono allineate al codice/test al momento del checkpoint, non ai documenti storici.
@@ -14,13 +14,33 @@
 
 Verifica: `tests/test_context_engine.py` (finestra dinamica, calibrazione, thinking, digest critico, pack per ruolo, memoria e missione reale FakeCrewRuntime), `tests/test_chat_tools.py` (turno lungo compattato, continuità nuova sessione). Evidenza reale: missione multi-agente completata e risposta di una nuova sessione Chat con la decisione `CH-42` recuperata dal digest (stesso file di evidence).
 
-### Code Intelligence e hook post-write (P2, nucleo implementato)
+### Code Intelligence e hook post-write (P2, implementato)
 
 - `tools/code_intel.py`: ricerca simboli read-only (AST Python, dichiarazioni TS/JS) e diagnostica statica su file espliciti (sintassi Python, parse JSON/TOML, pyflakes se già presente). Non esegue codice del progetto.
-- Tool esposti al modello: `search_symbols` e `lsp_diagnostics` (Chat e missioni, anche in modalità read-only); LSP usa solo server già installati e riporta `available:false` con motivo invece di installare nulla.
-- Hook post-write: `_validate_stage` esegue la diagnostica sui file cambiati prima del tester; se fallisce, il candidato viene invalidato (`promotion.invalidate_validation`), il gate resta chiuso e il feedback con file/riga entra nel retry del developer. Il ledger registra l'invocazione.
-- Verifica reale (distinta dai test simulati): missione con test **rosso preesistente** (`subtract` restituiva la somma) riparata da Ollama locale: candidato+oracle PASS, reviewer APPROVE, promozione di `src/calc.py`, test live **2 passed**. Evidenza `docs/evidence/nlcode/real-p2-repair-20261102-171636.json`.
-- Resta da verificare in P2 successivo: riparazione reale del ramo `repair` dopo un fallimento *introdotto dal candidato*, e diagnostica LSP quando un server è presente sulla macchina.
+- **LSP reale**: `lsp_diagnostics` usa `pylsp` installato nel runtime embedded (rilevato anche in `python\Scripts`), apre i documenti (`didOpen`), attende `publishDiagnostics` e restituisce file/riga/colonna. Corretto il bug di trasporto `stdout.read()` che bloccava le risposte brevi. Verificato: `undefined name` e import inutilizzato rilevati su fixture.
+- Tool esposti al modello: `search_symbols`, `lsp_diagnostics`, `list_skills`, `load_skill` (Chat e missioni, anche read-only); nessuna installazione automatica: se un server manca il tool riporta `available:false`.
+- Hook post-write: `_validate_stage` esegue la diagnostica statica sui file cambiati prima del tester; se fallisce, il candidato è invalidato (`promotion.invalidate_validation`), il gate resta chiuso e il feedback con file/riga entra nel retry del developer. Il ledger registra l'invocazione.
+- **Riparazione autonoma verificata**: `tests/test_flow_repair.py` esegue il vero executor con il MissionFlow: il developer introduce una regressione semantica valida (somma invece di differenza), il tester determina `needs_repair`, il debugger ripara, la verifica passa, il reviewer approva e il candidato viene promosso; un secondo caso prova che un JSON/sintassi introdotto viene bloccato prima del tester. Un terzo caso prova che un errore di sintassi introdotto non raggiunge mai il progetto live.
+- Verifica reale separata: missione con test **rosso preesistente** riparata da Ollama locale (candidato+oracle PASS, APPROVE, promozione, test live 2 passed) in `docs/evidence/nlcode/real-p2-repair-20261102-171636.json`.
+- Limite residuo: il ramo `repair` non è ancora stato esercitato con un modello reale che introduce l'errore (solo seam scriptato + riparazione reale di un test rosso preesistente).
+
+### Skills, subagenti e specialisti dinamici (P3, implementato)
+
+- **Skills progressive**: `skills/discovery.py` scopre `.agents/skills`, `.nlcode/skills` e `skills/` (SKILL.md con frontmatter o JSON), espone solo nome/descrizione nel catalogo iniettato nei prompt e carica il corpo su richiesta con `load_skill`. Contenuto trattato come guida non autorizzante, bounded (60 skill, 16k caratteri).
+- **Subagenti isolati**: `agents/subagents.py` esegue un agente con prompt e contesto propri (mai il transcript padre), strumenti read-only di default, e restituisce un handoff JSON strutturato (`summary/facts/decisions/risks/next_steps`).
+- **Advisor dinamici**: nuovo ruolo read-only `advisor`, multiplo e distinto per nome, persistito dal Team Architect/assignment, eseguito come subagente isolato prima dello sviluppo; gli handoff sono registrati come `record_handoff` e il testo entra nelle note passate al developer. Frontend e catalogo tool aggiornati. Test: `tests/test_skills.py`, `tests/test_subagents.py`, `tests/test_advisors.py` (missione completa con 2 advisor e handoff consumati).
+
+### Model intelligence e routing unificato (P4, implementato)
+
+- Chat e missioni usano lo stesso `ModelRouter.auto_select` con capability misurate e risultati storici; Chat registra la decisione (`strategy`, `selected`, `selection`, `capabilities`) nella risposta e nell'evidenza.
+- Una richiesta esplicita dell'utente resta prioritaria (`preserve_requested_order`); l'auto-selezione si applica solo in modalità automatica. Cloud continua a richiedere autorizzazione esplicita.
+- Verificato con modello reale: `model_router.auto_select`, modello richiesto preservato, continuità di sessione (`CHAT-99`) recuperata; test dedicati in `tests/test_model_routing.py`.
+
+### Distribuzione (P5, verificato)
+
+- **VSIX**: ricompilata da HEAD (`.workspace/dist/NL-Coding-Agent-0.7.2.vsix`, 4,7 MB), contiene il codice advisor aggiornato; `test:webview` PASS, `test:integration` 16 PASS con 82 tool, `test:vsix` (installata su VS Code) **VSIX-INSTALLED-MISSION-PASS** con missione reale e diff.
+- **Standalone Code - OSS**: ricompilato per Windows x64 (Electron 43.8.3, Code-OSS 1.145.0) in `.workspace/dist/NL Code`; script di accettazione GUI end-to-end **NLCODE-STANDALONE-ACCEPTANCE-PASS** (home, watermark, terminale, agenti, Chat reale con engine Python figlio, shutdown pulito, impostazioni preservate). ZIP portabile rigenerato (625.741.998 byte). Nota: il payload usa l'engine del repository (`engineRoot`) secondo il design attuale; non è un runtime autonomo separato.
+
 
 
 ### Checkpoint harness (2 novembre 2026)

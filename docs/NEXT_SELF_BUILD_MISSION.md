@@ -1,23 +1,19 @@
-# Prossima missione — P2 residuo e skills/subagenti
+# Prossima missione — chiusura dei residui verificati
 
 ## Stato
 
-P1 (Context Engine, memoria di progetto, contesto condiviso) e il nucleo P2 (code intelligence
-read-only, diagnostica post-write, missione reale con test rosso riparato) sono implementati e
-verificati. Il programma completo è in `NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md`.
+P1–P5 sono implementati; il nucleo è verificato con test e con evidenze reali (missione advisor,
+repair Flow, LSP reale, Chat con routing e continuità, VSIX installata, standalone accettato).
+Restano solo i residui elencati nel piano operativo.
 
 ## Obiettivo
 
-Chiudere i due residui P2 e aprire P3 senza regredire quanto verificato.
+Chiudere i residui senza riaprire il programma:
 
-## Scope e gate
+1. Eseguire con modelli reali il ramo `repair` quando è il candidato a introdurre l'errore
+   (seam già coperto deterministicamente) e registrare l'evidenza.
+2. Verificare dall'interfaccia installata una missione del percorso team completo (non solo chat).
+3. Decidere esplicitamente se il payload standalone debba incorporare una copia indipendente
+   dell'engine e del runtime invece di referenziare il repository.
+4. Eseguire la suite completa a albero fermo e aggiornare i gate.
 
-1. P2: verificare con modelli locali il ramo `repair` quando il **candidato introduce** un errore
-   (non solo un test rosso preesistente), incluso il feedback dei diagnostici post-write.
-2. P2: usare `lsp_diagnostics` reale quando `pylsp`/`pyright`/`basedpyright` è già installato;
-   altrimenti resta un'esposizione onesta `available:false` (nessuna installazione).
-3. P3: skills a caricamento progressivo (`.agents/skills`, `.nlcode/skills`) consumate dal runtime
-   e tracciate; subagenti read-only con contesto isolato e handoff strutturato consumato dal
-   Supervisor; specialisti dinamici oltre i ruoli base senza duplicare il contesto.
-4. Gate: una missione reale con errore introdotto e riparazione, un subagente reale il cui handoff
-   entra nel risultato finale, e suite completa verde.

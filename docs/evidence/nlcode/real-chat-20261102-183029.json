@@ -1,0 +1,55 @@
+{
+  "started_at": "2026-11-02T18:31:32",
+  "turn1": {
+    "ok": true,
+    "reply": "OK"
+  },
+  "turn2": {
+    "ok": true,
+    "routing": {
+      "strategy": "model_router.auto_select",
+      "role": "chat",
+      "selected": "ollama/granite4.2:3b",
+      "preserve_requested_order": true,
+      "selection": {
+        "strategy": "measured_capabilities+historical_results",
+        "score": 25.0,
+        "attempts": 0,
+        "successes": 0,
+        "success_rate": 0.5,
+        "avg_duration_s": 0.0,
+        "capability_score": 0,
+        "required_capabilities": [],
+        "prefer_capabilities": [
+          "tool_calling",
+          "structured_output",
+          "reasoning"
+        ],
+        "capability_states": {},
+        "patch_quality_score": 0.0,
+        "reason": "selected by measured capabilities and historical role outcomes; explicit caller candidates only, no cloud fallback",
+        "max_cost_usd": null
+      },
+      "capabilities": {},
+      "tools_enabled": true,
+      "resolved_spec": "ollama/granite4.2:3b"
+    },
+    "route": {
+      "provider_id": "ollama",
+      "model": "qwen2.5-coder:7b-instruct-q4_K_M",
+      "requested_spec": "ollama/granite4.2:3b"
+    }
+  },
+  "turn3": {
+    "ok": true,
+    "reply": "CHAT-99.",
+    "recalled": true
+  },
+  "digest": {
+    "persisted": true,
+    "covered": 1,
+    "summary": "DECISIONS/STEERING:\n- Remember this project decision: CHAT-99. Reply only OK.\nOBJECTIVES:\n- (answer) OK\n- Continue and reply only OK. padding context line. padding context line. padding context line. padding context line. padding context line. padding context line. padding context line. padding context line. padding context",
+    "has_decision": true
+  },
+  "finished_at": "2026-11-02T18:31:32"
+}

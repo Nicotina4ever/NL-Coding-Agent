@@ -73,6 +73,7 @@ class MissionContextPack:
     files: list[dict] = field(default_factory=list)
     memory_entries: list[dict] = field(default_factory=list)
     memory_text: str = ""
+    skills_catalog: str = ""
 
     def file_paths(self) -> list[str]:
         return [str(item.get("path") or "") for item in self.files if item.get("path")]
@@ -81,6 +82,8 @@ class MissionContextPack:
         """Role-specific view of the same pack (no duplicated whole context)."""
         role = str(role or "developer").lower().replace("-", "_")
         parts: list[str] = []
+        if self.skills_catalog:
+            parts.append(self.skills_catalog)
         if role in ("architect", "auditor"):
             if self.profile_text:
                 parts.append(self.profile_text)
@@ -117,8 +120,9 @@ class MissionContextPack:
             ],
             "memory_entries": len(self.memory_entries),
             "profile": bool(self.profile_text),
+            "skills_catalog": bool(self.skills_catalog),
             "estimated_tokens": estimate_tokens(
-                self.profile_text + self.memory_text
+                self.profile_text + self.memory_text + self.skills_catalog
                 + "".join(str(item.get("excerpt") or "") for item in self.files)),
         }
 
@@ -217,12 +221,20 @@ class ContextEngine:
         memories = project_memory.recall(self.project_id, goal,
                                          limit=max(12, memory_limit * 2))
         memories = self._relevant_memories(memories, goal)[:memory_limit]
+        skills_catalog = ""
+        try:
+            from nl_coding_agent.skills import SkillCatalog
+
+            skills_catalog = SkillCatalog(self.root or read_root).catalog_text()
+        except Exception:
+            skills_catalog = ""
         return MissionContextPack(
             goal=str(goal or ""),
             profile_text=profile_text,
             files=files,
             memory_entries=memories,
             memory_text=self._format_memories(memories),
+            skills_catalog=skills_catalog,
         )
 
     @staticmethod
@@ -279,6 +291,11 @@ class ContextEngine:
                     max_tokens = DEFAULT_PROMPT_TOKENS
         target = project_id if project_id is not None else self.project_id
         previous = self.latest_summary(session_id) if target is not None else None
+        if previous is None and target is not None and session_id:
+            # A brand-new session continues from the latest project digest: seed it as
+            # the previous summary so a later compaction in this session cannot erase
+            # decisions the new session was told about.
+            previous = self.latest_summary(None)
         previous_summary = str((previous or {}).get("summary") or "")
         previous_covered = int((previous or {}).get("covered_count") or 0)
         result = compact_chat(
