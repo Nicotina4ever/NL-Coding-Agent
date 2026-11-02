@@ -415,7 +415,7 @@ New-Item -ItemType Directory -Force -Path $engineData, $engineWorkspace | Out-Nu
 
 Write-Step 'Write launcher and build metadata'
 $launcherTemplate = Get-Content (Join-Path $PSScriptRoot 'launcher.bat') -Raw
-$launcher = $launcherTemplate.Replace('__ENGINE_ROOT__', '%~dp0engine').Replace('__APP_EXE__', $appExeName)
+$launcher = $launcherTemplate.Replace('__ENGINE_ROOT__', 'engine').Replace('__APP_EXE__', $appExeName)
 Set-Content -Path (Join-Path $dist 'NL Code.bat') -Value $launcher -Encoding ASCII
 
 Write-Step 'Compile the NL Code Launcher executable'

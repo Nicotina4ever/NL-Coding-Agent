@@ -62,8 +62,7 @@ Thumbs.db
 
 # Review-only staging for no-longer-needed material (task-44).
 # Nothing here is shipped, packaged or deleted without explicit user authorization.
-da_eliminare/*
-!da_eliminare/README.md
+da_eliminare/
 
 # Local secrets / machine-local state
 .env

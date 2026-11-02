@@ -1,10 +1,12 @@
 # NL Code — standalone Code - OSS distribution
 
-**Status:** objective 2 accepted on 2026-10-29. The portable distribution was built from Code - OSS
-1.145.0 (commit `7801f8a5…`) and verified in a real desktop session: NL Code starts with its own
-portable profile, loads the NL Chat extension, maps the opened folder to the backend project,
-receives a real Ollama reply, keeps the existing engine settings and releases the Python child on
-shutdown. See the acceptance record below.
+**Status:** beta Windows x64 published on 2026-11-02 as prerelease
+[`v0.7.2-beta.1`](https://github.com/Nicotina4ever/NL-Coding-Agent/releases/tag/v0.7.2-beta.1).
+The current distribution is built from Code - OSS 1.145.0 with insider quality metadata and verified
+locally: launch, embedded engine, PowerShell **and** Command Prompt terminals executing real
+commands, NL Chat, and clean process shutdown. macOS/Linux packages are not published or declared
+available until built and validated on those systems. Evidence:
+`docs/evidence/nlcode/standalone-acceptance-terminal-20261102.json`.
 
 ## Purpose
 
@@ -29,8 +31,8 @@ This is objective 2 of the product plan; objective 3
 | Branding is an overlay on `product.json` (`nameShort/nameLong = NL Code`, `applicationName = nl-code`, portable data folder `.nl-code`, own protocol/AppUserModelId/mutex) | No fork of the vendor source; the overlay is reproducible by the build script. |
 | The application is staged to `.workspace/dist/NL Code` with a `data/` folder | Code - OSS portable mode: user data and extensions live next to the application, no global install. |
 | The NL extension is installed in `data/extensions/nlcodingagent.nl-coding-agent-<version>` | The same built extension as the Insiders setup; production dependencies only. |
-| The Python engine is **not duplicated**; the launcher sets `NL_ENGINE_ROOT` to the existing installation | Avoids a second 1.6 GB Python/CrewAI runtime and keeps one model/agent/permission/history database. |
-| `NL_DATA_DIR` defaults to `<engine>\data` if present | Same SQLite data the Studio already uses; a user-provided `NL_DATA_DIR` still wins. |
+| The Python engine is embedded once under `<payload>/engine` and resolved relative to the payload by the launcher/extension | The distribution works after being moved and does not depend on the development repository. Models stay in Ollama; the VSIX keeps using the shared repository engine. |
+| `NL_DATA_DIR` defaults to `<payload>\data\engine-data`; the launcher sets `NL_WORKSPACE_DIR` and `NL_MODELS_CONFIG` relative to the payload | Independent standalone state; a user-provided environment still wins. |
 | Desktop build only: `remote/`, `test/*` and `.vscode/*` dependencies are not installed | They are development/remote-server trees, not part of a local desktop package. |
 
 ## Build
@@ -118,13 +120,18 @@ extension subsystem is reimplemented or removed.
 
 ## Run
 
+From a downloaded package, run `NL Code.bat` (portable) or install with `NL-Code-Setup.exe`.
+From this checkout:
+
 ```powershell
-.\.workspace\dist\NL Code\NL Code.bat
+.\Avvia NL Code.cmd
 ```
 
-The launcher starts `NL Code.exe` with the portable `data/` profile and points the extension at the
-existing engine. Override the engine with `NLCODE_ENGINE_ROOT`; existing `NL_DATA_DIR` values are
-respected.
+The root launchers resolve the payload relative to themselves. `scripts\nlcode\install_shortcuts.ps1`
+creates Desktop/Start shortcuts; `Apri Installer.cmd` opens `.workspace\releases\windows` and
+`Installa NL Coder.cmd` installs the VSIX. The portable launcher starts `NL Code.exe` with local
+`data\engine-data`, `data\workspace` and the embedded `engine\config\models.yaml`; a user-provided
+`NLCODE_ENGINE_ROOT`/`NL_DATA_DIR` still wins. The shared-engine VSIX is unaffected.
 
 ## Local capacity HUD and long-running work
 
@@ -144,9 +151,9 @@ for that model/role only. The default is never silently changed.
 
 ## VS Code extension 0.4.0
 
-The current extension build is `frontend` version `0.7.1`, packaged as
-`.workspace/dist/NL-Coding-Agent-0.7.1.vsix`. Install it through VS Code's
-“Install from VSIX…” so the extensions metadata is updated.
+The current extension build is `frontend` version `0.7.2`, packaged as
+`.workspace/releases/extension/NL-Coder.vsix` (the build also keeps a copy under `.workspace/dist`).
+Install it through VS Code's “Install from VSIX…” or `Installa NL Coder.cmd`.
 
 If a portable profile was edited by copying an extension directory manually and
 the Chat panel stays empty, VS Code is still using stale `data/extensions/extensions.json`
@@ -241,6 +248,18 @@ The staged standalone folder contains:
 - NL Code.exe — Code - OSS workbench;
 - NL Code Launcher.exe — sets NL_ENGINE_ROOT/NL_DATA_DIR from BUILD_INFO.json and starts the workbench;
 - NL Code Launcher.lnk — shortcut for the launcher;
-- NL Code.bat — fallback batch launcher.
+- NL Code.bat — fallback batch launcher;
+- engine\ — one embedded Python/CrewAI runtime, the models stay in Ollama;
+- data\ — portable profile, engine data and workspace.
 
-Double-click NL Code Launcher.exe (or the .lnk). The launcher keeps the existing engine installation and its data; it does not duplicate the Python runtime.
+Double-click NL Code Launcher.exe (or the .lnk). The Setup bootstrapper installs this payload under
+`%LOCALAPPDATA%\Programs\NL Code` and creates Desktop/Start shortcuts; it downloads the portable zip
+from the matching GitHub Release instead of embedding the runtime itself.
+
+## Releases and platforms
+
+Windows x64 portable, Setup and VSIX are published as
+[`v0.7.2-beta.1`](https://github.com/Nicotina4ever/NL-Coding-Agent/releases/tag/v0.7.2-beta.1).
+The GitHub Actions workflow builds the engine suite and the VSIX on Linux/macOS/Windows and exposes a
+self-hosted Windows job for the verified standalone; macOS/Linux standalone packages are not
+published until a runner on each system actually compiles and validates them.
