@@ -212,18 +212,22 @@ async function run() {
     console.log('PASS editor selection captured as attachment: ' + selectionAttachment.name);
 
     // 4. A URL sent in Chat is fetched, ingested and included in that same turn.
-    const priorAttachmentCount = latestState(api).payload.attachments.length;
+    //
+    // Pending attachments are deliberately cleared when the turn completes (explicit
+    // per-turn context), so the assertion is on the durable evidence of the turn:
+    // the system message that announced the untrusted fetch, the engine history with
+    // the attachment ids, and the assistant reply. Full preview text is asserted by
+    // the engine-level research/chat-tools tests.
     await api.chat.handleUserMessage('Fetch and summarize this URL: https://www.python.org/');
     await waitFor(() => !api.chat.debugState.busy, 240000, 'URL research chat turn');
-    await waitFor(() => latestState(api).payload.attachments.length > priorAttachmentCount,
-        20000, 'URL research attachment');
-    const researchAttachment = latestState(api).payload.attachments.slice(-1)[0];
-    assert(String(researchAttachment.preview || '').includes('Welcome to Python.org'),
-        'URL was recognized, fetched and attached to its Chat turn');
-    assert(String(researchAttachment.preview || '').includes('Source URL: https://www.python.org/'),
-        'fetched page attachment preserves its source URL for follow-ups');
-    assert(String(researchAttachment.preview || '').includes('UNTRUSTED DATA'),
-        'fetched page attachment is explicitly marked as untrusted');
+    const fetchNotice = api.chat.debugState.posted.filter((message) =>
+        message.type === 'chat' && message.role === 'system' &&
+        String(message.text || '').includes('as UNTRUSTED context')).pop();
+    assert(fetchNotice, 'URL was recognized, fetched and attached to its Chat turn');
+    assert(String(fetchNotice.text).includes('python.org'),
+        'fetched page notice preserves its source URL');
+    assert.strictEqual(latestState(api).payload.attachments.length, 0,
+        'pending attachments are consumed and cleared after the turn');
     const researchReply = api.chat.debugState.posted.filter((message) =>
         message.type === 'chat' && message.role === 'assistant').pop();
     assert(researchReply && researchReply.text.trim(), 'model returned a chat reply');
@@ -231,9 +235,10 @@ async function run() {
     const researchHistory = latestHistory(api).payload;
     const researchTurn = researchHistory.messages.find((message) =>
         message.role === 'user' && message.content.includes('Fetch and summarize this URL'));
-    assert(researchTurn && researchTurn.attachments && researchTurn.attachments.some((item) =>
-        Number(item.id) === Number(researchAttachment.id)),
-    'fetched page attachment persisted on the real Chat turn');
+    assert(researchTurn && researchTurn.attachments && researchTurn.attachments.length >= 1,
+        'fetched page attachment persisted on the real Chat turn');
+    assert(researchTurn.attachments.every((item) => item.has_text),
+        'persisted fetched attachments keep their extracted text');
     console.log('PASS Chat URL detection -> live fetch -> persisted same-turn attachment');
 
     // 5. Persisted history is returned by the engine, including route/attachment metadata.

@@ -650,6 +650,20 @@ function contentText(payload: ToolCallPayload): string {
  */
 export class EngineConnection {
     state: ConnectionState = 'idle';
+    /** Notifies the provider so the webview never shows "connected" with a dead engine. */
+    onStateChange?: (state: ConnectionState) => void;
+
+    private setState(state: ConnectionState): void {
+        if (this.state === state) {
+            return;
+        }
+        this.state = state;
+        try {
+            this.onStateChange?.(state);
+        } catch {
+            /* a UI listener must never break the transport */
+        }
+    }
     projectRoot: string;
 
     private client: Client | undefined;
@@ -739,7 +753,7 @@ export class EngineConnection {
                 'Open a folder before using NL Coder: the engine binds one project per connection.'
             );
         }
-        this.state = 'connecting';
+        this.setState('connecting');
         this.lastError = undefined;
         const location = resolveEngineLocation({ ...this.options, projectRoot: this.projectRoot });
         const env = collectEnvironment(this.options.env);
@@ -772,19 +786,25 @@ export class EngineConnection {
                 { name: 'nl-coding-agent-vscode', version: '0.1.0' },
                 { capabilities: {} }
             );
+            client.onclose = () => {
+                if (this.state === 'ready' || this.state === 'connecting') {
+                    this.lastError = this.lastError || 'The NL Coding Engine process closed.';
+                    this.setState('failed');
+                }
+            };
             await client.connect(transport, { timeout: CONNECT_TIMEOUT_MS });
             const listed = await client.listTools(undefined, { timeout: LIST_TOOLS_TIMEOUT_MS });
             this.client = client;
             this.transport = transport;
             this.tools = listed.tools || [];
             this.serverInfo = client.getServerVersion() as { name?: string; version?: string } | undefined;
-            this.state = 'ready';
+            this.setState('ready');
             this.log(
                 `engine ready: ${this.serverInfo?.name || 'unknown'} ${this.serverInfo?.version || ''} · ` +
                 `${this.tools.length} tools · pid ${transport.pid ?? '?'}`
             );
         } catch (error) {
-            this.state = 'failed';
+            this.setState('failed');
             this.lastError = error instanceof Error ? error.message : String(error);
             try {
                 if (client) {
@@ -816,14 +836,14 @@ export class EngineConnection {
 
     /** Close the MCP session and release the Python child process. */
     async close(): Promise<void> {
-        this.state = 'closed';
+        this.setState('closed');
         await this.disposeResources();
     }
 
     /** Drop the current session and start a new one (workspace folder changed, manual retry). */
     async restart(): Promise<void> {
         await this.disposeResources();
-        this.state = 'idle';
+        this.setState('idle');
         this.serverInfo = undefined;
         this.lastError = undefined;
         await this.connect();
@@ -845,13 +865,15 @@ export class EngineConnection {
     private async callTool(
         name: string,
         args: Record<string, unknown>,
-        timeoutMs?: number
+        timeoutMs?: number,
+        signal?: AbortSignal
     ): Promise<ToolCallPayload> {
         const client = await this.requiredClient();
         let raw: unknown;
         try {
             raw = await client.callTool({ name, arguments: args }, undefined, {
-                timeout: timeoutMs || this.timeoutMs
+                timeout: timeoutMs || this.timeoutMs,
+                signal
             });
         } catch (error) {
             const detail = error instanceof Error ? error.message : String(error);
@@ -870,8 +892,9 @@ export class EngineConnection {
     }
 
     /** Call an engine tool whose result is a JSON object serialized into a text block. */
-    async callJson<T>(name: string, args: Record<string, unknown>, timeoutMs?: number): Promise<T> {
-        const payload = await this.callTool(name, args, timeoutMs);
+    async callJson<T>(name: string, args: Record<string, unknown>, timeoutMs?: number,
+                      signal?: AbortSignal): Promise<T> {
+        const payload = await this.callTool(name, args, timeoutMs, signal);
         const text = contentText(payload);
         if (!text) {
             throw new EngineError('empty-result', `Tool "${name}" returned no text content.`);
@@ -905,7 +928,8 @@ export class EngineConnection {
         timeoutMs?: number,
         modelSpec?: string,
         attachmentIds: number[] = [],
-        allowCoding = false
+        allowCoding = false,
+        signal?: AbortSignal
     ): Promise<ConverseResult> {
         if (!Number.isInteger(projectId) || projectId <= 0) {
             throw new EngineError('invalid-project', 'A valid project id from project_context is required.');
@@ -931,7 +955,7 @@ export class EngineConnection {
         }
         params.max_seconds = Math.max(5, Math.min(3600,
             Math.floor((timeoutMs || this.timeoutMs) / 1000) - 5));
-        const result = await this.callJson<ConverseResult>('nlc_converse', params, timeoutMs || this.timeoutMs);
+        const result = await this.callJson<ConverseResult>('nlc_converse', params, timeoutMs || this.timeoutMs, signal);
         if (!result || ((result.ok !== true) && result.status !== 'budget_exhausted') ||
             typeof result.reply !== 'string') {
             const detail = (result && (result.reply || (result.error && result.error.message))) ||
@@ -1220,19 +1244,27 @@ export class EngineConnection {
         ok: boolean; roles?: Array<Record<string, unknown>>; summary?: string;
         analyst_model?: string; fallback?: boolean; analysis_error?: string;
         resources?: Record<string, unknown>;
+        dropped_roles?: Array<Record<string, unknown>>;
+        remapped_roles?: Array<Record<string, unknown>>;
+        tool_adjustments?: Record<string, string[]>;
     }> {
         return this.callJson<{
             ok: boolean; roles?: Array<Record<string, unknown>>; summary?: string;
             analyst_model?: string; fallback?: boolean; analysis_error?: string;
             resources?: Record<string, unknown>;
+            dropped_roles?: Array<Record<string, unknown>>;
+            remapped_roles?: Array<Record<string, unknown>>;
+            tool_adjustments?: Record<string, string[]>;
         }>('team_plan', { model, focus }, 240_000);
     }
 
     async assignSpecialistTeam(roles: Array<Record<string, unknown>>): Promise<{
         ok: boolean; created: number; updated: number; agents: CustomAgent[];
+        tool_adjustments?: Record<string, string[]>;
     }> {
         return this.callJson<{
         ok: boolean; created: number; updated: number; agents: CustomAgent[];
+        tool_adjustments?: Record<string, string[]>;
         }>('assign_specialist_team', { roles }, 30_000);
     }
 

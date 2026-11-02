@@ -233,6 +233,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
         log: (line: string) => output?.appendLine(line)
     });
     chat = new ChatProvider(context.extensionUri, connection, output, timeoutMs, context);
+    // A dead engine must never be shown as "connected": the transport notifies the
+    // provider whenever it transitions (ready/failed/closed) and the webview re-renders.
+    connection.onStateChange = () => chat?.notifyConnectionState();
 
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(ChatProvider.viewType, chat, {

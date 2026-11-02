@@ -1464,6 +1464,7 @@
         { name: '/mcp', insert: '/mcp', label: 'List MCP servers', detail: 'Show configured MCP servers; ask the model to discover/invoke their allowed tools.' },
         { name: '/checkpoint', insert: '/checkpoint', label: 'Checkpoint files', detail: 'Save filesystem state without touching chat history.' },
         { name: '/checkpoints', insert: '/checkpoints', label: 'List checkpoints', detail: 'Show recent filesystem checkpoints.' },
+        { name: '/restore', insert: '/restore ', label: 'Restore a checkpoint', detail: 'Restore files from a checkpoint id; chat history is not rewound.' },
         { name: '/help', insert: '/help', label: 'Show commands', detail: 'List the available Chat commands.' }
     ];
     let slashMatches = [];

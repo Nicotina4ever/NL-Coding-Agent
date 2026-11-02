@@ -140,6 +140,8 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     private dictationSessionId: string | undefined;
     private busyChat = false;
     private busyMission = false;
+    /** Aborts the in-flight Chat request when the user presses Stop. */
+    private chatAbort?: AbortController;
     private busyPhase = 'idle';
     private chatModel = '';
     private providerFilter = '';
@@ -246,14 +248,16 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             }
             this.setupEditorTracking();
             await this.refreshAll(true);
-            if (this.chatModel && this.isCloudRoute(this.chatModel)) {
-                await this.ensureCloudGrant(this.chatModel);
-            }
             await this.refreshSpeechSettings();
             await this.refreshAccessProfile();
             await this.loadSessions();
             await this.loadHistory();
             await this.refreshQueue(false);
+            // A durable queue must also survive a client restart: drain it once the
+            // connection is ready instead of leaving the user's messages stranded.
+            if (!this.busyChat && !this.busyMission) {
+                void this.refreshQueue(true);
+            }
             if (!this.readyAnnounced) {
                 this.readyAnnounced = true;
                 this.postChat('system', [
@@ -318,6 +322,23 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         }
         if (/^\/team$/i.test(message.trim())) {
             await this.generateSpecialistTeam(fromQueue);
+            return;
+        }
+        if (/^\/help$/i.test(message.trim())) {
+            this.postChat('system', [
+                'Available Chat commands:',
+                '/mission <objective> — start a verified mission on the opened project.',
+                '/steer <text> — redirect the running Chat turn or mission at its next checkpoint.',
+                '/fetch <url> — fetch a URL as untrusted context (requires NETWORK).',
+                '/agent <name> <task> — send one task to a specialist profile.',
+                '/plan <objective> — analyse and plan without editing or starting missions.',
+                '/apply — create the Goal/milestones from the last plan (no execution).',
+                '/runplan — explicitly start the applied plan under the Supervisor.',
+                '/team — design and persist the project specialist team.',
+                '/mcp — list configured MCP servers.',
+                '/checkpoint, /checkpoints, /restore <id> — filesystem checkpoints only.',
+                '/help — this list.'
+            ].join('\n'));
             return;
         }
         if (/^\/mcp$/i.test(message.trim())) {
@@ -504,10 +525,13 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 attachment.extracted_text.trim()
                 ? [attachment]
                 : [];
+            const abort = new AbortController();
+            this.chatAbort = abort;
             const result = await this.connection.converse(
                 context.project.id, message, legacyAttachments, this.requestTimeoutMs,
                 this.chatModel || 'auto', effectiveAttachmentIds,
-                !planningOnly && this.autoCoding && this.connection.executionAllowed
+                !planningOnly && this.autoCoding && this.connection.executionAllowed,
+                abort.signal
             );
             if (result.route) {
                 this.lastRoute = result.route;
@@ -543,8 +567,14 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             this.output.appendLine(`[chat] project #${context.project.id}: ${message.length} chars in, ` +
                 `${(result.reply || '').length} chars out, route ${result.route?.provider_id || '?'}/${result.route?.model || '?'}`);
         } catch (error) {
-            this.reportError(error, 'chat');
+            if (this.chatAbort?.signal.aborted) {
+                this.postChat('system',
+                    'Chat turn stopped by you; the engine was asked to stop at its next safe checkpoint.');
+            } else {
+                this.reportError(error, 'chat');
+            }
         } finally {
+            this.chatAbort = undefined;
             this.busyChat = false;
             this.busyPhase = this.busyMission ? 'mission' : 'idle';
             this.postState();
@@ -1249,18 +1279,14 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             this.drainingQueue = true;
             while (!this.busyChat && !this.busyMission && this.chatQueue.length) {
                 const next = this.chatQueue[0];
-                const turn = this.handleUserMessage(
-                    next.text, undefined, next.attachment_ids || [], true
-                );
-                try {
-                    await this.connection.chatQueueRemove(next.id);
-                } catch (error) {
-                    await turn.catch(() => undefined);
-                    throw error;
-                }
+                // Remove from the durable queue before dispatching: if the removal fails
+                // the message must not be executed and re-dispatched a second time later.
+                await this.connection.chatQueueRemove(next.id);
                 this.chatQueue = this.chatQueue.filter((item) => item.id !== next.id);
                 this.postState();
-                await turn;
+                await this.handleUserMessage(
+                    next.text, undefined, next.attachment_ids || [], true
+                );
                 const refreshed = await this.connection.chatQueue();
                 this.chatQueue = Array.isArray(refreshed.items) ? refreshed.items : [];
                 this.postState();
@@ -1291,11 +1317,18 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     }
 
     async stopChat(): Promise<void> {
+        const abort = this.chatAbort;
         try {
             const result = await this.connection.chatCancel();
-            this.postChat('system', result.ok === false
-                ? 'No running Chat turn to stop.'
-                : 'Chat stop requested at the next safe checkpoint.');
+            if (abort) {
+                abort.abort();
+                this.postChat('system',
+                    'Chat turn aborted; the engine was also asked to stop at its next safe checkpoint.');
+            } else {
+                this.postChat('system', result.ok === false
+                    ? 'No running Chat turn to stop.'
+                    : 'Chat stop requested at the next safe checkpoint.');
+            }
         } catch (error) {
             this.reportError(error, 'chat-stop');
         }
@@ -1380,7 +1413,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         this.chatModel = value;
         void this.workspaceState?.update('nlCodingAgent.chatModel', value);
         if (this.isCloudRoute(value)) {
-            void this.ensureCloudGrant(value);
+            void this.ensureCloudGrant(value).catch(() => undefined);
         }
         this.postState();
     }
@@ -1406,7 +1439,11 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         return Boolean(base) && !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(base);
     }
 
-    /** Explicit user selection of a cloud model is the owner grant action. */
+    /**
+     * Explicit user selection of a cloud model is the owner grant action, but the owner
+     * must still confirm: selecting a model must never silently authorize sending
+     * project data to a remote provider.
+     */
     private async ensureCloudGrant(model: string): Promise<void> {
         if (!this.isCloudRoute(model)) {
             return;
@@ -1416,14 +1453,29 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             if (current) {
                 return;
             }
+            const choice = await vscode.window.showWarningMessage(
+                'Enable CLOUD inference for this project?',
+                {
+                    modal: true,
+                    detail: 'The selected model (' + model + ') runs on a remote provider. ' +
+                        'Project context may be sent to that provider. This grants the CLOUD ' +
+                        'capability until you revoke it in Project Access.'
+                },
+                'Enable cloud'
+            );
+            if (choice !== 'Enable cloud') {
+                throw new EngineError('cloud-not-authorized',
+                    'CLOUD access was not granted; choose a local model or enable cloud explicitly.');
+            }
             await this.connection.savePermissionScope('cloud', true);
             await this.refreshAll(false);
             this.postChat('system',
-                'CLOUD permission granted automatically for the explicitly selected cloud model: ' + model);
+                'CLOUD permission granted by explicit confirmation for the selected cloud model: ' + model);
         } catch (error) {
             this.output.appendLine('[cloud-grant] ' + this.errorText(error));
             this.postChat('error',
                 'Could not activate CLOUD for ' + model + ': ' + this.errorText(error));
+            throw error;
         }
     }
 
@@ -2050,6 +2102,18 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             const result = await this.connection.assignSpecialistTeam(assignments);
             this.settings = await this.connection.engineSettings(false);
             this.postState();
+            const notes: string[] = [];
+            for (const [roleId, tools] of Object.entries(result.tool_adjustments || {})) {
+                notes.push('Restored required tools for ' + roleId + ': ' + tools.join(', '));
+            }
+            for (const item of plan.remapped_roles || []) {
+                notes.push('Mapped ' + String(item.name || item.declared_role_id || '?') +
+                    ' to ' + String(item.role_id || '?') + ': ' + String(item.reason || ''));
+            }
+            for (const item of plan.dropped_roles || []) {
+                notes.push('Not assigned ' + String(item.name || item.role_id || '?') +
+                    ': ' + String(item.reason || ''));
+            }
             this.postChat('system',
                 'Team Architect: ' + String(plan.summary || 'team assigned') +
                 '\n' + result.created + ' new, ' + result.updated
@@ -2058,7 +2122,8 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                                 (plan.fallback
                                         ? '\n(The analyst response was unusable; a deterministic team was created.' +
                                             (plan.analysis_error ? ' ' + plan.analysis_error : '') + ')'
-                                        : ''));
+                                        : '') +
+                (notes.length ? '\n' + notes.join('\n') : ''));
         } catch (error) {
             this.reportError(error, 'team-architect');
         } finally {
@@ -2512,7 +2577,18 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                         waitingForResume = false;
                     }
                 }
-                this.selected = { detail, diff: this.selected && this.selected.detail.mission.id === missionId ? this.selected.diff : undefined };
+                // Do not steal the user's selection: the monitor may keep polling in the
+                // background while the user inspects a different mission.
+                const monitorOwnsSelection = !this.selected ||
+                    this.selected.detail.mission.id === missionId;
+                if (monitorOwnsSelection) {
+                    this.selected = {
+                        detail,
+                        diff: this.selected && this.selected.detail.mission.id === missionId
+                            ? this.selected.diff
+                            : undefined
+                    };
+                }
                 await this.refreshMissions();
                 if (!waitingForResume && TERMINAL_STATUSES.has(detail.mission.status)) {
                     if (this.monitorTimer) {
@@ -2988,6 +3064,11 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             historyLoaded: this.historyLoaded,
             error: this.errorMessage
         };
+    }
+
+    /** Re-render the webview state after a backend connection-state change. */
+    notifyConnectionState(): void {
+        this.postState();
     }
 
     private postState(): void {
