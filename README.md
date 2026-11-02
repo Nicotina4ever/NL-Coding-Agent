@@ -41,6 +41,14 @@ From the repository root (no absolute path is stored in the launchers):
 - The legacy `NL Coding Agent.bat` starts the old PySide6 GUI; it is not part of the new
   standalone/extension distribution.
 
+## Repository vs packages
+
+Release packages contain only the standalone payload with its one embedded engine runtime and the
+NL Coder VSIX. The `tests/` suite and the legacy PySide6 source are **development/verification
+assets, not shipped in the installers**; they stay in the repository so the engine and extension can
+be validated. `da_eliminare/` is local review staging only and is no longer tracked. Models remain in
+Ollama; no model weights are packaged.
+
 ## Documentation
 
 - [Current state and verified limits](docs/CURRENT_STATE.md)
