@@ -2,8 +2,8 @@
  * Install the packaged VSIX into an isolated VS Code Insiders profile and run the
  * real chat feature acceptance from the installed package (no development path).
  *
- * Grants NETWORK + web-fetch in the isolated backend data directory using the
- * owner/backend permission API before launch; the extension never grants them.
+ * Grants Project Access NETWORK in the isolated backend data directory before
+ * launch; web-fetch follows the same project scope.
  */
 'use strict';
 
@@ -16,13 +16,17 @@ const frontendDir = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(frontendDir, '..');
 const scratchRoot = path.join(repoRoot, '.workspace', 'temp', 'frontend-accept');
 const vsixPath = process.argv[2] || path.join(repoRoot, '.workspace', 'dist', 'NL-Coding-Agent-0.7.2.vsix');
+const extensionTestPath = process.argv[3]
+    ? path.resolve(repoRoot, process.argv[3])
+    : path.join(frontendDir, 'test', 'chatfeatures.test.cjs');
+const passMarker = process.argv[4] || 'CHAT-FEATURE-ACCEPTANCE-PASS';
 const runDir = path.join(scratchRoot, 'vsix-chat-' + Date.now());
 const projectDir = path.join(runDir, 'project');
 const dataDir = path.join(runDir, 'data');
 const workspaceDir = path.join(runDir, 'workspace');
 const userDataDir = path.join(runDir, 'user-data');
 const extensionsDir = path.join(runDir, 'extensions');
-const logPath = path.join(scratchRoot, 'vsix-chat-test.log');
+const logPath = path.join(runDir, 'acceptance.log');
 
 function codeInsidersPath() {
     return process.env.VSCODE_INSIDERS_EXE ||
@@ -44,6 +48,25 @@ function prepare() {
     for (const dir of [projectDir, dataDir, workspaceDir, userDataDir, extensionsDir, scratchRoot]) {
         fs.mkdirSync(dir, { recursive: true });
     }
+    fs.writeFileSync(path.join(dataDir, 'models.yaml'), [
+        'providers:',
+        '  ollama:',
+        '    kind: ollama',
+        '    enabled: true',
+        '    base_url: http://127.0.0.1:11434',
+        'roles:',
+        '  chat:',
+        '    model: ollama/granite4.2:3b',
+        '  architect:',
+        '    model: ollama/granite4.2:3b',
+        '  developer:',
+        '    model: ollama/granite4.2:3b',
+        '  debugger:',
+        '    model: ollama/granite4.2:3b',
+        '  reviewer:',
+        '    model: ollama/granite4.2:3b',
+        ''
+    ].join('\n'), 'utf8');
     fs.writeFileSync(path.join(projectDir, 'README.md'), '# Isolated VSIX chat fixture\n');
     fs.writeFileSync(path.join(projectDir, 'notes.txt'),
         'The secret editor token is NL-EDITOR-TOKEN-52.\nVSIX attachment fixture.\n');
@@ -67,6 +90,10 @@ function main() {
         console.error('VSIX not found at ' + vsixPath);
         process.exit(2);
     }
+    if (!fs.existsSync(extensionTestPath)) {
+        console.error('extension test not found at ' + extensionTestPath);
+        process.exit(2);
+    }
     prepare();
     const baseEnv = { ...process.env };
     delete baseEnv.ELECTRON_RUN_AS_NODE;
@@ -88,7 +115,7 @@ function main() {
         ...baseEnv,
         NL_DATA_DIR: dataDir,
         NL_WORKSPACE_DIR: workspaceDir,
-        NL_MODELS_CONFIG: path.join(repoRoot, 'config', 'models.yaml')
+        NL_MODELS_CONFIG: path.join(dataDir, 'models.yaml')
     };
     const setup = spawnSync(path.join(repoRoot, 'python', 'python.exe'), [
         path.join(frontendDir, 'test', 'setupResearchGrants.py'), projectDir
@@ -104,7 +131,7 @@ function main() {
     fs.mkdirSync(emptyDevDir, { recursive: true });
     const args = [
         '--extensionDevelopmentPath=' + emptyDevDir,
-        '--extensionTestsPath=' + path.join(frontendDir, 'test', 'chatfeatures.test.cjs'),
+        '--extensionTestsPath=' + extensionTestPath,
         '--user-data-dir=' + userDataDir,
         '--extensions-dir=' + extensionsDir,
         '--disable-workspace-trust',
@@ -130,7 +157,7 @@ function main() {
         clearTimeout(timeout);
         fs.writeFileSync(logPath, output, 'utf8');
         console.log('\nexit code: ' + code + (signal ? ' signal ' + signal : ''));
-        if (code === 0 && output.includes('CHAT-FEATURE-ACCEPTANCE-PASS')) {
+        if (code === 0 && output.includes(passMarker)) {
             console.log('== VSIX-CHAT-FEATURE-PASS ==');
             process.exit(0);
         }

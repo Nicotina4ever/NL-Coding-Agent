@@ -8,8 +8,11 @@ router consumes them, no second model registry is introduced.
 from __future__ import annotations
 
 import json
+import base64
+import struct
 import time
 from typing import Any, Mapping
+import zlib
 
 from nl_coding_agent.models.capabilities import (
     CapabilityRecord,
@@ -22,6 +25,19 @@ from nl_coding_agent.models.providers import OllamaProvider
 PROBE_PATH = "probe_target.py"
 PROBE_TARGET = "VALUE = 1"
 PROBE_REPLACEMENT = "VALUE = 2"
+
+
+def _vision_probe_png() -> bytes:
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        body = kind + payload
+        return (struct.pack(">I", len(payload)) + body
+                + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF))
+
+    rows = b"".join(b"\x00" + b"\xff\x00\x00" * 32 for _ in range(32))
+    return (b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", 32, 32, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(rows))
+            + chunk(b"IEND", b""))
 
 
 def _tool_schema(name: str, description: str, properties: Mapping[str, Any]) -> dict:
@@ -142,6 +158,25 @@ def _structured_probe(provider: OllamaProvider, model: str, timeout: float) -> d
     return {"supported": ok, "metadata": {"valid_json": isinstance(parsed, Mapping)}}
 
 
+def _vision_probe(provider: Any, model: str, timeout: float) -> dict:
+    image = base64.b64encode(_vision_probe_png()).decode("ascii")
+    prompt = "The attached image is a solid red square. Reply with exactly RED if it is red, otherwise NOT_RED."
+    if getattr(provider, "kind", "") == "ollama":
+        messages = [{"role": "user", "content": prompt, "images": [image]}]
+        response = provider.generate(
+            model, prompt, timeout=timeout, messages=messages, role="vision")
+    else:
+        data_url = "data:image/png;base64," + image
+        messages = [{"role": "user", "content": [
+            {"type": "text", "text": prompt},
+            {"type": "image_url", "image_url": {"url": data_url}},
+        ]}]
+        response = provider.generate(model, prompt, timeout=timeout, messages=messages)
+    answer = str(response or "").strip().upper()
+    supported = answer == "RED" or answer.startswith("RED\n")
+    return {"supported": supported, "metadata": {"expected": "RED", "response": answer[:120]}}
+
+
 def _run_probes(provider: Any, provider_id: str, model: str, timeout: float,
                 persist: bool) -> list[CapabilityRecord]:
     records = probe_capabilities(
@@ -150,6 +185,7 @@ def _run_probes(provider: Any, provider_id: str, model: str, timeout: float,
             "tool_calling": lambda: _tool_calling_probe(provider, model, timeout),
             "patch_quality": lambda: _patch_quality_probe(provider, model, timeout),
             "structured_output": lambda: _structured_probe(provider, model, timeout),
+            "vision": lambda: _vision_probe(provider, model, timeout),
         },
         backend_version=provider_id,
         probe_id="operational-" + str(int(time.time())),

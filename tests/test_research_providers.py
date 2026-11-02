@@ -32,6 +32,18 @@ from nl_coding_agent.research.providers import (  # noqa: E402
     select_provider,
     verify_multi_source,
 )
+from nl_coding_agent.research.github import HttpResponse  # noqa: E402
+from nl_coding_agent.research.bing import BingHtmlProvider  # noqa: E402
+
+
+class FakeSearchTransport:
+    def __init__(self, response):
+        self.response = response
+        self.requests = []
+
+    def request(self, request):
+        self.requests.append(request)
+        return self.response
 
 
 def caps(provider_id: str, *, search_types=("web",), cost="free", latency="low",
@@ -175,6 +187,38 @@ class OfflineAndNoKeyTests(unittest.TestCase):
         self.assertEqual(refused.status.reason, "policy-denied")
         with self.assertRaises(ProviderError):
             KnownUrl("https://user:pass@example.com/x")
+
+    def test_bing_html_provider_uses_bounded_injected_transport(self):
+        body = b"""
+          <li class="b_algo">
+            <h2><a href="/ck/a?u=a1aHR0cHM6Ly9leGFtcGxlLmNvbS9ndWlkZQ==">Example guide</a></h2>
+            <div class="b_caption"><p>A useful <b>guide</b>.</p></div>
+          </li>
+          <li class="b_algo">
+            <h2><a href="https://example.org/page">Second result</a></h2>
+          </li>
+        """
+        transport = FakeSearchTransport(
+            HttpResponse(200, (("content-type", "text/html"),), body))
+        provider = BingHtmlProvider(transport)
+        response = provider.search(SearchQuery("example guide", max_results=1))
+        self.assertTrue(response.status.available)
+        self.assertEqual(len(response.results), 1)
+        self.assertEqual(response.results[0].url, "https://example.com/guide")
+        self.assertEqual(response.results[0].title, "Example guide")
+        self.assertEqual(response.results[0].snippet, "A useful guide.")
+        self.assertTrue(response.results[0].untrusted)
+        request = transport.requests[0]
+        self.assertEqual(request.method, "GET")
+        self.assertIn("q=example+guide", request.url)
+        self.assertLessEqual(request.max_bytes, 1_000_000)
+
+    def test_bing_html_provider_rejects_bad_response(self):
+        provider = BingHtmlProvider(
+            FakeSearchTransport(HttpResponse(503, (), b"unavailable")))
+        response = provider.search(SearchQuery("example"))
+        self.assertFalse(response.status.available)
+        self.assertEqual(response.status.reason, "http-503")
 
     def test_no_key_adapter_interface_is_honestly_unavailable(self):
         adapter = UnavailableNoKeyAdapter(caps("public-no-key"))

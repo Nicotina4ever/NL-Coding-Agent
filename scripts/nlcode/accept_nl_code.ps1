@@ -4,7 +4,7 @@
     Acceptance harness for the staged NL Code standalone distribution.
 
 .DESCRIPTION
-    Launches the packaged application with an isolated workspace and data directory,
+    Launches the packaged application with an isolated workbench profile, workspace and data directory,
     opens NL Chat through the command palette, sends a real message, captures a
     screenshot and verifies that the Python engine child was started and released.
 
@@ -20,6 +20,8 @@ param(
     [string]$Dist = '',
     [string]$Project = '',
     [string]$DataDir = '',
+    [string]$ScratchDir = '',
+    [string]$PortableProfileDir = '',
     [string]$ScreenshotDir = '',
     [switch]$SeedFromLiveData,
     [int]$ReplyTimeoutSeconds = 90,
@@ -29,11 +31,14 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 if (-not $Dist) { $Dist = Join-Path $repoRoot '.workspace\dist\NL Code' }
-$scratch = Join-Path $repoRoot '.workspace\temp\nlcode-accept'
+if (-not $ScratchDir) { $ScratchDir = Join-Path $repoRoot ('.workspace\temp\nlcode-accept-' + (Get-Date -Format 'yyyyMMdd-HHmmssfff')) }
+$scratch = $ScratchDir
 if (-not $Project) { $Project = Join-Path $scratch 'project' }
 if (-not $DataDir) { $DataDir = Join-Path $scratch 'data' }
+if (-not $PortableProfileDir) { $PortableProfileDir = Join-Path $scratch 'portable-profile' }
 if (-not $ScreenshotDir) { $ScreenshotDir = Join-Path $scratch 'screenshots' }
 $workspaceDir = Join-Path $scratch 'workspace'
+$portableExtensionsDir = Join-Path $PortableProfileDir 'extensions'
 $engineRoot = $repoRoot
 
 function Write-Result([string]$name, [bool]$ok, [string]$detail = '') {
@@ -94,7 +99,10 @@ if ($extensionDirs.Count -gt 0) {
 $results.Add((Write-Result 'extension installed in portable profile' ($null -ne $installedExtension -and (Test-Path (Join-Path $installedExtension.FullName 'package.json'))) $(if ($installedExtension) { $installedExtension.Name } else { '' }))) | Out-Null
 $results.Add((Write-Result 'build metadata present' (Test-Path (Join-Path $Dist 'BUILD_INFO.json')) '')) | Out-Null
 
-New-Item -ItemType Directory -Force -Path $Project, $DataDir, $workspaceDir, $ScreenshotDir | Out-Null
+New-Item -ItemType Directory -Force -Path $Project, $DataDir, $portableExtensionsDir, $workspaceDir, $ScreenshotDir | Out-Null
+if ($installedExtension) {
+    Copy-Item -Path $installedExtension.FullName -Destination $portableExtensionsDir -Recurse -Force
+}
 if (-not (Test-Path (Join-Path $Project 'README.md'))) {
     Set-Content -Path (Join-Path $Project 'README.md') -Value "# NL Code acceptance project`n"
 }
@@ -137,7 +145,23 @@ Set-Content -Path (Join-Path $scratch 'snapshot.py') -Value $snapshotScript -Enc
 & (Join-Path $repoRoot 'python\python.exe') (Join-Path $scratch 'snapshot.py') $DataDir | Set-Content $snapshotFile -Encoding UTF8
 
 Write-Host "launching: $appExe $Project"
-$process = Start-Process -FilePath $appExe -ArgumentList @("`"$Project`"", '--disable-workspace-trust', '--skip-welcome', '--skip-release-notes') -PassThru
+$previousPortableDir = $env:VSCODE_PORTABLE
+$env:VSCODE_PORTABLE = $PortableProfileDir
+try {
+    $process = Start-Process -FilePath $appExe -ArgumentList @(
+        "`"$Project`"",
+        '--new-window',
+        '--disable-workspace-trust',
+        '--skip-welcome',
+        '--skip-release-notes'
+    ) -PassThru
+} finally {
+    if ($null -eq $previousPortableDir) {
+        Remove-Item Env:VSCODE_PORTABLE -ErrorAction SilentlyContinue
+    } else {
+        $env:VSCODE_PORTABLE = $previousPortableDir
+    }
+}
 $deadline = (Get-Date).AddSeconds(90)
 do {
     Start-Sleep -Milliseconds 500
@@ -245,11 +269,18 @@ if (-not $KeepOpen) {
 & (Join-Path $repoRoot 'python\python.exe') (Join-Path $scratch 'snapshot.py') $DataDir | Set-Content (Join-Path $scratch 'engine-data-after.json') -Encoding UTF8
 $before = Get-Content $snapshotFile -Raw | ConvertFrom-Json
 $after = Get-Content (Join-Path $scratch 'engine-data-after.json') -Raw | ConvertFrom-Json
-$existingKeys = @($before.settings.PSObject.Properties.Name)
+$existingKeys = @()
+if ($null -ne $before.settings) {
+    $existingKeys = @($before.settings.PSObject.Properties | ForEach-Object { $_.Name })
+}
 $preservedSettings = $true
 foreach ($key in $existingKeys) {
-    $afterProperty = $after.settings.PSObject.Properties[$key]
-    if ($null -eq $afterProperty -or $afterProperty.Value -ne $before.settings.$key) {
+    $beforeProperty = $before.settings.PSObject.Properties[$key]
+    $afterProperty = $null
+    if ($null -ne $after.settings) {
+        $afterProperty = $after.settings.PSObject.Properties[$key]
+    }
+    if ($null -eq $afterProperty -or $afterProperty.Value -ne $beforeProperty.Value) {
         $preservedSettings = $false
         break
     }

@@ -15,7 +15,9 @@ branded and packaged locally, that reuses:
 - the existing Python engine at the repository root (`nl_agent.py`, `nl_coding_agent/`, `python/`),
 - the existing user data (`data/`: settings, agents, models, permissions, missions, history).
 
-The PySide6 Studio stays available and unchanged. This is objective 2 of the product plan; objective 3
+The older PySide6 Studio is legacy and is not part of normal development or acceptance. NL Code is
+one of the two supported interfaces, sharing the Python engine with NL Coder for VS Code Insiders.
+This is objective 2 of the product plan; objective 3
 (verified autonomous development of the frontend and the distribution) is specified at the end but is
 **not started** until this distribution passes its own acceptance.
 

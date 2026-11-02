@@ -14,11 +14,15 @@ import json
 import os
 import time
 import shutil
+import stat
 import tempfile
+import urllib.request
 import wave
+import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any, Callable, Protocol, runtime_checkable
 
 from nl_coding_agent.persistence import database
@@ -37,6 +41,27 @@ ASR_INSTALL_HINTS = {
     "qwen3-asr": "external qwen3-asr-cli plus a local GGUF model (reused in place).",
     "whisper.cpp": "optional whisper-cli/whisper.cpp binary plus a local GGUF/bin model.",
 }
+DOWNLOADABLE_ASR_MODELS = (
+    {"model_id": "faster-whisper-tiny", "engine": "faster-whisper",
+     "language": "Multilingual", "size_mb": 75, "max_download_mb": 180,
+     "license": "MIT", "repo_id": "Systran/faster-whisper-tiny"},
+    {"model_id": "faster-whisper-base", "engine": "faster-whisper",
+     "language": "Multilingual", "size_mb": 142, "max_download_mb": 320,
+     "license": "MIT", "repo_id": "Systran/faster-whisper-base"},
+    {"model_id": "faster-whisper-small", "engine": "faster-whisper",
+     "language": "Multilingual", "size_mb": 466, "max_download_mb": 900,
+     "license": "MIT", "repo_id": "Systran/faster-whisper-small"},
+    {"model_id": "vosk-model-small-it-0.22", "engine": "vosk",
+     "language": "Italian", "size_mb": 48,
+     "license": "Apache-2.0",
+     "url": "https://alphacephei.com/vosk/models/vosk-model-small-it-0.22.zip"},
+    {"model_id": "vosk-model-small-en-us-0.15", "engine": "vosk",
+     "language": "English (US)", "size_mb": 40,
+     "license": "Apache-2.0",
+     "url": "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"},
+)
+MAX_ASR_DOWNLOAD_BYTES = 160 * 1024 * 1024
+MAX_ASR_EXTRACTED_BYTES = 240 * 1024 * 1024
 
 
 class SpeechError(RuntimeError):
@@ -151,6 +176,34 @@ def _qwen3_cli(home: Path | None = None) -> Path | None:
     return None
 
 
+def _whisper_cpp_cli_from_root(root: Path) -> Path | None:
+    names = ("whisper-cli.exe", "whisper-cli", "main.exe", "main")
+    candidates = [root / name for name in names]
+    candidates.extend(root / "bin" / name for name in names)
+    return next((candidate.resolve() for candidate in candidates if candidate.is_file()), None)
+
+
+def _whisper_cpp_cli() -> Path | None:
+    configured = os.environ.get("NL_WHISPER_CPP_HOME", "").strip()
+    roots = [Path(configured).expanduser()] if configured else []
+    try:
+        stored = database.get_json_setting("speech.whisper_cpp_home", {})
+        if isinstance(stored, dict) and stored.get("path"):
+            roots.append(Path(str(stored["path"])).expanduser())
+    except Exception:
+        pass
+    names = ("whisper-cli.exe", "whisper-cli", "main.exe", "main")
+    for root in roots:
+        candidate = _whisper_cpp_cli_from_root(root)
+        if candidate is not None:
+            return candidate
+    for name in names[:2]:
+        found = shutil.which(name)
+        if found:
+            return Path(found).resolve()
+    return None
+
+
 def _recordings_root() -> Path:
     return database.data_root() / "speech" / "recordings"
 
@@ -166,9 +219,36 @@ def detect_capabilities(*, probes: dict | None = None,
     }
     if "qwen3-asr" in engines:
         engines["qwen3-asr"] = bool(probes.get("qwen3-asr", qwen3_cli is not None))
+    if "whisper.cpp" in engines:
+        engines["whisper.cpp"] = bool(probes.get("whisper.cpp", _whisper_cpp_cli() is not None))
     local_dirs = [str(_default_model_root()), *[str(path) for path in _env_model_dirs()]]
+    try:
+        external_config = database.get_json_setting("speech.external_model_dirs", {})
+        external_dirs = external_config.get("paths", []) if isinstance(external_config, dict) else []
+        if isinstance(external_dirs, list):
+            for value in external_dirs:
+                if not str(value).strip():
+                    continue
+                external_root = Path(str(value)).expanduser()
+                local_dirs.append(str(external_root))
+                nested_models = external_root / "models"
+                if nested_models.is_dir():
+                    local_dirs.append(str(nested_models))
+    except Exception:
+        pass
     for home in _qwen3_external_homes():
         candidate = home / "models"
+        if candidate.is_dir() and str(candidate) not in local_dirs:
+            local_dirs.append(str(candidate))
+    whisper_home = os.environ.get("NL_WHISPER_CPP_HOME", "").strip()
+    try:
+        stored_whisper = database.get_json_setting("speech.whisper_cpp_home", {})
+        if not whisper_home and isinstance(stored_whisper, dict):
+            whisper_home = str(stored_whisper.get("path") or "")
+    except Exception:
+        pass
+    if whisper_home:
+        candidate = Path(whisper_home).expanduser() / "models"
         if candidate.is_dir() and str(candidate) not in local_dirs:
             local_dirs.append(str(candidate))
     audio = {
@@ -190,14 +270,14 @@ def detect_capabilities(*, probes: dict | None = None,
 def _is_model_dir(path: Path) -> bool:
     if not path.is_dir():
         return False
-    markers = ("model.bin", "config.json", "*.gguf", "*.onnx", "am")
+    markers = ("model.bin", "config.json", "*.gguf", "ggml-*.bin", "*.onnx", "am")
     for marker in markers:
         if marker.startswith("*"):
             if list(path.glob(marker)):
                 return True
         elif (path / marker).exists():
             return True
-    return any(child.is_dir() for child in path.iterdir()) if path.is_dir() else False
+    return False
 
 
 class SpeechManager:
@@ -237,24 +317,48 @@ class SpeechManager:
         for root in self._model_dirs:
             if not root.is_dir():
                 continue
-            for child in sorted(root.iterdir()):
+            children = []
+            if ((root / "model.bin").is_file() or (root / "config.json").is_file()
+                    or (root / "am").is_dir()):
+                children.append(root)
+            children.extend(sorted(root.iterdir()))
+            for child in children:
                 if str(child) in seen:
                     continue
                 if child.is_file() and child.suffix.lower() == ".gguf":
+                    lower_name = child.name.lower()
+                    if "forced-aligner" in lower_name or "aligner" in lower_name:
+                        continue
+                    if "qwen3-asr" not in lower_name and "qwen-asr" not in lower_name:
+                        continue
                     seen.add(str(child))
                     models.append(SpeechModel(child.name, "qwen3-asr", str(child),
                                              child.stat().st_size / (1024 * 1024)))
                     continue
+                if child.is_file() and child.name.lower().startswith("ggml-") \
+                        and child.suffix.lower() == ".bin":
+                    seen.add(str(child))
+                    models.append(SpeechModel(child.stem, "whisper.cpp", str(child),
+                                             child.stat().st_size / (1024 * 1024)))
+                    continue
                 if not child.is_dir():
+                    continue
+                if child.name.lower() == "models" and (
+                        any(child.glob("qwen*asr*.gguf")) or any(child.glob("ggml-*.bin"))):
                     continue
                 if not _is_model_dir(child):
                     continue
                 seen.add(str(child))
-                engine = (
-                    "faster-whisper" if (child / "model.bin").exists()
-                    else "vosk" if (child / "am").exists()
-                    else "qwen3-asr"
-                )
+                if (child / "model.bin").exists() or (child / "config.json").exists():
+                    engine = "faster-whisper"
+                elif (child / "am").is_dir():
+                    engine = "vosk"
+                elif any(child.glob("qwen*asr*.gguf")):
+                    engine = "qwen3-asr"
+                elif any(child.glob("ggml-*.bin")):
+                    engine = "whisper.cpp"
+                else:
+                    continue
                 size_mb = 0.0
                 try:
                     size_mb = sum(item.stat().st_size for item in child.rglob("*")
@@ -275,6 +379,7 @@ class SpeechManager:
                 "hint": ASR_INSTALL_HINTS.get(engine, ""),
             })
         return {"engines": engine_rows, "models": [m.to_dict() for m in self.discover_models()],
+            "downloadable_models": [dict(item) for item in DOWNLOADABLE_ASR_MODELS],
                 "active_model": self.active_model(),
                 "audio_backend": self.audio_backend(),
                 "audio_available": self.audio_backend() is not None,
@@ -298,18 +403,106 @@ class SpeechManager:
                        "installation requires explicit human action.",
         }
 
+    def download_model(self, model_id: str) -> dict:
+        """Download one curated Vosk or Faster-Whisper model after explicit consent."""
+        choice = next((item for item in DOWNLOADABLE_ASR_MODELS
+                       if item["model_id"] == str(model_id)), None)
+        if choice is None:
+            raise SpeechError("unknown-model-download", "No curated download exists for " + repr(model_id))
+        if (choice["engine"] == "vosk"
+                and not self.capabilities.engines.get("vosk")):
+            raise SpeechError("asr-unavailable",
+                              "Install the Vosk engine before downloading a Vosk model: "
+                              + ASR_INSTALL_HINTS["vosk"])
+
+        model_root = _default_model_root()
+        target = model_root / str(choice["model_id"])
+        if target.exists():
+            if _is_model_dir(target):
+                return next(model.to_dict() for model in self.discover_models()
+                            if model.path == str(target))
+            raise SpeechError("model-path-exists",
+                              "Model target exists but is not a valid model; nothing was overwritten: "
+                              + str(target))
+        model_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="nl-asr-download-", dir=str(model_root.parent)) as temp:
+            if choice["engine"] == "faster-whisper":
+                if not self.capabilities.engines.get("faster-whisper"):
+                    raise SpeechError("asr-unavailable",
+                                      "Install faster-whisper in the embedded Python runtime first.")
+                staging = Path(temp) / str(choice["model_id"])
+                try:
+                    from huggingface_hub import snapshot_download
+                    snapshot_download(
+                        repo_id=str(choice["repo_id"]), local_dir=str(staging), max_workers=4,
+                        allow_patterns=["config.json", "model.bin", "tokenizer.json",
+                                        "preprocessor_config.json", "vocabulary.*", "*.json"],
+                    )
+                except Exception as exc:
+                    raise SpeechError("download-failed", "Could not download Faster-Whisper model: "
+                                      + str(exc)[:800]) from exc
+                downloaded_bytes = sum(item.stat().st_size for item in staging.rglob("*")
+                                       if item.is_file())
+                if downloaded_bytes > int(choice["max_download_mb"]) * 1024 * 1024:
+                    raise SpeechError("download-too-large", "Faster-Whisper snapshot exceeds its catalog size limit.")
+                if not (staging / "config.json").is_file() or not (staging / "model.bin").is_file():
+                    raise SpeechError("model-invalid", "Faster-Whisper snapshot lacks config.json or model.bin.")
+                shutil.move(str(staging), str(target))
+                return next(model.to_dict() for model in self.discover_models()
+                            if model.path == str(target))
+
+            archive_path = Path(temp) / "model.zip"
+            total = 0
+            try:
+                with urllib.request.urlopen(str(choice["url"]), timeout=30) as response:
+                    with archive_path.open("wb") as archive_file:
+                        while True:
+                            block = response.read(1024 * 1024)
+                            if not block:
+                                break
+                            total += len(block)
+                            if total > MAX_ASR_DOWNLOAD_BYTES:
+                                raise SpeechError("download-too-large",
+                                                  "ASR model archive exceeds the 160 MiB download limit.")
+                            archive_file.write(block)
+            except SpeechError:
+                raise
+            except Exception as exc:
+                raise SpeechError("download-failed", "Could not download ASR model: " + str(exc)) from exc
+
+            extraction_root = Path(temp) / "unpacked"
+            extraction_root.mkdir()
+            try:
+                with zipfile.ZipFile(archive_path) as archive:
+                    total_unpacked = 0
+                    for member in archive.infolist():
+                        member_path = PurePosixPath(member.filename)
+                        if member_path.is_absolute() or ".." in member_path.parts:
+                            raise SpeechError("archive-path-invalid", "ASR archive contains an unsafe path.")
+                        mode = member.external_attr >> 16
+                        if stat.S_ISLNK(mode):
+                            raise SpeechError("archive-path-invalid", "ASR archive contains a symlink.")
+                        total_unpacked += int(member.file_size)
+                        if total_unpacked > MAX_ASR_EXTRACTED_BYTES:
+                            raise SpeechError("archive-too-large",
+                                              "ASR archive expands beyond the 240 MiB safety limit.")
+                    archive.extractall(extraction_root)
+            except SpeechError:
+                raise
+            except Exception as exc:
+                raise SpeechError("archive-invalid", "Could not unpack ASR model: " + str(exc)) from exc
+
+            extracted = extraction_root / str(choice["model_id"])
+            if not _is_model_dir(extracted) or not (extracted / "am").is_dir():
+                raise SpeechError("model-invalid", "Downloaded archive did not contain a valid Vosk model.")
+            shutil.move(str(extracted), str(target))
+
+        return next(model.to_dict() for model in self.discover_models()
+                    if model.path == str(target))
+
     # -------------------------------------------------------------- model state
     def active_model(self) -> dict | None:
         raw = database.get_json_setting(self.SETTING_MODEL, {})
-        if not raw:
-            # A discovered local model is enough for an explicitly initiated
-            # dictation; prefer the first available model rather than making the
-            # user configure a purely technical selection first.
-            discovered = self.discover_models()
-            if discovered:
-                first = discovered[0]
-                self.switch_model(first.model_id)
-                raw = database.get_json_setting(self.SETTING_MODEL, {})
         if not raw:
             return None
         model_id = str(raw.get("model_id") or "")
@@ -318,12 +511,17 @@ class SpeechManager:
                 return model.to_dict()
         return None
 
-    def switch_model(self, model_id: str) -> dict:
+    def switch_model(self, model_id: str, engine: str = "") -> dict:
         wanted = str(model_id or "").strip()
-        match = next((m for m in self.discover_models() if m.model_id == wanted), None)
+        requested_engine = str(engine or "").strip()
+        match = next((m for m in self.discover_models()
+                      if m.model_id == wanted
+                      and (not requested_engine or m.engine == requested_engine)), None)
         if match is None:
             raise SpeechError("model-not-local",
-                              "Speech model " + repr(wanted) + " is not a discovered local model.")
+                              "Speech model " + repr(wanted)
+                              + (f" for engine {requested_engine!r}" if requested_engine else "")
+                              + " is not a discovered local model.")
         engine_available = bool(self.capabilities.engines.get(match.engine))
         if not engine_available and self._transcriber is None:
             raise SpeechError("asr-unavailable",
@@ -340,24 +538,45 @@ class SpeechManager:
         return {"unloaded": True, "active_model": None}
 
     def set_external_home(self, path: str) -> dict:
-        """Register an existing external engine/model folder without copying it."""
+        """Register an existing local ASR model folder without copying it."""
         root = Path(str(path or "")).expanduser().resolve()
         if not root.is_dir():
             raise SpeechError("external-folder-missing", "External folder does not exist: " + str(root))
         cli = _qwen3_cli(root)
-        models = {}
-        if cli is not None:
-            model_dir = root / "models"
-            if model_dir.is_dir():
-                models = {"qwen3-asr": sorted(
-                    str(item) for item in model_dir.glob("*.gguf"))}
-        if cli is None and not models:
-            raise SpeechError("external-folder-invalid",
-                              "Expected qwen3-asr-cli next to a models/ folder with GGUF files.")
-        database.set_json_setting("speech.qwen3_home", {"path": str(root), "set_at": _now()})
+        whisper_cli = _whisper_cpp_cli_from_root(root)
+        qwen_models = list(root.glob("*.gguf")) + list((root / "models").glob("*.gguf"))
+        previous_dirs = self._model_dirs
+        candidates = [root]
+        models_dir = root / "models"
+        if models_dir.is_dir():
+            candidates.append(models_dir)
+        self._model_dirs = [*previous_dirs, *candidates]
+        discovered = [
+            model for model in self.discover_models()
+            if Path(model.path).resolve().is_relative_to(root)
+        ]
+        if not discovered:
+            self._model_dirs = previous_dirs
+            raise SpeechError(
+                "external-folder-invalid",
+                "No supported local ASR model was found in the selected folder or its models subfolder.")
+        external_config = database.get_json_setting("speech.external_model_dirs", {})
+        stored_dirs = external_config.get("paths", []) if isinstance(external_config, dict) else []
+        if not isinstance(stored_dirs, list):
+            stored_dirs = []
+        registered_dirs = list(dict.fromkeys(
+            [str(item) for item in stored_dirs if str(item).strip()] + [str(root)]))
+        database.set_json_setting("speech.external_model_dirs", {"paths": registered_dirs})
+        if cli is not None or qwen_models:
+            qwen_home = root.parent if root.name.lower() == "models" else root
+            database.set_json_setting("speech.qwen3_home", {"path": str(qwen_home), "set_at": _now()})
+        if whisper_cli is not None:
+            database.set_json_setting("speech.whisper_cpp_home", {"path": str(root), "set_at": _now()})
         self.capabilities = detect_capabilities()
         self._model_dirs = [Path(item).expanduser() for item in self.capabilities.local_model_dirs]
-        return {"external_home": str(root), "cli": str(cli) if cli else None,
+        return {"external_home": str(root), "models": [item.to_dict() for item in discovered],
+                "qwen3_cli": str(cli) if cli else None,
+                "whisper_cpp_cli": str(whisper_cli) if whisper_cli else None,
                 "catalog": self.catalog()}
 
     # ------------------------------------------------------------------ devices
@@ -539,6 +758,8 @@ class SpeechManager:
         model_path = str(active.get("path") or "")
         if engine == "qwen3-asr":
             return self._run_qwen3_asr(path, model_path, language=language)
+        if engine == "whisper.cpp":
+            return self._run_whisper_cpp_asr(path, model_path, language=language)
         if engine == "faster-whisper":
             try:
                 from faster_whisper import WhisperModel
@@ -555,6 +776,36 @@ class SpeechManager:
         raise SpeechError("asr-unavailable",
                           "No local ASR adapter for engine " + repr(engine)
                           + "; install/configure it explicitly.")
+
+    def _run_whisper_cpp_asr(self, wav_path: str, model_path: str, *, language=None) -> dict:
+        cli = _whisper_cpp_cli()
+        model = Path(model_path).expanduser()
+        if cli is None:
+            raise SpeechError("asr-unavailable",
+                              "whisper-cli was not found; register its folder in Engine → Dictation.")
+        if not model.is_file():
+            raise SpeechError("model-not-local", "whisper.cpp model file is missing: " + str(model))
+        import subprocess
+        with tempfile.TemporaryDirectory(prefix="nl-whisper-output-",
+                                         dir=str(database.data_root())) as temp:
+            output_prefix = Path(temp) / "transcript"
+            command = [str(cli), "-m", str(model), "-f", str(Path(wav_path).resolve()),
+                       "-nt", "-otxt", "-of", str(output_prefix)]
+            if language:
+                command.extend(["-l", str(language)])
+            try:
+                completed = subprocess.run(command, capture_output=True, text=True,
+                                           timeout=300, encoding="utf-8", errors="replace")
+            except subprocess.TimeoutExpired as exc:
+                raise SpeechError("asr-timeout", "whisper.cpp transcription timed out.") from exc
+            if completed.returncode != 0:
+                detail = (completed.stderr or completed.stdout or "").strip()[-800:]
+                raise SpeechError("asr-failed", "whisper.cpp failed: " + detail)
+            text_path = output_prefix.with_suffix(".txt")
+            text = text_path.read_text(encoding="utf-8", errors="replace").strip() \
+                if text_path.is_file() else str(completed.stdout or "").strip()
+            return {"text": text, "engine": "whisper.cpp", "model": model.name,
+                    "segments": [], "language": language}
 
     def _run_vosk_asr(self, wav_path: str, model_path: str) -> dict:
         """Lightweight offline Vosk adapter for a local model directory."""

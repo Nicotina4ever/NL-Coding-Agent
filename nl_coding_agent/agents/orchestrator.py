@@ -20,7 +20,7 @@ from crewai import LLM
 
 from nl_coding_agent.agents.crew_backend import CrewAIBackend, CrewRuntime
 from nl_coding_agent.agents.specs import resolve_role
-from nl_coding_agent.app.services import Event, get_event_bus
+from nl_coding_agent.app.services import Event, get_event_bus, project_team_agents
 from nl_coding_agent.core import candidate_verification, promotion
 from nl_coding_agent.core.mission_lock import MissionLockError, mission_lock
 from nl_coding_agent.core.promotion import GateFailure
@@ -118,7 +118,7 @@ def _truncate(text: str, limit: int = 20_000) -> str:
 def _make_llm(model_name: str, base_url: str = "http://127.0.0.1:11434",
               temperature: float = 0.1, *, project_id: int | None = None,
               role: str | None = None) -> LLM:
-    """Create a permission-checked CrewAI LLM instance for Ollama.
+    """Create a permission-checked CrewAI LLM for the configured provider route.
 
     Context length is deliberately not set here: Ollama's own model/server
     settings own it. Only explicitly persisted generation parameters are sent;
@@ -126,8 +126,50 @@ def _make_llm(model_name: str, base_url: str = "http://127.0.0.1:11434",
     """
     from nl_coding_agent.core.permissions import assert_model_permitted
 
-    assert_model_permitted(model_name, base_url, project_id=project_id)
-    kwargs: dict = {"model": model_name, "base_url": base_url, "temperature": temperature}
+    route = str(model_name or "").strip()
+    llm_model = route
+    resolved_base_url = str(base_url or "http://127.0.0.1:11434")
+    api_key = None
+    if "/" in route:
+        provider_id, provider_model = route.split("/", 1)
+        from nl_coding_agent.models.model_config_store import load as load_model_config
+        config = load_model_config()
+        providers = config.get("providers") or {}
+        provider_config = providers.get(provider_id) or {}
+        if not isinstance(provider_config, dict):
+            provider_config = {}
+        if provider_id != "ollama" and not provider_config.get("enabled", True):
+            raise ValueError("Model provider is missing or disabled: " + provider_id)
+        kind = str(provider_config.get("kind") or provider_id)
+        if provider_id == "ollama" or kind == "ollama":
+            ollama = config.get("ollama") or {}
+            resolved_base_url = str(
+                provider_config.get("base_url") or ollama.get("base_url") or resolved_base_url
+            )
+            llm_model = route if provider_id == "ollama" else "ollama/" + provider_model
+        else:
+            resolved_base_url = str(provider_config.get("base_url") or "").strip()
+            if not resolved_base_url:
+                raise ValueError("Model provider has no base URL: " + provider_id)
+            if kind not in ("openai_compatible", "openai", "lm_studio", "llama_cpp"):
+                raise ValueError("Unsupported CrewAI model provider kind: " + kind)
+            api_key_env = str(provider_config.get("api_key_env") or "").strip()
+            api_key = os.environ.get(api_key_env, "") if api_key_env else ""
+            if api_key_env and not api_key:
+                raise ValueError(
+                    "Model provider API key environment variable is not set: " + api_key_env
+                )
+            api_key = api_key or "ollama"
+            llm_model = "openai/" + provider_model
+
+    assert_model_permitted(route, resolved_base_url, project_id=project_id)
+    kwargs: dict = {
+        "model": llm_model,
+        "base_url": resolved_base_url,
+        "temperature": temperature,
+    }
+    if api_key is not None:
+        kwargs["api_key"] = api_key
     # Persistent per-model/per-role generation parameters. Missing values are
     # intentionally omitted so the provider keeps its own defaults.
     try:
@@ -545,8 +587,26 @@ class MultiAgentOrchestrator:
         self._last_agent_result = None
         self._route_selections: dict[str, dict] = {}
         self._ledger_mission_id: int | None = None
+        self._team_by_role: dict[str, dict] = {}
+        for profile in project_team_agents(self.project_id):
+            self._team_by_role.setdefault(str(profile.get("role_id") or ""), profile)
 
     # ------------------------------------------------------------------ helpers
+
+    def _specialist_for_role(self, role: str) -> dict | None:
+        normalized = str(role or "").strip().lower().replace("-", "_")
+        aliases = {
+            "software architect": "architect",
+            "repository auditor": "auditor",
+            "risk auditor": "auditor",
+            "code reviewer": "reviewer",
+            "debug specialist": "debugger",
+        }
+        try:
+            role_id = resolve_role(role).role_id
+        except ValueError:
+            role_id = aliases.get(normalized, normalized)
+        return self._team_by_role.get(role_id)
 
     def _agent_metadata(self, model_name: str, role: str = "developer") -> dict:
         """Actual CrewAI result evidence for the last call, bounded and JSON-safe."""
@@ -601,6 +661,9 @@ class MultiAgentOrchestrator:
                        required_capabilities=(), max_cost_usd: float | None = None) -> str:
         """Resolve an explicit route, or an explicitly requested ``auto`` route."""
         route = str(requested or "").strip()
+        profile = self._specialist_for_role(role)
+        if profile and str(profile.get("model") or "").strip():
+            return str(profile["model"]).strip()
         if route.lower() not in ("auto", "automatic"):
             return route
         try:
@@ -834,6 +897,30 @@ class MultiAgentOrchestrator:
         """
         self._assert_execution_permissions()
         spec = resolve_role(role)
+        profile = self._specialist_for_role(role)
+        if profile:
+            specialist_instructions = str(profile.get("instructions") or "").strip()
+            if specialist_instructions:
+                backstory += "\n\nProject specialist instructions:\n" + specialist_instructions[:8000]
+            requested_tools = profile.get("tools")
+            if isinstance(requested_tools, list):
+                requested = {str(item) for item in requested_tools}
+                available = {
+                    str(getattr(item, "name", type(item).__name__))
+                    for item in (tools or [])
+                }
+                missing = sorted(requested - available)
+                if missing:
+                    self._emit(
+                        "agents", "warning",
+                        "Specialist tools unavailable for this stage",
+                        role=str(profile.get("role_id") or role),
+                        tools=missing,
+                    )
+                tools = [
+                    item for item in (tools or [])
+                    if str(getattr(item, "name", type(item).__name__)) in requested
+                ]
         try:
             from nl_coding_agent.core import instructions as shared_instructions
             backstory = shared_instructions.system_prompt(
@@ -2840,6 +2927,8 @@ INSTRUCTIONS:
 6. Follow the verdict with concise review notes and blocking issues.
 """
         try:
+            review_tools = get_project_tools(
+                stage.workspace, project_id=self.project_id, read_only=True)
             review_text = self._call_model(
                 "Code Reviewer & Quality Gatekeeper",
                 model_name,
@@ -2850,6 +2939,7 @@ INSTRUCTIONS:
                     "You give an APPROVE or REJECT verdict on the first line."
                 ),
                 expected_output="APPROVE or REJECT verdict on the first line, followed by review notes.",
+                tools=review_tools,
             )
             verdict = parse_reviewer_verdict(review_text)
             metadata = self._agent_metadata(model_name, "reviewer")

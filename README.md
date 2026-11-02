@@ -17,8 +17,10 @@ conflict prevention, persistent state and controlled self-development.
 Early-stage but functionally exercised: the end-to-end developer/tester/debugger/reviewer cycle has
 been run with a live local model and an interruption/resume cycle. Safety staging, rollback and the
 persistent supervisor are implemented with gate evidence; the CrewAI/Flows runtime seam and model
-intelligence are integrated. The Studio GUI, multimodal chat/attachments, voice/ASR and the final
-portable release are still in progress (see the program plan in
+intelligence are integrated. The supported interfaces are the NL Coder VS Code extension and the
+NL Code Code - OSS workbench; both use the same Python engine. The PySide6 GUI remains in the
+repository as a legacy interface and is excluded from normal development and acceptance. Multimodal
+chat/attachments, voice/ASR and the final portable release are still in progress (see the program plan in
 `docs/product-blueprint/INDEX.json` and the current state in `docs/CURRENT_STATE.md`).
 No release claim is made until the acceptance gates in `docs/08_ACCEPTANCE_GATES.md` and the
 release requirements in `docs/PRODUCT_BACKLOG.md` pass.
@@ -43,11 +45,11 @@ their own location, so they can be double-clicked or started from any working di
 
 | Entry point | Purpose |
 |---|---|
-| `NL Coding Agent.bat` | Windows desktop GUI (PySide6) — the obvious launcher at the repository root. |
+| `NL Coding Agent.bat` | Legacy PySide6 GUI launcher; retained but not a supported development or acceptance surface. |
 | `scripts\launchers\doctor.bat` | Windows environment diagnostics (runtime, CrewAI, Ollama, project state). |
 | `scripts\launchers\status.bat` | Windows persisted projects/missions/state summary. |
 | `scripts\launchers\Self-Build Mode.bat` | Windows one guided self-build mission with persisted state and resume hint. |
-| `scripts/launchers/NL Coding Agent.sh` | POSIX desktop GUI launcher for Linux/macOS beta (staged to the payload root). |
+| `scripts/launchers/NL Coding Agent.sh` | Legacy PySide6 GUI launcher for Linux/macOS beta (staged to the payload root). |
 | `scripts/launchers/doctor.sh` | POSIX read-only environment diagnostics (payload root: `doctor.sh`). |
 | `scripts/launchers/status.sh` | POSIX persisted-state summary (payload root: `status.sh`). |
 | `scripts/launchers/Self-Build Mode.sh` | POSIX explicit one-mission launcher (payload root, preserves exit codes). |
@@ -65,17 +67,15 @@ launchers look for the provisioned runtime at `python/bin/python3` (compatibly
 instructions. Launchers pass all arguments through, preserve exit codes and never start a model
 mission except when the user explicitly runs Self-Build Mode.
 
-Equivalent CLI form (use the embedded runtime explicitly):
+## Supported editor interfaces
 
-Studio opens a dockable project workspace: files on the left, the existing editor
-in the center, persistent Chat on the right and tools/activity in bottom tabs.
-Use **Panels** to show, move or reset panels; layout, project and open files restore
-after restart. **Enter** sends Chat, **Ctrl+Enter** adds a newline. Ordinary messages
-stay conversational. Select the explicit document-plan, coding-task or Goal action
-to prepare work; a coding mission starts only through **Run / Resume**.
-**Ask in Chat** references selected code; **Open file** in Chat attaches the active
-editor snapshot. **Review candidate** displays staged changes and verdicts even when
-promotion is blocked. **Ctrl+Alt+C/E/D** focus Chat/editor/document planning.
+Use **NL Code** for the standalone Code - OSS workbench, or install **NL Coder** in VS Code
+Insiders. They share the Python engine, model configuration and persistent data; there is no
+separate supported PySide6 product UI. See [NL Code standalone](docs/NL_CODE_STANDALONE.md) for
+build and acceptance requirements. The repository-root `NL Coding Agent.bat` remains only as a
+legacy launcher.
+
+Equivalent CLI form (use the embedded runtime explicitly):
 
 ```powershell
 python\python.exe nl_agent.py doctor
@@ -129,10 +129,10 @@ CLI commands: `doctor`, `audit`, `work`, `status`, `roadmap`, `mission`, `mcp`,
 
 ## NL Coder (VS Code extension)
 
-`frontend/` is the VS Code / VS Code Insiders extension **NL Coder** (`0.3.0`, extension ID
+`frontend/` is the VS Code / VS Code Insiders extension **NL Coder** (`0.7.2`, extension ID
 `nlcodingagent.nl-coding-agent`): complete NL Chat plus real mission control over MCP. It has no models,
 missions, permissions or persistence of its own; the Python engine remains the single source of truth
-and the PySide6 Studio is unchanged.
+for both supported editor interfaces. The PySide6 GUI is legacy and is not part of routine acceptance.
 
 ```powershell
 cd frontend
@@ -143,16 +143,24 @@ code-insiders --extensionDevelopmentPath="K:\AI\NL Coding Agent\frontend" "K:\pa
 
 The **NL** activity-bar view has **Chat / Missions / Engine** tabs. Chat supports provider/model
 selection with an **Automatic** engine-default mode, project-scoped file attachments (picker, drag &
-drop, current file, selection), visible editor context, URLs fetched only on explicit confirmation
-through the existing Research service/permissions, and engine-persisted history. The **Engine** tab
-shows the existing model/agent/permission configuration plus the read-only research profile/NETWORK
-status. Switch the composer to **Mission** (or use `/mission <objective>`) to start a real Supervisor
+drop, current file, selection, `@file` autocomplete, and pasted screenshots with Ctrl+V), visible editor context, URLs fetched
+only on explicit confirmation through the existing Research service/permissions, and engine-persisted
+history. Images go only to a measured Vision-capable specialist; its text handoff is marked untrusted
+for the selected Chat model and other agents. The **Engine** tab
+shows the existing model/agent/permission configuration, local ASR engine/model catalog and the
+read-only research profile/NETWORK status. Choose an ASR engine and one of its local models before
+dictation; curated downloads appear in the same model menu and require the project NETWORK grant and
+explicit confirmation. External Faster-Whisper, Vosk, Qwen3-ASR and whisper.cpp model folders are
+registered and reused in place, never copied. Switch the composer
+to **Mission** (or use `/mission <objective>`) to start a real Supervisor
 mission on the opened project. Missions show progress, task/agent handoffs, candidate + oracle
 verification, reviewer verdict and the candidate or retained diff; Stop and Resume use the engine's
 existing cooperative lifecycle. Mission execution is opt-in with `nlCodingAgent.allowExecution` (each
-start/stop still asks for confirmation); without it the engine is read-only. URL fetch requires
-owner-created `NETWORK` + `web-fetch` grants and an approving research profile (the extension never
-grants permissions). The mission planner is proportional: the core developer/tester/reviewer team gains
+start/stop still asks for confirmation); without it the engine is read-only. URL fetch uses the
+built-in bounded HTTPS transport and requires the project NETWORK grant; the matching `web-fetch`
+capability follows that same Project Access scope. The Research profile still controls automatic
+approval. Web search additionally requires a configured provider. The mission planner is proportional:
+the core developer/tester/reviewer team gains
 a read-only architect for multi-file/design work and an auditor for security/audit objectives; the
 multi-agent runtime audit is in `docs/ARCHITECTURE_AND_ENGINE.md`. Commands: **Start Chat**, **Start
 Mission…**, **Show Missions**, **Show Engine Settings**, **Toggle Mission Execution**, **Show Backend
@@ -162,8 +170,8 @@ A locally installable VSIX is produced with:
 
 ```powershell
 cd frontend
-npm run package:vsix      # .workspace\dist\NL-Coding-Agent-0.3.0.vsix
-code-insiders --install-extension ..\.workspace\dist\NL-Coding-Agent-0.3.0.vsix
+npm run package:vsix      # .workspace\dist\NL-Coding-Agent-0.7.2.vsix
+code-insiders --install-extension ..\.workspace\dist\NL-Coding-Agent-0.7.2.vsix
 ```
 
 Set `nlCodingAgent.engineRoot` when installing on a machine where the engine is not resolvable from the
@@ -172,8 +180,8 @@ and uses the real product logo as its icon. Real acceptance (isolated project mi
 PASS and reviewer `APPROVE`; stop→resume; model→conversation; attachment/editor context; authorized
 URL fetch→context; installed-VSIX chat and mission acceptance) is recorded in
 `docs/CHAT_AND_SESSIONS.md` and `docs/evidence/frontend/`; protocol/architecture
-details are in `docs/FRONTEND_ARCHITECTURE.md`. The NL Code standalone distribution still bundles
-extension 0.1.0 and must be rebuilt to include this chat/mission UI.
+details are in `docs/FRONTEND_ARCHITECTURE.md`. A standalone distribution is current only when its
+portable profile contains the same accepted NL Coder VSIX version.
 
 ## NL Code standalone (objective 2)
 

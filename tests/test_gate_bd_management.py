@@ -110,6 +110,32 @@ def test_operational_probe_runs_through_an_openai_compatible_provider():
     assert by_name["structured_output"].state == "measured"
 
 
+def test_vision_probe_measures_image_recognition():
+    from nl_coding_agent.models.operational_probes import probe_model_with_provider
+
+    class VisionProvider:
+        kind = "ollama"
+
+        def chat_turn(self, model, messages, tools, **kwargs):
+            name = tools[0]["function"]["name"]
+            args = {"value": 42} if name == "record_probe" else {
+                "path": "probe_target.py", "target": "VALUE = 1",
+                "replacement": "VALUE = 2"}
+            return {"tool_calls": [{"function": {"name": name, "arguments": args}}]}
+
+        def generate(self, model, prompt, **kwargs):
+            if kwargs.get("role") == "vision":
+                assert kwargs["messages"][0]["images"]
+                return "RED"
+            return '{"ok": true, "n": 7}'
+
+    records = probe_model_with_provider(
+        VisionProvider(), "ollama", "vision-fixture", persist=False)
+    by_name = {record.capability: record for record in records}
+    assert by_name["vision"].state == "measured"
+    assert by_name["vision"].metadata["expected"] == "RED"
+
+
 def test_specialist_consultation_uses_the_configured_profile_model(isolated, monkeypatch):
     from nl_coding_agent.app.services import AppServices
     services = AppServices()
@@ -121,19 +147,31 @@ def test_specialist_consultation_uses_the_configured_profile_model(isolated, mon
         "Security reviewer", provider="ollama", model="ollama/qwen3.5:9b",
         role="security", instructions="Focus on injection and permissions.")
 
-    class FakeProvider:
-        provider_id = "ollama"
+    invocation = {}
 
-        def generate(self, model, prompt, **kwargs):
-            return "SECOND-OPINION: " + model
+    def fake_generate(project_id, model_spec, prompt, **kwargs):
+        invocation.update({
+            "project_id": project_id,
+            "model_spec": model_spec,
+            "prompt": prompt,
+            "kwargs": kwargs,
+        })
+        return {
+            "provider_id": "ollama",
+            "model": "qwen3.5:9b",
+            "reply": "SECOND-OPINION: qwen3.5:9b",
+            "fallback": False,
+        }
 
-    monkeypatch.setattr(services, "_resolve_chat_provider",
-                        lambda *args, **kwargs: (FakeProvider(), "qwen3.5:9b", None, None))
+    monkeypatch.setattr(services, "_generate_with_fallback", fake_generate)
     result = services.consult_specialist(
         project["id"], agent["id"], "Review this plan", context="candidate")
     assert result["agent_name"] == "Security reviewer"
     assert result["model"] == "qwen3.5:9b"
     assert result["reply"] == "SECOND-OPINION: qwen3.5:9b"
+    assert invocation["model_spec"] == "ollama/qwen3.5:9b"
+    assert invocation["kwargs"]["role"] == "chat"
+    assert "Focus on injection and permissions." in invocation["kwargs"]["messages"][0]["content"]
     services._db.close()
 
 
@@ -187,14 +225,11 @@ def test_chat_sessions_are_persistent_and_migrate_legacy(isolated):
     assert chat_sessions.messages(1) == []
 
 
-def test_mission_archive_then_delete_requires_archived(isolated):
+def test_mission_delete_does_not_require_prior_archive(isolated):
     from nl_coding_agent.persistence import missions
 
     mission_id = missions.create_mission(None, "test", "goal")
     missions.update_mission_status(mission_id, "completed")
-    with pytest.raises(ValueError, match="Archive"):
-        missions.delete_mission(mission_id)
-    missions.archive_mission(mission_id)
     missions.delete_mission(mission_id)
     assert missions.get_mission(mission_id) is None
 
@@ -334,4 +369,3 @@ def test_chat_panel_creates_and_selects_durable_session(isolated):
     from nl_coding_agent.app.services import AppServices as FreshServices
     assert len(FreshServices().list_chat_sessions(1)) >= 2
     panel.deleteLater()
-

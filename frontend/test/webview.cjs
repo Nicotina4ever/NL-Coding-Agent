@@ -65,11 +65,23 @@ function testHtml() {
         'storage-cleanup-orphans', 'storage-cleanup-archived', 'jobs-refresh', 'jobs-list',
         'specialist-list', 'specialist-name', 'specialist-provider', 'specialist-model',
         'specialist-role', 'specialist-instructions', 'specialist-tools',
-        'specialist-permissions', 'specialist-enabled', 'specialist-save',
+        'specialist-enabled', 'specialist-save',
         'specialist-new', 'specialist-duplicate', 'specialist-delete',
-        'mission-query', 'mission-status-filter', 'mission-archived-toggle']) {
+        'mission-query', 'mission-status-filter', 'mission-archived-toggle',
+        'mission-select-visible', 'mission-selection-count', 'mission-selection-clear',
+        'mission-stop-selected', 'mission-archive-selected', 'mission-delete-selected',
+        'speech-engine', 'speech-model', 'speech-select', 'speech-refresh',
+        'speech-home', 'speech-browse', 'speech-external', 'speech-engines']) {
         assert(html.includes(`id="${id}"`), `markup exposes #${id}`);
     }
+    for (const id of ['speech-engine', 'speech-model', 'speech-select', 'speech-refresh',
+        'speech-home', 'speech-browse', 'speech-external', 'speech-engines']) {
+        assert.strictEqual(html.split(`id="${id}"`).length - 1, 1,
+            `speech control #${id} appears exactly once`);
+    }
+    assert(!html.includes('id="speech-download-model"'), 'download options share the model selector');
+    assert(!html.includes('id="specialist-permissions"'),
+        'specialist editor does not duplicate project-wide permissions');
     assert.strictEqual(escapeHtml('<b>&"\'</b>'), '&lt;b&gt;&amp;&quot;&#39;&lt;/b&gt;');
     console.log('PASS generated HTML has a strict CSP, no inline script and the dashboard structure');
 }
@@ -99,6 +111,8 @@ class FakeElement {
         this.dataset = {};
         this.style = {};
         this.value = '';
+        this.selectionStart = null;
+        this.selectionEnd = null;
         this.disabled = false;
         this.scrollTop = 0;
         this.scrollHeight = 0;
@@ -114,6 +128,8 @@ class FakeElement {
     set textContent(value) { this._text = String(value); this.children = []; }
     get textContent() { return this._text; }
     appendChild(child) { this.children.push(child); return child; }
+    setAttribute(name, value) { this[name] = value; }
+    setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; }
     removeChild(child) {
         const index = this.children.indexOf(child);
         if (index >= 0) { this.children.splice(index, 1); }
@@ -149,8 +165,22 @@ function testWebviewBehaviour() {
     const windowListeners = new Map();
     const documentListeners = new Map();
     let savedState;
+    class FakeFileReader {
+        constructor() {
+            this.listeners = new Map();
+            this.result = 'data:image/png;base64,cG5n';
+        }
+        addEventListener(type, listener) {
+            this.listeners.set(type, listener);
+        }
+        readAsDataURL() {
+            const listener = this.listeners.get('load');
+            if (listener) { listener(); }
+        }
+    }
     const sandbox = {
         console,
+        FileReader: FakeFileReader,
         acquireVsCodeApi: () => ({
             postMessage: (message) => posted.push(message),
             getState: () => savedState,
@@ -177,6 +207,35 @@ function testWebviewBehaviour() {
 
     assert.strictEqual(posted[0].type, 'ready', 'webview posts ready');
     assert(get('input').focused, 'input is focused on load');
+    let pastePrevented = false;
+    get('input').dispatch('paste', {
+        clipboardData: {
+            items: [{ kind: 'file', type: 'image/png', getAsFile: () => ({ size: 3 }) }],
+            getData: () => ''
+        },
+        preventDefault: () => { pastePrevented = true; }
+    });
+    const imagePaste = posted.find((message) => message.type === 'action' && message.action === 'pasteImage');
+    assert(pastePrevented, 'image-only paste is intercepted by the Chat composer');
+    assert(imagePaste && imagePaste.payload.imageBase64 === 'cG5n', 'clipboard image is sent to attachment ingestion');
+    const input = get('input');
+    input.value = '@calc';
+    input.setSelectionRange(input.value.length, input.value.length);
+    input.dispatch('input', {});
+    assert(posted.some((message) => message.type === 'action' &&
+        message.action === 'searchWorkspaceFiles' && message.payload.query === 'calc'),
+    'typing @ starts a workspace file search');
+    const messageListener = (windowListeners.get('message') || [])[0];
+    messageListener({ data: { type: 'fileMentions', query: 'calc', files: [
+        { path: 'src/calc.py', label: 'calc.py' }
+    ] } });
+    const mentionRow = get('slash-menu').children[0];
+    assert(mentionRow, '@ autocomplete renders a matching file');
+    mentionRow.dispatch('mousedown', { preventDefault: () => undefined });
+    assert.strictEqual(input.value, '@src/calc.py ', 'selected file path is inserted into the composer');
+    assert(posted.some((message) => message.type === 'action' &&
+        message.action === 'mentionWorkspaceFile' && message.payload.path === 'src/calc.py'),
+    'selected @file is attached through the workspace action');
 
     const settings = {
         schema_version: 1,
@@ -214,6 +273,7 @@ function testWebviewBehaviour() {
             status: 'available',
             offline: false,
             network_configured: true,
+            url_fetch_available: true,
             network_granted: true
         }
     };
@@ -308,6 +368,26 @@ function testWebviewBehaviour() {
             items: [{ id: 'tmp-1', category: 'workspace-temp', path: 'K:\\tmp', bytes: 1048576, files: 2, deletable: true, reason: 'temporary files' }],
             never_delete: []
         },
+        speech: {
+            speech: { audio_available: true, active_model: {
+                model_id: 'vosk-it', engine: 'vosk', path: 'D:\\asr\\vosk-it'
+            } },
+            catalog: {
+                engines: [
+                    { engine: 'vosk', installed: true, hint: 'Vosk runtime' },
+                    { engine: 'whisper.cpp', installed: true, hint: 'whisper.cpp runtime' }
+                ],
+                models: [
+                    { model_id: 'vosk-it', engine: 'vosk', path: 'D:\\asr\\vosk-it' },
+                    { model_id: 'ggml-tiny', engine: 'whisper.cpp', path: 'D:\\asr\\ggml-tiny.bin' }
+                ],
+                downloadable_models: [
+                    { model_id: 'vosk-model-small-it-0.22', engine: 'vosk', language: 'Italian',
+                        size_mb: 48, license: 'Apache-2.0' }
+                ],
+                active_model: { model_id: 'vosk-it', engine: 'vosk', path: 'D:\\asr\\vosk-it' }
+            }
+        },
         historyCount: 2,
         historyLoaded: true
     };
@@ -333,6 +413,54 @@ function testWebviewBehaviour() {
     assert(get('research-text').textContent.includes('This domain is for use'));
     assert.strictEqual(get('research-use').disabled, false);
     assert.strictEqual(get('mission-list').children.length, 1, 'mission row rendered');
+    assert.strictEqual(get('mission-selection-count').textContent, '0 selected');
+    get('mission-select-visible').checked = true;
+    get('mission-select-visible').dispatch('change', {});
+    assert.strictEqual(get('mission-selection-count').textContent, '1 selected',
+        'select filtered selects all currently visible project missions');
+    get('mission-delete-selected').dispatch('click', {});
+    assert(posted.some((message) => message.type === 'action' &&
+        message.action === 'deleteSelectedMissions' &&
+        message.payload.missionIds.length === 1 && message.payload.missionIds[0] === 3),
+    'bulk delete receives the selected mission ids');
+    get('mission-archive-selected').dispatch('click', {});
+    assert(posted.some((message) => message.type === 'action' &&
+        message.action === 'archiveSelectedMissions' && message.payload.missionIds[0] === 3),
+    'bulk archive is a distinct action');
+    get('mission-stop-selected').dispatch('click', {});
+    assert(posted.some((message) => message.type === 'action' &&
+        message.action === 'stopSelectedMissions' && message.payload.missionIds[0] === 3),
+    'bulk stop is a distinct action');
+    get('mission-selection-clear').dispatch('click', {});
+    send({ type: 'state', payload: {
+        ...state,
+        missionShowArchived: true,
+        missions: [
+            { id: 10, title: 'planned', status: 'planned' },
+            { id: 11, title: 'pending', status: 'pending' },
+            { id: 12, title: 'running', status: 'running' },
+            { id: 13, title: 'interrupted', status: 'interrupted' },
+            { id: 14, title: 'blocked', status: 'blocked' },
+            { id: 15, title: 'completed', status: 'completed' },
+            { id: 16, title: 'failed', status: 'failed' },
+            { id: 17, title: 'archived', status: 'completed', archived_at: '2026-10-31' }
+        ]
+    } });
+    assert.strictEqual(get('mission-list').children.length, 8,
+        'planned, pending, active, terminal and archived missions remain selectable');
+    get('mission-select-visible').checked = true;
+    get('mission-select-visible').dispatch('change', {});
+    assert.strictEqual(get('mission-selection-count').textContent, '8 selected',
+        'select filtered selects every mission in the current project result');
+    get('mission-delete-selected').dispatch('click', {});
+    const bulkDelete = posted.filter((message) => message.type === 'action' &&
+        message.action === 'deleteSelectedMissions').pop();
+    assert.strictEqual(bulkDelete.payload.missionIds.length, 8,
+        'bulk deletion includes not-started and archived mission records');
+    const runningRow = get('mission-list').children[2];
+    assert(runningRow.children.some((child) =>
+        child.children.some((action) => action.textContent === 'Stop')),
+    'running mission presents a separate Stop action before deletion');
     assert(!get('mission-banner').classList.contains('hidden'), 'active mission banner visible');
     assert.strictEqual(get('banner-status').textContent, 'completed');
     assert.strictEqual(get('banner-progress-bar').style.width, '100%');
@@ -350,6 +478,7 @@ function testWebviewBehaviour() {
     const engineText = collectText(get('engine-content'));
     assert(engineText.includes('Permissions'), 'engine permissions rendered');
     assert(engineText.includes('Research / URL fetch'), 'research settings rendered');
+    assert(engineText.includes('URL fetch: available'), 'built-in URL fetch availability rendered');
     assert(engineText.includes('Trusted auto review'), 'research profile options rendered');
     assert(engineText.includes('ollama/dev'), 'model routes rendered');
     assert(engineText.includes('dev'), 'discovered model rendered');
@@ -362,6 +491,37 @@ function testWebviewBehaviour() {
     assert.strictEqual(get('provider-id').value, 'ollama', 'provider id populated');
     assert.strictEqual(get('provider-kind').value, 'ollama', 'provider kind populated');
     assert.strictEqual(get('probe-model').children.length, 2, 'probe model options rendered');
+    assert.strictEqual(get('speech-engine').value, 'vosk', 'active speech engine selected');
+    assert.strictEqual(get('speech-model').value, 'vosk-it', 'active local speech model selected');
+    assert.strictEqual(get('speech-model').children.length, 3,
+        'one model menu contains local model and curated download choices');
+    assert.strictEqual(get('speech-select').textContent, 'Use model', 'local model action label');
+    get('speech-model').value = 'vosk-model-small-it-0.22';
+    get('speech-model').dispatch('change', {});
+    assert.strictEqual(get('speech-select').textContent, 'Download model',
+        'download option reuses the model selector and action button');
+    get('speech-select').dispatch('click', {});
+    assert(posted.some((message) => message.type === 'action' &&
+        message.action === 'downloadSpeechModel' &&
+        message.payload.modelId === 'vosk-model-small-it-0.22'),
+    'selected catalog model triggers its explicit download');
+    get('speech-model').value = 'vosk-it';
+    get('speech-model').dispatch('change', {});
+    get('speech-select').dispatch('click', {});
+    assert(posted.some((message) => message.type === 'action' &&
+        message.action === 'selectSpeechModel' && message.payload.modelId === 'vosk-it' &&
+        message.payload.engine === 'vosk'),
+    'local model selection sends both engine and model identity');
+    get('speech-home').value = 'D:\\asr\\external-vosk';
+    get('speech-external').dispatch('click', {});
+    assert(posted.some((message) => message.type === 'action' &&
+        message.action === 'setSpeechExternalHome' &&
+        message.payload.path === 'D:\\asr\\external-vosk'),
+    'external model folder is registered in place');
+    get('speech-engine').value = 'whisper.cpp';
+    get('speech-engine').dispatch('change', {});
+    assert.strictEqual(get('speech-model').value, 'ggml-tiny',
+        'engine menu filters the model menu to the selected engine');
 
     get('chat-controls-toggle').dispatch('click', {});
     assert(get('model-bar').classList.contains('hidden'), 'model controls collapse');
@@ -404,7 +564,7 @@ function testWebviewBehaviour() {
         payload: {
             messages: [
                 { role: 'user', content: 'first question', created_at: '2026-10-29T10:00:00', attachments: [{ name: 'notes.txt', kind: 'text', size_bytes: 29, has_text: true }] },
-                { role: 'assistant', content: 'see https://example.com/', created_at: '2026-10-29T10:00:05', model: 'dev' }
+                { role: 'assistant', content: 'see https://example.com/ and nicolalanci.com', created_at: '2026-10-29T10:00:05', model: 'dev' }
             ]
         }
     });
@@ -423,6 +583,15 @@ function testWebviewBehaviour() {
     link.dispatch('click', { preventDefault() {} });
     assert(posted.some((message) => message.type === 'action' && message.action === 'fetchUrl' &&
         message.payload.url === 'https://example.com/'), 'link click requests a real research fetch');
+    const bareDomainLink = (function find(node) {
+        if (node.tagName === 'a' && node.href === 'https://nicolalanci.com/') { return node; }
+        for (const child of node.children) {
+            const found = find(child);
+            if (found) { return found; }
+        }
+        return null;
+    })(assistantHistory);
+    assert(bareDomainLink, 'bare domain is recognized as a secure URL');
 
     // Tab navigation.
     tabButtons[1].dispatch('click', {});
@@ -479,5 +648,3 @@ testScriptSyntax();
 testHtml();
 testWebviewBehaviour();
 console.log('== WEBVIEW-TESTS-PASS ==');
-
-

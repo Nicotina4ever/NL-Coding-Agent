@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import json
+import io
 import socket
 import wave
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -93,6 +95,193 @@ def test_local_model_discovery_switch_persist_and_unload(tmp_path):
     with pytest.raises(sp.SpeechError) as caught:
         manager.switch_model("missing-model")
     assert caught.value.code == "model-not-local"
+
+
+def test_model_selection_uses_engine_when_model_ids_collide(tmp_path):
+    faster_root = tmp_path / "faster-whisper"
+    vosk_root = tmp_path / "vosk"
+    faster_model = faster_root / "shared"
+    vosk_model = vosk_root / "shared"
+    faster_model.mkdir(parents=True)
+    (faster_model / "model.bin").write_bytes(b"faster")
+    (vosk_model / "am").mkdir(parents=True)
+    (vosk_model / "am" / "final.mdl").write_bytes(b"vosk")
+    manager = sp.SpeechManager(
+        capabilities=_caps(**{"faster-whisper": True, "vosk": True}),
+        model_dirs=[str(faster_root), str(vosk_root)])
+
+    selected = manager.switch_model("shared", engine="vosk")
+    assert selected["engine"] == "vosk"
+    assert selected["path"] == str(vosk_model)
+    with pytest.raises(sp.SpeechError) as caught:
+        manager.switch_model("shared", engine="whisper.cpp")
+    assert caught.value.code == "model-not-local"
+
+
+def test_curated_model_download_is_explicit_scoped_and_safe(tmp_path, monkeypatch):
+    payload = io.BytesIO()
+    with zipfile.ZipFile(payload, "w") as archive:
+        archive.writestr("vosk-model-small-it-0.22/am/final.mdl", b"model")
+        archive.writestr("vosk-model-small-it-0.22/conf/model.conf", "sample-rate=16000")
+    archive_bytes = payload.getvalue()
+
+    class Response:
+        def __init__(self):
+            self.stream = io.BytesIO(archive_bytes)
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            self.stream.close()
+        def read(self, size):
+            return self.stream.read(size)
+
+    monkeypatch.setattr(sp.urllib.request, "urlopen", lambda *args, **kwargs: Response())
+    manager = sp.SpeechManager(capabilities=_caps(vosk=True))
+    selected = manager.download_model("vosk-model-small-it-0.22")
+
+    assert selected["engine"] == "vosk"
+    assert Path(selected["path"]).is_relative_to(Path(isolated_root := database.data_root()) / "speech" / "models")
+    assert (Path(selected["path"]) / "am" / "final.mdl").read_bytes() == b"model"
+    assert any(item.model_id == "vosk-model-small-it-0.22" for item in manager.discover_models())
+    with pytest.raises(sp.SpeechError) as caught:
+        manager.download_model("not-in-curated-catalog")
+    assert caught.value.code == "unknown-model-download"
+
+
+def test_faster_whisper_download_uses_curated_snapshot_in_managed_root(monkeypatch):
+    calls = []
+
+    def fake_snapshot_download(*, repo_id, local_dir, **kwargs):
+        calls.append((repo_id, kwargs.get("allow_patterns")))
+        target = Path(local_dir)
+        target.mkdir(parents=True)
+        (target / "config.json").write_text("{}", encoding="utf-8")
+        (target / "model.bin").write_bytes(b"model")
+        (target / "tokenizer.json").write_text("{}", encoding="utf-8")
+        return str(target)
+
+    monkeypatch.setattr("huggingface_hub.snapshot_download", fake_snapshot_download)
+    manager = sp.SpeechManager(
+        capabilities=_caps(**{"faster-whisper": True, "vosk": False}))
+    model = manager.download_model("faster-whisper-tiny")
+
+    assert calls[0][0] == "Systran/faster-whisper-tiny"
+    assert "model.bin" in calls[0][1]
+    assert Path(model["path"]).is_relative_to(Path(isolated_root := database.data_root()) / "speech" / "models")
+    assert model["engine"] == "faster-whisper"
+
+
+def test_asr_download_rejects_archive_path_traversal(tmp_path, monkeypatch):
+    payload = io.BytesIO()
+    with zipfile.ZipFile(payload, "w") as archive:
+        archive.writestr("../escape.txt", "outside")
+    archive_bytes = payload.getvalue()
+
+    class Response:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+        def read(self, size):
+            nonlocal archive_bytes
+            data, archive_bytes = archive_bytes[:size], archive_bytes[size:]
+            return data
+
+    monkeypatch.setattr(sp.urllib.request, "urlopen", lambda *args, **kwargs: Response())
+    manager = sp.SpeechManager(capabilities=_caps(vosk=True))
+    with pytest.raises(sp.SpeechError) as caught:
+        manager.download_model("vosk-model-small-it-0.22")
+    assert caught.value.code == "archive-path-invalid"
+
+
+def test_speech_download_requires_project_network_permission(tmp_path):
+    from nl_coding_agent.app.services import AppServices
+    from nl_coding_agent.core import permissions
+
+    root = tmp_path / "project"
+    root.mkdir()
+    services = AppServices()
+    project = services.open_project(root)
+    services.speech_manager = lambda: type("Manager", (), {
+        "download_model": staticmethod(lambda model_id: {"model_id": model_id})
+    })()
+    try:
+        with pytest.raises(permissions.PermissionDenied):
+            services.speech_download_model(project["id"], "vosk-model-small-it-0.22")
+        permissions.grant(permissions.NETWORK, project_id=project["id"], source="test")
+        assert services.speech_download_model(
+            project["id"], "vosk-model-small-it-0.22")["model_id"] == "vosk-model-small-it-0.22"
+    finally:
+        services._db.close()
+
+
+def test_qwen_forced_aligner_is_not_offered_as_asr(tmp_path):
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "qwen3-asr-1.7b-q8_0.gguf").write_bytes(b"asr")
+    (models / "qwen3-forced-aligner-0.6b-q4_k_m.gguf").write_bytes(b"aligner")
+    manager = sp.SpeechManager(capabilities=_caps(**{"qwen3-asr": True}),
+                               model_dirs=[str(models)])
+    assert [item.model_id for item in manager.discover_models()] == ["qwen3-asr-1.7b-q8_0.gguf"]
+
+
+def test_external_whisper_cpp_folder_is_discovered_and_transcribes(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    import subprocess
+
+    external = tmp_path / "whisper.cpp"
+    (external / "bin").mkdir(parents=True)
+    cli = external / "bin" / "whisper-cli.exe"
+    cli.write_bytes(b"external cli")
+    model_dir = external / "models"
+    model_dir.mkdir()
+    model = model_dir / "ggml-tiny.bin"
+    model.write_bytes(b"model")
+    manager = sp.SpeechManager(capabilities=_caps(**{"whisper.cpp": True}))
+
+    registered = manager.set_external_home(str(external))
+    assert registered["whisper_cpp_cli"] == str(cli.resolve())
+    selected = manager.switch_model("ggml-tiny")
+    assert selected["engine"] == "whisper.cpp"
+
+    wav = tmp_path / "audio.wav"
+    wav.write_bytes(b"RIFF")
+    def fake_run(command, **kwargs):
+        output_prefix = Path(command[command.index("-of") + 1])
+        output_prefix.with_suffix(".txt").write_text("hello from whisper", encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    transcript = manager.transcribe(wav)
+    assert transcript["text"] == "hello from whisper"
+    assert transcript["engine"] == "whisper.cpp"
+
+
+def test_external_vosk_model_folder_is_added_in_place_and_persisted(tmp_path):
+    external = tmp_path / "external-vosk"
+    (external / "am").mkdir(parents=True)
+    (external / "am" / "final.mdl").write_bytes(b"model")
+    manager = sp.SpeechManager(capabilities=_caps(vosk=True))
+
+    registered = manager.set_external_home(str(external))
+    assert registered["external_home"] == str(external.resolve())
+    assert [item["model_id"] for item in registered["models"]] == ["external-vosk"]
+    selected = manager.switch_model("external-vosk")
+    assert selected["engine"] == "vosk"
+    assert selected["path"] == str(external.resolve())
+
+    reopened = sp.SpeechManager(capabilities=_caps(vosk=True))
+    assert any(item.model_id == "external-vosk" for item in reopened.discover_models())
+    assert reopened.active_model()["model_id"] == "external-vosk"
+
+
+def test_external_model_folder_without_supported_asr_model_is_rejected(tmp_path):
+    external = tmp_path / "empty"
+    external.mkdir()
+    manager = sp.SpeechManager(capabilities=_caps(vosk=True))
+    with pytest.raises(sp.SpeechError) as caught:
+        manager.set_external_home(str(external))
+    assert caught.value.code == "external-folder-invalid"
 
 
 def test_cloud_asr_requires_explicit_permission(monkeypatch, tmp_path):

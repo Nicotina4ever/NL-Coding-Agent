@@ -20,6 +20,7 @@ from nl_coding_agent.research.providers import (  # noqa: E402
 )
 from nl_coding_agent.research.service import ResearchService  # noqa: E402
 from nl_coding_agent.research.store import ResearchStore  # noqa: E402
+from nl_coding_agent.research.github import HttpResponse  # noqa: E402
 
 HTML = (b"<html><head><title>Example Title</title></head><body>"
         b"<h1>Heading</h1><p>Hello research world.</p></body></html>")
@@ -35,6 +36,14 @@ class FakeFetchTransport:
             status_code=200,
             headers=(("content-type", "text/html; charset=utf-8"),),
             body=HTML)
+
+
+class FakeSearchHttpTransport:
+    def request(self, request):
+        body = (b'<li class="b_algo"><h2><a href="https://example.com/page">'
+                b'Example page</a></h2><div class="b_caption"><p>Search result</p>'
+                b'</div></li>')
+        return HttpResponse(200, (("content-type", "text/html"),), body)
 
 
 class PermissionStub:
@@ -76,6 +85,7 @@ class AppResearchTests(unittest.TestCase):
     def fake_service(self, *, permission=None, review=None, known=True):
         permission = permission or PermissionStub()
         review = review or ReviewStub()
+        permissions.grant(permissions.NETWORK)
         transport = FakeFetchTransport()
         registry = default_registry(known_urls=[
             KnownUrl("https://example.com/docs", "Alpha docs", "alpha known doc")]) \
@@ -86,18 +96,20 @@ class AppResearchTests(unittest.TestCase):
             profile=auto_review.PROFILE_TRUSTED)
         return service, transport, permission, review
 
-    def test_default_offline_and_no_implicit_network(self):
+    def test_default_search_offline_but_url_fetch_available(self):
         status = self.services.research_status()
         self.assertTrue(status["offline"])
         self.assertFalse(status["network_configured"])
+        self.assertTrue(status["url_fetch_available"])
         self.assertEqual(status["provider_count"], 0)
-        self.assertIn("no explicit network", status["reason"])
+        self.assertIn("URL fetch is available", status["reason"])
         search = self.services.research_search("anything")
         self.assertFalse(search["ok"])
         self.assertTrue(search["offline"])
         self.assertIn("no explicit research network transport", search["error"])
         fetch_result = self.services.research_fetch_read("https://example.com/x")
-        self.assertTrue(fetch_result["offline"])
+        self.assertFalse(fetch_result["offline"])
+        self.assertIn("NETWORK access is not granted", fetch_result["error"])
         github = self.services.research_github_lookup(action="repository",
                                                      full_name="owner/repo")
         self.assertTrue(github["offline"])
@@ -107,6 +119,43 @@ class AppResearchTests(unittest.TestCase):
         service = self.services._research_service()
         self.assertIsNone(getattr(service, "_fetch_transport", None))
         self.assertIsNone(getattr(service, "_http_transport", None))
+
+    def test_default_configured_transport_enables_general_web_search(self):
+        project_id = 72
+        self.services.set_permission_scope(
+            permissions.NETWORK, True, project_id=project_id)
+        status = self.services.configure_research(
+            fetch_transport=FakeFetchTransport(),
+            http_transport=FakeSearchHttpTransport(),
+            profile=auto_review.PROFILE_TRUSTED)
+        self.assertFalse(status["offline"])
+        provider = next(item for item in status["providers"]
+                        if item["provider_id"] == "bing-html")
+        self.assertTrue(provider["available"])
+        search = self.services.research_search(
+            "example page", project_id=project_id, max_results=3)
+        self.assertTrue(search["ok"], search)
+        self.assertEqual(search["provider_id"], "bing-html")
+        self.assertEqual(search["results"][0]["url"], "https://example.com/page")
+        self.assertTrue(search["results"][0]["untrusted"])
+
+    def test_project_network_permission_grants_and_revokes_web_fetch(self):
+        project_id = 71
+        self.services.set_permission_scope(
+            permissions.NETWORK, True, project_id=project_id)
+        for capability in (permissions.CAPABILITY_WEB_FETCH,
+                           permissions.CAPABILITY_WEB_SEARCH):
+            allowed = permissions.check_capability(
+                capability, context={"project_id": project_id})
+            self.assertIsInstance(allowed, permissions.Allowed)
+
+        self.services.set_permission_scope(
+            permissions.NETWORK, False, project_id=project_id)
+        for capability in (permissions.CAPABILITY_WEB_FETCH,
+                           permissions.CAPABILITY_WEB_SEARCH):
+            denied = permissions.check_capability(
+                capability, context={"project_id": project_id})
+            self.assertIsInstance(denied, permissions.Denied)
 
     def test_configured_fake_service_search_fetch_provenance_store_citations(self):
         service, transport, permission, review = self.fake_service()

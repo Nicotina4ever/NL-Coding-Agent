@@ -4,7 +4,11 @@
 
 Inventariare dinamicamente i modelli di **Ollama** (locale e cloud dichiarato), **llama.cpp**, **LM Studio**, OpenAI-compatible e provider addizionali tramite adapter. Non hardcodare i 21 modelli osservati il 30/10; non assumere che un modello disponibile sia anche caricato o adatto al tool calling. Modelli/versioni/quantizzazioni e parametri per ruolo devono essere modificabili dalla GUI, con fallback esplicito e test del provider.
 
-Le route definite dall'utente sono vincolanti: il router non sostituisce di nascosto un modello esplicito. `auto_select()` al checkpoint `1655cbb` usa risultati storici da `task_attempts.metadata_json`, ma **non è ancora validato** con capability probe live. Classificare per task/competenze e hardware: esiti verified, latenze, token, review, errori, contesto effettivo, supporto tool/structured output. Evitare benchmark inventati e premi per test triviale. Se pochi campioni, preferire scelta controllata/benchmark mirati.
+Le route definite dall'utente sono vincolanti: il router non sostituisce di nascosto un modello esplicito. Il capability ledger misura ora anche `vision` con un PNG sintetico; unknown/declared non soddisfa il router. Il percorso Chat sceglie un Vision specialist per turno, solo da modelli scoperti e misurati, e passa il risultato agli agenti normali come handoff testuale non fidato. La prova locale verificata è `qwen3.5:9b` → `RED`. Le route cloud restano escluse senza escalation CLOUD esplicita.
+
+## ASR e modelli vocali
+
+La sezione Speech offre un menu per l'engine e un unico menu per i suoi modelli locali/scaricabili; l'azione cambia tra uso e download in base alla scelta. Il comando per aggiungere una cartella esterna registra il percorso senza copiare o modificare i file; i modelli Faster-Whisper, Vosk, Qwen3-ASR e whisper.cpp vengono rilevati in-place. Per usare un modello il runtime dell'engine deve essere disponibile. I download Vosk/Faster-Whisper richiedono grant `NETWORK` e conferma; l'estrazione è limitata e non sovrascrive modelli esistenti.
 
 ## Risorse e spesa
 
@@ -12,7 +16,7 @@ Con GPU 8 GB / RAM 32 GB di riferimento, più agenti logici non significano infe
 
 ## Tool Registry
 
-I tool dichiarati da DeepSeek al checkpoint: `read_file`, `list_dir`, `write_file`, `patch_file`, `run_tests`, `run_command` (argv allowlist e `shell=False`), `git_status`, `git_diff`, `research_fetch_url` gated, `mcp_list_tools` con client esistente. Esistenza di codice/schema NON prova invocazione reale da Chat o Flow. `mcp invoke` richiede grant/approvazione: mantenere broker unico. Separare permessi READ, WRITE, EXECUTE, DELETE, NETWORK, CLOUD e tool esterni con trust e scope specifici.
+La Chat espone `web_search` (Bing HTML) per ricerche generiche e `fetch_url` per leggere pagine; entrambi rispettano il Project Access `NETWORK` e il profilo Research. Le query vengono inviate a Bing e risultati/pagine sono dati non fidati da citare tramite URL. GitHub mantiene `github_lookup` REST read-only dedicato. Esistenza di codice/schema NON prova invocazione reale da Chat o Flow: la suite verifica ricerca e fetch attraverso i tool Chat.
 
 ## Settings e onboarding
 

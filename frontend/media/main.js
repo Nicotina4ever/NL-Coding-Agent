@@ -68,6 +68,7 @@
     const storageListEl = $('storage-list');
     const jobsListEl = $('jobs-list');
     const probeSelectEl = $('probe-model');
+    const speechEngineEl = $('speech-engine');
     const speechModelEl = $('speech-model');
     const speechStatusEl = $('speech-status');
     const speechEnginesEl = $('speech-engines');
@@ -80,9 +81,10 @@
     const specialistRoleEl = $('specialist-role');
     const specialistInstructionsEl = $('specialist-instructions');
     const specialistToolsEl = $('specialist-tools');
-    const specialistPermissionsEl = $('specialist-permissions');
     const specialistEnabledEl = $('specialist-enabled');
     let storageSelected = {};
+    let selectedMissionIds = Object.create(null);
+    let missionSelectionProjectId = null;
     let chatControlsVisible = true;
     let contextVisible = true;
     let missionFieldsVisible = true;
@@ -95,6 +97,10 @@
     let tab = 'chat';
     let rendering = false;
     let dragDepth = 0;
+    let slashMode = 'command';
+    let fileMentionResults = [];
+    let fileMentionSearchQuery = null;
+    let fileMentionSearchTimer = null;
 
     function persist() {
         vscode.setState({ mode: mode, tab: tab });
@@ -149,21 +155,34 @@
     }
 
     function renderLinks(container, text) {
-        const pattern = /https?:\/\/[^\s<>"']+/g;
+        const pattern = /https?:\/\/[^\s<>"']+|(?<![\w./-])(?:www\.)?(?:[a-z0-9-]+\.)+[a-z]{2,24}(?:\/[^\s<>"']*)?/gi;
+        const fileExtensions = new Set([
+            'md', 'json', 'py', 'js', 'ts', 'tsx', 'jsx', 'yaml', 'yml', 'txt',
+            'html', 'css', 'sh', 'ps1', 'toml', 'lock', 'xml', 'csv', 'png',
+            'jpg', 'jpeg', 'pdf', 'zip', 'sql', 'ini', 'cfg', 'env', 'go',
+            'rs', 'java', 'c', 'cpp', 'h', 'hpp'
+        ]);
         let last = 0;
         let match;
         while ((match = pattern.exec(text)) !== null) {
             const raw = match[0].replace(/[),.;!?]+$/, '');
             if (!raw) { continue; }
+            const candidate = /^https?:\/\//i.test(raw) ? raw : 'https://' + raw;
+            const parts = /^(https?):\/\/([^/?#]+)([\s\S]*)$/i.exec(candidate);
+            if (!parts) { continue; }
+            const hostname = parts[2].replace(/:\d+$/, '').toLowerCase();
+            const tld = hostname.split('.').pop() || '';
+            if (fileExtensions.has(tld)) { continue; }
+            const target = candidate + (parts[3] ? '' : '/');
             if (match.index > last) {
                 container.appendChild(el('span', '', text.slice(last, match.index)));
             }
             const link = el('a', 'nl-link', raw);
-            link.href = raw;
+            link.href = target;
             link.title = 'Fetch this page through Research (explicit action, permissions apply)';
             link.addEventListener('click', function (event) {
                 event.preventDefault();
-                postAction('fetchUrl', { url: raw });
+                postAction('fetchUrl', { url: target });
             });
             container.appendChild(link);
             last = match.index + raw.length;
@@ -219,7 +238,9 @@
                 const chip = el('span', 'nl-attachment-history');
                 chip.appendChild(el('span', '', attachment.name || 'attachment'));
                 chip.appendChild(el('span', 'nl-muted', attachmentLine(attachment)));
-                if (!attachment.has_text) {
+                if (attachment.kind === 'image') {
+                    chip.appendChild(el('span', 'nl-warning-inline', 'Vision image'));
+                } else if (!attachment.has_text) {
                     chip.appendChild(el('span', 'nl-warning-inline', 'no text'));
                 }
                 chips.appendChild(chip);
@@ -430,7 +451,6 @@
         specialistRoleEl.value = agent ? (agent.role || 'assistant') : 'assistant';
         specialistInstructionsEl.value = agent ? (agent.instructions || '') : '';
         setCheckedValues(specialistToolsEl, agent ? (agent.tools || []) : []);
-        setCheckedValues(specialistPermissionsEl, agent ? (agent.permissions || []) : []);
         specialistEnabledEl.checked = agent ? agent.enabled !== false : true;
     }
 
@@ -444,14 +464,20 @@
         const settings = current.settings;
         const agents = settings.agents.custom_agents || [];
         const providers = settings.models.providers || [];
+        const projectId = Number(current.project && current.project.id || settings.project.id);
         const selected = specialistSelectEl.value;
         clear(specialistSelectEl);
         const empty = el('option', '', agents.length ? 'Select specialist…' : 'No specialist agents yet');
         empty.value = '';
         specialistSelectEl.appendChild(empty);
         agents.forEach(function (agent) {
+            const active = agent.team_active === true &&
+                Number(agent.project_id) === projectId;
+            const scope = active ? ' · active team' :
+                (agent.project_id != null && Number(agent.project_id) !== projectId
+                    ? ' · another project' : '');
             const option = el('option', '', (agent.name || 'Specialist') +
-                (agent.enabled === false ? ' (disabled)' : ''));
+                (agent.enabled === false ? ' (disabled)' : '') + scope);
             option.value = String(agent.id || '');
             specialistSelectEl.appendChild(option);
         });
@@ -475,6 +501,18 @@
         const selectedAgent = selectedSpecialist(current);
         const chosenModel = selectedAgent ? selectedAgent.model : specialistModelEl.value;
         populateModelSelect(specialistModelEl, modelChoices(specialistProviderEl.value), chosenModel);
+        const status = $('specialist-team-status');
+        if (selectedAgent && selectedAgent.team_active === true &&
+                Number(selectedAgent.project_id) === projectId) {
+            status.textContent = 'Active in current project Supervisor team as '
+                + (selectedAgent.role_id || selectedAgent.role || 'specialist')
+                + '. Project Access controls all operational permissions.';
+        } else if (selectedAgent && selectedAgent.project_id != null &&
+                Number(selectedAgent.project_id) !== projectId) {
+            status.textContent = 'This profile belongs to another project and is not used by the current Supervisor.';
+        } else {
+            status.textContent = 'Profile only; Generate team links Supervisor specialists to this project. Project Access controls operational permissions.';
+        }
     }
 
     function renderJobs(current) {
@@ -506,32 +544,95 @@
         });
     }
 
-    function renderSpeech(current) {
+    function renderSpeech(current, requestedEngine) {
         const payload = (current && current.speech) || {};
         const speech = payload.speech || payload;
         const catalog = payload.catalog || {};
         const models = catalog.models || [];
+        const downloadable = catalog.downloadable_models || [];
         const active = speech.active_model || catalog.active_model || {};
-        const previous = speechModelEl.value;
+        const previousEngine = speechEngineEl.value;
+        const previousModel = speechModelEl.value;
+        const engines = catalog.engines || [];
+        clear(speechEngineEl);
+        engines.forEach(function (engine) {
+            const option = el('option', '', engine.engine + ' · ' +
+                (engine.installed ? 'installed' : 'not installed'));
+            option.value = engine.engine;
+            speechEngineEl.appendChild(option);
+        });
+        let selectedEngine = requestedEngine;
+        if (!engines.some(function (engine) { return engine.engine === selectedEngine; })) {
+            selectedEngine = active.engine;
+        }
+        if (!engines.some(function (engine) { return engine.engine === selectedEngine; })) {
+            selectedEngine = previousEngine;
+        }
+        if (!engines.some(function (engine) { return engine.engine === selectedEngine; })) {
+            selectedEngine = (engines[0] && engines[0].engine) || '';
+        }
+        if (selectedEngine) { speechEngineEl.value = selectedEngine; }
+
         clear(speechModelEl);
-        models.forEach(function (model) {
-            const option = el('option', '', model.model_id + ' · ' + model.engine);
+        const engineModels = models.filter(function (model) {
+            return model.engine === selectedEngine;
+        });
+        const engineDownloads = downloadable.filter(function (model) {
+            return model.engine === selectedEngine &&
+                !engineModels.some(function (local) { return local.model_id === model.model_id; });
+        });
+        const placeholder = el('option', '', 'Select a local model…');
+        placeholder.value = '';
+        speechModelEl.appendChild(placeholder);
+        engineModels.forEach(function (model) {
+            const option = el('option', '', model.model_id + ' · local');
             option.value = model.model_id;
             option.title = model.path || '';
             speechModelEl.appendChild(option);
         });
-        const activeId = active.model_id || previous;
-        if (activeId) { speechModelEl.value = activeId; }
-        const engines = (catalog.engines || []).filter(function (engine) {
-            return engine.installed;
-        }).map(function (engine) { return engine.engine; });
+        engineDownloads.forEach(function (model) {
+            const label = model.model_id + ' · download · ' + (model.language || '') + ' · ' +
+                model.size_mb + ' MB · ' + (model.license || 'check license');
+            const option = el('option', '', label);
+            option.value = model.model_id;
+            option.dataset.downloadModel = 'true';
+            speechModelEl.appendChild(option);
+        });
+        const currentModelExists = engineModels.concat(engineDownloads).some(function (model) {
+            return model.model_id === previousModel;
+        });
+        if (active.engine === selectedEngine && engineModels.some(function (model) {
+            return model.model_id === active.model_id;
+        })) {
+            speechModelEl.value = active.model_id;
+        } else if (currentModelExists) {
+            speechModelEl.value = previousModel;
+        } else if (engineModels.length) {
+            speechModelEl.value = engineModels[0].model_id;
+        } else {
+            speechModelEl.value = '';
+        }
+        const selectedOption = Array.prototype.slice.call(speechModelEl.children).filter(function (option) {
+            return option.value === speechModelEl.value;
+        })[0];
+        const downloadSelected = Boolean(selectedOption && selectedOption.dataset.downloadModel);
+        $('speech-select').textContent = downloadSelected ? 'Download model' : 'Use model';
+        const selectedEngineInfo = engines.filter(function (engine) {
+            return engine.engine === selectedEngine;
+        })[0];
+        $('speech-select').disabled = !speechModelEl.value ||
+            !(selectedEngineInfo && selectedEngineInfo.installed);
         const audio = speech.audio_available ? 'microphone ready' : 'no microphone backend';
         speechStatusEl.textContent = engines.length
-            ? 'Local ASR: ' + engines.join(', ') + ' · ' + audio + ' · ' + models.length + ' model(s)'
+            ? 'Local ASR · ' + audio + ' · ' + models.length + ' local model(s)'
             : 'No local ASR engine detected. Register an external folder or install a local engine.';
-        if (active.path) { speechStatusEl.textContent += ' · active: ' + active.path; }
+        if (active.path) {
+            speechStatusEl.textContent += ' · active: ' + active.model_id + ' (' + active.path + ')';
+        } else if (models.length) {
+            speechStatusEl.textContent += ' · select a model to enable dictation';
+        }
         clear(speechEnginesEl);
-        (catalog.engines || []).forEach(function (engine) {
+        engines.forEach(function (engine) {
             const row = el('div', 'nl-list-row');
             row.appendChild(el('strong', '', engine.engine));
             row.appendChild(el('span', engine.installed ? 'nl-chip ok' : 'nl-muted',
@@ -539,7 +640,7 @@
             if (engine.hint) { row.appendChild(el('span', 'nl-muted', engine.hint)); }
             speechEnginesEl.appendChild(row);
         });
-        if (!catalog.engines || !catalog.engines.length) {
+        if (!engines.length) {
             speechEnginesEl.appendChild(el('p', 'nl-muted',
                 'No speech engine catalog available. Vosk, Qwen3-ASR, Faster-Whisper and Whisper.cpp can be supplied as local engines/models.'));
         }
@@ -620,7 +721,8 @@
         const result = current.capabilityProbe;
         $('probe-result').textContent = result
             ? result.provider_id + '/' + result.model + ': tools=' + result.tool_calling +
-              ', structured=' + result.structured_output + ', patch=' + result.patch_quality
+                            ', structured=' + result.structured_output + ', patch=' + result.patch_quality +
+                            ', vision=' + (result.vision || 'unknown')
             : '';
     }
 
@@ -729,7 +831,7 @@
         hintEl.textContent = phaseText || (current.busyChat
             ? 'Running — a new message is queued; start it with /steer to redirect at the next checkpoint.'
             : current.busyMission ? 'Mission running — messages are sent as steering; /mission waits.' : '');
-        sendEl.disabled = false;
+        sendEl.disabled = current.busyPhase === 'attaching';
         sendEl.textContent = mode === 'mission' ? 'Start mission' : (current.busyChat ? 'Queue' : 'Send');
         chatStop.classList.toggle('hidden', !current.busyChat);
     }
@@ -763,7 +865,13 @@
             const chip = el('span', 'nl-attachment-chip');
             chip.appendChild(el('span', 'nl-attachment-name', attachment.name || 'attachment'));
             chip.appendChild(el('span', 'nl-muted', attachmentLine(attachment)));
-            if (!attachment.has_text) {
+            if (attachment.kind === 'image') {
+                const metadata = attachment.metadata || {};
+                const dimensions = metadata.width && metadata.height
+                    ? ' · ' + metadata.width + '×' + metadata.height
+                    : '';
+                chip.appendChild(el('span', 'nl-status-chip', 'Vision' + dimensions));
+            } else if (!attachment.has_text) {
                 chip.appendChild(el('span', 'nl-warning-inline', 'no text'));
             }
             if (attachment.preview) {
@@ -842,16 +950,36 @@
     function renderMissionList(current) {
         clear(missionListEl);
         const missions = current.missions || [];
+        if (missionSelectionProjectId !== current.project.id) {
+            missionSelectionProjectId = current.project.id;
+            selectedMissionIds = Object.create(null);
+        }
         $('mission-query').value = current.missionQuery || '';
         $('mission-status-filter').value = current.missionStatusFilter || '';
         $('mission-archived-toggle').checked = Boolean(current.missionShowArchived);
         if (!missions.length) {
             missionListEl.appendChild(el('p', 'nl-muted', 'No persistent missions for this project.'));
+            updateMissionSelectionControls(missions);
             return;
         }
         missions.forEach(function (mission) {
             const row = el('div', 'nl-mission-row');
             const head = el('div', 'nl-mission-row-head');
+            const select = el('input', 'nl-mission-select');
+            select.type = 'checkbox';
+            select.checked = Boolean(selectedMissionIds[String(mission.id)]);
+            select.setAttribute('aria-label', 'Select mission #' + mission.id);
+            select.addEventListener('click', function (event) { event.stopPropagation(); });
+            select.addEventListener('change', function (event) {
+                event.stopPropagation();
+                if (select.checked) {
+                    selectedMissionIds[String(mission.id)] = true;
+                } else {
+                    delete selectedMissionIds[String(mission.id)];
+                }
+                updateMissionSelectionControls(missions);
+            });
+            head.appendChild(select);
             head.appendChild(el('span', 'nl-mission-id', '#' + mission.id));
             head.appendChild(el('span', 'nl-mission-title', mission.title || '(untitled)'));
             head.appendChild(chip(mission.status || '—', statusKind(mission.status)));
@@ -872,7 +1000,7 @@
                 switchTab('missions');
             });
             actions.appendChild(open);
-            if (mission.status === 'running' || mission.status === 'pending') {
+            if (mission.status === 'running') {
                 const stop = el('button', '', 'Stop');
                 stop.addEventListener('click', function (event) {
                     event.stopPropagation();
@@ -888,15 +1016,13 @@
                 });
                 actions.appendChild(resume);
             }
-            if (['completed', 'failed', 'blocked', 'interrupted'].indexOf(mission.status) >= 0) {
-                const remove = el('button', 'nl-danger', 'Delete');
-                remove.title = 'Archive (if needed) and permanently delete this mission record.';
-                remove.addEventListener('click', function (event) {
-                    event.stopPropagation();
-                    postAction('deleteMission', { missionId: mission.id });
-                });
-                actions.appendChild(remove);
-            }
+            const remove = el('button', 'nl-danger', 'Delete');
+            remove.title = 'Permanently delete this mission record; project files are not changed.';
+            remove.addEventListener('click', function (event) {
+                event.stopPropagation();
+                postAction('deleteMission', { missionId: mission.id });
+            });
+            actions.appendChild(remove);
             row.appendChild(actions);
             row.addEventListener('click', function () {
                 postAction('selectMission', { missionId: mission.id });
@@ -904,6 +1030,26 @@
             });
             missionListEl.appendChild(row);
         });
+        updateMissionSelectionControls(missions);
+    }
+
+    function updateMissionSelectionControls(visibleMissions) {
+        const selected = Object.keys(selectedMissionIds);
+        const visibleSelected = visibleMissions.filter(function (mission) {
+            return Boolean(selectedMissionIds[String(mission.id)]);
+        }).length;
+        const selectVisible = $('mission-select-visible');
+        selectVisible.checked = visibleMissions.length > 0 && visibleSelected === visibleMissions.length;
+        selectVisible.indeterminate = visibleSelected > 0 && visibleSelected < visibleMissions.length;
+        $('mission-selection-count').textContent = selected.length + ' selected';
+        $('mission-selection-clear').disabled = selected.length === 0;
+        $('mission-stop-selected').disabled = selected.length === 0;
+        $('mission-archive-selected').disabled = selected.length === 0;
+        $('mission-delete-selected').disabled = selected.length === 0;
+    }
+
+    function selectedMissionIdsList() {
+        return Object.keys(selectedMissionIds).map(Number).filter(Number.isInteger);
     }
 
     function renderTasks(detail) {
@@ -1081,7 +1227,7 @@
         const refresh = el('button', '', 'Refresh');
         refresh.addEventListener('click', function () { postAction('selectMission', { missionId: mission.id }); });
         actions.appendChild(refresh);
-        if (mission.status === 'running' || mission.status === 'pending') {
+        if (mission.status === 'running') {
             const stop = el('button', '', 'Stop');
             stop.addEventListener('click', function () { postAction('cancelMission', { missionId: mission.id }); });
             actions.appendChild(stop);
@@ -1246,12 +1392,13 @@
         const researchInfo = (settings.research || {});
         researchSection.appendChild(el('div', 'nl-muted',
             'Engine status: ' + (researchInfo.status || 'unknown') +
-            ' · network configured: ' + (researchInfo.network_configured ? 'yes' : 'no')));
+            ' · URL fetch: ' + (researchInfo.url_fetch_available ? 'available' : 'unavailable') +
+            ' · web search: ' + (researchInfo.network_configured ? 'configured' : 'not configured')));
         researchSection.appendChild(el('div', 'nl-muted',
             'NETWORK grant: ' + (settings.permissions.policy.network ? 'granted' : 'denied') +
-            ' · extension never grants permissions'));
+            ' · web-fetch follows the same Project Access grant'));
         researchSection.appendChild(el('div', 'nl-muted',
-            'A successful fetch also needs a web-fetch capability grant; the backend returns the exact reason when denied or awaiting approval.'));
+            'The selected Research profile controls automatic approval. Fetched page content is always treated as untrusted.'));
         engineContent.appendChild(researchSection);
 
         const providers = el('div', 'nl-engine-section');
@@ -1325,6 +1472,12 @@
     function hideSlashMenu() {
         slashMatches = [];
         slashContext = null;
+        slashMode = 'command';
+        fileMentionSearchQuery = null;
+        if (fileMentionSearchTimer && typeof clearTimeout === 'function') {
+            clearTimeout(fileMentionSearchTimer);
+            fileMentionSearchTimer = null;
+        }
         if (slashMenuEl) {
             slashMenuEl.classList.add('hidden');
             clear(slashMenuEl);
@@ -1348,6 +1501,9 @@
         inputEl.value = before + command.insert + after;
         const caret = before.length + command.insert.length;
         hideSlashMenu();
+        if (command.kind === 'file') {
+            postAction('mentionWorkspaceFile', { path: command.path });
+        }
         if (command.name === '/mission') {
             modeEl.value = 'mission';
             setMode('mission');
@@ -1356,38 +1512,17 @@
         inputEl.setSelectionRange(caret, caret);
     }
 
-    function updateSlashMenu() {
-        if (!slashMenuEl || !inputEl) { return; }
-        const value = inputEl.value;
-        const caret = inputEl.selectionStart === null
-            ? value.length : inputEl.selectionStart;
-        const before = value.slice(0, caret);
-        const match = /(^|\s)\/([^\s/]*)$/.exec(before);
-        if (!match) {
-            hideSlashMenu();
-            return;
-        }
-        const query = match[2].toLowerCase();
-        slashContext = { start: caret - match[2].length - 1, end: caret };
-        slashMatches = slashCommands.filter(function (item) {
-            return !query || item.name.slice(1).indexOf(query) === 0;
-        });
-        if (!query || 'agent'.indexOf(query) === 0) {
-            const agents = (state && state.settings && state.settings.agents &&
-                state.settings.agents.custom_agents) || [];
-            agents.slice(0, 12).forEach(function (agent) {
-                if (!agent || !agent.id) { return; }
-                slashMatches.push({
-                    name: '/agent ' + agent.id,
-                    insert: '/agent ' + agent.id + ' ',
-                    label: agent.name || agent.id,
-                    detail: (agent.role || 'specialist') + ' · ' + (agent.model || 'default model')
-                });
-            });
-        }
+    function renderSlashMatches() {
+        if (!slashMenuEl) { return; }
         clear(slashMenuEl);
         if (!slashMatches.length) {
-            hideSlashMenu();
+            if (slashMode === 'file') {
+                slashMenuEl.appendChild(el('div', 'nl-slash-row',
+                    fileMentionSearchQuery === null ? 'Searching project files…' : 'No matching files'));
+                slashMenuEl.classList.remove('hidden');
+            } else {
+                hideSlashMenu();
+            }
             return;
         }
         slashMatches.forEach(function (command, index) {
@@ -1407,8 +1542,82 @@
         slashMenuEl.classList.remove('hidden');
     }
 
+    function currentFileMention() {
+        if (!inputEl) { return null; }
+        const value = inputEl.value;
+        const caret = inputEl.selectionStart === null ? value.length : inputEl.selectionStart;
+        const match = /(^|\s)@([^\s@]*)$/.exec(value.slice(0, caret));
+        return match ? { query: match[2].toLowerCase(), caret: caret,
+            start: caret - match[2].length - 1 } : null;
+    }
+
+    function updateSlashMenu() {
+        if (!slashMenuEl || !inputEl) { return; }
+        const value = inputEl.value;
+        const caret = inputEl.selectionStart === null
+            ? value.length : inputEl.selectionStart;
+        const before = value.slice(0, caret);
+        const mention = /(^|\s)@([^\s@]*)$/.exec(before);
+        if (mention && mode === 'chat') {
+            const query = mention[2].toLowerCase();
+            slashMode = 'file';
+            slashContext = { start: caret - mention[2].length - 1, end: caret };
+            if (fileMentionSearchQuery !== query) {
+                fileMentionSearchQuery = query;
+                fileMentionResults = [];
+                if (fileMentionSearchTimer && typeof clearTimeout === 'function') {
+                    clearTimeout(fileMentionSearchTimer);
+                }
+                fileMentionSearchTimer = setTimeout(function () {
+                    fileMentionSearchTimer = null;
+                    const current = currentFileMention();
+                    if (current && current.query === query) {
+                        postAction('searchWorkspaceFiles', { query: query });
+                    }
+                }, 120);
+            }
+            slashMatches = fileMentionResults.filter(function (file) {
+                return !query || file.path.toLowerCase().includes(query);
+            }).map(function (file) {
+                return {
+                    kind: 'file', path: file.path, name: '@' + file.path,
+                    insert: '@' + file.path + ' ', label: file.label || file.path,
+                    detail: file.detail || 'Attach project file as context'
+                };
+            });
+            renderSlashMatches();
+            return;
+        }
+        const match = /(^|\s)\/([^\s/]*)$/.exec(before);
+        if (!match) {
+            hideSlashMenu();
+            return;
+        }
+        slashMode = 'command';
+        const query = match[2].toLowerCase();
+        slashContext = { start: caret - match[2].length - 1, end: caret };
+        slashMatches = slashCommands.filter(function (item) {
+            return !query || item.name.slice(1).indexOf(query) === 0;
+        });
+        if (!query || 'agent'.indexOf(query) === 0) {
+            const agents = (state && state.settings && state.settings.agents &&
+                state.settings.agents.custom_agents) || [];
+            agents.slice(0, 12).forEach(function (agent) {
+                if (!agent || !agent.id) { return; }
+                slashMatches.push({
+                    name: '/agent ' + agent.id,
+                    insert: '/agent ' + agent.id + ' ',
+                    label: agent.name || agent.id,
+                    detail: (agent.role || 'specialist') + ' · ' + (agent.model || 'default model')
+                });
+            });
+        }
+        renderSlashMatches();
+    }
+
     function handleSlashKey(event) {
         if (!slashMenuEl || slashMenuEl.classList.contains('hidden')) { return false; }
+        if (!slashMatches.length) { return false; }
         if (event.key === 'Tab' || event.key === 'Enter') {
             event.preventDefault();
             applySlashCommand(slashMatches[0]);
@@ -1427,6 +1636,10 @@
     }
 
     function submit() {
+        if (state && state.busyPhase === 'attaching') {
+            showNotice('Wait for the selected file to finish attaching before sending.');
+            return;
+        }
         let text = inputEl.value.trim();
         if (!text) {
             return;
@@ -1486,6 +1699,48 @@
             event.preventDefault();
             submit();
         }
+    });
+    inputEl.addEventListener('paste', function (event) {
+        const clipboard = event.clipboardData;
+        const items = clipboard && clipboard.items;
+        if (!items) { return; }
+        let imageFile = null;
+        for (let index = 0; index < items.length; index += 1) {
+            const item = items[index];
+            if (item.kind === 'file' && /^image\//i.test(item.type || '')) {
+                imageFile = item.getAsFile();
+                if (imageFile) { break; }
+            }
+        }
+        if (!imageFile) { return; }
+        if (mode !== 'chat') {
+            event.preventDefault();
+            showNotice('Switch to Chat mode to attach a pasted image.');
+            return;
+        }
+        const maxImageBytes = 25 * 1024 * 1024;
+        if (imageFile.size > maxImageBytes) {
+            event.preventDefault();
+            showNotice('Pasted image exceeds the 25 MiB limit.');
+            return;
+        }
+        if (!(clipboard.getData('text/plain') || '').trim()) {
+            event.preventDefault();
+        }
+        const reader = new FileReader();
+        reader.addEventListener('load', function () {
+            const dataUrl = String(reader.result || '');
+            const separator = dataUrl.indexOf(',');
+            if (separator < 0) {
+                showNotice('Could not read the pasted image.');
+                return;
+            }
+            postAction('pasteImage', { imageBase64: dataUrl.slice(separator + 1) });
+        });
+        reader.addEventListener('error', function () {
+            showNotice('Could not read the pasted image.');
+        });
+        reader.readAsDataURL(imageFile);
     });
     inputEl.addEventListener('input', updateSlashMenu);
     inputEl.addEventListener('blur', function () {
@@ -1634,8 +1889,27 @@
         postAction('addProviderDialog', {});
     });
     $('speech-refresh').addEventListener('click', function () { postAction('refreshSpeech', {}); });
+    speechEngineEl.addEventListener('change', function () {
+        renderSpeech(state, speechEngineEl.value);
+    });
+    speechModelEl.addEventListener('change', function () {
+        const option = Array.prototype.slice.call(speechModelEl.children).filter(function (item) {
+            return item.value === speechModelEl.value;
+        })[0];
+        $('speech-select').textContent =
+            option && option.dataset.downloadModel ? 'Download model' : 'Use model';
+        const engines = ((state && state.speech && state.speech.catalog) || {}).engines || [];
+        const engine = engines.filter(function (item) {
+            return item.engine === speechEngineEl.value;
+        })[0];
+        $('speech-select').disabled = !speechModelEl.value || !(engine && engine.installed);
+    });
     $('speech-select').addEventListener('click', function () {
-        postAction('selectSpeechModel', { modelId: speechModelEl.value });
+        const option = Array.prototype.slice.call(speechModelEl.children).filter(function (item) {
+            return item.value === speechModelEl.value;
+        })[0];
+        postAction(option && option.dataset.downloadModel ? 'downloadSpeechModel' : 'selectSpeechModel',
+            { modelId: speechModelEl.value, engine: speechEngineEl.value });
     });
     $('speech-external').addEventListener('click', function () {
         postAction('setSpeechExternalHome', { path: $('speech-home').value });
@@ -1648,12 +1922,6 @@
             specialistToolsEl.querySelectorAll('input[type="checkbox"]'))
             .map(function (input) { return input.value; });
         setCheckedValues(specialistToolsEl, values);
-    });
-    $('specialist-permissions-all').addEventListener('click', function () {
-        const values = Array.prototype.slice.call(
-            specialistPermissionsEl.querySelectorAll('input[type="checkbox"]'))
-            .map(function (input) { return input.value; });
-        setCheckedValues(specialistPermissionsEl, values);
     });
     accessProfileEl.addEventListener('change', function () {
         postAction('setAccessMode', { profile: accessProfileEl.value });
@@ -1698,7 +1966,6 @@
             role: specialistRoleEl.value,
             instructions: specialistInstructionsEl.value,
             tools: checkedValues(specialistToolsEl),
-            permissions: checkedValues(specialistPermissionsEl),
             enabled: specialistEnabledEl.checked
         });
     });
@@ -1795,6 +2062,30 @@
         $('mission-list').classList.toggle('hidden', !missionListVisible);
         $('mission-list-toggle').textContent = (missionListVisible ? '▾' : '▸') + ' mission list';
     });
+    $('mission-select-visible').addEventListener('change', function () {
+        const missions = (state && state.missions) || [];
+        missions.forEach(function (mission) {
+            if ($('mission-select-visible').checked) {
+                selectedMissionIds[String(mission.id)] = true;
+            } else {
+                delete selectedMissionIds[String(mission.id)];
+            }
+        });
+        renderMissionList(state);
+    });
+    $('mission-selection-clear').addEventListener('click', function () {
+        selectedMissionIds = Object.create(null);
+        renderMissionList(state);
+    });
+    $('mission-stop-selected').addEventListener('click', function () {
+        postAction('stopSelectedMissions', { missionIds: selectedMissionIdsList() });
+    });
+    $('mission-archive-selected').addEventListener('click', function () {
+        postAction('archiveSelectedMissions', { missionIds: selectedMissionIdsList() });
+    });
+    $('mission-delete-selected').addEventListener('click', function () {
+        postAction('deleteSelectedMissions', { missionIds: selectedMissionIdsList() });
+    });
 
     tabButtons.forEach(function (button) {
         button.addEventListener('click', function () { switchTab(button.dataset.tab); });
@@ -1839,6 +2130,22 @@
             inputEl.value = String(message.text || '');
             inputEl.focus();
             updateSlashMenu();
+        } else if (message.type === 'fileMentions') {
+            const current = currentFileMention();
+            const query = String(message.query || '').toLowerCase();
+            if (!current || current.query !== query || slashMode !== 'file') { return; }
+            fileMentionResults = Array.isArray(message.files) ? message.files : [];
+            slashMatches = fileMentionResults.map(function (file) {
+                return {
+                    kind: 'file', path: file.path, name: '@' + file.path,
+                    insert: '@' + file.path + ' ', label: file.label || file.path,
+                    detail: file.detail || 'Attach project file as context'
+                };
+            });
+            renderSlashMatches();
+        } else if (message.type === 'clearMissionSelection') {
+            selectedMissionIds = Object.create(null);
+            if (state) { renderMissionList(state); }
         }
     });
 

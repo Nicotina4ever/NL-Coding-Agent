@@ -2,6 +2,8 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+import time
+
 from PySide6.QtWidgets import QApplication
 
 from nl_coding_agent.gui.widgets.models_panel import ModelsPanel
@@ -208,6 +210,89 @@ def test_model_hub_panel_renders_and_recovers_from_error():
     panel._on_error("offline")
     assert "offline" in panel._status_label.text()
     assert panel._refresh_btn.isEnabled()
+    panel.shutdown()
+
+
+def test_speech_tab_selects_engine_model_and_registers_external_model():
+    app = _app()
+
+    class FakeServices:
+        def __init__(self):
+            self.catalog = {
+                "engines": [
+                    {"engine": "vosk", "installed": True, "hint": "Vosk runtime"},
+                    {"engine": "whisper.cpp", "installed": True, "hint": "Whisper runtime"},
+                ],
+                "models": [
+                    {"model_id": "vosk-it", "engine": "vosk", "path": "D:/asr/vosk-it"},
+                    {"model_id": "ggml-tiny", "engine": "whisper.cpp", "path": "D:/asr/ggml-tiny.bin"},
+                ],
+                "active_model": {"model_id": "vosk-it", "engine": "vosk", "path": "D:/asr/vosk-it"},
+            }
+            self.selected = None
+            self.external_path = None
+            self.called_off_gui_thread = False
+
+        def speech_catalog(self):
+            from PySide6.QtCore import QThread
+            self.called_off_gui_thread = QThread.currentThread() != app.thread()
+            return self.catalog
+
+        def speech_switch_model(self, model_id, engine):
+            from PySide6.QtCore import QThread
+            self.called_off_gui_thread = QThread.currentThread() != app.thread()
+            self.selected = (model_id, engine)
+            model = next(item for item in self.catalog["models"]
+                         if item["model_id"] == model_id and item["engine"] == engine)
+            self.catalog["active_model"] = model
+            return model
+
+        def speech_set_external_home(self, path):
+            from PySide6.QtCore import QThread
+            self.called_off_gui_thread = QThread.currentThread() != app.thread()
+            self.external_path = path
+            model = {"model_id": "external-it", "engine": "vosk", "path": path}
+            self.catalog["models"].append(model)
+            self.catalog["active_model"] = model
+            return {"models": [model], "catalog": self.catalog}
+
+    services = FakeServices()
+    panel = ModelsPanel(services)
+    panel._render_speech_catalog(services.catalog)
+    assert panel._speech_engine.currentData() == "vosk"
+    assert panel._speech_model.currentData() == "vosk-it"
+
+    panel._speech_engine.setCurrentIndex(panel._speech_engine.findData("whisper.cpp"))
+    assert panel._speech_model.count() == 1
+    assert panel._speech_model.currentData() == "ggml-tiny"
+    panel._speech_engine.setCurrentIndex(panel._speech_engine.findData("vosk"))
+    panel._speech_model.setCurrentIndex(panel._speech_model.findData("vosk-it"))
+    panel._speech_use.click()
+    deadline = time.monotonic() + 3
+    while services.selected is None and time.monotonic() < deadline:
+        app.processEvents()
+        time.sleep(0.01)
+    assert services.selected == ("vosk-it", "vosk")
+    assert services.called_off_gui_thread is True
+    deadline = time.monotonic() + 3
+    while panel._speech_thread is not None and time.monotonic() < deadline:
+        app.processEvents()
+        time.sleep(0.01)
+    assert panel._speech_thread is None
+
+    panel._speech_external_path.setText("D:/external/vosk-it")
+    panel._speech_add_external.click()
+    deadline = time.monotonic() + 3
+    while services.external_path is None and time.monotonic() < deadline:
+        app.processEvents()
+        time.sleep(0.01)
+    assert services.external_path == "D:/external/vosk-it"
+    deadline = time.monotonic() + 3
+    while panel._speech_model.findData("external-it") < 0 and time.monotonic() < deadline:
+        app.processEvents()
+        time.sleep(0.01)
+    assert panel._speech_model.findData("external-it") >= 0
+    assert "not copied" in panel._speech_status.text()
     panel.shutdown()
 
 

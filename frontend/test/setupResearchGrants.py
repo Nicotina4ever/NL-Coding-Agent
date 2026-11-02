@@ -1,4 +1,4 @@
-"""Prepare a scratch engine project with the owner grants needed for the URL test.
+"""Prepare a scratch engine project with the Project Access grant for URL tests.
 
 This is test setup using the existing backend permission API; the extension
 itself never grants permissions. It writes only inside NL_DATA_DIR.
@@ -19,8 +19,8 @@ services = AppServices()
 try:
     project = services.open_project(project_dir)
     project_id = int(project["id"])
-    permissions.grant(permissions.NETWORK, project_id=project_id)
-    permissions.grant_capability("web-fetch", None, decision="project", project_id=project_id)
+    services.set_permission_scope(
+        permissions.NETWORK, True, project_id=project_id, source="acceptance")
     print(json.dumps({
         "project_id": project_id,
         "network": permissions.get_policy(project_id).get("network"),

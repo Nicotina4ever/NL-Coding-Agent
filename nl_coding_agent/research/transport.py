@@ -1,10 +1,10 @@
-"""Stdlib HTTP transport for research (R4) - explicit construction only.
+"""Stdlib HTTP transport for research (R4).
 
 Implements the existing injected HttpTransport contract from
 nl_coding_agent.research.github (request(HttpRequest) -> HttpResponse).
-It is never created implicitly: construction requires an explicit permission gate
-(the service wires the capability/auto-review boundary), and all tests inject a
-fake opener. No module-level opener/network object exists.
+Construction requires an explicit permission gate. Production fetches get a
+transport only after the ResearchService permission boundary approves the URL;
+tests inject a fake opener. No module-level opener/network object exists.
 
 Safety rules:
   * only GET/HEAD, only explicitly allowed http(s) schemes;
@@ -111,8 +111,7 @@ class StdlibHttpTransport:
                  user_agent: str = "NL-Coding-Agent-Research/0.4 (explicit transport)"):
         if not callable(permission_gate):
             raise ValueError(
-                "StdlibHttpTransport requires an explicit permission gate; "
-                "no network transport is created by default")
+                "StdlibHttpTransport requires an explicit permission gate")
         schemes = tuple(str(item).strip().lower() for item in allowed_schemes or ())
         if not schemes or any(item not in ("https", "http") for item in schemes):
             raise ValueError("allowed_schemes must be https and optionally http")
@@ -157,6 +156,13 @@ class StdlibHttpTransport:
                                      "content-length", "retry-after", "link"):
                 items.append((str(name), str(value)))
         return tuple(sorted(items))
+
+    def open(self, request):
+        """Adapt the existing safe transport to Research Fetcher's request contract."""
+        from .fetch import TransportResponse
+        response = self.request(HttpRequest(method=request.method, url=request.url,
+            headers=request.headers, timeout_s=request.timeout_s, max_bytes=request.max_bytes))
+        return TransportResponse(response.status_code, response.headers, response.body)
 
     def request(self, request: HttpRequest) -> HttpResponse:
         if not isinstance(request, HttpRequest):

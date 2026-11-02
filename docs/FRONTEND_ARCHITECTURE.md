@@ -1,6 +1,7 @@
 # NL Coder — VS Code extension architecture
 
-**Status:** extended on 2026-10-29 (extension **NL Coder** `0.3.0`) from chat-only to **complete NL Chat
+**Status:** extension **NL Coder** `0.7.2`; installed-VSIX acceptance now covers concurrent Chat,
+Queue, Mission and Team Architect requests. The extension provides **complete NL Chat
 (model selection, project-scoped attachments, editor context, authorized URL research, persisted
 history) + real mission control + diff/verification review**, packaged as an installable VSIX and
 accepted against a real **VS Code Insiders 1.145.0-insider** extension host and the existing Python
@@ -10,8 +11,9 @@ wrong and its code was removed.
 
 The frontend is `frontend/`: a VS Code extension that speaks the Model Context Protocol to the
 authoritative Python engine. It owns **no** models, missions, permissions, conversations or
-persistence. Everything remains in `nl_coding_agent/` and `data/`, exactly as the PySide6 Studio
-sees it. The Studio is untouched and remains the compatibility UI.
+persistence. NL Coder and the NL Code Code - OSS workbench are the two supported interfaces to the
+same `nl_coding_agent/` engine and `data/` store. The older PySide6 GUI remains legacy and is
+excluded from routine development and acceptance.
 
 ## Non-negotiables kept
 
@@ -21,6 +23,24 @@ sees it. The Studio is untouched and remains the compatibility UI.
 - One MCP process per workspace folder, bound to exactly one registered project.
 - Model-generated text is rendered as text, never as HTML.
 - Shutdown releases the MCP session and the Python child process.
+
+## MCP request concurrency and acceptance
+
+The embedded server uses `mcp==1.30.0`. In this version a synchronous FastMCP tool handler is called
+directly from the server event loop. A long `team_plan` scan/inference therefore blocked unrelated
+requests on the same stdio session, including `mission_detail`, `chat_queue_remove` and
+`save_role_settings`, until their client timeouts expired. `create_engine_server` now registers sync
+handlers as async wrappers that run in AnyIO worker threads; async handlers remain unchanged.
+
+The Team Architect scan now prunes runtime, generated-data, cache, staged-vendor and nested-repository
+directories before traversal, and caps visited entries/directories as well as prompt size. Chat queue
+read-modify-write operations are guarded by a per-project reentrant lock, and the extension drains one
+queued turn at a time while reporting Team Architect as busy.
+
+`frontend/test/runInstalledChatFeatureTests.cjs` installs the packaged VSIX in an isolated Insiders
+profile. Its acceptance runs the real local-model Team Architect while `mission_detail`, queue removal
+and role settings are issued concurrently through the same MCP connection; it also checks Chat,
+attachments, authorized research, persisted history and child-process shutdown.
 
 ## Components
 
@@ -59,9 +79,11 @@ Discovered tools and contracts:
 | `project_context` | none | Returns the bound project (`id`, `root`, `name`, …) and `execution_enabled`. |
 | `engine_settings` | optional `include_models` (default `false`), `timeout_s` (0.5–5 s) | Read-only projection of the existing model config, configured providers/roles, chat default, agent roles/custom agents, effective permissions, runtime paths and mission route defaults. `include_models` runs the same bounded GET-only Model Hub probe as the Studio; it never loads a model. |
 | `nlc_converse` | `project_id` (required, must equal the bound project), `text`, `attachments` (legacy `{name, extracted_text}`), `attachment_ids` (ids from `attachment_ingest`), `history` (accepted, ignored), optional `model_spec` | Runs the existing `AppServices.chat_conversation` and returns `{ok, reply, messages, route, ...}`. The route is the provider/model actually used (`automatic` when `model_spec` was omitted). |
-| `attachment_ingest` | `paths` (workspace-contained files) and/or `text` + `name` | Copies through the existing attachment store; rejects symlinks/directories/outside paths; returns ids, bounded preview and extraction status; never exposes `stored_path`. |
+| `attachment_ingest` | `paths` (workspace-contained files), `text` + `name`, or clipboard `image_base64` | Copies through the existing attachment store; rejects symlinks/directories/outside paths; clipboard images are base64-validated and capped at 25 MiB; returns ids, bounded preview and extraction status; never exposes `stored_path`. |
+| `speech_download_model` | curated `model_id` | Explicitly downloads one catalogued Vosk model after project `NETWORK` permission; writes only below managed `data/speech/models`, validates archive paths and never overwrites existing models. |
 | `chat_history` | `limit` (1–1000), optional `before_index` | Reads the existing per-project chat JSON; returns messages, attachment metadata, assistant `model`/`provider_id` and counts. |
 | `research_fetch_url` | `url` (http/https) | Requires `READ` + `NETWORK`; calls the existing Research service/policy and returns bounded untrusted text, title, provenance, source/citation ids and warnings. Raw HTML is not returned. |
+| `research_github_lookup` | action + repository query | Requires `READ` + `NETWORK`; read-only GitHub REST lookup for metadata, README, repository contents and activity. Results are untrusted and bounded; no clone/execute. |
 | `mission_list` | none | Read-only. |
 | `mission_status` | `mission_id` | Read-only; rejects foreign missions. |
 | `mission_detail` | `mission_id` | Read-only persisted view: tasks, task attempts, handoffs, verification runs, progress, timestamps, parsed `changed_paths`. |
@@ -106,7 +128,8 @@ point the bundled extension at the existing engine installation, so no per-machi
 The webview has three sections:
 
 - **Chat:** engine-persisted conversation history; provider/model picker with an **Automatic** mode;
-  project-scoped file attachments (picker, drag & drop, current file, selection) with previews and
+  project-scoped file attachments (picker, drag & drop, current file, selection, `@file` autocomplete,
+  and pasted screenshots with Ctrl+V) with previews and
   removal; visible editor/selection context; URL links that fetch only on explicit confirmation via
   the Research service; a fetched-page card with "Use as chat context"; model route badges. The
   history shown comes from `chat_history`, not a second webview transcript.
@@ -162,9 +185,10 @@ handoff payload. See [ARCHITECTURE_AND_ENGINE.md](ARCHITECTURE_AND_ENGINE.md).
 - Attachments are path-filtered in the extension and re-validated by the engine: workspace containment,
   no symlinks, no directories, size/type limits from the existing attachment store. The UI never
   receives `stored_path`.
-- URL fetch is real HTTP through the existing Research service only; raw HTML is never returned and
-  page content is framed/marked as untrusted. The extension cannot grant permissions and does not retry
-  through another transport.
+- URL fetch uses the built-in bounded HTTPS transport through the existing Research service; each
+  redirect is rechecked, raw HTML is never returned, and page content is framed/marked as untrusted.
+  The project NETWORK permission controls the matching `web-fetch` capability. Research auto-review
+  remains an independent project preference; web search still needs a configured provider.
 - Client-supplied history remains ignored; the engine persists and replays the real history.
 
 ## Lifecycle
@@ -232,11 +256,15 @@ Logs and machine-readable evidence are under `docs/evidence/frontend/`: `chat-fe
 ## Known limits / next increments
 
 - No streaming: a chat turn is one request/response; mission progress is polled every 2 s.
-- URL research is permission-gated by design: without an owner `NETWORK` + `web-fetch` grant and an
-  approving research profile, the UI reports `denied`/`needs_approval`/`offline`; it never grants
-  permissions or retries through another transport. DNS/peer-IP verification remains a Research limit.
-- Attachments are text/context, not vision; images are metadata-only and unsupported formats are
-  reported honestly.
+- URL research is permission-gated by design: without an owner NETWORK grant and an approving
+  research profile, the UI reports `denied`/`needs_approval`; it never retries through another
+  transport. DNS resolution is checked against private/reserved targets before requests; connection
+  pinning and live-network acceptance remain open limitations.
+- Images are metadata-only in storage, then routed per turn only to a model with measured Vision
+  capability. The specialist receives image bytes; the selected Chat/agent model receives its bounded,
+  explicitly untrusted text handoff. Unknown/declared Vision and unapproved cloud routes are refused.
+- Clipboard screenshot acceptance covers the real installed VSIX and MCP attachment store. A local
+  `qwen3.5:9b` Vision probe returned the expected `RED` on the synthetic PNG fixture.
 - No per-tool-call telemetry exists in the engine, so the dashboard shows persisted task/handoff/
   attempt/verification evidence rather than fabricated tool calls.
 - Single-folder workspaces; changing folders restarts and rebinds the engine.
@@ -247,10 +275,11 @@ Logs and machine-readable evidence are under `docs/evidence/frontend/`: `chat-fe
 - Legacy missions (`harness_version != 2`) are listed but cannot be run/resumed by the current harness.
 - Mission detail strings are bounded by the MCP tool (attempt output 12k, verification 8k, handoff
   payload 2k) to keep the webview responsive.
-- The NL Code standalone distribution built earlier still bundles extension 0.1.0 (chat-only); it must
-  be rebuilt to include this chat/mission UI when objective-2 packaging resumes.
-- The Studio (PySide6) and all existing user data remain the compatibility path.
+- The NL Code standalone portable profile must contain the same currently accepted VSIX as the
+  VS Code Insiders installation; verify its packaged files and run Code - OSS acceptance after updates.
+- PySide6 is legacy; do not treat its compatibility behavior or test results as acceptance for either
+  supported interface.
 - `vscode/` in the repository root is a local Code - OSS reference checkout; it is not part of this
   extension and is not shipped.
 
-*Last updated: 2026-10-29, after chat features, mission control, VSIX packaging and installed-VSIX acceptance.*
+*Last updated: 2026-11-02, after VSIX packaging, installed Team Architect acceptance and mission review.*

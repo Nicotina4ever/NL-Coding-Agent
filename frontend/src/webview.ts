@@ -201,6 +201,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                 <input id="mission-query" type="search" placeholder="Filter title/goal…" aria-label="Mission filter">
                 <select id="mission-status-filter" aria-label="Mission status filter">
                     <option value="">all statuses</option>
+                    <option value="planned">planned</option>
                     <option value="running">running</option>
                     <option value="pending">pending</option>
                     <option value="completed">completed</option>
@@ -211,6 +212,14 @@ export function buildChatHtml(assets: WebviewAssets): string {
                 <label class="nl-check"><input id="mission-archived-toggle" type="checkbox"> archived</label>
                 <button id="mission-apply-filter" type="button">Apply</button>
                 <button id="mission-list-toggle" type="button" class="nl-collapse-button">▾ mission list</button>
+            </div>
+            <div class="nl-filter-row">
+                <label class="nl-check"><input id="mission-select-visible" type="checkbox"> select filtered</label>
+                <span id="mission-selection-count" class="nl-muted">0 selected</span>
+                <button id="mission-selection-clear" type="button">Clear selection</button>
+                <button id="mission-stop-selected" type="button">Stop selected</button>
+                <button id="mission-archive-selected" type="button">Archive selected</button>
+                <button id="mission-delete-selected" type="button" class="nl-danger">Delete selected</button>
             </div>
             <div id="mission-list" class="nl-list"></div>
             <div id="mission-detail" class="nl-detail hidden"></div>
@@ -242,6 +251,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                         <button id="specialist-duplicate" type="button">Duplicate</button>
                         <button id="specialist-delete" type="button">Delete</button>
                     </div>
+                    <p id="specialist-team-status" class="nl-hint">No specialist selected.</p>
                     <div class="nl-filter-row">
                         <input id="specialist-name" type="text" placeholder="agent name" aria-label="Specialist agent name">
                         <select id="specialist-provider" aria-label="Specialist agent provider"></select>
@@ -264,16 +274,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                             <label class="nl-check"><input type="checkbox" value="mcp_list_tools"> mcp_list_tools</label>
                         </fieldset>
                         <button id="specialist-tools-all" type="button">Select all tools</button>
-                        <fieldset id="specialist-permissions" class="nl-check-grid" hidden>
-                            <legend>Permissions</legend>
-                            <label class="nl-check"><input type="checkbox" value="read-only"> read-only</label>
-                            <label class="nl-check"><input type="checkbox" value="project-write"> project-write</label>
-                            <label class="nl-check"><input type="checkbox" value="execute"> execute</label>
-                            <label class="nl-check"><input type="checkbox" value="network"> network</label>
-                            <label class="nl-check"><input type="checkbox" value="cloud"> cloud</label>
-                        </fieldset>
-                        <p class="nl-hint">Permissions are project-wide and apply to every agent. Configure the Access profile in Settings.</p>
-                        <button id="specialist-permissions-all" type="button" hidden>Select all permissions</button>
+                        <p class="nl-hint">Tools define specialist capabilities. Operational permissions are controlled once by the project-wide Access profile.</p>
                         <label class="nl-check"><input id="specialist-enabled" type="checkbox"> enabled</label>
                         <button id="specialist-save" type="button">Save specialist</button>
                     </div>
@@ -311,6 +312,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                     <h3>Dictation and local ASR</h3>
                     <p id="speech-status" class="nl-hint">Checking local speech engines…</p>
                     <div class="nl-filter-row">
+                        <select id="speech-engine" aria-label="Speech engine"></select>
                         <select id="speech-model" aria-label="Local ASR model"></select>
                         <button id="speech-select" type="button">Use model</button>
                         <button id="speech-refresh" type="button">Refresh speech</button>
@@ -318,7 +320,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                     <div class="nl-filter-row">
                         <input id="speech-home" type="text" placeholder="external ASR folder, e.g. J:\ZLinkdaC\Qwen3ASR" aria-label="External ASR folder">
                         <button id="speech-browse" type="button">Browse…</button>
-                        <button id="speech-external" type="button">Use external folder</button>
+                        <button id="speech-external" type="button">Add external model</button>
                     </div>
                     <div id="speech-engines" class="nl-list"></div>
                     <p class="nl-hint">External models stay in place and are never copied or deleted. Models downloaded into NL Code live under <code>data/speech/models</code>. Dictation records locally and inserts editable text into the composer.</p>

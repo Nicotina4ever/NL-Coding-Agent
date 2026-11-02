@@ -163,9 +163,20 @@ def _iso_now() -> str:
 def _parse_repo(full_name: str) -> str:
     text = str(full_name or "").strip().strip("/")
     parts = text.split("/")
-    if len(parts) != 2 or not all(parts):
+    if (len(parts) != 2 or
+            any(not re.fullmatch(r"[A-Za-z0-9_.-]+", part) for part in parts)):
         raise ValueError("repository must be owner/name")
     return parts[0] + "/" + parts[1]
+
+
+def _encoded_path(path: str, *, allow_empty: bool) -> str:
+    parts = str(path or "").replace("\\", "/").strip("/").split("/")
+    if parts == [""]:
+        parts = []
+    if (not allow_empty and not parts) or any(
+            not part or part in (".", "..") or "\x00" in part for part in parts):
+        raise ValueError("repository path is invalid")
+    return "/".join(quote(part, safe="") for part in parts)
 
 
 def _header(headers: tuple[tuple[str, str], ...], name: str) -> str | None:
@@ -382,12 +393,35 @@ class GitHubResearchClient:
         items = list((data or {}).get("workflows") or [])[: min(limit, self.max_items)]
         return self._result(repo, "workflows", items)
 
+    def contents(self, full_name: str, *, path: str = "", ref: str | None = None,
+                 limit: int = 40) -> GitHubResult:
+        repo = _parse_repo(full_name)
+        safe_path = _encoded_path(path, allow_empty=True)
+        endpoint = "repos/" + repo + "/contents"
+        if safe_path:
+            endpoint += "/" + safe_path
+        data = self._json(endpoint, {"ref": ref} if ref else None)
+        if isinstance(data, list):
+            items = [{
+                key: item.get(key) for key in
+                ("name", "path", "type", "size", "sha", "download_url")
+                if item.get(key) is not None
+            } for item in data[: min(max(1, int(limit)), self.max_items)]
+                if isinstance(item, dict)]
+            payload = {"items": items, "truncated": len(data) > len(items)}
+        elif isinstance(data, dict):
+            payload = {key: data.get(key) for key in
+                       ("name", "path", "type", "size", "sha", "download_url")
+                       if data.get(key) is not None}
+        else:
+            raise GitHubResponseError("unexpected GitHub contents response",
+                                      url=self._url(endpoint))
+        return self._result(repo, "contents", payload, ref)
+
     def file_contents(self, full_name: str, path: str, *,
                       ref: str | None = None) -> GitHubResult:
         repo = _parse_repo(full_name)
-        safe_path = "/".join(quote(part, safe="") for part in str(path or "").split("/") if part)
-        if not safe_path:
-            raise ValueError("file path must not be empty")
+        safe_path = _encoded_path(path, allow_empty=False)
         data = self._json("repos/" + repo + "/contents/" + safe_path,
                           {"ref": ref} if ref else None)
         payload = {"path": data.get("path"), "sha": data.get("sha"),

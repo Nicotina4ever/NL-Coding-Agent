@@ -1,10 +1,9 @@
 """Search provider capability registry and deterministic research router.
 
-Stage 7 research R2 (NL-BP-169/205). Standard library only: this increment
-declares and routes providers but contains **no real network transport and no
-provider SDK**. Real providers are represented by declared capability matrices;
-the only executable built-in provider is the offline/known-URL provider. Tests
-use fake providers.
+Stage 7 research R2 (NL-BP-169/205). Standard library only: this module
+declares and routes providers but contains no network transport or provider SDK.
+Network adapters live in separate modules and receive an explicit transport;
+the registry never constructs a transport implicitly. Tests use fake providers.
 
 Contract:
   * every provider declares a validated CapabilityMatrix (search types,

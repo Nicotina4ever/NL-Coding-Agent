@@ -4,7 +4,7 @@
  * authorized URL fetch -> context, persisted history, and automatic mode.
  *
  * Requires the isolated runner (runChatFeatureTests.cjs), which grants the
- * backend NETWORK/web-fetch permissions in a scratch data directory.
+ * Project Access NETWORK/web-fetch permission in a scratch data directory.
  */
 'use strict';
 
@@ -77,6 +77,90 @@ async function run() {
         30000, 'engine settings with trusted research profile');
     console.log('PASS webview ready with engine settings and trusted research profile');
 
+    await api.chat.searchWorkspaceFiles('notes');
+    const fileMentions = api.chat.debugState.posted.filter((message) =>
+        message.type === 'fileMentions').pop();
+    assert(fileMentions && fileMentions.files.some((item) => item.path === 'notes.txt'),
+        'workspace @mention search returns the matching project file');
+    await api.chat.mentionWorkspaceFile('notes.txt');
+    assert(latestState(api).payload.attachments.some((item) => item.name === 'notes.txt'),
+        '@mention selection uses the existing attachment pipeline');
+    api.chat.removeAttachment(latestState(api).payload.attachments.find((item) => item.name === 'notes.txt').id);
+    console.log('PASS installed VSIX @file search -> project attachment');
+
+    // Concurrent MCP calls must stay responsive while the real Team Architect runs.
+    const queued = await api.connection.chatEnqueue('Concurrent queue-removal acceptance item');
+    assert(queued.item && queued.item.id, 'queue item created');
+    const originalQuickPick = vscode.window.showQuickPick;
+    const originalModelOptions = api.chat.modelOptions;
+    const originalTeamPlan = api.connection.teamPlan;
+    let quickCalls;
+    let quickCallDuration = 0;
+    api.chat.modelOptions = () => [{
+        value: EXPLICIT_MODEL,
+        label: EXPLICIT_MODEL,
+        group: 'test',
+        loaded: false,
+        provider: 'ollama',
+        model: 'granite4.2:3b'
+    }];
+    vscode.window.showQuickPick = async (items) => items.find((item) => item.route === EXPLICIT_MODEL);
+    api.connection.teamPlan = function (model, focus) {
+        const teamRequest = originalTeamPlan.call(this, model, focus);
+        const quickCallsStartedAt = Date.now();
+        quickCalls = Promise.all([
+            api.connection.missionDetail(2147483647).then(() => {
+                throw new Error('mission_detail unexpectedly accepted a missing mission');
+            }, (error) => {
+                assert(/Mission does not belong/.test(error.message), error.message);
+            }),
+            api.connection.chatQueueRemove(queued.item.id),
+            api.connection.saveRoleSettings('chat', { model: EXPLICIT_MODEL })
+        ]).then((result) => {
+            quickCallDuration = Date.now() - quickCallsStartedAt;
+            return result;
+        });
+        return teamRequest;
+    };
+    api.chat.drainingQueue = true;
+    try {
+        await api.chat.generateSpecialistTeam(true);
+        await quickCalls;
+        assert(quickCallDuration < 10000,
+            'mission_detail, queue remove and role settings stayed responsive (' + quickCallDuration + ' ms)');
+    } finally {
+        api.chat.drainingQueue = false;
+        vscode.window.showQuickPick = originalQuickPick;
+        api.connection.teamPlan = originalTeamPlan;
+        api.chat.modelOptions = originalModelOptions;
+    }
+    assert.strictEqual(api.chat.debugState.busy, false, 'Team Architect releases the busy state');
+    assert(api.chat.debugState.posted.some((message) =>
+        message.type === 'chat' && message.role === 'system' && /Team Architect:/.test(message.text)),
+    'Team Architect completed and persisted a specialist team');
+    const assignedTeam = await api.connection.customAgents();
+    const activeSpecialists = assignedTeam.agents.filter((agent) => agent.team_active);
+    assert(activeSpecialists.length > 0, 'Team Architect persisted active project specialists');
+    assert(activeSpecialists.every((agent) =>
+        ['architect', 'developer', 'debugger', 'reviewer', 'auditor'].includes(agent.role_id) &&
+        String(agent.model || '').includes('/') &&
+        String(agent.model).startsWith(String(agent.provider || '') + '/')),
+    'active specialist provider/model assignments persisted: ' + JSON.stringify(activeSpecialists));
+    assert(!(await api.connection.chatQueue()).items.some((item) => item.id === queued.item.id),
+        'the concurrently removed queue item is gone');
+    console.log('PASS installed Team Architect persisted provider/model routes for active specialists');
+    console.log('PASS installed Team Architect completed alongside mission, queue and settings calls');
+
+    const clipboardImage = fs.readFileSync(path.join(extension.extensionPath, 'assets', 'icon.png'))
+        .toString('base64');
+    await api.chat.attachClipboardImage(clipboardImage);
+    await waitFor(() => latestState(api).payload.attachments.some((item) => item.kind === 'image'),
+        20000, 'pasted clipboard image attachment');
+    const pastedImage = latestState(api).payload.attachments.find((item) => item.kind === 'image');
+    assert(pastedImage && pastedImage.mime === 'image/png', 'clipboard PNG stored by the engine');
+    api.chat.removeAttachment(pastedImage.id);
+    console.log('PASS installed VSIX clipboard image -> MCP attachment store');
+
     // 1. Explicit model selection must be used by the real request.
     api.setChatModel(EXPLICIT_MODEL);
     await waitFor(() => latestState(api).payload.chatModel === EXPLICIT_MODEL, 10000, 'selected model state');
@@ -127,21 +211,30 @@ async function run() {
     assert(selectionAttachment.preview.includes(TOKEN), 'selection text captured');
     console.log('PASS editor selection captured as attachment: ' + selectionAttachment.name);
 
-    // 4. Authorized URL retrieval through the existing Research service.
-    const fetched = await api.fetchUrl('https://example.com/', true);
-    assert(fetched && fetched.ok === true, 'research fetch allowed: ' + JSON.stringify(fetched && fetched.outcome));
-    assert(/Example Domain/.test(String(fetched.title || '') + String(fetched.text || '')), 'fetched page content');
-    await api.chat.useResearchAsContext();
-    await waitFor(() => latestState(api).payload.attachments.length >= 2, 20000, 'research attachment');
+    // 4. A URL sent in Chat is fetched, ingested and included in that same turn.
+    const priorAttachmentCount = latestState(api).payload.attachments.length;
+    await api.chat.handleUserMessage('Fetch and summarize this URL: https://www.python.org/');
+    await waitFor(() => !api.chat.debugState.busy, 240000, 'URL research chat turn');
+    await waitFor(() => latestState(api).payload.attachments.length > priorAttachmentCount,
+        20000, 'URL research attachment');
     const researchAttachment = latestState(api).payload.attachments.slice(-1)[0];
-    assert(String(researchAttachment.preview || '').includes('Example Domain'), 'research preview attached');
-    await api.chat.handleUserMessage('Using the attached fetched page, reply with exactly its title.');
-    await waitFor(() => !api.chat.debugState.busy, 240000, 'research context reply');
+    assert(String(researchAttachment.preview || '').includes('Welcome to Python.org'),
+        'URL was recognized, fetched and attached to its Chat turn');
+    assert(String(researchAttachment.preview || '').includes('Source URL: https://www.python.org/'),
+        'fetched page attachment preserves its source URL for follow-ups');
+    assert(String(researchAttachment.preview || '').includes('UNTRUSTED DATA'),
+        'fetched page attachment is explicitly marked as untrusted');
     const researchReply = api.chat.debugState.posted.filter((message) =>
         message.type === 'chat' && message.role === 'assistant').pop();
-    assert(/Example Domain/.test(researchReply.text), 'model used fetched page: ' +
-        JSON.stringify(researchReply.text));
-    console.log('PASS authorized URL fetch -> chat context: ' + researchReply.text.trim());
+    assert(researchReply && researchReply.text.trim(), 'model returned a chat reply');
+    await api.loadHistory();
+    const researchHistory = latestHistory(api).payload;
+    const researchTurn = researchHistory.messages.find((message) =>
+        message.role === 'user' && message.content.includes('Fetch and summarize this URL'));
+    assert(researchTurn && researchTurn.attachments && researchTurn.attachments.some((item) =>
+        Number(item.id) === Number(researchAttachment.id)),
+    'fetched page attachment persisted on the real Chat turn');
+    console.log('PASS Chat URL detection -> live fetch -> persisted same-turn attachment');
 
     // 5. Persisted history is returned by the engine, including route/attachment metadata.
     await api.loadHistory();
@@ -178,4 +271,3 @@ async function run() {
 }
 
 module.exports = { run };
-

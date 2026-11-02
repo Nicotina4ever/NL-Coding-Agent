@@ -2,7 +2,7 @@
  * Launch VS Code Insiders with the extension under development and run the real
  * chat feature acceptance (test/chatfeatures.test.cjs) on an isolated project.
  *
- * Sets up scratch backend grants for NETWORK + web-fetch (owner/backend API),
+ * Sets up the scratch Project Access NETWORK grant (including web-fetch),
  * enables the trusted-auto-review research profile via user settings, and keeps
  * all engine data under the isolated run directory.
  */

@@ -15,8 +15,9 @@ const vscode = require('vscode');
 
 const EXTENSION_NAME = 'nl-coding-agent';
 const GOAL = 'In src/calc.py add sub(a, b) returning a - b. In src/stats.py add mean(values) returning the arithmetic mean. Preserve all existing tests. Change only src/calc.py and src/stats.py.';
-const DEVELOPER = 'ollama/qwen2.5-coder:7b-instruct-q4_K_M';
-const REVIEWER = 'ollama/qwen2.5-coder:7b-instruct-q4_K_M';
+const DEVELOPER = process.env.NL_ACCEPTANCE_DEVELOPER_MODEL ||
+    'ollama/qwen2.5-coder:7b-instruct-q4_K_M';
+const REVIEWER = process.env.NL_ACCEPTANCE_REVIEWER_MODEL || DEVELOPER;
 
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -118,7 +119,7 @@ async function run() {
     assert(detail.model_bindings && detail.model_bindings.developer && detail.model_bindings.reviewer,
         'ModelRouter bindings persisted');
     assert(detail.model_bindings.architect, 'architect binding persisted');
-    assert(String(detail.model_bindings.developer.model_name || '').includes('qwen2.5-coder'),
+    assert.strictEqual(detail.model_bindings.developer.model_name, DEVELOPER.split('/').slice(1).join('/'),
         'developer model binding: ' + JSON.stringify(detail.model_bindings.developer));
     console.log('PASS ModelRouter role bindings persisted');
 
@@ -170,6 +171,24 @@ async function run() {
     assert(selected.diff && selected.diff.ok, 'dashboard received diff');
     console.log('PASS dashboard shows completed mission, handoffs, models, verification and diff');
 
+    let result = await api.connection.archiveMissions([missionId]);
+    assert.strictEqual(result.archived_count, 1, 'completed mission archived by the engine');
+    let row = (await api.connection.missionList({ includeArchived: true }))
+        .find((mission) => mission.id === missionId);
+    assert(row && row.archived_at, 'archive state persisted');
+
+    await api.connection.unarchiveMission(missionId);
+    row = (await api.connection.missionList({ includeArchived: true }))
+        .find((mission) => mission.id === missionId);
+    assert(row && !row.archived_at, 'mission restored from archive');
+
+    result = await api.connection.deleteMissions([missionId]);
+    assert.strictEqual(result.deleted_count, 1, 'completed mission deleted by the engine');
+    row = (await api.connection.missionList({ includeArchived: true }))
+        .find((mission) => mission.id === missionId);
+    assert(!row, 'deleted mission no longer appears in the project mission list');
+    console.log('PASS installed engine mission archive -> unarchive -> delete lifecycle');
+
     const pid = api.connection.childPid;
     await api.shutdown();
     await waitFor(() => {
@@ -180,4 +199,3 @@ async function run() {
 }
 
 module.exports = { run };
-

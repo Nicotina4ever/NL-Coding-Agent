@@ -145,14 +145,19 @@ class BoundaryTests(ServiceTestCase):
         self.assertTrue(result.denied)
         self.assertIn("auto-review", result.reason.lower())
 
-    def test_no_default_network_without_explicit_transport(self):
-        service = ResearchService(registry=self.registry, fetch_transport=None,
-                                  permission_checker=self.permission,
-                                  auto_reviewer=self.review)
-        result = service.fetch_read("https://example.com/page")
-        self.assertEqual(result.outcome, "unavailable")
-        self.assertIn("no explicit fetch transport", result.reason)
-        self.assertEqual(self.fetch_transport.calls, [])
+    def test_default_transport_is_created_after_permission_gate(self):
+        from unittest.mock import patch
+        with patch.object(ResearchService, "_resolve_host",
+                          return_value=("93.184.216.34",)), \
+                patch("nl_coding_agent.research.transport.StdlibHttpTransport",
+                      return_value=self.fetch_transport) as transport:
+            service = ResearchService(
+                registry=self.registry, permission_checker=self.permission,
+                auto_reviewer=self.review, profile=auto_review.PROFILE_TRUSTED)
+            result = service.fetch_read("https://example.com/page")
+        self.assertTrue(result.allowed)
+        transport.assert_called_once()
+        self.assertEqual(len(self.fetch_transport.calls), 1)
         github = service.github_lookup(action="repository", full_name="owner/repo")
         self.assertEqual(github.outcome, "error")
         self.assertIn("no explicit HTTP transport", github.reason)
@@ -220,6 +225,10 @@ class FetchStoreTests(ServiceTestCase):
                 self.calls.append(("repository", full_name))
                 return FakeResult({"full_name": full_name, "stars": 5})
 
+            def contents(self, full_name, *, path="", ref=None, limit=40):
+                self.calls.append(("contents", full_name, path, ref, limit))
+                return FakeResult({"items": [{"path": "src/main.py"}], "truncated": False})
+
         class FakeHF:
             def __init__(self):
                 self.calls = []
@@ -243,12 +252,25 @@ class FetchStoreTests(ServiceTestCase):
         self.assertEqual(stored["canonical_url"],
                          "https://api.github.com/repos/owner/repo")
         self.assertEqual(stored["project_id"], 1)
+        contents = service.github_lookup(action="contents", full_name="owner/repo",
+                                          path="src", limit=10, project_id=1)
+        self.assertTrue(contents.allowed)
+        self.assertEqual(github.calls[-1], ("contents", "owner/repo", "src", None, 10))
+        self.assertEqual(self.review.calls[-1]["action"].capability,
+                         permissions.CAPABILITY_WEB_FETCH)
         hf_result = service.huggingface_lookup(action="search_models", query="model")
         self.assertTrue(hf_result.allowed)
         self.assertEqual(hf.calls, [("search_models", "model", 20)])
         self.assertTrue(hf_result.payload["source_id"])
         self.assertFalse(service.github_lookup(action="delete_repository",
                                                full_name="owner/repo").allowed)
+        calls_before_denial = list(github.calls)
+        self.permission.factory = lambda capability, scope, context: permissions.Denied(
+            capability, "NETWORK denied by test")
+        denied = service.github_lookup(action="contents", full_name="owner/repo",
+                                       project_id=1)
+        self.assertTrue(denied.denied)
+        self.assertEqual(github.calls, calls_before_denial)
 
     def test_save_finding_list_search_mark_stale_and_refresh(self):
         fetch_result = self.service.fetch_read("https://example.com/page")

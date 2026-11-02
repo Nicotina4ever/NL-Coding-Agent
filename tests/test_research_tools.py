@@ -57,6 +57,7 @@ class DescriptorTests(unittest.TestCase):
         self.assertLessEqual(search.input_schema["properties"]["max_results"]["maximum"], 100)
         github = tools.research_tool("github_lookup")
         self.assertIn("search_repositories", github.input_schema["properties"]["action"]["enum"])
+        self.assertIn("contents", github.input_schema["properties"]["action"]["enum"])
         hf = tools.research_tool("huggingface_lookup")
         self.assertIn("search_models", hf.input_schema["properties"]["action"]["enum"])
 

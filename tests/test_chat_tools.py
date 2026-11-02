@@ -1,6 +1,10 @@
 """Chat model-call orchestration: scope, budgets, actual MCP and recovery."""
+import time
+from concurrent.futures import ThreadPoolExecutor
 import json
 import sys
+import struct
+import zlib
 from pathlib import Path
 
 import pytest
@@ -23,6 +27,18 @@ class Provider:
 
 def call(name, **arguments):
     return {"tool_calls": [{"function": {"name": name, "arguments": arguments}}]}
+
+
+def _one_pixel_png():
+    def chunk(kind, payload):
+        body = kind + payload
+        return (struct.pack(">I", len(payload)) + body
+                + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF))
+
+    return (b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(b"\x00\xff\x00\x00"))
+            + chunk(b"IEND", b""))
 
 
 @pytest.fixture
@@ -59,6 +75,103 @@ def test_source_tool_and_result_interpretation(chat):
     assert "value = 7" in tool_result["content"]
     assert json.loads(tool_result["content"])["untrusted"]
     assert services.list_chat_messages(project_id=project["id"])[-1]["role"] == "assistant"
+
+
+def test_followup_replays_persisted_research_attachment_and_uses_github_lookup(chat, monkeypatch):
+    from nl_coding_agent.app.attachments import prepare_text
+
+    services, project, run = chat
+    saved = prepare_text(
+        "Repository: acme/demo\nREADME:\n# Demo project\nThis repository contains the actual source.",
+        name="github:acme/demo",
+        project_id=project["id"])
+    first, _ = run([{"content": "What would you like to know?"}],
+                   text="https://github.com/acme/demo",
+                   attachment_ids=[saved["id"]])
+    assert first["ok"]
+
+    observed = {}
+
+    def github_lookup(**kwargs):
+        observed.update(kwargs)
+        return {"ok": True, "untrusted": True,
+                "result": {"kind": "readme", "data": {"text": "# Demo project"}}}
+
+    monkeypatch.setattr(services, "research_github_lookup", github_lookup)
+
+    def request_readme(tools):
+        github_tool = next(tool for tool in tools
+                           if tool["function"]["name"] == "github_lookup")
+        assert "contents" in github_tool["function"]["parameters"]["properties"]["action"]["enum"]
+        return call("github_lookup", action="readme", full_name="acme/demo")
+
+    result, provider = run([request_readme, {"content": "The README describes the demo project."}],
+                           text="Explore it and tell me what you find")
+    assert result["ok"]
+    assert observed == {"action": "readme", "full_name": "acme/demo", "query": None,
+                        "path": None, "ref": None, "number": None, "state": "open",
+                        "limit": 20, "project_id": project["id"]}
+    prior_user = next(message for message in provider.requests[0][0]
+                      if message["role"] == "user" and "github.com/acme/demo" in message["content"])
+    assert "This repository contains the actual source." in prior_user["content"]
+    tool_output = next(message for message in provider.requests[1][0]
+                       if message["role"] == "tool")
+    assert "# Demo project" in tool_output["content"]
+    assert json.loads(tool_output["content"])["untrusted"] is True
+
+
+def test_general_web_research_searches_then_fetches_a_page(chat, monkeypatch):
+    services, project, run = chat
+    services.set_permission_scope(
+        permissions.NETWORK, True, project_id=project["id"])
+    observed_search = {}
+
+    def search(**kwargs):
+        observed_search.update(kwargs)
+        return {"ok": True, "untrusted": True, "results": [{
+            "title": "Example page", "url": "https://example.com/page",
+            "snippet": "A public example page."}]}
+
+    class FakeResearchService:
+        _fetch_transport = object()
+        profile = ""
+
+        def fetch_read(self, url, *, project_id):
+            return {"operation": "fetch_read", "outcome": "allowed",
+                    "allowed": True, "capability": "web-fetch",
+                    "payload": {"url": url, "text": "Retrieved page body.",
+                                "untrusted": True}}
+
+    monkeypatch.setattr(services, "research_search", search)
+    monkeypatch.setattr(services, "_research_service", lambda: FakeResearchService())
+    query = "Who publishes the example page?"
+
+    def search_tool(tools):
+        names = {tool["function"]["name"] for tool in tools}
+        assert {"web_search", "fetch_url", "github_lookup"} <= names
+        return call("web_search", query=query, search_type="web", max_results=3)
+
+    def fetch_tool(tools):
+        return call("fetch_url", url="https://example.com/page")
+
+    provider = None
+    result, provider = run(
+        [search_tool, fetch_tool, {"content": "The example page publishes this content."}],
+        text=query)
+    assert result["ok"]
+    system = next(message["content"] for message in provider.requests[0][0]
+                  if message["role"] == "system")
+    assert "general web research" in system
+    assert observed_search == {
+        "query": query, "search_type": "web", "max_results": 3,
+        "project_id": project["id"]}
+    search_output = next(message["content"] for message in provider.requests[1][0]
+                         if message["role"] == "tool")
+    assert "https://example.com/page" in search_output
+    fetch_output = [message["content"] for message in provider.requests[2][0]
+                    if message["role"] == "tool"][-1]
+    assert "Retrieved page body." in fetch_output
+    assert json.loads(fetch_output)["untrusted"] is True
 
 
 def test_denied_source_and_coding_do_not_escape(chat, tmp_path):
@@ -143,6 +256,104 @@ def test_duplicate_call_ids_fail_before_any_invocation(chat):
     result, _ = run([response])
     assert not result["ok"] and "Duplicate" in result["reply"]
     assert load_state(project["id"])["used_calls"] == 0
+
+
+def test_concurrent_queue_enqueues_preserve_every_message(chat, monkeypatch):
+    from nl_coding_agent.app import chat_tools
+
+    services, project, _ = chat
+    original_load_queue = chat_tools.load_queue
+
+    def delayed_load(project_id):
+        items = original_load_queue(project_id)
+        time.sleep(0.01)
+        return items
+
+    monkeypatch.setattr(chat_tools, "load_queue", delayed_load)
+
+    def enqueue(index):
+        return chat_tools.enqueue(services, project["id"], f"queued {index}")
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        list(executor.map(enqueue, range(24)))
+
+    queued = chat_tools.list_queue(project["id"])
+    assert queued["count"] == 24
+    assert {item["text"] for item in queued["items"]} == {
+        f"queued {index}" for index in range(24)
+    }
+
+
+def test_vision_handoff_requires_measured_capability_and_sends_image_to_specialist(chat, monkeypatch):
+    from types import SimpleNamespace
+    from nl_coding_agent.app import attachments
+    from nl_coding_agent.models.capabilities import CapabilityRecord, record_capabilities
+
+    services, project, _ = chat
+    image = attachments.AttachmentStore().prepare_clipboard_image(
+        _one_pixel_png(), project_id=project["id"])
+
+    class VisionProvider:
+        provider_id = "ollama"
+        kind = "ollama"
+        base_url = "http://127.0.0.1:11434"
+
+        def __init__(self):
+            self.calls = []
+
+        def generate(self, model, prompt, **kwargs):
+            self.calls.append((model, kwargs))
+            return "A red one-pixel image."
+
+    provider = VisionProvider()
+    snapshot = SimpleNamespace(providers=[SimpleNamespace(
+        provider_id="ollama", reachable=True, base_url=provider.base_url,
+        models=[SimpleNamespace(name="vision-model", size_gb=1.0)]
+    )])
+    monkeypatch.setattr(services, "discover_models", lambda **kwargs: snapshot)
+    monkeypatch.setattr(services, "get_model_config", lambda: {"providers": {
+        "ollama": {"kind": "ollama", "enabled": True,
+                  "base_url": provider.base_url}
+    }})
+    monkeypatch.setattr("nl_coding_agent.app.services.build_providers", lambda config: [provider])
+
+    refused = services._vision_handoff(project["id"], [image])
+    assert refused and not refused["ok"]
+    assert provider.calls == []
+
+    record_capabilities([CapabilityRecord(
+        "ollama", "vision-model", "vision", "measured")])
+    handoff = services._vision_handoff(project["id"], [image])
+    assert handoff and handoff["ok"]
+    assert handoff["model"] == "vision-model"
+    assert handoff["analysis"] == "A red one-pixel image."
+    messages = provider.calls[0][1]["messages"]
+    assert len(messages[0]["images"]) == 1
+    assert messages[0]["content"].startswith("Analyze the attached user images")
+
+
+def test_chat_passes_vision_handoff_as_untrusted_text(chat, monkeypatch):
+    services, project, _ = chat
+    observed = {}
+    monkeypatch.setattr(services, "_vision_handoff", lambda project_id, attachments: {
+        "ok": True, "provider_id": "ollama", "model": "vision-model",
+        "analysis": "The screenshot shows a red error banner."
+    })
+
+    def fake_reply(**kwargs):
+        observed["text"] = kwargs["text"]
+        return {"reply": "I can see the error banner.", "route": {
+            "provider_id": "ollama", "model": "chat-model", "automatic": False
+        }}
+
+    monkeypatch.setattr(services, "_chat_reply", fake_reply)
+    result = services.chat_conversation(
+        project, "What is shown?", model_spec="ollama/chat-model", tools_enabled=False)
+
+    assert result["ok"]
+    assert result["vision"]["model"] == "vision-model"
+    assert "UNTRUSTED vision-specialist handoff" in observed["text"]
+    assert "The screenshot shows a red error banner." in observed["text"]
 
 
 def test_cross_process_writer_lock_prevents_transcript_replacement(chat):

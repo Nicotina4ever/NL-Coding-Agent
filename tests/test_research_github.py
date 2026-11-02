@@ -45,6 +45,11 @@ class RepoHandler:
         if "/contents/" in url:
             return response(payload={"path": "src/app.py", "sha": "blob-sha", "size": 9,
                                      "content": base64.b64encode(b"x = 1\n").decode()})
+        if url.split("?", 1)[0].endswith("/contents"):
+            return response(payload=[
+                {"name": "README.md", "path": "README.md", "type": "file", "size": 20},
+                {"name": "src", "path": "src", "type": "dir"},
+            ])
         if "/branches" in url:
             return response(payload=[{"name": "main", "commit": {"sha": SHA}}])
         if "/tags" in url:
@@ -105,6 +110,21 @@ def test_readme_license_contents_and_ref_pinning():
     assert contents.data["sha"] == "blob-sha"
     assert contents.provenance.requested_ref == "v1.0.0"
     assert any("ref=v1.0.0" in request.url for request in transport.requests)
+
+
+def test_repository_contents_are_bounded_and_paths_reject_traversal():
+    client, transport = make_client(max_items=1)
+    result = client.contents("acme/demo", limit=10)
+    assert result.kind == "contents"
+    assert result.data["items"] == [{
+        "name": "README.md", "path": "README.md", "type": "file", "size": 20
+    }]
+    assert result.data["truncated"] is True
+    assert transport.requests[0].method == "GET"
+    with pytest.raises(ValueError, match="repository path is invalid"):
+        client.contents("acme/demo", path="../other")
+    with pytest.raises(ValueError, match="repository must be owner/name"):
+        client.repository("acme/demo?format=evil")
 
 
 def test_pagination_is_bounded_and_read_only():

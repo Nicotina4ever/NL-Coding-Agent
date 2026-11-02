@@ -18,7 +18,7 @@ const dataDir = path.join(runDir, 'data');
 const workspaceDir = path.join(runDir, 'workspace');
 const userDataDir = path.join(runDir, 'user-data');
 const extensionsDir = path.join(runDir, 'extensions');
-const logPath = path.join(scratchRoot, 'vsix-team-test.log');
+const logPath = path.join(runDir, 'acceptance.log');
 
 function codeInsidersPath() {
     return process.env.VSCODE_INSIDERS_EXE ||

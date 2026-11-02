@@ -171,19 +171,40 @@ def list_missions(project_id: int | None = None) -> list[dict]:
 
 
 def archive_mission(mission_id: int, *, project_id: int | None = None) -> dict:
-    """Archive a terminal mission without deleting any data."""
-    mission = get_mission(mission_id)
-    if not mission:
-        raise ValueError("Mission not found")
-    if project_id is not None and mission.get("project_id") != project_id:
-        raise ValueError("Mission belongs to another project")
-    if mission.get("status") in ("pending", "running"):
-        raise ValueError("Cannot archive a pending/running mission")
+    """Archive one non-running mission without deleting data."""
+    return archive_missions([mission_id], project_id=project_id)[0]
+
+
+def archive_missions(mission_ids, *, project_id: int | None = None) -> list[dict]:
+    """Atomically archive selected missions that are not currently running."""
+    ids = list(dict.fromkeys(int(value) for value in (mission_ids or [])))
+    if not ids or any(value <= 0 for value in ids):
+        raise ValueError("Select at least one valid mission")
+    placeholders = ",".join("?" for _ in ids)
     now = _now()
     with _db() as conn, conn:
-        conn.execute("UPDATE missions SET archived_at=?, updated_at=? WHERE id=?",
-                     (now, now, int(mission_id)))
-    return get_mission(mission_id) or {}
+        conn.execute("BEGIN IMMEDIATE")
+        rows = conn.execute(
+            f"SELECT * FROM missions WHERE id IN ({placeholders})", ids
+        ).fetchall()
+        if len(rows) != len(ids):
+            raise ValueError("One or more selected missions no longer exist")
+        missions = [dict(row) for row in rows]
+        if project_id is not None and any(
+                item.get("project_id") != project_id for item in missions):
+            raise ValueError("A selected mission belongs to another project")
+        running = [item["id"] for item in missions if item.get("status") == "running"]
+        if running:
+            raise ValueError(
+                "Stop running missions before archiving them: "
+                + ", ".join(str(value) for value in running)
+            )
+        conn.execute(
+            f"UPDATE missions SET archived_at=?, updated_at=? "
+            f"WHERE id IN ({placeholders})",
+            [now, now, *ids],
+        )
+    return missions
 
 
 def unarchive_mission(mission_id: int) -> dict:
@@ -194,23 +215,120 @@ def unarchive_mission(mission_id: int) -> dict:
 
 
 def delete_mission(mission_id: int, *, project_id: int | None = None) -> dict:
-    """Delete one archived terminal mission row and its dependent rows.
+    """Delete one mission and its dependent records, without touching project files."""
+    return delete_missions([mission_id], project_id=project_id)[0]
 
-    Staged files are not deleted here; the Storage Manager purges them only via
-    an explicit preview/confirmation path.
-    """
-    mission = get_mission(mission_id)
-    if not mission:
-        raise ValueError("Mission not found")
-    if project_id is not None and mission.get("project_id") != project_id:
-        raise ValueError("Mission belongs to another project")
-    if mission.get("status") in ("pending", "running"):
-        raise ValueError("Cannot delete a pending/running mission")
-    if not mission.get("archived_at"):
-        raise ValueError("Archive the mission before deleting it")
+
+def delete_missions(mission_ids, *, project_id: int | None = None) -> list[dict]:
+    """Atomically delete selected non-running missions and detach retained evidence."""
+    ids = list(dict.fromkeys(int(value) for value in (mission_ids or [])))
+    if not ids or any(value <= 0 for value in ids):
+        raise ValueError("Select at least one valid mission")
+    placeholders = ",".join("?" for _ in ids)
+    now = _now()
     with _db() as conn, conn:
-        conn.execute("DELETE FROM missions WHERE id=?", (int(mission_id),))
-    return mission
+        conn.execute("BEGIN IMMEDIATE")
+        rows = conn.execute(
+            f"SELECT * FROM missions WHERE id IN ({placeholders})", ids
+        ).fetchall()
+        if len(rows) != len(ids):
+            raise ValueError("One or more selected missions no longer exist")
+        missions = [dict(row) for row in rows]
+        if project_id is not None and any(
+                item.get("project_id") != project_id for item in missions):
+            raise ValueError("A selected mission belongs to another project")
+        running = [item["id"] for item in missions if item.get("status") == "running"]
+        if running:
+            raise ValueError(
+                "Stop running missions before deleting them: "
+                + ", ".join(str(value) for value in running)
+            )
+        linked_milestones = conn.execute(
+            f"SELECT DISTINCT goal_id, milestone_id FROM goal_missions "
+            f"WHERE mission_id IN ({placeholders}) AND milestone_id IS NOT NULL",
+            ids,
+        ).fetchall()
+
+        conn.execute(
+            f"UPDATE mission_queue SET mission_id=NULL WHERE mission_id IN ({placeholders})",
+            ids,
+        )
+        conn.execute(
+            f"UPDATE backlog_items SET last_mission_id=NULL "
+            f"WHERE last_mission_id IN ({placeholders})", ids,
+        )
+        conn.execute(
+            f"UPDATE approvals SET mission_id=NULL WHERE mission_id IN ({placeholders})",
+            ids,
+        )
+        conn.execute(
+            f"UPDATE events SET mission_id=NULL WHERE mission_id IN ({placeholders})",
+            ids,
+        )
+        conn.execute(
+            f"UPDATE flow_runs SET mission_id=NULL WHERE mission_id IN ({placeholders})",
+            ids,
+        )
+        conn.execute(
+            f"UPDATE mission_attachments SET mission_id=NULL "
+            f"WHERE mission_id IN ({placeholders})", ids,
+        )
+        conn.execute(
+            f"UPDATE research_finding_attachments SET revoked_at=COALESCE(revoked_at, ?) "
+            f"WHERE mission_id IN ({placeholders})", [now, *ids],
+        )
+        for mission_id in ids:
+            conn.execute(
+                "DELETE FROM app_settings WHERE key IN (?, ?)",
+                ("mission.stop." + str(mission_id), "mission.steer." + str(mission_id)),
+            )
+        conn.execute(
+            f"DELETE FROM missions WHERE id IN ({placeholders})", ids,
+        )
+
+        affected_goals: set[int] = set()
+        for link in linked_milestones:
+            milestone_id = int(link["milestone_id"])
+            remaining = conn.execute(
+                "SELECT m.status FROM goal_missions gm "
+                "JOIN missions m ON m.id=gm.mission_id WHERE gm.milestone_id=?",
+                (milestone_id,),
+            ).fetchall()
+            if not remaining:
+                conn.execute(
+                    "UPDATE milestones SET status='pending', evidence_refs_json='[]', "
+                    "updated_at=? WHERE id=?",
+                    (now, milestone_id),
+                )
+            else:
+                statuses = [str(row["status"] or "") for row in remaining]
+                if all(status == "completed" for status in statuses):
+                    milestone_status = "completed"
+                elif any(status == "running" for status in statuses):
+                    milestone_status = "in_progress"
+                elif any(status in ("blocked", "failed") for status in statuses):
+                    milestone_status = "blocked"
+                else:
+                    milestone_status = "pending"
+                conn.execute(
+                    "UPDATE milestones SET status=?, updated_at=? WHERE id=?",
+                    (milestone_status, now, milestone_id),
+                )
+            affected_goals.add(int(link["goal_id"]))
+        for goal_id in affected_goals:
+            goal = conn.execute(
+                "SELECT status FROM goals WHERE id=?", (goal_id,)
+            ).fetchone()
+            incomplete = conn.execute(
+                "SELECT 1 FROM milestones WHERE goal_id=? AND status!='completed' LIMIT 1",
+                (goal_id,),
+            ).fetchone()
+            if goal and goal["status"] == "completed" and incomplete:
+                conn.execute(
+                    "UPDATE goals SET status='active', updated_at=? WHERE id=?",
+                    (now, goal_id),
+                )
+    return missions
 
 
 def set_mission_project(mission_id: int, project_id: int) -> None:

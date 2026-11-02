@@ -109,7 +109,7 @@ _GITHUB_SCHEMA = {
     "type": "object",
     "properties": {
         "action": {"type": "string", "enum": [
-            "repository", "readme", "license", "branches", "tags", "commits",
+            "repository", "readme", "contents", "license", "branches", "tags", "commits",
             "issues", "releases", "workflows", "file_contents",
             "search_repositories"]},
         "full_name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},

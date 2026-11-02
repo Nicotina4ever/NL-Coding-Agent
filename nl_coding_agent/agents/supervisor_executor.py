@@ -49,6 +49,7 @@ class SupervisorMissionExecutor:
         self.reviewer_model = reviewer_model or DEFAULT_REVIEWER_MODEL
         self.debug_model = debug_model or DEFAULT_DEBUG_MODEL
         self.architect_model = architect_model or self.developer_model
+        self.auditor_model = self.developer_model
         self.stage = None
         self.baseline: dict[str, str] = {}
         self.mission: dict = {}
@@ -80,6 +81,7 @@ class SupervisorMissionExecutor:
         self.reviewer_model = orch._resolve_route("reviewer", self.reviewer_model)
         self.debug_model = orch._resolve_route("debugger", self.debug_model)
         self.architect_model = orch._resolve_route("architect", self.architect_model)
+        self.auditor_model = orch._resolve_route("auditor", self.developer_model)
         existing_tasks = get_tasks(self.mission_id)
         if existing_tasks:
             reset_ids = reset_interrupted_tasks(self.mission_id)
@@ -98,7 +100,7 @@ class SupervisorMissionExecutor:
             "debugger": self.debug_model,
         }
         if "auditor" in planned_roles:
-            assignment_routes["auditor"] = self.developer_model
+            assignment_routes["auditor"] = self.auditor_model
         orch._record_model_assignments(self.mission_id, assignment_routes)
         if existing_tasks:
             baseline = orch._load_baseline(self.mission_id)
@@ -155,7 +157,7 @@ class SupervisorMissionExecutor:
             self._checkpoint("before-architect")
             architecture_notes = self.orchestrator._run_planned_analysis(
                 self.mission_id, self.tasks, self.goal,
-                {"architect": self.architect_model, "auditor": self.developer_model},
+                {"architect": self.architect_model, "auditor": self.auditor_model},
             )
             self._checkpoint("after-architect")
             self._checkpoint("before-developer")

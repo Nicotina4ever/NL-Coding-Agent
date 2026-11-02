@@ -1,15 +1,14 @@
 """Safe HTTP fetcher for the research foundation (NL-BP-170 / NL-BP-206).
 
 The fetcher NEVER opens a connection itself: a transport/opener must be injected
-by the caller.  The production urllib transport is intentionally not implemented
-in this foundation increment so tests and the app cannot accidentally reach the
-network; a real transport will be added together with the NETWORK/web-fetch
-permission integration.  Tests pass a scripted fake transport.
+by the caller. Production uses a bounded stdlib transport only after the
+ResearchService permission gate approves each URL; tests inject scripted
+transports.  Tests pass a scripted fake transport.
 
 Security flow for every hop (initial request and each redirect):
 1. RetrievalPolicy.evaluate_url / evaluate_redirect (scheme, domain, SSRF,
    ports, redirect budget);
-2. optional permission-gate callback (future NETWORK/web-fetch capability);
+2. permission-gate callback (NETWORK/web-fetch capability and auto-review);
 3. deterministic token-bucket rate limit;
 4. transport request with timeout and max-bytes budget;
 5. elapsed-time, HTTP status, content-type and body-size enforcement.

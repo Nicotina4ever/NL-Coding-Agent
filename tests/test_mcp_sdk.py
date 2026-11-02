@@ -1,7 +1,9 @@
 """Real SDK wire/lifecycle coverage and policy-before-start regression checks."""
 from pathlib import Path
 import json
+import struct
 import sys
+import zlib
 
 import pytest
 
@@ -13,6 +15,17 @@ from nl_coding_agent.persistence import database
 def tool_payload(result):
     assert not result.get("isError"), result
     return result.get("structuredContent") or json.loads(result["content"][0]["text"])
+
+
+def _one_pixel_png() -> bytes:
+    def chunk(kind, payload):
+        body = kind + payload
+        return struct.pack(">I", len(payload)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+
+    return (b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(b"\x00\xff\x00\x00"))
+            + chunk(b"IEND", b""))
 
 
 @pytest.fixture
@@ -41,6 +54,20 @@ def test_real_stdio_tools_resources_and_diagnostics(manager, tmp_path):
     assert any("fixture diagnostics" in p.read_text(encoding="utf-8") for p in logs)
     with pytest.raises(McpError, match="not advertised"):
         manager.read_resource("fixture", "file:///secret", human_approved=True)
+
+
+def test_github_mcp_payload_preserves_bounded_file_text():
+    from nl_coding_agent.app.mcp_engine import _bounded_github_payload
+
+    text = "x" * 15000
+    result = _bounded_github_payload({
+        "result": {"kind": "file_contents", "data": {"text": text, "path": "README.md"},
+                   "provenance": {"untrusted": True}},
+        "untrusted": True,
+    })
+    assert len(result["result"]["data"]["text"]) == 12000 + len("\n... [truncated]")
+    assert result["result"]["data"]["path"] == "README.md"
+    assert result["untrusted"] is True
 
 
 def test_schema_rejection_before_invocation(manager):
@@ -119,7 +146,7 @@ def test_real_streamable_http_requires_network_then_connects(manager):
 def test_real_engine_stdio_readonly_project_binding(tmp_path, monkeypatch):
     pytest.importorskip("mcp")
     from nl_coding_agent.app.services import AppServices
-    from nl_coding_agent.app.mcp_engine import vscode_configuration
+    from nl_coding_agent.app.mcp_engine import create_engine_server, vscode_configuration
     from nl_coding_agent.persistence.missions import create_mission, get_mission
 
     monkeypatch.setenv("NL_DATA_DIR", str(tmp_path / "data"))
@@ -132,6 +159,7 @@ def test_real_engine_stdio_readonly_project_binding(tmp_path, monkeypatch):
     try:
         project = services.open_project(root)
         foreign = services.open_project(other)
+        create_engine_server(services, project)
         own = create_mission(project["id"], "Own task", "Never execute automatically")
         foreign_id = create_mission(foreign["id"], "Foreign", "Private")
         spec = vscode_configuration(root)["servers"]["nl-coding-engine"]
@@ -141,7 +169,10 @@ def test_real_engine_stdio_readonly_project_binding(tmp_path, monkeypatch):
         names = {t["name"] for t in manager.list_tools("engine")}
         assert {"project_context", "mission_status", "start_mission", "cancel_mission",
                 "engine_settings", "mission_detail", "attachment_ingest",
-                "chat_history", "research_fetch_url"} <= names
+            "chat_history", "research_fetch_url", "speech_download_model",
+                "research_github_lookup", "delete_missions"} <= names
+        assert services._research_network_configured
+        assert services._research_service()._http_transport is not None
         settings = manager.invoke_tool("engine", "engine_settings", {}, human_approved=True)
         settings_payload = tool_payload(settings)
         assert settings_payload["project"]["id"] == project["id"]
@@ -162,6 +193,21 @@ def test_real_engine_stdio_readonly_project_binding(tmp_path, monkeypatch):
         assert attachment["has_text"] is True
         assert attachment["preview"] == "hello attachment\nsecond line\n"
         assert "stored_path" not in attachment
+        pasted = manager.invoke_tool("engine", "attachment_ingest", {
+            "image_base64": __import__("base64").b64encode(_one_pixel_png()).decode("ascii")
+        }, human_approved=True)
+        pasted_payload = tool_payload(pasted)
+        image = pasted_payload["attachments"][0]
+        assert image["kind"] == "image"
+        assert image["mime"] == "image/png"
+        assert image["has_text"] is False
+        assert image["metadata"]["width"] == 1
+        assert image["metadata"]["height"] == 1
+        invalid_image = manager.invoke_tool("engine", "attachment_ingest", {
+            "image_base64": "not base64"
+        }, human_approved=True)
+        assert invalid_image["isError"]
+        assert "valid base64" in invalid_image["content"][0]["text"]
         outside = tmp_path / "outside.txt"
         outside.write_text("outside", encoding="utf-8")
         rejected_path = manager.invoke_tool("engine", "attachment_ingest",
@@ -183,6 +229,11 @@ def test_real_engine_stdio_readonly_project_binding(tmp_path, monkeypatch):
         assert detail_payload["mission"]["id"] == own
         assert detail_payload["mission"]["status"] == "pending"
         assert detail_payload["tasks"] == [] and detail_payload["progress"]["total"] == 0
+        denied_asr_download = manager.invoke_tool("engine", "speech_download_model", {
+            "model_id": "vosk-model-small-it-0.22"
+        }, human_approved=True)
+        assert denied_asr_download["isError"]
+        assert "NETWORK" in denied_asr_download["content"][0]["text"]
         context = manager.invoke_tool("engine", "project_context", {}, human_approved=True)
         assert tool_payload(context)["project"]["id"] == project["id"]
         assert not tool_payload(context)["execution_enabled"]
@@ -196,6 +247,26 @@ def test_real_engine_stdio_readonly_project_binding(tmp_path, monkeypatch):
         assert denied["isError"]
         assert len(services.list_missions(project["id"])) == 1
         assert get_mission(own)["status"] == "pending"
+        permissions.grant(permissions.DELETE, project_id=project["id"])
+        deleted = manager.invoke_tool("engine", "delete_missions", {
+            "mission_ids": [own], "approved": True}, human_approved=True)
+        assert tool_payload(deleted)["deleted_count"] == 1
+        assert get_mission(own) is None
+
+        pending = create_mission(project["id"], "Pending task", "Delete without execution")
+        permissions.revoke(permissions.DELETE, project_id=project["id"])
+        denied_delete = manager.invoke_tool("engine", "delete_missions", {
+            "mission_ids": [pending], "approved": True}, human_approved=True)
+        assert denied_delete["isError"]
+        assert "DELETE" in denied_delete["content"][0]["text"]
+        assert get_mission(pending)["status"] == "pending"
+
+        permissions.grant(permissions.DELETE, project_id=project["id"])
+        unapproved_delete = manager.invoke_tool("engine", "delete_missions", {
+            "mission_ids": [pending], "approved": False}, human_approved=True)
+        assert unapproved_delete["isError"]
+        assert "explicit approval" in unapproved_delete["content"][0]["text"]
+        assert get_mission(pending)["status"] == "pending"
         resource = manager.read_resource("engine", "nl-engine://project", human_approved=True)
         assert json.loads(resource["contents"][0]["text"])["project"]["id"] == project["id"]
         # A client may not converse as another project or as the unregistered id 0.

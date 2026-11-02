@@ -113,9 +113,21 @@ async function run() {
         'provider-api-key-env', 'chat-controls-toggle', 'mission-fields-toggle',
         'mission-list-toggle', 'generation-save', 'permission-grant',
         'autonomy-save', 'mcp-save', 'probe-run', 'storage-scan', 'storage-vacuum',
-        'auto-coding']) {
+        'auto-coding', 'speech-engine', 'speech-model', 'speech-select', 'speech-refresh',
+        'speech-home', 'speech-browse', 'speech-external', 'speech-engines',
+        'mission-select-visible', 'mission-selection-count', 'mission-selection-clear',
+        'mission-stop-selected', 'mission-archive-selected', 'mission-delete-selected']) {
         assert(html.includes('id="' + id + '"'), 'real VSIX webview exposes #' + id);
     }
+    for (const id of ['speech-engine', 'speech-model', 'speech-select',
+        'speech-home', 'speech-browse', 'speech-external']) {
+        assert.strictEqual(html.split('id="' + id + '"').length - 1, 1,
+            'real VSIX webview exposes one #' + id);
+    }
+    assert(!html.includes('id="speech-download-model"'),
+        'real VSIX webview uses one model selector for local and downloadable models');
+    assert(!html.includes('id="specialist-permissions"'),
+        'real VSIX specialist editor uses global project permissions only');
     const systemMessage = api.chat.debugState.posted.find((message) =>
         message.type === 'chat' && message.role === 'system');
     assert(systemMessage, 'webview received the project/tool system message');
@@ -170,4 +182,3 @@ async function run() {
 
 // VS Code's extension-test harness imports this module and awaits `run()`.
 module.exports = { run };
-

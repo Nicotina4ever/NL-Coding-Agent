@@ -1,10 +1,14 @@
 """Project-bound MCP client interface to AppServices and the existing mission engine."""
 from __future__ import annotations
 
+import base64
+import binascii
 import json
+import inspect
 import os
 import sys
 from contextlib import asynccontextmanager, redirect_stdout
+from functools import partial, wraps
 from pathlib import Path
 
 _ATTACHMENT_BUDGET = 8000
@@ -38,6 +42,52 @@ def _bounded_payload(value, limit: int = 2000, depth: int = 0):
     if isinstance(value, (list, tuple)):
         return [_bounded_payload(item, limit, depth + 1) for item in list(value)[:40]]
     return value
+
+
+def _bounded_github_payload(value):
+    bounded = _bounded_payload(value)
+    if not isinstance(value, dict):
+        return bounded
+    result = value.get("result")
+    bounded_result = bounded.get("result") if isinstance(bounded, dict) else None
+    if not isinstance(result, dict) or not isinstance(bounded_result, dict):
+        return bounded
+    data = result.get("data")
+    bounded_data = bounded_result.get("data")
+    if (isinstance(data, dict) and isinstance(data.get("text"), str)
+            and isinstance(bounded_data, dict)):
+        bounded_data["text"] = _bounded_text(data["text"], 12000)
+    return bounded
+
+
+def _threaded_tool_registration(server):
+    register = server.tool
+
+    def wrap(function):
+        if inspect.iscoroutinefunction(function):
+            return function
+
+        @wraps(function)
+        async def run_in_worker(*args, **kwargs):
+            import anyio
+            return await anyio.to_thread.run_sync(partial(function, *args, **kwargs))
+
+        return run_in_worker
+
+    def tool(*args, **kwargs):
+        if len(args) == 1 and callable(args[0]) and not kwargs:
+            function = args[0]
+            register()(wrap(function))
+            return function
+        decorator = register(*args, **kwargs)
+
+        def register_handler(function):
+            decorator(wrap(function))
+            return function
+
+        return register_handler
+
+    return tool
 
 
 def _json_mapping(value) -> dict:
@@ -184,8 +234,10 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                 permissions.require(permissions.NETWORK, project_id=bound_project_id)
                 return True
 
+            transport = StdlibHttpTransport(gate)
             services.configure_research(
-                fetch_transport=StdlibHttpTransport(gate),
+                fetch_transport=transport,
+                http_transport=transport,
                 profile=auto_review.normalize_profile(research_profile),
             )
         except Exception as exc:  # research remains offline; tool reports it
@@ -206,6 +258,11 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         permissions.require(permissions.EXECUTE, project_id=bound_project_id)
         permissions.require(permissions.WRITE, project_id=bound_project_id)
 
+    def require_mission_delete(approved):
+        if not approved:
+            raise PermissionError("Mission deletion requires explicit approval")
+        permissions.require(permissions.DELETE, project_id=bound_project_id)
+
     @asynccontextmanager
     async def lifespan(server):
         # FastMCP opens its stdio streams BEFORE entering lifespan. The protocol
@@ -219,6 +276,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                                             reason="MCP client disconnected")
 
     server = FastMCP("NL Coding Engine", lifespan=lifespan)
+    server.tool = _threaded_tool_registration(server)
     read_only = ToolAnnotations(readOnlyHint=True, destructiveHint=False)
 
     @server.tool(annotations=read_only)
@@ -275,6 +333,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
             "status": research_status.get("status"),
             "offline": bool(research_status.get("offline")),
             "network_configured": bool(research_status.get("network_configured")),
+            "url_fetch_available": bool(research_status.get("url_fetch_available")),
             "network_granted": bool(permissions.get_policy(bound_project_id).get("network")),
             "permission_guidance": research_status.get("permission_guidance", ""),
         }
@@ -296,7 +355,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
             },
             "mission_defaults": mission_defaults,
             "agents": {
-                "roles": _plain_json(services.get_agent_roles()),
+                "roles": _plain_json(services.get_agent_roles(bound_project_id)),
                 "custom_agents": _plain_json(services.list_custom_agents()),
             },
             "permissions": _plain_json(services.get_permissions(bound_project_id)),
@@ -447,6 +506,12 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         require_read()
         return services.team_plan(bound_project_id, str(model), focus=str(focus or ""))
 
+    @server.tool()
+    def assign_specialist_team(roles: list[dict]) -> dict:
+        """Persist the active project team for the existing Supervisor runtime."""
+        require_read()
+        return services.assign_project_team(bound_project_id, list(roles or []))
+
     @server.tool(annotations=read_only)
     def custom_agents() -> dict:
         """List specialist agent profiles (configuration presets, not hidden execution)."""
@@ -478,11 +543,17 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                           role: str = "assistant",
                           instructions: str = "",
                           tools: list[str] | None = None,
-                          permissions: list[str] | None = None,
+                          role_id: str | None = None,
+                          project_id: int | None = None,
+                          team_active: bool | None = None,
                           enabled: bool = True,
                           approved: bool = False) -> dict:
         """Create or update a specialist agent profile with a model assignment."""
         require_read()
+        if project_id is not None and int(project_id) != int(bound_project_id):
+            raise ValueError("Specialist profile must be assigned to the bound project")
+        if team_active is True and project_id is None:
+            raise ValueError("An active Supervisor specialist must be linked to this project")
         fields = {
             "name": str(name or "Specialist agent").strip() or "Specialist agent",
             "provider": str(provider or "ollama"),
@@ -490,7 +561,9 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
             "role": str(role or "assistant"),
             "instructions": str(instructions or ""),
             "tools": [str(item) for item in (tools or [])],
-            "permissions": [str(item) for item in (permissions or [])],
+            "role_id": str(role_id) if role_id is not None else None,
+            "project_id": int(project_id) if project_id is not None else None,
+            "team_active": bool(team_active) if team_active is not None else None,
             "enabled": bool(enabled),
         }
         if agent_id:
@@ -594,8 +667,8 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False,
                                              idempotentHint=False, openWorldHint=False))
     def attachment_ingest(paths: list[str] | None = None, text: str | None = None,
-                          name: str = "") -> dict:
-        """Ingest explicit files strictly inside the bound project, or pasted text.
+                          name: str = "", image_base64: str | None = None) -> dict:
+        """Ingest project files, pasted text or one pasted clipboard image.
 
         Files are copied into the engine's existing attachment store and their
         text is extracted by the existing attachment pipeline; arbitrary paths,
@@ -624,7 +697,21 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                 name=(str(name).strip() or "pasted-context.txt"))
             gathered.append(_attachment_view(item))
             total_bytes += int(item.get("size_bytes") or 0)
-        if not raw_paths and not (text is not None and str(text).strip()):
+        if image_base64:
+            max_image_bytes = 25 * 1024 * 1024
+            if len(image_base64) > ((max_image_bytes + 2) // 3) * 4:
+                raise ValueError("Clipboard image exceeds the 25 MiB attachment limit")
+            try:
+                image_bytes = base64.b64decode(image_base64, validate=True)
+            except (binascii.Error, ValueError):
+                raise ValueError("Clipboard image must be valid base64") from None
+            if not image_bytes or len(image_bytes) > max_image_bytes:
+                raise ValueError("Clipboard image is empty or exceeds the 25 MiB attachment limit")
+            item = services.prepare_attachment_clipboard_image(
+                bound_project_id, image_bytes)
+            gathered.append(_attachment_view(item))
+            total_bytes += int(item.get("size_bytes") or 0)
+        if not raw_paths and not (text is not None and str(text).strip()) and not image_base64:
             raise ValueError("Provide at least one file path or text to ingest")
         return {"ok": bool(gathered), "attachments": gathered, "errors": errors,
                 "total_bytes": total_bytes,
@@ -767,15 +854,33 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         return {"ok": True, "recording": services.speech_stop_recording(str(session_id))}
 
     @server.tool()
-    def speech_switch_model(model_id: str) -> dict:
+    def speech_switch_model(model_id: str, engine: str = "") -> dict:
         """Select one discovered local ASR model."""
         require_read()
-        return {"ok": True, "model": services.speech_switch_model(str(model_id)),
+        return {"ok": True, "model": services.speech_switch_model(str(model_id), str(engine)),
+                "catalog": services.speech_catalog()}
+
+    @server.tool()
+    def speech_download_model(model_id: str) -> dict:
+        """Download one curated local ASR model; requires a project NETWORK grant."""
+        require_read()
+        from nl_coding_agent.core import permissions
+        permissions.require(permissions.NETWORK, project_id=bound_project_id)
+        return {"ok": True,
+                "model": services.speech_download_model(bound_project_id, str(model_id)),
+                "catalog": services.speech_catalog()}
+
+    @server.tool()
+    def speech_download_model(model_id: str) -> dict:
+        """Download one curated ASR model into managed data after a NETWORK grant."""
+        require_read()
+        return {"ok": True,
+                "model": services.speech_download_model(bound_project_id, str(model_id)),
                 "catalog": services.speech_catalog()}
 
     @server.tool()
     def speech_set_external_home(path: str) -> dict:
-        """Register an existing external ASR folder (for example Qwen3-ASR) in place."""
+        """Register an existing external ASR model folder in place without copying its files."""
         require_read()
         return {"ok": True, "speech": services.speech_manager().set_external_home(str(path))}
 
@@ -861,10 +966,10 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
     def research_fetch_url(url: str) -> dict:
         """Fetch one public URL through the existing Research service and permissions.
 
-        Requires an explicit NETWORK grant; the configured research profile and
-        any web-fetch capability grant decide whether the fetch is allowed or
-        needs approval. The returned page text is UNTRUSTED data; raw HTML is not
-        exposed and nothing from the page is executed or followed as instructions.
+        Requires the project NETWORK grant; its matching web-fetch capability is
+        managed in the same scope. The configured research profile decides whether
+        a permitted fetch is auto-approved or needs approval. Returned page text is
+        UNTRUSTED; raw HTML is not exposed and nothing from the page is executed.
         """
         require_read()
         permissions.require(permissions.NETWORK, project_id=bound_project_id)
@@ -877,6 +982,29 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
             raise ValueError("Only http(s) URLs are supported")
         payload = services.research_fetch_read(target, project_id=bound_project_id)
         return _research_view(payload)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False,
+                                             idempotentHint=True, openWorldHint=True))
+    def research_github_lookup(action: str, full_name: str | None = None,
+                               query: str | None = None, path: str | None = None,
+                               ref: str | None = None, number: int | None = None,
+                               state: str = "open", limit: int = 20) -> dict:
+        """Read public GitHub repository metadata, README, files and activity.
+
+        Uses GitHub's read-only REST API through Research and requires project
+        NETWORK access plus the configured Research approval profile. Returned
+        data is untrusted and bounded; no repository is cloned or executed.
+        """
+        require_read()
+        permissions.require(permissions.NETWORK, project_id=bound_project_id)
+        if len(str(full_name or "")) > 200 or len(str(path or "")) > 2000:
+            raise ValueError("GitHub repository or path is too long")
+        result = services.research_github_lookup(
+            action=str(action), full_name=full_name, query=query, path=path,
+            ref=ref, number=number, state=str(state),
+            limit=max(1, min(int(limit), 100)),
+            project_id=bound_project_id)
+        return _bounded_github_payload(result)
 
     @server.tool(annotations=read_only)
     def mission_list(include_archived: bool = True, status: str | None = None,
@@ -902,11 +1030,23 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
 
     @server.tool()
     def archive_mission(mission_id: int, approved: bool = False) -> dict:
-        """Archive a terminal mission; data is retained and the action is reversible."""
+        """Archive a non-running mission; data is retained and the action is reversible."""
         require_execution(approved)
         mission(mission_id)
         return {"ok": True, "mission": services.archive_mission(
             int(mission_id), project_id=bound_project_id)}
+
+    @server.tool()
+    def archive_missions(mission_ids: list[int], approved: bool = False) -> dict:
+        """Atomically archive selected non-running missions; data is retained."""
+        require_execution(approved)
+        ids = list(dict.fromkeys(int(value) for value in (mission_ids or [])))
+        if not ids:
+            raise ValueError("Select at least one mission")
+        for mission_id in ids:
+            mission(mission_id)
+        archived = services.archive_missions(ids, project_id=bound_project_id)
+        return {"ok": True, "missions": archived, "archived_count": len(archived)}
 
     @server.tool()
     def unarchive_mission(mission_id: int, approved: bool = False) -> dict:
@@ -915,13 +1055,27 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         mission(mission_id)
         return {"ok": True, "mission": services.unarchive_mission(int(mission_id))}
 
-    @server.tool()
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True,
+                                             idempotentHint=False, openWorldHint=False))
     def delete_mission(mission_id: int, approved: bool = False) -> dict:
-        """Delete only an already archived terminal mission; never live/staged files."""
-        require_execution(approved)
+        """Delete one stopped mission record; project and staged files are not removed."""
+        require_mission_delete(approved)
         mission(mission_id)
         return {"ok": True, "mission": services.delete_mission(
             int(mission_id), project_id=bound_project_id)}
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True,
+                                             idempotentHint=False, openWorldHint=False))
+    def delete_missions(mission_ids: list[int], approved: bool = False) -> dict:
+        """Atomically delete selected non-running missions; project files are untouched."""
+        require_mission_delete(approved)
+        ids = list(dict.fromkeys(int(value) for value in (mission_ids or [])))
+        if not ids:
+            raise ValueError("Select at least one mission")
+        for mission_id in ids:
+            mission(mission_id)
+        deleted = services.delete_missions(ids, project_id=bound_project_id)
+        return {"ok": True, "missions": deleted, "deleted_count": len(deleted)}
 
     @server.tool()
     def job_start(argv: list[str], label: str = "", timeout_s: int = 900,

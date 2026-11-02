@@ -9,9 +9,9 @@ Boundary contract:
     permissions.check_capability and auto_review.evaluate_action;
   * normal policy outcomes are returned as explicit NeedsApproval/Denied results,
     not raised past the boundary;
-  * no fetch or investigator transport exists by default: callers must inject
-    explicit transport(s); provider search is declarative/offline unless a real
-    provider adapter is injected;
+  * URL fetch uses the bounded stdlib transport only after per-hop permission,
+    auto-review and retrieval-policy checks; provider search is declarative/offline
+    unless a real provider adapter is injected;
   * retrieved provenance (canonical URL, redirects, timestamps, content hash,
     title/metadata, bounded excerpt, scope links, citations) is persisted in the
     research store; secrets are never logged or included in results;
@@ -21,7 +21,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field
+import socket
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from typing import Any, Callable, Mapping, Sequence
 
@@ -63,12 +64,13 @@ CAPABILITY_BY_OPERATION = {
     "model_inference_cloud": permissions.CAPABILITY_MODEL_INFERENCE_CLOUD,
 }
 NETWORK_OPERATIONS = ("search", "fetch_read", "github_lookup", "huggingface_lookup")
-GITHUB_ACTIONS = ("repository", "readme", "license", "branches", "tags",
+GITHUB_ACTIONS = ("repository", "readme", "contents", "license", "branches", "tags",
                   "commits", "issues", "issue_comments", "pull_requests",
                   "pull_reviews", "releases", "workflows", "file_contents",
                   "search_repositories")
 GITHUB_METHODS = {
-    "repository": "repository", "readme": "readme", "license": "license_info",
+    "repository": "repository", "readme": "readme", "contents": "contents",
+    "license": "license_info",
     "branches": "branches", "tags": "tags", "commits": "commits",
     "issues": "issues", "issue_comments": "issue_comments",
     "pull_requests": "pull_requests", "pull_reviews": "pull_reviews",
@@ -175,9 +177,16 @@ class ResearchService:
     def __repr__(self) -> str:
         return ("ResearchService(profile=" + repr(self.profile)
                 + ", providers=" + str(len(self.registry.provider_ids()))
-                + ", transport=" + ("injected" if self._fetch_transport else "none")
+                + ", transport=" + ("injected" if self._fetch_transport
+                                    else "built-in-on-demand")
                 + ", http_transport=" + ("injected" if self._http_transport else "none")
                 + ", tokens=REDACTED)")
+
+    @staticmethod
+    def _resolve_host(host: str) -> tuple[str, ...]:
+        """Resolve every address so the retrieval policy can reject private targets."""
+        addresses = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+        return tuple(dict.fromkeys(str(item[4][0]) for item in addresses))
 
     # -------------------------------------------------------- injection scan
     @staticmethod
@@ -393,11 +402,6 @@ class ResearchService:
     def fetch_read(self, url: str, *, project_id: int | None = None,
                    mission_id: int | None = None, task_id: int | None = None,
                    headers: Mapping[str, str] | None = None) -> ResearchResult:
-        if self._fetch_transport is None:
-            return ResearchResult(
-                operation="fetch_read", capability=permissions.CAPABILITY_WEB_FETCH,
-                outcome=OUTCOME_UNAVAILABLE,
-                reason="no explicit fetch transport injected; no default network transport exists")
         captured: list[ResearchResult] = []
 
         def permission_gate(target_url: str) -> bool:
@@ -412,7 +416,20 @@ class ResearchService:
             captured.append(gate_result)
             return gate_result.allowed
 
-        fetcher = Fetcher(policy=self.policy, transport=self._fetch_transport,
+        transport = self._fetch_transport
+        fetch_policy = self.policy
+        if transport is None:
+            from .transport import StdlibHttpTransport
+
+            if fetch_policy.host_resolver is None:
+                fetch_policy = replace(fetch_policy, host_resolver=self._resolve_host)
+            transport = StdlibHttpTransport(
+                permission_gate=lambda _target: bool(captured and captured[-1].allowed),
+                allowed_schemes=fetch_policy.allowed_schemes,
+                timeout_s=fetch_policy.request_timeout_s,
+                max_bytes=fetch_policy.max_bytes,
+            )
+        fetcher = Fetcher(policy=fetch_policy, transport=transport,
                           permission_gate=permission_gate)
         try:
             document = fetcher.fetch(url, headers=headers)
@@ -587,6 +604,11 @@ class ResearchService:
                 if not full_name or not path:
                     raise ValueError("full_name and path are required")
                 result = client.file_contents(full_name, path, ref=ref)
+            elif action == "contents":
+                if not full_name:
+                    raise ValueError("full_name is required")
+                result = client.contents(full_name, path=path or "", ref=ref,
+                                         limit=limit)
             elif action in ("issue_comments", "pull_reviews"):
                 if not full_name or number is None:
                     raise ValueError("full_name and number are required")

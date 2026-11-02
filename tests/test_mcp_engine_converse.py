@@ -5,6 +5,9 @@ pin the prompt-shaping rules that must run before any model request is made.
 """
 from __future__ import annotations
 
+import asyncio
+import time
+
 from nl_coding_agent.app.mcp_engine import _attachment_context
 
 
@@ -36,3 +39,31 @@ def test_attachment_name_is_bounded():
     context = _attachment_context([{"name": "n" * 500, "extracted_text": "payload"}])
     assert "payload" in context
     assert "n" * 201 not in context
+
+
+def test_sync_mcp_tool_does_not_block_other_requests():
+    from nl_coding_agent.app.mcp_engine import _threaded_tool_registration
+
+    class ToolRegistry:
+        def tool(self, **options):
+            def register(function):
+                self.handler = function
+                return function
+            return register
+
+    registry = ToolRegistry()
+    tool = _threaded_tool_registration(registry)
+
+    @tool()
+    def slow_handler():
+        time.sleep(0.15)
+        return "done"
+
+    async def verify_responsiveness():
+        started = time.monotonic()
+        slow_request = asyncio.create_task(registry.handler())
+        await asyncio.sleep(0.01)
+        assert time.monotonic() - started < 0.1
+        assert await slow_request == "done"
+
+    asyncio.run(verify_responsiveness())

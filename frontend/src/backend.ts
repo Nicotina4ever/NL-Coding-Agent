@@ -139,6 +139,7 @@ export interface ModelCapabilityProbe {
     structured_output: string;
     patch_quality: string;
     patch_score: number;
+    vision: string;
     capabilities: Record<string, QueryableCapability>;
 }
 
@@ -306,10 +307,12 @@ export interface CustomAgent {
     name: string;
     provider?: string;
     model?: string;
+    role_id?: string;
+    project_id?: number | null;
+    team_active?: boolean;
     role?: string;
     instructions?: string;
     tools?: string[];
-    permissions?: string[];
     enabled?: boolean;
     kind?: string;
     [key: string]: unknown;
@@ -360,6 +363,7 @@ export interface EngineSettings {
         status?: string;
         offline?: boolean;
         network_configured?: boolean;
+        url_fetch_available?: boolean;
         network_granted?: boolean;
         permission_guidance?: string;
     };
@@ -938,7 +942,12 @@ export class EngineConnection {
     }
 
     /** Ingest explicit files (or text) through the engine attachment pipeline. */
-    async attachmentIngest(input: { paths?: string[]; text?: string; name?: string }): Promise<AttachmentIngestResult> {
+    async attachmentIngest(input: {
+        paths?: string[];
+        text?: string;
+        name?: string;
+        imageBase64?: string;
+    }): Promise<AttachmentIngestResult> {
         const params: Record<string, unknown> = {};
         if (input.paths && input.paths.length) {
             params.paths = input.paths;
@@ -946,6 +955,9 @@ export class EngineConnection {
         if (input.text) {
             params.text = input.text;
             params.name = input.name || 'pasted-context.txt';
+        }
+        if (input.imageBase64) {
+            params.image_base64 = input.imageBase64;
         }
         const result = await this.callJson<AttachmentIngestResult>('attachment_ingest', params, 60_000);
         if (!result || typeof result !== 'object') {
@@ -1056,9 +1068,14 @@ export class EngineConnection {
         }>('speech_transcribe', { wav_path: wavPath, language }, 180_000);
     }
 
-    async speechSwitchModel(modelId: string): Promise<{ ok: boolean; model?: Record<string, unknown> }> {
+    async speechSwitchModel(modelId: string, engine = ''): Promise<{ ok: boolean; model?: Record<string, unknown> }> {
         return this.callJson<{ ok: boolean; model?: Record<string, unknown> }>(
-            'speech_switch_model', { model_id: modelId }, 30_000);
+            'speech_switch_model', { model_id: modelId, engine }, 30_000);
+    }
+
+    async speechDownloadModel(modelId: string): Promise<{ ok: boolean; model?: Record<string, unknown>; catalog?: Record<string, unknown> }> {
+        return this.callJson<{ ok: boolean; model?: Record<string, unknown>; catalog?: Record<string, unknown> }>(
+            'speech_download_model', { model_id: modelId }, 300_000);
     }
 
     async speechSetExternalHome(path: string): Promise<{ ok: boolean; speech?: Record<string, unknown> }> {
@@ -1201,12 +1218,22 @@ export class EngineConnection {
 
     async teamPlan(model: string, focus = ''): Promise<{
         ok: boolean; roles?: Array<Record<string, unknown>>; summary?: string;
-        analyst_model?: string; fallback?: boolean; resources?: Record<string, unknown>;
+        analyst_model?: string; fallback?: boolean; analysis_error?: string;
+        resources?: Record<string, unknown>;
     }> {
         return this.callJson<{
             ok: boolean; roles?: Array<Record<string, unknown>>; summary?: string;
-            analyst_model?: string; fallback?: boolean; resources?: Record<string, unknown>;
+            analyst_model?: string; fallback?: boolean; analysis_error?: string;
+            resources?: Record<string, unknown>;
         }>('team_plan', { model, focus }, 240_000);
+    }
+
+    async assignSpecialistTeam(roles: Array<Record<string, unknown>>): Promise<{
+        ok: boolean; created: number; updated: number; agents: CustomAgent[];
+    }> {
+        return this.callJson<{
+        ok: boolean; created: number; updated: number; agents: CustomAgent[];
+        }>('assign_specialist_team', { roles }, 30_000);
     }
 
     async planGenerate(model: string, objective: string): Promise<Record<string, unknown>> {
@@ -1234,7 +1261,9 @@ export class EngineConnection {
             role: agent.role || 'assistant',
             instructions: agent.instructions || '',
             tools: agent.tools || [],
-            permissions: agent.permissions || [],
+            role_id: agent.role_id || '',
+            project_id: agent.project_id,
+            team_active: agent.team_active,
             enabled: agent.enabled !== false,
             approved: true
         }, 30_000);
@@ -1333,6 +1362,11 @@ export class EngineConnection {
         return this.callJson<{ ok: boolean; mission: MissionRow }>('archive_mission', { mission_id: missionId, approved: true }, 30_000);
     }
 
+    async archiveMissions(missionIds: number[]): Promise<{ ok: boolean; missions: MissionRow[]; archived_count: number }> {
+        return this.callJson<{ ok: boolean; missions: MissionRow[]; archived_count: number }>(
+            'archive_missions', { mission_ids: missionIds, approved: true }, 30_000);
+    }
+
     async acceptMission(missionId: number): Promise<{ ok: boolean; promotion_status?: string; accepted?: boolean }> {
         return this.callJson<{ ok: boolean; promotion_status?: string; accepted?: boolean }>(
             'accept_mission', { mission_id: missionId, approved: true }, 30_000);
@@ -1352,6 +1386,11 @@ export class EngineConnection {
 
     async deleteMission(missionId: number): Promise<{ ok: boolean; mission: MissionRow }> {
         return this.callJson<{ ok: boolean; mission: MissionRow }>('delete_mission', { mission_id: missionId, approved: true }, 30_000);
+    }
+
+    async deleteMissions(missionIds: number[]): Promise<{ ok: boolean; missions: MissionRow[]; deleted_count: number }> {
+        return this.callJson<{ ok: boolean; missions: MissionRow[]; deleted_count: number }>(
+            'delete_missions', { mission_ids: missionIds, approved: true }, 30_000);
     }
 
     async missionStatus(missionId: number): Promise<MissionRow> {
@@ -1419,4 +1458,3 @@ export class EngineConnection {
         );
     }
 }
-

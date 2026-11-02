@@ -67,6 +67,47 @@ def test_make_llm_omits_context_until_explicitly_configured(db, monkeypatch):
     assert recorded["extra_body"] == {"options": {"top_k": 20, "num_ctx": 16384}}
 
 
+def test_make_llm_resolves_custom_provider_route_and_keeps_project_access_gate(
+        db, tmp_path, monkeypatch):
+    import nl_coding_agent.agents.orchestrator as orchestrator
+    from nl_coding_agent.core.permissions import PermissionDenied
+    from nl_coding_agent.models import model_config_store
+
+    config_path = tmp_path / "models.yaml"
+    monkeypatch.setenv("NL_MODELS_CONFIG", str(config_path))
+    monkeypatch.setenv("LOCAL_TEST_API_KEY", "local-test-key")
+    config = {
+        "providers": {
+            "custom_local": {
+                "kind": "openai_compatible",
+                "enabled": True,
+                "base_url": "http://127.0.0.1:1234/v1",
+                "api_key_env": "LOCAL_TEST_API_KEY",
+            },
+        },
+        "roles": {},
+    }
+    model_config_store.save(config, config_path)
+    captured = {}
+
+    class FakeLLM:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(orchestrator, "LLM", FakeLLM)
+    orchestrator._make_llm(
+        "custom_local/assigned-model", project_id=41, role="developer")
+    assert captured["model"] == "openai/assigned-model"
+    assert captured["base_url"] == "http://127.0.0.1:1234/v1"
+    assert captured["api_key"] == "local-test-key"
+
+    config["providers"]["custom_local"]["base_url"] = "https://models.example/v1"
+    model_config_store.save(config, config_path)
+    with pytest.raises(PermissionDenied) as exc_info:
+        orchestrator._make_llm("custom_local/assigned-model", project_id=41)
+    assert exc_info.value.scope == "network"
+
+
 def test_ollama_provider_omits_context_until_configured(db, monkeypatch):
     from nl_coding_agent.models import providers
 
