@@ -554,11 +554,50 @@ CREATE TABLE IF NOT EXISTS document_plan_versions (
 );
 CREATE INDEX IF NOT EXISTS idx_document_plans_project
     ON document_plans(project_id, id DESC);
+
+-- Persisted, bounded project intelligence (Context Engine P1). The profile is a
+-- cache of a read-only scan. Memory is durable cross-mission knowledge.
+CREATE TABLE IF NOT EXISTS project_profiles (
+    project_id   INTEGER PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+    root         TEXT NOT NULL DEFAULT '',
+    profile_json TEXT NOT NULL DEFAULT '{}',
+    updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS project_memory (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    mission_id  INTEGER,
+    kind        TEXT NOT NULL,
+    text        TEXT NOT NULL,
+    tags        TEXT NOT NULL DEFAULT '[]',
+    confidence  REAL NOT NULL DEFAULT 0.5,
+    fingerprint TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(project_id, fingerprint)
+);
+CREATE INDEX IF NOT EXISTS idx_project_memory_project
+    ON project_memory(project_id, id DESC);
+
+CREATE TABLE IF NOT EXISTS context_summaries (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id    INTEGER,
+    session_id    TEXT NOT NULL DEFAULT '',
+    scope         TEXT NOT NULL DEFAULT 'chat',
+    message_count INTEGER NOT NULL DEFAULT 0,
+    summary       TEXT NOT NULL,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_context_summaries_session
+    ON context_summaries(project_id, session_id, id DESC);
 """
 
 # Columns added after the first operational baseline.  Migrations are additive
 # and idempotent so existing mission history is preserved.
 _MIGRATIONS: list[tuple[str, str, str]] = [
+    # Incremental context digests (P1): covered message count and structured digest.
+    ("context_summaries", "covered_count", "INTEGER NOT NULL DEFAULT 0"),
+    ("context_summaries", "digest_json", "TEXT NOT NULL DEFAULT '{}'"),
     ("missions", "result_summary", "TEXT"),
     ("missions", "review_verdict", "TEXT"),
     ("missions", "diff_stat", "TEXT"),

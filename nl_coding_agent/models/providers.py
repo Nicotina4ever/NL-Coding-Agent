@@ -218,7 +218,9 @@ class OllamaProvider:
         capabilities = getattr(self, "_capabilities", {}).get(model, ())
         if capabilities and "tools" not in capabilities:
             raise ValueError("Selected model reports no native tools capability; select validated JSON mode explicitly")
-        wire_messages = [{**m, **({"tool_name": m.get("name", "")} if m["role"] == "tool" else {})}
+        wire_messages = [{key: value for key, value in
+                          {**m, **({"tool_name": m.get("name", "")} if m["role"] == "tool" else {})}.items()
+                          if not str(key).startswith("_")}
                          for m in messages]
         body = {
             "model": model, "messages": wire_messages, "tools": tools,
@@ -228,7 +230,15 @@ class OllamaProvider:
         if options:
             body["options"] = options
         data = _post_json(self.base_url + "/api/chat", body, timeout)
-        return dict(data.get("message") or {})
+        message = dict(data.get("message") or {})
+        # Provider-reported usage lets the context estimator calibrate itself.
+        message["_usage"] = {
+            "prompt_tokens": data.get("prompt_eval_count"),
+            "output_tokens": data.get("eval_count"),
+        }
+        if message.get("thinking"):
+            message["_thinking"] = str(message.get("thinking") or "")
+        return message
 
 
 class OpenAICompatibleProvider:
@@ -347,7 +357,8 @@ class OpenAICompatibleProvider:
         self.assert_generation_permitted(model, project_id)
         wire_messages = []
         for message in messages:
-            item = dict(message)
+            item = {key: value for key, value in dict(message).items()
+                    if not str(key).startswith("_")}
             if item.get("tool_calls"):
                 item["tool_calls"] = [{**call, "function": {**call["function"], "arguments":
                     json.dumps(call["function"]["arguments"]) if isinstance(call["function"]["arguments"], dict)
@@ -359,7 +370,16 @@ class OpenAICompatibleProvider:
         choices = data.get("choices") or []
         if not choices:
             raise ValueError("Provider returned no chat completion")
-        return dict(choices[0].get("message") or {})
+        message = dict(choices[0].get("message") or {})
+        usage = data.get("usage") or {}
+        message["_usage"] = {
+            "prompt_tokens": usage.get("prompt_tokens"),
+            "output_tokens": usage.get("completion_tokens"),
+        }
+        reasoning = message.get("reasoning_content") or message.get("reasoning")
+        if reasoning:
+            message["_thinking"] = str(reasoning)
+        return message
 
 
 def build_providers(config: dict[str, Any] | None = None) -> list[Any]:

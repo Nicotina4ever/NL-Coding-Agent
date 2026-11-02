@@ -1,7 +1,19 @@
-**Checkpoint 2 novembre 2026.** Baseline verificata su `6e98f46`/`e49333f` + correzioni harness: suite Python completa **1369 passed in 7:54** a working tree fermo. Acceptance reali eseguite in questa sessione: `npm run test:webview` 3 PASS, `npm run test:integration` (engine MCP 1.30.0) 16 PASS con shutdown dei child, `npm run test:chat-features` **PASS con VS Code Insiders reale e Ollama `granite4.2:3b`** (chat, allegati, editor selection, fetch URL con attachment persistito, history, modalità automatica, shutdown). VSIX 0.7.2 rigenerata da HEAD (`.workspace/dist/NL-Coding-Agent-0.7.2.vsix`, 4,7 MB, 15:46). Resta stale il payload standalone estratto e lo ZIP portabile: vanno rigenerati prima di qualunque acceptance standalone. Correzioni harness applicate e coperte da test: percorso Team Architect→specialisti, parità tool, deadline missione, pulizia staging, affidabilità NL Coder.
+**Checkpoint 2 novembre 2026 (sessione harness).** Baseline verificata e P1 Context Engine implementato. Suite Python completa **verde** a working tree fermo (dettaglio sotto); acceptance reali eseguite: NL Coder `test:chat-features` PASS con VS Code Insiders e Ollama reale, integrazione MCP 16 PASS, e **missione multi-agente reale completata** (`docs/evidence/nlcode/real-verification-20261102-165024.json`): 5 ruoli (architect, 2 developer, tester, reviewer), candidato+oracle PASS, reviewer APPROVE, promozione di `src/calc.py` e `src/stats.py` con modelli Ollama locali. Pulizia di Livello A autorizzata ed eseguita: **2.760,8 MB** di artefatti rigenerabili rimossi (nessun dato utente). Restano le lacune P2–P5 (code intelligence/hook, skills/subagenti, routing unificato, payload standalone, documentazione storica).
 # Stato corrente — NL Coding Agent / NL Code
 
 **Verifica aggiornata: 2 novembre 2026.** La versione **1.0 STABLE non è stata raggiunta**. Due audit indipendenti (motore e percorso team) più una verifica frontend hanno classificato lo stato reale; le affermazioni di questo file sono allineate al codice/test al momento del checkpoint, non ai documenti storici.
+
+### Context Engine e memoria (P1, implementato)
+
+- **Finestra dinamica per modello**: `context/window.py` ricava il budget da `num_ctx` configurato, capability ledger, config provider, cache misurata e probe Ollama `/api/show`; solo se il provider non riporta nulla usa un fallback generoso dichiarato. Non esiste più il muro fisso a 60.000 caratteri e il budget non è un limite economico o di iterazioni.
+- **Thinking e output riservati**: il budget riserva esplicitamente token di output e di ragionamento; i campi `thinking`/`reasoning` già presenti nella conversazione sono conteggiati. La stima si calibra sui `prompt_eval_count`/`usage.prompt_tokens` reali del provider (EWMA per modello).
+- **Compattazione senza perdita**: le turnate con scritture, risultati di test/verifica, errori, decisioni/steering e la richiesta corrente sono preservate testualmente; solo il resto viene riassunto in un digest strutturato (obiettivi, decisioni, risultati, problemi). Il digest è incrementale: non viene ricalcolato né duplicato, e copre anche le decisioni ancora presenti nel prompt così una nuova sessione può continuare.
+- **Continuità**: Chat carica la cronologia in funzione della finestra, inietta il digest persistito quando omette messaggi o quando inizia una nuova sessione, e mantiene il digest nel DB (`context_summaries` con `covered_count`/`digest_json`).
+- **Contesto condiviso tra agenti**: `MissionContextPack` è costruito una volta per missione (profile + file rilevanti + memoria) e ogni ruolo riceve solo la propria vista (architect/auditor: profilo+file selezionabili; developer/debugger: estratti; reviewer: decisioni+aree cambiate), evitando di duplicare l'intero contesto.
+- **Memoria di progetto**: decisioni/errori/esiti delle missioni sono persistiti e richiamati per parole chiave, filtrando le memorie che riguardano file diversi dal target esplicito.
+
+Verifica: `tests/test_context_engine.py` (finestra dinamica, calibrazione, thinking, digest critico, pack per ruolo, memoria e missione reale FakeCrewRuntime), `tests/test_chat_tools.py` (turno lungo compattato, continuità nuova sessione). Evidenza reale: missione multi-agente completata e risposta di una nuova sessione Chat con la decisione `CH-42` recuperata dal digest (stesso file di evidence).
+
 
 ### Checkpoint harness (2 novembre 2026)
 
@@ -12,14 +24,12 @@
 
 ### Lacune harness ancora aperte (ordinate)
 
-1. **Context engine assente**: nessun tokenizer/compaction; Chat con tool ha un muro a 60.000 caratteri JSON ("start a narrower turn") e history limitata agli ultimi 20 messaggi; i prompt missione ricostruiscono il contesto da zero (snapshot alfabetico di 18k char). Nessun project profile persistito né recupero selettivo.
-2. **Memoria di progetto assente**: handoff/decisioni/errori sono per missione; nessuna recall cross-missione delle lezioni o dei fallimenti precedenti.
-3. **Code intelligence fuori dal loop**: LSP esiste solo in GUI/services, non è un tool del modello; la ricerca è `rglob`+substring; la verifica è solo pytest, senza diagnostica post-write.
-4. **Skills e subagenti assenti**: nessun caricamento progressivo di skill; 7 ruoli fissi in `agents/specs.py`, pipeline sequenziale obbligata, nessuna delega con contesto isolato.
-5. **Hook pre/post tool assenti**: i gate sono a fine stage; un solo retry dopo la validazione, nessun lint/typecheck/diagnostica per singola scrittura.
-6. **Chat resilience**: un turno con tool in volo non è recuperabile dopo crash; Stop Chat non annulla la chiamata in corso nell'estensione.
-7. **NL Coder / distribuzione**: corretti in questa sessione (testato con `test:chat-features` e compile) lo stato connessione che restava "connected" con engine morto, Stop Chat che ora abortisce la chiamata in volo, drain della coda all'avvio, ordine di rimozione dalla coda prima del dispatch (niente doppio invio), monitor missione che non ruba la selezione, CLOUD con conferma esplicita modale, `/help` e `/restore` raggiungibili, messaggio team con ruoli scartati/rimappati e tool ripristinati. Restano: VSIX 0.7.2 rigenerata ma **payload standalone estratto e ZIP portabile stale** (da ricostruire), doppia `initialize` alla riconnessione, `errorMessage` sticky, identità client MCP `0.1.0`.
-8. **Documentazione**: riferimenti superati in `README`/`docs/README`/`NL_CODE_STANDALONE`/`FRONTEND_ARCHITECTURE`/piano 1.0; `NEXT_SELF_BUILD_MISSION.md` (Linux/macOS) va sostituito dalla priorità harness corrente.
+1. **Code intelligence fuori dal loop**: LSP esiste in GUI/services ma non è ancora un tool del modello; la ricerca è `rglob`+substring; manca la diagnostica post-write nel ciclo di sviluppo.
+2. **Skills e subagenti assenti**: nessun caricamento progressivo di skill; ruoli fissi in `agents/specs.py`, pipeline sequenziale, nessuna delega con contesto isolato (il Context Engine condiviso è il primo passo, non il runtime subagenti).
+3. **Hook pre/post tool assenti**: i gate sono a fine stage; nessun lint/typecheck/diagnostica per singola scrittura.
+4. **Chat resilience**: Stop Chat ora annulla la chiamata in volo, ma un turno con tool in volo interrotto da crash non è ancora journalato/recuperabile.
+5. **NL Coder / distribuzione**: corretti stato connessione, Stop, drain coda, doppio invio, selezione monitor, CLOUD con conferma, `/help`/`/restore`, messaggio team. Restano: **payload standalone estratto e ZIP portabile stale** (da ricostruire), doppia `initialize` alla riconnessione, `errorMessage` sticky, identità client MCP `0.1.0`.
+6. **Documentazione**: restano da consolidare `README`/`docs/README`/`NL_CODE_STANDALONE`/`FRONTEND_ARCHITECTURE` e il piano 1.0; `NEXT_SELF_BUILD_MISSION.md` ora indica P2.
 
 
 ### URL fetch e ricerca web

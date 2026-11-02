@@ -283,8 +283,35 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
     def project_context() -> dict:
         """Identify the one project bound to this server; never opens arbitrary paths."""
         require_read()
-        return {"project": project, "execution_enabled": allow_execution,
-                "engine": "AppServices/Supervisor", "state": "existing mission SQLite"}
+        context = {"project": project, "execution_enabled": allow_execution,
+                   "engine": "AppServices/Supervisor", "state": "existing mission SQLite"}
+        try:
+            context["context_engine"] = services.context_status(bound_project_id)
+        except Exception as exc:
+            context["context_engine"] = {"ok": False, "error": type(exc).__name__}
+        return context
+
+    @server.tool(annotations=read_only)
+    def project_profile(refresh: bool = False) -> dict:
+        """Persisted project profile (languages, test command, modules, docs).
+
+        Read-only cache of a bounded scan; ``refresh`` rescans when files changed.
+        It never edits the project and never reads user data or vendor trees.
+        """
+        require_read()
+        return services.project_profile(bound_project_id, refresh=bool(refresh))
+
+    @server.tool(annotations=read_only)
+    def project_memory_recall(query: str = "", limit: int = 8) -> dict:
+        """Recall durable lessons/decisions from earlier missions of this project."""
+        require_read()
+        return services.project_memory(bound_project_id, query, limit=int(limit))
+
+    @server.tool(annotations=read_only)
+    def context_status() -> dict:
+        """Read-only context-engine health: profile, memory and persisted summary."""
+        require_read()
+        return services.context_status(bound_project_id)
 
     @server.tool(annotations=read_only)
     def engine_settings(include_models: bool = False, timeout_s: float = 2.0) -> dict:

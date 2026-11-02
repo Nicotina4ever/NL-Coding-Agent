@@ -9,8 +9,8 @@
 3. **[08_ACCEPTANCE_GATES.md](08_ACCEPTANCE_GATES.md)** — prove richieste prima di dichiarare stable.
 4. **[OPERATIONS_AND_RESTART.md](OPERATIONS_AND_RESTART.md)** — ripresa, comandi e cosa non toccare.
 
-`NEXT_SELF_BUILD_MISSION.md` descrive la prossima missione (Context Engine e memoria di progetto);
-non è un piano parallelo.
+`NEXT_SELF_BUILD_MISSION.md` descrive la prossima missione (P2 Code Intelligence e runtime hooks);
+non è un piano parallelo. P1 Context Engine e memoria di progetto sono implementati e verificati.
 
 ## Dove trovare gli altri dettagli, soltanto quando servono
 

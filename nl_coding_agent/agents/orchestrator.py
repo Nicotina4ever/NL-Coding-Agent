@@ -426,7 +426,8 @@ def _apply_snippet_patch(project_root: Path, rel_path: str, target: str,
 
 def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None = None,
                         mission_id: int | None = None, role: str | None = None,
-                        model: str | None = None) -> list[str]:
+                        model: str | None = None,
+                        expected_paths: list[str] | None = None) -> list[str]:
     """Execute write/patch actions emitted as text by a local model.
 
     This is a fallback for models that describe a tool call instead of using the
@@ -434,6 +435,44 @@ def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None
     """
     actions: list[str] = []
     root = Path(project_root).resolve()
+    scope = [str(item).replace("\\", "/").lstrip("./") for item in (expected_paths or [])]
+
+    def path_allowed(rel_path: str) -> bool:
+        return not scope or any(rel_path == item or rel_path.endswith("/" + item)
+                                for item in scope)
+
+    # Models often emit several labelled sections in one fence (current vs patched
+    # content). Pick the final/patched section for each declared target path.
+    section_blocks = re.findall(r"```[A-Za-z0-9_+.-]*\r?\n(.*?)```", text, re.DOTALL)
+    for block in section_blocks:
+        matches = list(re.finditer(r"^---\s*(.+?)\s*---\s*$", block, re.MULTILINE))
+        if not matches:
+            continue
+        sections: list[tuple[str, str]] = []
+        for index, match in enumerate(matches):
+            start = match.end()
+            end = matches[index + 1].start() if index + 1 < len(matches) else len(block)
+            sections.append((match.group(1).strip(), block[start:end].strip("\n")))
+        selected: dict[str, str] = {}
+        for label, body in sections:
+            candidate = label.split("(")[0].strip().strip("`").replace("\\", "/")
+            if not candidate or " " in candidate or not path_allowed(candidate):
+                continue
+            lowered = label.lower()
+            if any(word in lowered for word in ("patcher", "patched", "final", "updated",
+                                                "complete", "new content")):
+                selected[candidate] = body
+            else:
+                selected.setdefault(candidate, body)
+        for rel_path, body in selected.items():
+            try:
+                content = clean_file_content(body, rel_path)
+                if not content.strip():
+                    continue
+                scoped_write_file(root, rel_path, content)
+                actions.append(f"Wrote {rel_path} via labelled section block")
+            except Exception as exc:
+                actions.append(f"Failed to write {rel_path}: {exc}")
 
     # Some local models emit one JSON tool object per line inside a Python fence
     # instead of a JSON array or a ```json fence. Parse the literal objects only.
@@ -478,7 +517,7 @@ def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None
     )
     for match in section_pattern.finditer(text):
         rel_path = match.group(1).strip().strip("`")
-        if not rel_path or " " in rel_path:
+        if not rel_path or " " in rel_path or not path_allowed(rel_path):
             continue
         try:
             scoped_write_file(root, rel_path,
@@ -513,6 +552,9 @@ def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None
     write_pattern = re.compile(r"```(?:write|file):([^\r\n`]+)\r?\n(.*?)```", re.DOTALL)
     for match in write_pattern.finditer(text):
         rel_path = match.group(1).strip()
+        if not path_allowed(rel_path):
+            actions.append(f"Skipped out-of-scope write: {rel_path}")
+            continue
         content = clean_file_content(match.group(2), rel_path)
         try:
             scoped_write_file(root, rel_path, content)
@@ -527,6 +569,9 @@ def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None
     )
     for match in labelled_pattern.finditer(text):
         rel_path = match.group(1).strip()
+        if not path_allowed(rel_path):
+            actions.append(f"Skipped out-of-scope write: {rel_path}")
+            continue
         content = clean_file_content(match.group(2), rel_path)
         try:
             scoped_write_file(root, rel_path, content)
@@ -548,6 +593,42 @@ def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None
             actions.append(f"Failed to patch {rel_path}: {exc}")
 
     actions.extend(_apply_python_tool_calls(root, text))
+
+    # Last-resort recovery for a single declared target: a model may answer with one
+    # plain fenced file (sometimes with pseudo "current/patched" headings) instead of
+    # a tool call or write:path block. Never write prose or invalid Python.
+    wrote = [item for item in actions if item.startswith(("Wrote ", "Patched "))]
+    if not wrote and len(scope) == 1:
+        target = scope[0]
+        for block in re.findall(r"```[A-Za-z0-9_+.-]*\r?\n(.*?)```", text, re.DOTALL):
+            if target not in block and "def " not in block and "class " not in block:
+                continue
+            body = block
+            marker = re.search(r"---[^\r\n]*patched[^\r\n]*---", body, re.IGNORECASE)
+            if marker:
+                body = body[marker.end():]
+            cleaned_lines = [
+                line for line in body.splitlines()
+                if not line.strip().startswith(("+++ ", "--- ", "diff --git", "@@ "))
+            ]
+            content = body if not cleaned_lines else "\n".join(cleaned_lines)
+            try:
+                content = clean_file_content(content, target)
+            except Exception:
+                continue
+            if not content.strip() or len(content.splitlines()) < 2:
+                continue
+            if target.endswith(".py"):
+                try:
+                    compile(content, target, "exec")
+                except SyntaxError:
+                    continue
+            try:
+                scoped_write_file(root, target, content)
+                actions.append(f"Wrote {target} via recovered code block")
+                break
+            except Exception as exc:
+                actions.append(f"Failed to write {target}: {exc}")
     try:
         from nl_coding_agent.core.tool_invocations import record_invocation
         for action in actions:
@@ -587,6 +668,7 @@ class MultiAgentOrchestrator:
         self._last_agent_result = None
         self._route_selections: dict[str, dict] = {}
         self._ledger_mission_id: int | None = None
+        self._mission_pack = None
         self._team_by_role: dict[str, dict] = {}
         for profile in project_team_agents(self.project_id):
             self._team_by_role.setdefault(str(profile.get("role_id") or ""), profile)
@@ -1090,8 +1172,38 @@ class MultiAgentOrchestrator:
                 remaining.remove(path)
         return ordered
 
-    def _existing_project_context(self, workspace: Path, limit: int = 18_000) -> str:
-        """Bounded read-only snapshot of the small project for the developer prompt."""
+    def _context_engine(self, root: Path | None = None):
+        from nl_coding_agent.context.engine import ContextEngine
+        return ContextEngine(self.project_id, root or self.root)
+
+    def _remember_outcome(self, mission_id: int) -> None:
+        """Persist a compact cross-mission lesson; never blocks a finished mission."""
+        try:
+            from nl_coding_agent.context.memory import attach_mission_outcome
+
+            attach_mission_outcome(int(mission_id))
+        except Exception:
+            pass
+
+    def _existing_project_context(self, workspace: Path, goal: str = "",
+                                  limit: int = 18_000) -> str:
+        """Relevant project context for this mission, with the legacy scan as fallback.
+
+        The shared MissionContextPack is built once per mission and sliced per role;
+        the old alphabetical snapshot remains only as a fallback when it is absent.
+        """
+        try:
+            if self._mission_pack is not None:
+                text = self._mission_pack.for_role("developer", budget_chars=limit)
+                if text.strip():
+                    return text
+            engine = self._context_engine()
+            context = engine.mission_context(goal, budget_chars=limit,
+                                             root_override=workspace)
+            if str(context.text or "").strip():
+                return context.text
+        except Exception:
+            pass
         chunks: list[str] = []
         used = 0
         for candidate in sorted(workspace.rglob("*")):
@@ -1621,6 +1733,7 @@ class MultiAgentOrchestrator:
             diff_stat=stat,
             changed_paths=changed,
         )
+        self._remember_outcome(mission_id)
         record_handoff(
             mission_id,
             "orchestrator",
@@ -1680,6 +1793,7 @@ class MultiAgentOrchestrator:
             diff_stat="",
             changed_paths=[],
         )
+        self._remember_outcome(mission_id)
         record_handoff(
             mission_id,
             "orchestrator",
@@ -1727,6 +1841,7 @@ class MultiAgentOrchestrator:
             except Exception:
                 staged_paths = []
         update_mission_status(mission_id, "interrupted")
+        self._remember_outcome(mission_id)
         record_handoff(
             mission_id,
             "orchestrator",
@@ -1772,6 +1887,7 @@ class MultiAgentOrchestrator:
         self._emit("orchestrator", "error", message, mission_id=mission_id)
         record_handoff(mission_id, "orchestrator", "user", message, {"error": str(exc)})
         update_mission_status(mission_id, "failed")
+        self._remember_outcome(mission_id)
         return self._result_payload(mission_id, status="failed", error=str(exc))
 
     def _finalize_execution_failed(self, mission_id: int, *, error: str,
@@ -1810,6 +1926,7 @@ class MultiAgentOrchestrator:
             "stage_dir": stage_dir,
             "live_changes": "none",
         }
+        self._remember_outcome(mission_id)
         record_handoff(mission_id, "orchestrator", "user", summary, payload)
         try:
             self._emit("orchestrator", "error", summary, mission_id=mission_id)
@@ -2003,6 +2120,24 @@ class MultiAgentOrchestrator:
             # The scope is the union of all implementation subtasks, not just the first.
             stage_scope = [path for task in dev_tasks for path in (task.get("write_paths") or [])]
             stage = self._ensure_stage(mission_id, dev_task, goal, scope_paths=stage_scope)
+            # Recover mission context once; every agent stage receives a role slice.
+            self._mission_pack = None
+            try:
+                self._mission_pack = self._context_engine().build_mission_pack(
+                    goal, budget_chars=18_000, root_override=stage.workspace)
+                if self._mission_pack is not None:
+                    self._emit(
+                        "orchestrator", "info",
+                        "Context recovered: "
+                        + str(len(self._mission_pack.files)) + " relevant file(s), "
+                        + str(len(self._mission_pack.memory_entries)) + " memory item(s)",
+                        mission_id=mission_id,
+                        files=[str(item.get("path")) for item in self._mission_pack.files],
+                    )
+            except Exception as exc:
+                self._emit("orchestrator", "warning",
+                           "Context recovery unavailable: " + type(exc).__name__,
+                           mission_id=mission_id)
             outcome = promotion.reconcile(stage, recovery_dir=self._recovery_dir())
             if outcome.get("state") == "conflict":
                 self._save_promotion_status(mission_id, "rollback_conflict")
@@ -2188,6 +2323,17 @@ class MultiAgentOrchestrator:
             mission_id=mission_id,
         )
         tools = get_project_tools(self.root, read_only=True)
+        analysis_context = ""
+        try:
+            if self._mission_pack is not None:
+                analysis_context = self._mission_pack.for_role(role, budget_chars=6_000)
+            else:
+                engine = self._context_engine()
+                profile = engine.profile_text(max_chars=1_500)
+                memory = engine.memory_text(goal, limit=5)
+                analysis_context = "\n".join(part for part in (profile, memory) if part)[:5_000]
+        except Exception:
+            analysis_context = ""
         prompt = f"""
 PROJECT ROOT: {self.root}
 MISSION GOAL: {goal}
@@ -2195,6 +2341,8 @@ MISSION GOAL: {goal}
 You are the read-only {display_role} in a multi-agent coding mission.
 Inspect only the files needed to understand the existing design, constraints and tests.
 Do not modify any file; you have no write tools.
+
+{analysis_context}
 
 {purpose}
 
@@ -2390,7 +2538,7 @@ Do not claim that changes were made. The Developer will perform them in a staged
             "USER STEERING (highest priority, while preserving verification and scope):\n"
             + steering if steering else ""
         )
-        existing_context = self._existing_project_context(stage.workspace)
+        existing_context = self._existing_project_context(stage.workspace, goal)
         tests_context = ""
         try:
             test_files = sorted((stage.workspace / "tests").glob("test_*.py"))
@@ -2534,6 +2682,7 @@ INSTRUCTIONS:
                                 stage.workspace, first_output,
                                 project_id=self.project_id, mission_id=mission_id,
                                 role="developer", model=model_name,
+                                expected_paths=write_paths,
                             )
                             promotion.normalize_staged_newlines(stage)
                         break
@@ -2547,6 +2696,7 @@ INSTRUCTIONS:
                             stage.workspace, first_output,
                             project_id=self.project_id, mission_id=mission_id,
                             role="developer", model=model_name,
+                            expected_paths=write_paths,
                         )
                         promotion.normalize_staged_newlines(stage)
                     output = first_output
@@ -2557,6 +2707,7 @@ INSTRUCTIONS:
                 stage.workspace, output,
                 project_id=self.project_id, mission_id=mission_id,
                 role="developer", model=model_name,
+                expected_paths=write_paths,
             )
             promotion.normalize_staged_newlines(stage)
             after_files = snapshot_workspace(stage.workspace)
@@ -2851,6 +3002,12 @@ INSTRUCTIONS:
             if write_paths
             else "Stay focused on the failing code."
         )
+        debug_context = ""
+        try:
+            if self._mission_pack is not None:
+                debug_context = self._mission_pack.for_role("debugger", budget_chars=4_500)
+        except Exception:
+            debug_context = ""
         prompt = f"""
 PROJECT ROOT: {self.root}
 WORKSPACE (staged copy; write relative paths here): {stage.workspace}
@@ -2858,6 +3015,9 @@ TEST FAILURE LOGS:
 {_truncate(error_msg, 12_000)}
 
 {scope_text}
+
+SHARED MISSION CONTEXT (recovered once for this mission; do not re-read the repository):
+{debug_context}
 
 INSTRUCTIONS:
 1. Examine the failing tests and the current staged code.
@@ -2887,6 +3047,7 @@ INSTRUCTIONS:
             stage.workspace, output,
             project_id=self.project_id, mission_id=mission_id,
             role="debugger", model=model_name,
+            expected_paths=write_paths,
         )
         promotion.normalize_staged_newlines(stage)
         after_debug = snapshot_workspace(stage.workspace)
@@ -2964,6 +3125,12 @@ INSTRUCTIONS:
             "\nUSER STEERING TO CONSIDER DURING REVIEW:\n" + steering
             if steering else ""
         )
+        shared_context = ""
+        try:
+            if self._mission_pack is not None:
+                shared_context = self._mission_pack.for_role("reviewer", budget_chars=4_000)
+        except Exception:
+            shared_context = ""
         self._emit(
             "reviewer", "info",
             f"Reviewer inspecting the staged candidate ({stat}) on task #{task_id}",
@@ -2978,6 +3145,9 @@ PERSISTED MISSION OBJECTIVE:
 {objective}
 
 {steering_text}
+
+SHARED MISSION CONTEXT (same recovered pack used by the other agents):
+{shared_context}
 
 AUTHORIZED CANDIDATE WRITE SCOPE:
 {json.dumps(list(stage.scope), ensure_ascii=False)}

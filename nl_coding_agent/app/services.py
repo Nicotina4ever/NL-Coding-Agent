@@ -307,6 +307,15 @@ class AppServices:
             )
         except Exception:
             pass
+        # Build/persist the bounded project profile so Chat and missions retrieve
+        # relevant context instead of rescanning the repository. Best effort: a
+        # profile failure must never block opening a project.
+        try:
+            from nl_coding_agent.context.profile import ensure_profile
+
+            ensure_profile(int(result["id"]), result["root"])
+        except Exception:
+            pass
         return result
 
     def list_recent_projects(self, limit: int = 20) -> list[dict]:
@@ -386,6 +395,47 @@ class AppServices:
 
     def get_project_facts(self, project_id: int) -> dict:
         return _get_project_facts(project_id)
+
+    # ------------------------------------------------------ context engine (P1)
+
+    def project_profile(self, project_id: int, *, refresh: bool = False) -> dict:
+        """Persisted project profile consumed by Chat and mission prompts."""
+        from nl_coding_agent.context.engine import ContextEngine
+        from nl_coding_agent.core import permissions
+
+        permissions.require(permissions.READ, project_id=int(project_id))
+        project = self.get_project(int(project_id))
+        if not project:
+            raise ValueError("Project not found")
+        engine = ContextEngine(int(project_id), project["root"])
+        profile = engine.profile(refresh=bool(refresh))
+        return {"ok": profile is not None,
+                "project_id": int(project_id),
+                "profile": profile.to_dict() if profile else None}
+
+    def project_memory(self, project_id: int, query: str = "", *,
+                       limit: int = 8) -> dict:
+        """Durable cross-mission memory recall for a project (read-only)."""
+        from nl_coding_agent.context import memory as project_memory
+        from nl_coding_agent.core import permissions
+
+        permissions.require(permissions.READ, project_id=int(project_id))
+        entries = project_memory.recall(int(project_id), query,
+                                        limit=max(1, min(int(limit), 50)))
+        return {"ok": True, "project_id": int(project_id), "count": len(entries),
+                "entries": entries}
+
+    def context_status(self, project_id: int) -> dict:
+        """Read-only health of the context engine for one project."""
+        from nl_coding_agent.context.engine import ContextEngine
+        from nl_coding_agent.core import permissions
+
+        permissions.require(permissions.READ, project_id=int(project_id))
+        project = self.get_project(int(project_id))
+        if not project:
+            raise ValueError("Project not found")
+        return {"ok": True,
+                **ContextEngine(int(project_id), project["root"]).status()}
 
     def get_project(self, project_id: int) -> dict | None:
         from nl_coding_agent.projects.registry import get_project
@@ -1713,7 +1763,8 @@ class AppServices:
                 from nl_coding_agent.app.chat_tools import converse
                 result = converse(self, project, effective_text, attachments, history, model_spec=model_spec,
                                   max_calls=max_calls, max_seconds=max_seconds, allow_coding=allow_coding,
-                                  resume=resume, protocol=tool_protocol, research_profile=research_profile)
+                                  resume=resume, protocol=tool_protocol, research_profile=research_profile,
+                                  session_id=session_id or "")
                 if vision:
                     result["vision"] = vision
                 if result.get("ok"):

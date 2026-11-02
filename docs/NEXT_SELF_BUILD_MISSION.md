@@ -1,34 +1,25 @@
-# Prossima missione — Context Engine e memoria di progetto
+# Prossima missione — Code Intelligence e runtime hooks
 
 ## Stato
 
-Baseline 2 novembre 2026: suite Python verde sul codice verificato, percorso Team Architect →
-specialisti corretto, deadline missione imposta, staging di missione ripulito. Le lacune reali
-rimaste sono elencate in `CURRENT_STATE.md`; il programma completo è nel piano operativo
-`NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md` (P0–P5). La distribuzione nativa Linux/macOS resta
-rinviata: non è la priorità corrente e non va dichiarata supportata.
+P1 Context Engine e memoria di progetto sono implementati e verificati (suite dedicata, missione
+multi-agente reale e continuità Chat dopo nuova sessione). Il programma completo resta in
+`NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md` (P0–P5); la distribuzione nativa Linux/macOS è rinviata.
 
 ## Obiettivo
 
-Costruire il **Context Engine** del motore condiviso e una **memoria di progetto persistente**, così
-che Chat e missioni recuperino il contesto necessario invece di rileggere il repository o fallire per
-budget. Moduli previsti: nuovo `nl_coding_agent/context/`, `app/chat_tools.py`,
-`agents/orchestrator.py`, `persistence/database.py`, `app/services.py`. Nessuna nuova interfaccia:
-il lavoro deve risultare nella Chat NL Coder e nelle missioni esistenti.
+Portare il codice dentro il ciclo dell'agente: il modello deve vedere simboli, riferimenti e
+diagnostica come tool reali, e ogni scrittura deve poter essere verificata prima della fase tester.
 
 ## Scope e gate
 
-1. Budget di contesto centralizzato e misurato (stima token, finestra scorrevole, limiti per
-   sezione: istruzioni, history, allegati, risultati tool) con degrado graduale invece del muro a
-   60.000 caratteri JSON.
-2. Summarization locale opzionale della conversazione, persistita come messaggio/metadato e riusata
-   dopo restart; nessuna perdita di tool call pendenti o allegati.
-3. Project profile persistito per progetto: linguaggi, entry point, test command, moduli principali,
-   documenti autorevoli, rischi noti; aggiornabile e interrogabile.
-4. Recupero selettivo per missione: i prompt di developer/architect/reviewer ricevono i file e i
-   simboli pertinenti (scope, import, test, decisioni precedenti) invece di uno snapshot alfabetico.
-5. Memoria di progetto: decisioni, errori ricorrenti, verifiche e lezioni delle missioni precedenti
-   recuperabili con un comando/tool e mostrate nel contesto quando pertinenti.
-6. Prove: un turno Chat oltre budget non fallisce; riavvio del client conserva summary e profilo;
-   missione su progetto multi-modulo usa il retrieval e cita i file; un errore già visto in una
-   missione precedente viene recuperato dalla memoria.
+1. Esporre `lsp_diagnostics` e ricerca simboli come tool read-only bounded sia in Chat sia nelle
+   missioni, riusando `app/lsp.py` e i servizi esistenti (nessuna seconda implementazione LSP).
+2. Hook post-write: dopo una scrittura nel candidato eseguire sintassi/import/diagnostica e
+   restituire al developer un feedback strutturato; i check falliti non devono diventare PASS.
+3. Usare il ledger `tool_invocations` e le evidenze di verifica per decidere retry/repair, con
+   budget bounded e senza loop ripetitivi.
+4. Test: errore introdotto in una patch rilevato prima del tester; diagnostica con file/riga;
+   nessun falso PASS; Chat in read-only limitata come oggi.
+5. Verifica reale distinta dai test simulati: una missione con errore reale (test rosso) riparata
+   dal ciclo Flow/repair con modelli Ollama locali, con evidenza in `docs/evidence/nlcode/`.

@@ -67,6 +67,69 @@ def test_ordinary_question_does_not_discover_or_invoke(chat, monkeypatch):
     assert services.list_missions(project["id"]) == []
 
 
+def test_new_session_continuity_uses_persisted_digest(chat, monkeypatch):
+    """A new Chat session continues from the persisted digest of earlier work."""
+    services, project, run = chat
+    root = Path(project["root"])
+    for index in range(8):
+        (root / f"ctx{index}.py").write_text("x = 1\n" * 3_000, encoding="utf-8")
+
+    def read(index):
+        return lambda tools: call("read_source", path=f"ctx{index}.py")
+
+    provider = Provider([read(index) for index in range(8)] + [{"content": "ok"}])
+    monkeypatch.setattr(services, "_resolve_chat_provider",
+                        lambda *a, **kw: (provider, "model", "test", ""))
+    session_one = services.create_chat_session(project["id"], "long session")["id"]
+    first = services.chat_conversation(
+        project, "Read all context files", tools_enabled=True,
+        model_spec="test/model", session_id=session_one, max_calls=24)
+    assert first["ok"], first
+    from nl_coding_agent.context.engine import ContextEngine
+    assert ContextEngine(project["id"], root).latest_summary(None), \
+        "the long session must persist a digest"
+
+    provider2 = Provider([{"content": "continuing"}])
+    monkeypatch.setattr(services, "_resolve_chat_provider",
+                        lambda *a, **kw: (provider2, "model", "test", ""))
+    session_two = services.create_chat_session(project["id"], "new session")["id"]
+    second = services.chat_conversation(
+        project, "What did we do before?", tools_enabled=True,
+        model_spec="test/model", session_id=session_two)
+    assert second["ok"], second
+    injected = json.dumps(provider2.requests[0][0], ensure_ascii=False)
+    assert "EARLIER CONVERSATION DIGEST" in injected
+    assert "previous session" in injected
+
+
+def test_long_tool_turn_is_compacted_instead_of_failing(chat):
+    """A long tool turn is compacted with a persisted digest, not refused."""
+    services, project, run = chat
+    root = Path(project["root"])
+    for index in range(8):
+        (root / f"big{index}.py").write_text(
+            ("x = 1  # padding line for the context budget test\n" * 400),
+            encoding="utf-8")
+
+    def read(index):
+        return lambda tools: call("read_source", path=f"big{index}.py")
+
+    responses = [read(index) for index in range(8)] + [{"content": "Final summary."}]
+    result, provider = run(responses, text="Read all big files, then summarize", max_calls=24)
+    assert result["ok"], result
+    assert result["reply"] == "Final summary."
+    final_messages = provider.requests[-1][0]
+    # The prompt fits the dynamically derived budget (chars are bounded by the
+    # calibrated ratio; never the old fixed 60k wall).
+    assert len(json.dumps(final_messages, ensure_ascii=False)) < 200_000
+    state = load_state(project["id"])
+    assert any(item.get("tool") == "context" for item in state.get("activity", []))
+    from nl_coding_agent.context.engine import ContextEngine
+    summary = ContextEngine(project["id"], root).latest_summary("")
+    assert summary and summary["summary"]
+
+
+
 def test_source_tool_and_result_interpretation(chat):
     services, project, run = chat
     result, provider = run([call("read_source", path="calc.py"), {"content": "value vale 7"}])

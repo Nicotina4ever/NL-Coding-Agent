@@ -270,13 +270,13 @@ cancellazione senza autorizzazione dell'utente e senza processi/test fermi.
 - [x] Percorso Team Architect→specialisti: route, istruzioni, tool e task verificati con test.
 - [x] `mission_wall_time_s` imposto e ripresa possibile dopo interruzione.
 - [x] Delete missione non perde file del progetto e non lascia staging usa-e-getta.
-- [ ] Suite completa verde su albero fermo (unico residuo noto: flakiness CI smoke sotto editing
-      concorrente, da riprovare a tree fermo).
-- [ ] VSIX/payload rigenerati dallo stesso HEAD e verificati.
-- [ ] Context engine con budget/summary e project memory (P1).
+- [x] Context Engine: finestra dinamica per modello (misurata/configurata, thinking+output riservati), compattazione con digest incrementale che preserva decisioni/risultati, continuità dopo nuova sessione, `MissionContextPack` condiviso per ruolo — coperto da `tests/test_context_engine.py` e `tests/test_chat_tools.py`.
+- [x] Project profile persistito, recupero file mirato e memoria di progetto richiamabile — coperto dagli stessi test.
+- [x] Pulizia storage Livello A autorizzata ed eseguita (2.760,8 MB), nessun dato utente toccato.
+- [x] Missione multi-agente reale completata con Ollama locale: architect→2 developer→tester→reviewer, candidato/oracle PASS, APPROVE e promozione (evidenza `docs/evidence/nlcode/real-verification-20261102-165024.json`); nuova sessione Chat reale che recupera una decisione dal digest.
 - [ ] Code intelligence e diagnostica post-write (P2).
-- [ ] Specialisti dinamici, skills e subagenti (P3).
-- [ ] Routing unificato Chat/missioni con evidence (P4).
-- [ ] Una missione end-to-end su progetto esistente con errore reale, repair, review e resume,
-      eseguita dall'interfaccia installata e registrata con evidenze.
+- [ ] Skills, subagenti con contesto indipendente e specialisti dinamici oltre i ruoli base (P3).
+- [ ] Routing Chat/missioni unificato con la stessa evidenza e resource gate (P4).
+- [ ] Payload standalone/ZIP rigenerati dallo stesso HEAD e verificati (P5).
+- [ ] Missione end-to-end dall'interfaccia installata (VSIX/standalone) registrata con evidenze, non solo dal motore.
 
