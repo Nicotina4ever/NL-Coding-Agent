@@ -1479,6 +1479,46 @@ class MultiAgentOrchestrator:
     def _validate_stage(self, stage: promotion.Stage) -> dict:
         verdict = promotion.validate(stage, deny_paths=self._mission_input_paths())
         if verdict["valid"]:
+            # Post-write hook: static diagnostics on the changed files must pass before
+            # the independent tester. This catches syntax/structured-file errors that
+            # the byte-level staging gate cannot see, with file/line feedback.
+            try:
+                from nl_coding_agent.tools.code_intel import (
+                    diagnose_files, format_diagnostics,
+                )
+
+                changed = sorted((promotion.read_manifest(stage).get("changed") or {}).keys())
+                diagnostics = [item for item in diagnose_files(stage.workspace, changed)
+                               if str(item.get("severity") or "") == "error"]
+            except Exception:
+                diagnostics = []
+            if diagnostics:
+                verdict = dict(verdict)
+                verdict["valid"] = False
+                verdict["diagnostics"] = diagnostics
+                verdict["errors"] = list(verdict.get("errors") or []) + [
+                    "post-write diagnostics: " + format_diagnostics(diagnostics)]
+                promotion.invalidate_validation(
+                    stage, "post-write diagnostics failed for: " + ", ".join(changed))
+                self._emit(
+                    "orchestrator", "warning",
+                    "Post-write diagnostics rejected the candidate: "
+                    + format_diagnostics(diagnostics)[:600],
+                    mission_id=stage.mission_id,
+                    diagnostics=diagnostics[:12],
+                )
+                try:
+                    from nl_coding_agent.core.tool_invocations import record_invocation
+
+                    record_invocation(
+                        "lsp_diagnostics", arguments={"paths": changed},
+                        result=format_diagnostics(diagnostics), status="failed",
+                        source="hook", project_id=self.project_id,
+                        mission_id=stage.mission_id, role="developer",
+                    )
+                except Exception:
+                    pass
+        if verdict["valid"]:
             self._save_promotion_status(stage.mission_id, "validated")
         return verdict
 

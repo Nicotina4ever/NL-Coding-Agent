@@ -312,6 +312,18 @@ def ensure_recovery_point(stage: Stage, recovery_dir: Path | str | None = None) 
     )
 
 
+def invalidate_validation(stage: Stage, reason: str = "") -> dict:
+    """Reopen the gate after a post-validation hook rejects the candidate."""
+    manifest = read_manifest(stage)
+    if manifest.get("validated") or manifest.get("verified"):
+        manifest["validated"] = False
+        manifest["verified"] = False
+        if reason:
+            manifest["validation_error"] = str(reason)[:1000]
+        _save_manifest(stage, manifest)
+    return manifest
+
+
 def mark_verified(stage: Stage, *, passed: bool, evidence: str) -> None:
     _broker_mark_verified(stage.stage_dir, passed=passed, evidence=evidence)
 

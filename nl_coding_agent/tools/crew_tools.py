@@ -143,7 +143,40 @@ def get_project_tools(project_root: Path | str, *, read_only: bool = False,
                     "Do not repeat the same list_dir call; write the file with write_file/patch_file "
                     "or list a directory that exists." + hint)
 
-    tools = [read_file, list_dir]
+    @tool("search_symbols")
+    def search_symbols(query: str = "", path_prefix: str = "", limit: int = 50) -> str:
+        """Search declared symbols (Python AST, TS/JS declarations) by partial name."""
+        try:
+            from nl_coding_agent.tools.code_intel import search_symbols as _search
+
+            rows = _search(root, query, limit=max(1, min(int(limit), 200)),
+                           path_prefix=path_prefix)
+            if not rows:
+                return "(no matching symbols)"
+            return "\n".join(
+                str(row.get("kind")) + " " + str(row.get("name")) + " — "
+                + str(row.get("path")) + ":" + str(row.get("line"))
+                for row in rows)
+        except Exception as exc:
+            return "Symbol search failed: " + type(exc).__name__ + ": " + str(exc)
+
+    @tool("lsp_diagnostics")
+    def lsp_diagnostics(language: str = "python") -> str:
+        """Bounded diagnostics from an already-installed language server (never installs)."""
+        try:
+            from nl_coding_agent.tools.code_intel import lsp_diagnostics as _lsp
+
+            payload = _lsp(root, language=language)
+            if not payload.get("available"):
+                return "LSP diagnostics unavailable: " + str(payload.get("reason") or "unknown")
+            items = payload.get("diagnostics") or []
+            if not items:
+                return "LSP diagnostics: no issues reported."
+            return "\n".join(str(item) for item in items[:50])
+        except Exception as exc:
+            return "LSP diagnostics failed: " + type(exc).__name__ + ": " + str(exc)
+
+    tools = [read_file, list_dir, search_symbols, lsp_diagnostics]
     if read_only:
         return tools
 

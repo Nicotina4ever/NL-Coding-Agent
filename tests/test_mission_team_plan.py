@@ -150,10 +150,11 @@ def test_read_only_analysis_tools_exclude_writes(tmp_path):
     root.mkdir()
     tools = get_project_tools(root, read_only=True)
     names = {getattr(tool, "name", "") for tool in tools}
-    assert names == {"read_file", "list_dir"}
+    assert names == {"read_file", "list_dir", "search_symbols", "lsp_diagnostics"}
     writable = {getattr(tool, "name", "") for tool in get_project_tools(root)}
     assert {"read_file", "list_dir", "write_file", "patch_file"} <= writable
-    assert {"run_command", "run_tests", "git_status", "git_diff"} <= writable
+    assert {"run_command", "run_tests", "git_status", "git_diff",
+            "search_symbols", "lsp_diagnostics"} <= writable
 
 
 def test_team_tool_catalog_matches_runtime_and_editor_tools(tmp_path):
@@ -206,7 +207,8 @@ def test_ungoverned_mission_offers_prompted_tools(tmp_path, monkeypatch):
         assert {"read_file", "list_dir", "write_file", "patch_file",
                 "run_tests", "run_command"} <= developer_tools
         reviewer_tools = {tool.name for tool in calls_by_role["reviewer"]["tools"]}
-        assert reviewer_tools == {"read_file", "list_dir"}
+        assert reviewer_tools == {"read_file", "list_dir", "search_symbols",
+                                  "lsp_diagnostics"}
     finally:
         services._db.close()
 

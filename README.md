@@ -34,11 +34,13 @@ and a new Chat session recalled a decision from the persisted digest.
 Multimodal attachments, Vision handoff, local ASR and web research are implemented and tested.
 See `docs/CURRENT_STATE.md` for what is verified and what is still missing.
 
-The remaining harness-level gaps are explicit: code intelligence (LSP/diagnostics) is not yet a
-model tool, runtime hooks are stage-level only, skills and sub-agents are absent, Chat/Missions do
-not share one routing evidence path yet, and the packaged VSIX/portable payload must be rebuilt from
-the current HEAD. No release claim is made until the acceptance gates in
-`docs/08_ACCEPTANCE_GATES.md` and the release requirements in `docs/PRODUCT_BACKLOG.md` pass.
+The remaining harness-level gaps are explicit: code intelligence is now exposed as read-only
+`search_symbols`/`lsp_diagnostics` tools with a static post-write diagnostics hook, but the repair
+branch after a candidate-introduced failure and real LSP availability still need verification;
+skills and sub-agents are absent, Chat/Missions do not share one routing evidence path yet, and the
+packaged VSIX/portable payload must be rebuilt from the current HEAD. No release claim is made until
+the acceptance gates in `docs/08_ACCEPTANCE_GATES.md` and the release requirements in
+`docs/PRODUCT_BACKLOG.md` pass.
 
 ## Requirements
 

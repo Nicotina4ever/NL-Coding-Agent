@@ -228,6 +228,14 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
         _tool("search_text", "Search literal text in project source files; returns paths, line numbers and bounded snippets.",
               {"query": {"type": "string", "minLength": 1},
                "limit": {"type": "integer", "minimum": 1, "maximum": 100}}, ["query"]),
+        _tool("search_symbols",
+              "Search declared symbols by partial name (Python AST, TS/JS declarations). Read-only navigation aid.",
+              {"query": {"type": "string", "maxLength": 200},
+               "path_prefix": {"type": "string", "maxLength": 300},
+               "limit": {"type": "integer", "minimum": 1, "maximum": 200}}, []),
+        _tool("lsp_diagnostics",
+              "Read diagnostics from an already-installed language server for this project. Read-only; never installs anything.",
+              {"language": {"type": "string", "enum": ["python", "typescript"]}}, []),
         _tool("git_status", "Read the real git working-tree status for this project.", {}),
         _tool("git_diff", "Read the real git diff for this project.", {}),
         _tool("get_project_context", "Read project registry/facts and the current root for this bound project.", {}),
@@ -442,6 +450,19 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
                 if candidate.match(pattern) or candidate.name == pattern:
                     found.append({"path": relative, "size": candidate.stat().st_size})
             return {"untrusted": True, "files": found}
+        if name == "search_symbols":
+            from nl_coding_agent.tools.code_intel import search_symbols
+
+            rows = search_symbols(registered["root"], str(args.get("query") or ""),
+                                  limit=max(1, min(int(args.get("limit", 50)), 200)),
+                                  path_prefix=str(args.get("path_prefix") or ""))
+            return {"untrusted": True, "symbols": rows}
+        if name == "lsp_diagnostics":
+            from nl_coding_agent.tools.code_intel import lsp_diagnostics
+
+            return {"untrusted": True,
+                    **lsp_diagnostics(registered["root"],
+                                      language=str(args.get("language") or "python"))}
         if name == "search_text":
             query = str(args["query"] or "")
             limit = max(1, min(int(args.get("limit", 40)), 100))

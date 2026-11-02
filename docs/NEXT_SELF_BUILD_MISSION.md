@@ -1,25 +1,23 @@
-# Prossima missione — Code Intelligence e runtime hooks
+# Prossima missione — P2 residuo e skills/subagenti
 
 ## Stato
 
-P1 Context Engine e memoria di progetto sono implementati e verificati (suite dedicata, missione
-multi-agente reale e continuità Chat dopo nuova sessione). Il programma completo resta in
-`NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md` (P0–P5); la distribuzione nativa Linux/macOS è rinviata.
+P1 (Context Engine, memoria di progetto, contesto condiviso) e il nucleo P2 (code intelligence
+read-only, diagnostica post-write, missione reale con test rosso riparato) sono implementati e
+verificati. Il programma completo è in `NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md`.
 
 ## Obiettivo
 
-Portare il codice dentro il ciclo dell'agente: il modello deve vedere simboli, riferimenti e
-diagnostica come tool reali, e ogni scrittura deve poter essere verificata prima della fase tester.
+Chiudere i due residui P2 e aprire P3 senza regredire quanto verificato.
 
 ## Scope e gate
 
-1. Esporre `lsp_diagnostics` e ricerca simboli come tool read-only bounded sia in Chat sia nelle
-   missioni, riusando `app/lsp.py` e i servizi esistenti (nessuna seconda implementazione LSP).
-2. Hook post-write: dopo una scrittura nel candidato eseguire sintassi/import/diagnostica e
-   restituire al developer un feedback strutturato; i check falliti non devono diventare PASS.
-3. Usare il ledger `tool_invocations` e le evidenze di verifica per decidere retry/repair, con
-   budget bounded e senza loop ripetitivi.
-4. Test: errore introdotto in una patch rilevato prima del tester; diagnostica con file/riga;
-   nessun falso PASS; Chat in read-only limitata come oggi.
-5. Verifica reale distinta dai test simulati: una missione con errore reale (test rosso) riparata
-   dal ciclo Flow/repair con modelli Ollama locali, con evidenza in `docs/evidence/nlcode/`.
+1. P2: verificare con modelli locali il ramo `repair` quando il **candidato introduce** un errore
+   (non solo un test rosso preesistente), incluso il feedback dei diagnostici post-write.
+2. P2: usare `lsp_diagnostics` reale quando `pylsp`/`pyright`/`basedpyright` è già installato;
+   altrimenti resta un'esposizione onesta `available:false` (nessuna installazione).
+3. P3: skills a caricamento progressivo (`.agents/skills`, `.nlcode/skills`) consumate dal runtime
+   e tracciate; subagenti read-only con contesto isolato e handoff strutturato consumato dal
+   Supervisor; specialisti dinamici oltre i ruoli base senza duplicare il contesto.
+4. Gate: una missione reale con errore introdotto e riparazione, un subagente reale il cui handoff
+   entra nel risultato finale, e suite completa verde.

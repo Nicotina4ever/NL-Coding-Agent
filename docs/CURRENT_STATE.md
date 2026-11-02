@@ -14,6 +14,14 @@
 
 Verifica: `tests/test_context_engine.py` (finestra dinamica, calibrazione, thinking, digest critico, pack per ruolo, memoria e missione reale FakeCrewRuntime), `tests/test_chat_tools.py` (turno lungo compattato, continuità nuova sessione). Evidenza reale: missione multi-agente completata e risposta di una nuova sessione Chat con la decisione `CH-42` recuperata dal digest (stesso file di evidence).
 
+### Code Intelligence e hook post-write (P2, nucleo implementato)
+
+- `tools/code_intel.py`: ricerca simboli read-only (AST Python, dichiarazioni TS/JS) e diagnostica statica su file espliciti (sintassi Python, parse JSON/TOML, pyflakes se già presente). Non esegue codice del progetto.
+- Tool esposti al modello: `search_symbols` e `lsp_diagnostics` (Chat e missioni, anche in modalità read-only); LSP usa solo server già installati e riporta `available:false` con motivo invece di installare nulla.
+- Hook post-write: `_validate_stage` esegue la diagnostica sui file cambiati prima del tester; se fallisce, il candidato viene invalidato (`promotion.invalidate_validation`), il gate resta chiuso e il feedback con file/riga entra nel retry del developer. Il ledger registra l'invocazione.
+- Verifica reale (distinta dai test simulati): missione con test **rosso preesistente** (`subtract` restituiva la somma) riparata da Ollama locale: candidato+oracle PASS, reviewer APPROVE, promozione di `src/calc.py`, test live **2 passed**. Evidenza `docs/evidence/nlcode/real-p2-repair-20261102-171636.json`.
+- Resta da verificare in P2 successivo: riparazione reale del ramo `repair` dopo un fallimento *introdotto dal candidato*, e diagnostica LSP quando un server è presente sulla macchina.
+
 
 ### Checkpoint harness (2 novembre 2026)
 

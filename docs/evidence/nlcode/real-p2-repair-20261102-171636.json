@@ -1,0 +1,61 @@
+{
+  "started_at": "2026-11-02T17:17:08",
+  "mission": {
+    "status": "completed",
+    "duration_s": 29.8,
+    "verdict": "APPROVE",
+    "changed_paths": [
+      "src/calc.py"
+    ],
+    "promotion_status": "promoted",
+    "tasks": [
+      {
+        "role": "developer",
+        "status": "completed"
+      },
+      {
+        "role": "tester",
+        "status": "completed"
+      },
+      {
+        "role": "reviewer",
+        "status": "completed"
+      }
+    ],
+    "attempts": [
+      {
+        "role": "developer",
+        "status": "completed"
+      },
+      {
+        "role": "tester",
+        "status": "completed"
+      },
+      {
+        "role": "reviewer",
+        "status": "completed"
+      }
+    ],
+    "verification": [
+      {
+        "command": "verify:candidate K:\\AI\\NL Coding Agent\\python\\python.exe K:\\AI\\NL Coding Agent\\.workspace\\temp\\real-p2-20261102-171636\\project\\data\\staging\\mission-1-nptsg6a_\\verification\\candidate\\_pytest_runner.py -q -p no:cacheprovider --no-header --junitxml=K:\\AI\\NL Coding Agent\\.workspace\\temp\\real-p2-20261102-171636\\project\\data\\staging\\mission-1-nptsg6a_\\verification\\evidence\\junit-candidate.xml tests",
+        "exit_code": 0,
+        "passed": 1
+      },
+      {
+        "command": "verify:oracle K:\\AI\\NL Coding Agent\\python\\python.exe K:\\AI\\NL Coding Agent\\.workspace\\temp\\real-p2-20261102-171636\\project\\data\\staging\\mission-1-nptsg6a_\\verification\\oracle\\_pytest_runner.py -q -p no:cacheprovider --no-header --junitxml=K:\\AI\\NL Coding Agent\\.workspace\\temp\\real-p2-20261102-171636\\project\\data\\staging\\mission-1-nptsg6a_\\verification\\evidence\\junit-oracle.xml tests",
+        "exit_code": 0,
+        "passed": 1
+      }
+    ],
+    "live_calc_source": "# src/calc.py\ndef add(a, b):\n    return a + b\n\ndef subtract(a, b):\n    return a - b\n",
+    "live_test_after": {
+      "exit_code": 0,
+      "command": "python -c sys.path.insert(0, project); pytest.main([-q, tests])",
+      "note": "direct execution on the live project after promotion; embedded runtime ignores PYTHONPATH, so the project root is inserted explicitly"
+    },
+    "error": null,
+    "review_summary": "Reviewer APPROVED; promoted 1 file(s)."
+  },
+  "finished_at": "2026-11-02T17:17:08"
+}

@@ -44,17 +44,23 @@ _TEAM_PLAN_IGNORED_DIRS = frozenset({
 #: that is unknown here is silently dropped on team assignment, which used to
 #: leave specialists without the tools their profile displayed.
 _TEAM_ROLE_TOOLS = {
-    "architect": ("read_file", "list_dir", "git_status", "git_diff"),
+    "architect": ("read_file", "list_dir", "git_status", "git_diff",
+                  "search_symbols", "lsp_diagnostics"),
     "developer": ("read_file", "list_dir", "write_file", "patch_file",
-                  "run_tests", "run_command", "git_status", "git_diff"),
+                  "run_tests", "run_command", "git_status", "git_diff",
+                  "search_symbols", "lsp_diagnostics"),
     "debugger": ("read_file", "list_dir", "write_file", "patch_file",
-                 "run_tests", "run_command", "git_status", "git_diff"),
-    "reviewer": ("read_file", "list_dir", "git_status", "git_diff"),
-    "auditor": ("read_file", "list_dir", "git_status", "git_diff"),
+                 "run_tests", "run_command", "git_status", "git_diff",
+                 "search_symbols", "lsp_diagnostics"),
+    "reviewer": ("read_file", "list_dir", "git_status", "git_diff",
+                 "search_symbols", "lsp_diagnostics"),
+    "auditor": ("read_file", "list_dir", "git_status", "git_diff",
+                "search_symbols", "lsp_diagnostics"),
 }
 
 #: Read-only subset used for analysis/review fallbacks (never mutates a candidate).
-_TEAM_READONLY_TOOLS = ("read_file", "list_dir", "git_status", "git_diff")
+_TEAM_READONLY_TOOLS = ("read_file", "list_dir", "git_status", "git_diff",
+                        "search_symbols", "lsp_diagnostics")
 
 #: A writing specialist that loses these tools can no longer do its declared job, so
 #: they are restored (and reported) instead of silently producing a read-only writer.
@@ -1230,7 +1236,8 @@ class AppServices:
             "these are the specialist roles the Supervisor actually executes. Every model must "
             "be one of the available routes; prefer distinct routes when resources allow. "
             "Tools may only be selected from read_file, list_dir, git_status, git_diff, "
-            "write_file, patch_file, run_tests and run_command, appropriate to that role; "
+            "search_symbols, lsp_diagnostics, write_file, patch_file, run_tests and "
+            "run_command, appropriate to that role; "
             "give the developer/debugger the write and verification tools they need and keep "
             "architect/auditor/reviewer read-only. Do not invent licenses or capabilities. "
             "No missions, no file edits, no permission changes."

@@ -274,7 +274,8 @@ cancellazione senza autorizzazione dell'utente e senza processi/test fermi.
 - [x] Project profile persistito, recupero file mirato e memoria di progetto richiamabile — coperto dagli stessi test.
 - [x] Pulizia storage Livello A autorizzata ed eseguita (2.760,8 MB), nessun dato utente toccato.
 - [x] Missione multi-agente reale completata con Ollama locale: architect→2 developer→tester→reviewer, candidato/oracle PASS, APPROVE e promozione (evidenza `docs/evidence/nlcode/real-verification-20261102-165024.json`); nuova sessione Chat reale che recupera una decisione dal digest.
-- [ ] Code intelligence e diagnostica post-write (P2).
+- [x] Code intelligence di base e diagnostica post-write (P2): tool `search_symbols`/`lsp_diagnostics` in Chat e missioni, hook statico che invalida il candidato prima del tester; missione reale con test rosso preesistente riparata e promossa (evidenza `docs/evidence/nlcode/real-p2-repair-20261102-171636.json`).
+- [ ] P2 residuo: riparazione reale del ramo `repair` dopo un fallimento introdotto dal candidato; LSP reale quando un server è installato.
 - [ ] Skills, subagenti con contesto indipendente e specialisti dinamici oltre i ruoli base (P3).
 - [ ] Routing Chat/missioni unificato con la stessa evidenza e resource gate (P4).
 - [ ] Payload standalone/ZIP rigenerati dallo stesso HEAD e verificati (P5).

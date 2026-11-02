@@ -72,7 +72,8 @@ def test_crew_tools_binding_is_bounded_and_explicit():
         assert {"read_file", "write_file", "patch_file", "list_dir"} <= set(tool_names)
         assert {"run_command", "run_tests", "git_status", "git_diff",
                 "research_fetch_url", "mcp_list_tools"} <= set(tool_names)
-        assert len(tools) == 10
+        assert {"search_symbols", "lsp_diagnostics"} <= set(tool_names)
+        assert len(tools) == 12
         # Execution is exposed only through the bounded argv/test wrappers, never
         # as an unrestricted model-supplied shell command.
         source = Path("nl_coding_agent/tools/crew_tools.py").read_text(encoding="utf-8")
