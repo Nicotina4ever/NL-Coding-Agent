@@ -321,9 +321,16 @@ class ServiceInjectionTests(unittest.TestCase):
     def test_static_service_guards_and_no_direct_mutation_of_content(self):
         source = (REPO_ROOT / "nl_coding_agent" / "research" /
                   "service.py").read_text(encoding="utf-8")
-        for forbidden in ("import requests", "import urllib", "import socket",
+        # The service resolves hostnames only so RetrievalPolicy can reject private
+        # addresses (SSRF guard); it must not open sockets or perform network I/O
+        # itself — that stays in the injected bounded transport.
+        for forbidden in ("import requests", "import urllib", "http.client",
                           "subprocess", "eval(", "exec("):
             self.assertNotIn(forbidden, source, forbidden)
+        self.assertIn("socket.getaddrinfo", source)
+        for forbidden_socket in ("socket.socket", "socket.create_connection",
+                                 "connect(", "sendto("):
+            self.assertNotIn(forbidden_socket, source, forbidden_socket)
         self.assertIn("injection_warnings", source)
         self.assertIn("_audit_injection", source)
 

@@ -156,6 +156,183 @@ def test_read_only_analysis_tools_exclude_writes(tmp_path):
     assert {"run_command", "run_tests", "git_status", "git_diff"} <= writable
 
 
+def test_team_tool_catalog_matches_runtime_and_editor_tools(tmp_path):
+    """Every tool a Supervisor role may keep must exist at runtime (no dead options)."""
+    from nl_coding_agent.app.services import _TEAM_ROLE_TOOLS
+    from nl_coding_agent.tools.crew_tools import get_project_tools
+
+    root = tmp_path / "project"
+    root.mkdir()
+    runtime_tools = {getattr(tool, "name", "") for tool in get_project_tools(root)}
+    for role_id, tools in _TEAM_ROLE_TOOLS.items():
+        assert tools, role_id
+        missing = [name for name in tools if name not in runtime_tools]
+        assert not missing, f"{role_id} declares tools the runtime does not expose: {missing}"
+    # A debugger must be able to read the failing code it is asked to repair.
+    assert {"read_file", "list_dir"} <= set(_TEAM_ROLE_TOOLS["debugger"])
+    assert "run_tests" in _TEAM_ROLE_TOOLS["debugger"]
+    # A developer must be able to self-check before the independent tester runs.
+    assert "run_tests" in _TEAM_ROLE_TOOLS["developer"]
+    # Read-only roles never get mutation tools.
+    for role_id in ("architect", "reviewer", "auditor"):
+        assert not ({"write_file", "patch_file"} & set(_TEAM_ROLE_TOOLS[role_id])), role_id
+
+
+def test_ungoverned_mission_offers_prompted_tools(tmp_path, monkeypatch):
+    """When no specialist overrides the role, stages expose the tools their prompt promises."""
+    services, project, root = _project(tmp_path, monkeypatch)
+    (root / "tests" / "test_calc.py").write_text(
+        "from src.calc import add\n\n\ndef test_add():\n    assert add(1, 2) == 3\n",
+        encoding="utf-8",
+    )
+    for scope in (permissions.READ, permissions.WRITE, permissions.EXECUTE):
+        permissions.grant(scope, project_id=project["id"], source="test")
+    mission_id = create_mission(
+        project["id"], "Developer tool parity", "Add a subtract function to src/calc.py")
+    runtime = FakeCrewRuntime({
+        "developer": [
+            "```write:src/calc.py\ndef add(a, b):\n    return a + b\n\n"
+            "def sub(a, b):\n    return a - b\n```"
+        ],
+        "reviewer": ["APPROVE\nLooks correct.\n"],
+    })
+    try:
+        orchestrator = MultiAgentOrchestrator(
+            root, project_id=project["id"], crew_runtime=runtime)
+        result = orchestrator.run_mission(mission_id)
+        assert result["status"] == "completed", result
+        calls_by_role = {call["role_id"]: call for call in runtime.calls}
+        developer_tools = {tool.name for tool in calls_by_role["developer"]["tools"]}
+        assert {"read_file", "list_dir", "write_file", "patch_file",
+                "run_tests", "run_command"} <= developer_tools
+        reviewer_tools = {tool.name for tool in calls_by_role["reviewer"]["tools"]}
+        assert reviewer_tools == {"read_file", "list_dir"}
+    finally:
+        services._db.close()
+
+
+
+def test_team_plan_reports_dropped_and_remapped_specialists(tmp_path, monkeypatch):
+    services, project, _root = _project(tmp_path, monkeypatch)
+    monkeypatch.setattr(services, "discover_models", lambda **kwargs: SimpleNamespace(
+        providers=[SimpleNamespace(
+            provider_id="ollama", label="Ollama", models=[SimpleNamespace(
+                name="local-model", size_gb=1.0, loaded=False, capabilities=())]
+        )]
+    ))
+    monkeypatch.setattr(services, "_generate_with_fallback", lambda *args, **kwargs: {
+        "reply": json.dumps({"summary": "team", "roles": [
+            {"role_id": "developer", "name": "Core Developer", "role": "developer",
+             "model": "ollama/local-model", "instructions": "implement",
+             "tools": ["read_file"]},
+            {"role_id": "tester", "name": "QA Engineer", "role": "test engineer",
+             "model": "ollama/local-model", "instructions": "test",
+             "tools": ["read_file"]},
+            {"name": "UX Designer", "role": "design", "model": "ollama/local-model",
+             "instructions": "design", "tools": ["read_file"]},
+        ]})
+    })
+    from nl_coding_agent.core import resource_monitor
+    monkeypatch.setattr(resource_monitor, "snapshot", lambda: {"gpus": [], "ram": {}})
+    try:
+        result = services.team_plan(project["id"], "ollama/local-model")
+    finally:
+        services._db.close()
+    dropped = {item["name"] for item in result["dropped_roles"]}
+    assert "QA Engineer" in dropped
+    assert any(item["declared_role_id"] == "" and item["role_id"] == "architect"
+               for item in result["remapped_roles"])
+    developer = next(item for item in result["roles"] if item["role_id"] == "developer")
+    # A writer must never be persisted without its write capability.
+    assert {"read_file", "write_file", "patch_file"} <= set(developer["tools"])
+    assert "developer" in result["tool_adjustments"]
+
+
+def test_assigned_team_drives_planned_tasks_and_specialist_routes(tmp_path, monkeypatch):
+    """The active team is an operational assignment: auditor/architect get tasks and models."""
+    services, project, root = _project(tmp_path, monkeypatch)
+    (root / "tests" / "test_calc.py").write_text(
+        "from src.calc import add\n\n\ndef test_add():\n    assert add(1, 2) == 3\n",
+        encoding="utf-8",
+    )
+    plan_roles = [
+        {"role_id": "architect", "name": "Project Architect", "role": "architect",
+         "model": "ollama/team-arch", "tools": ["read_file", "list_dir"],
+         "instructions": "Produce a bounded architectural outline."},
+        {"role_id": "auditor", "name": "Risk Auditor", "role": "auditor",
+         "model": "ollama/team-audit", "tools": ["read_file"],
+         "instructions": "Audit risks and constraints."},
+        {"role_id": "developer", "name": "Lead Developer", "role": "developer",
+         "model": "ollama/team-dev", "tools": ["read_file"],
+         "instructions": "Implement only the declared scope."},
+        {"role_id": "reviewer", "name": "Code Reviewer", "role": "reviewer",
+         "model": "ollama/team-review", "tools": ["read_file", "list_dir"],
+         "instructions": "Review the staged diff."},
+        {"role_id": "debugger", "name": "Repair Engineer", "role": "debugger",
+         "model": "ollama/team-debug", "tools": ["patch_file"],
+         "instructions": "Repair verification failures."},
+    ]
+    monkeypatch.setattr(services, "discover_models", lambda **kwargs: SimpleNamespace(
+        providers=[SimpleNamespace(
+            provider_id="ollama", label="Ollama", models=[
+                SimpleNamespace(name=name, size_gb=1.0, loaded=False, capabilities=())
+                for name in ("team-arch", "team-audit", "team-dev", "team-review",
+                             "team-debug")
+            ]
+        )]
+    ))
+    monkeypatch.setattr(services, "_generate_with_fallback", lambda *args, **kwargs: {
+        "reply": json.dumps({"summary": "project team", "roles": plan_roles})
+    })
+    from nl_coding_agent.core import resource_monitor
+    monkeypatch.setattr(resource_monitor, "snapshot", lambda: {"gpus": [], "ram": {}})
+    for scope in (permissions.READ, permissions.WRITE, permissions.EXECUTE):
+        permissions.grant(scope, project_id=project["id"], source="test")
+    try:
+        plan = services.team_plan(project["id"], "ollama/team-dev")
+        persisted = services.assign_project_team(project["id"], plan["roles"])
+        by_role = {item["role_id"]: item for item in persisted["agents"]}
+        assert {"read_file", "write_file", "patch_file"} <= set(by_role["developer"]["tools"])
+        assert {"read_file", "write_file", "patch_file"} <= set(by_role["debugger"]["tools"])
+
+        mission_id = create_mission(
+            project["id"], "Team mission", "Add a subtract function to src/calc.py")
+        runtime = FakeCrewRuntime({
+            "architect": ["Architecture: keep src/calc.py API stable."],
+            "auditor": ["Audit: no dependencies; keep add() intact."],
+            "developer": [
+                "```write:src/calc.py\ndef add(a, b):\n    return a + b\n\n"
+                "def sub(a, b):\n    return a - b\n```"
+            ],
+            "reviewer": ["APPROVE\nScope and tests are consistent.\n"],
+        })
+        orchestrator = MultiAgentOrchestrator(
+            root, project_id=project["id"], crew_runtime=runtime)
+        result = orchestrator.run_mission(mission_id)
+        assert result["status"] == "completed", result
+
+        tasks = get_tasks(mission_id)
+        roles = [task["agent_role"] for task in tasks]
+        assert roles[:2] == ["architect", "auditor"]
+        calls = {call["role_id"]: call for call in runtime.calls}
+        assert calls["architect"]["model_name"] == "ollama/team-arch"
+        assert calls["auditor"]["model_name"] == "ollama/team-audit"
+        assert calls["developer"]["model_name"] == "ollama/team-dev"
+        assert calls["reviewer"]["model_name"] == "ollama/team-review"
+        # The developer profile declared only read_file; write capability is restored.
+        assert {"write_file", "patch_file"} <= {
+            tool.name for tool in calls["developer"]["tools"]}
+        specialists = {item["role_id"]: item for item in result["specialists"]}
+        assert set(specialists) == {"architect", "auditor", "developer", "reviewer",
+                                    "debugger"}
+        assert specialists["architect"]["task_ids"]
+        assert specialists["auditor"]["task_ids"]
+        assert specialists["debugger"]["standby"] is True
+        assert "verification fails" in specialists["debugger"]["standby_reason"]
+    finally:
+        services._db.close()
+
+
 def test_generated_team_is_project_scoped_persisted_and_used_in_mission(
         tmp_path, monkeypatch):
     services, project, root = _project(tmp_path, monkeypatch)

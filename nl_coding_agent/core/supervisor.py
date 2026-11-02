@@ -112,6 +112,7 @@ class SupervisorConfig:
     reviewer_model: str | None = None
     debug_model: str | None = None
     architect_model: str | None = None
+    auditor_model: str | None = None
     pipeline: str = "sequential"
     work_source: str = "backlog"
 
@@ -1324,10 +1325,15 @@ class Supervisor:
 
     def _invoke_mission(self, mission_id: int, goal: str | None) -> dict:
         """Dispatch to the configured pipeline (sequential default remains untouched)."""
-        with self.control.observe_mission_stop(mission_id):
-            if str(self.config.pipeline) == "flow":
-                return self._invoke_flow_mission(mission_id, goal)
-            return self._invoke_orchestrator(mission_id, goal)
+        # The configured wall-time budget is enforced at orchestrator/flow checkpoints.
+        self.control.set_deadline(self.config.mission_wall_time_s)
+        try:
+            with self.control.observe_mission_stop(mission_id):
+                if str(self.config.pipeline) == "flow":
+                    return self._invoke_flow_mission(mission_id, goal)
+                return self._invoke_orchestrator(mission_id, goal)
+        finally:
+            self.control.clear_deadline()
 
     def _invoke_flow_mission(self, mission_id: int, goal: str | None) -> dict:
         """Execute one mission through MissionFlow; the supervisor finalizes status."""
@@ -1401,6 +1407,7 @@ class Supervisor:
                 reviewer_model=self.config.reviewer_model,
                 debug_model=self.config.debug_model,
                 architect_model=self.config.architect_model,
+                auditor_model=self.config.auditor_model,
                 control=self.control,
             )
         except RunStopped as exc:

@@ -8,6 +8,7 @@ interrupts a promotion write or a journaled CAS operation.
 from __future__ import annotations
 
 import threading
+import time
 from contextlib import contextmanager
 from typing import Callable
 
@@ -60,6 +61,7 @@ class RunControl:
         stop_event: threading.Event | None = None,
         pause_event: threading.Event | None = None,
         on_checkpoint: Callable[[str], None] | None = None,
+        clock: Callable[[], float] | None = None,
     ) -> None:
         self._stop = stop_event if stop_event is not None else threading.Event()
         self._pause = pause_event if pause_event is not None else threading.Event()
@@ -67,6 +69,8 @@ class RunControl:
         self._checkpoint_hook = on_checkpoint
         self._checkpoint_hooks = []
         self._lock = threading.Lock()
+        self._clock = clock or time.monotonic
+        self._deadline: float | None = None
 
     # ------------------------------------------------------------------ flags
 
@@ -107,6 +111,39 @@ class RunControl:
         self.clear_pause()
         self.clear_stop()
 
+    # --------------------------------------------------------------- deadline
+
+    def set_deadline(self, seconds: float | None) -> None:
+        """Bound one mission's wall time; the deadline is raised at a safe checkpoint.
+
+        The Supervisor owns ``mission_wall_time_s``; without this the setting was only
+        descriptive metadata, so a stuck model or an endless retry loop could keep a
+        mission "running" indefinitely. The deadline never interrupts a promotion or a
+        journaled CAS write: it is only evaluated inside checkpoint().
+        """
+        with self._lock:
+            if seconds is None or float(seconds) <= 0:
+                self._deadline = None
+            else:
+                self._deadline = self._clock() + float(seconds)
+
+    def clear_deadline(self) -> None:
+        with self._lock:
+            self._deadline = None
+
+    @property
+    def deadline_remaining_s(self) -> float | None:
+        with self._lock:
+            deadline = self._deadline
+        if deadline is None:
+            return None
+        return max(0.0, deadline - float(self._clock()))
+
+    @property
+    def deadline_exceeded(self) -> bool:
+        remaining = self.deadline_remaining_s
+        return remaining is not None and remaining <= 0.0
+
     # ------------------------------------------------------------ checkpoints
 
     def add_checkpoint_hook(self, hook: Callable[[str], None]) -> None:
@@ -144,6 +181,12 @@ class RunControl:
             hook(str(stage))
         if self._stop.is_set():
             raise RunStopped(stage, self.stop_reason)
+        if self.deadline_exceeded:
+            raise RunStopped(
+                stage,
+                "Mission wall-time budget exceeded; staged work is retained and the "
+                "mission can be resumed. Increase mission_wall_time_s to allow more time.",
+            )
 
     def wait_if_paused(self) -> bool:
         """Best-effort pause helper (not used by the C3 orchestrator hook)."""

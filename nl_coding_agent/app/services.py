@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import queue
+import shutil
 import subprocess
 import sys
 import threading
@@ -38,13 +39,50 @@ _TEAM_PLAN_IGNORED_DIRS = frozenset({
     "site-packages", "dist", "build", "target", "data", "da_eliminare",
 })
 
+#: Tools each Supervisor role may actually execute. Every entry must exist in
+#: ``tools.crew_tools.get_project_tools`` and in the editor tool pickers; a tool
+#: that is unknown here is silently dropped on team assignment, which used to
+#: leave specialists without the tools their profile displayed.
 _TEAM_ROLE_TOOLS = {
-    "architect": ("read_file", "list_dir"),
-    "developer": ("read_file", "list_dir", "write_file", "patch_file"),
-    "debugger": ("write_file", "patch_file", "run_tests"),
-    "reviewer": ("read_file", "list_dir"),
-    "auditor": ("read_file", "list_dir"),
+    "architect": ("read_file", "list_dir", "git_status", "git_diff"),
+    "developer": ("read_file", "list_dir", "write_file", "patch_file",
+                  "run_tests", "run_command", "git_status", "git_diff"),
+    "debugger": ("read_file", "list_dir", "write_file", "patch_file",
+                 "run_tests", "run_command", "git_status", "git_diff"),
+    "reviewer": ("read_file", "list_dir", "git_status", "git_diff"),
+    "auditor": ("read_file", "list_dir", "git_status", "git_diff"),
 }
+
+#: Read-only subset used for analysis/review fallbacks (never mutates a candidate).
+_TEAM_READONLY_TOOLS = ("read_file", "list_dir", "git_status", "git_diff")
+
+#: A writing specialist that loses these tools can no longer do its declared job, so
+#: they are restored (and reported) instead of silently producing a read-only writer.
+_TEAM_ROLE_REQUIRED_TOOLS = {
+    "developer": ("read_file", "write_file", "patch_file"),
+    "debugger": ("read_file", "write_file", "patch_file"),
+}
+
+
+def _normalize_role_tools(role_id: str, requested) -> tuple[list[str], list[str]]:
+    """Intersect requested tools with the role catalog and restore required ones.
+
+    Returns ``(tools, added)`` where ``added`` lists the capabilities that had to be
+    restored so the caller can surface the adjustment instead of hiding it.
+    """
+    allowed = _TEAM_ROLE_TOOLS[role_id]
+    if isinstance(requested, list):
+        tools = [str(value) for value in requested if str(value) in allowed]
+    else:
+        tools = []
+    if not tools:
+        tools = list(allowed)
+    added: list[str] = []
+    for name in _TEAM_ROLE_REQUIRED_TOOLS.get(role_id, ()):
+        if name not in tools:
+            tools.append(name)
+            added.append(name)
+    return tools, added
 
 
 def _team_role_id(item: Mapping) -> str:
@@ -70,19 +108,19 @@ def _team_role_id(item: Mapping) -> str:
 def _fallback_team_roles(route: str) -> list[dict]:
     return [
         {"role_id": "architect", "name": "Project Architect", "role": "software architect",
-         "model": route, "tools": ["read_file", "list_dir"],
+         "model": route, "tools": list(_TEAM_READONLY_TOOLS),
          "instructions": "Inspect structure and risks; propose a minimal plan."},
         {"role_id": "developer", "name": "Lead Developer", "role": "lead developer",
-         "model": route, "tools": ["read_file", "list_dir", "write_file", "patch_file"],
+         "model": route, "tools": list(_TEAM_ROLE_TOOLS["developer"]),
          "instructions": "Implement precise patches with verification."},
         {"role_id": "auditor", "name": "Risk Auditor", "role": "risk auditor",
-         "model": route, "tools": ["read_file", "list_dir"],
+         "model": route, "tools": list(_TEAM_READONLY_TOOLS),
          "instructions": "Identify mission-specific risks and constraints."},
         {"role_id": "reviewer", "name": "Code Reviewer", "role": "code reviewer",
-         "model": route, "tools": ["read_file", "list_dir"],
+         "model": route, "tools": list(_TEAM_READONLY_TOOLS),
          "instructions": "Review the staged diff and report actionable findings."},
         {"role_id": "debugger", "name": "Debug Specialist", "role": "debugger",
-         "model": route, "tools": ["write_file", "patch_file", "run_tests"],
+         "model": route, "tools": list(_TEAM_ROLE_TOOLS["debugger"]),
          "instructions": "Diagnose and repair verification failures in the staged candidate."},
     ]
 
@@ -111,6 +149,13 @@ def project_team_agents(project_id: int | None) -> list[dict]:
             continue
         profile = dict(item)
         profile["role_id"] = role_id
+        # Normalise on read as well: profiles persisted before the tool catalog was
+        # aligned (or edited by hand) must still reach their stage with a usable,
+        # role-appropriate tool set instead of a silently read-only developer.
+        tools, restored = _normalize_role_tools(role_id, profile.get("tools"))
+        profile["tools"] = tools
+        if restored:
+            profile["restored_tools"] = restored
         result.append(profile)
     return result
 
@@ -784,6 +829,7 @@ class AppServices:
         configured_providers = config.get("providers") or {}
         normalized: list[dict] = []
         seen_roles: set[str] = set()
+        tool_adjustments: dict[str, list[str]] = {}
         for item in roles[:32]:
             if not isinstance(item, dict):
                 continue
@@ -804,11 +850,14 @@ class AppServices:
                 if not isinstance(provider, dict) or not provider.get("enabled", True):
                     raise ValueError("Specialist model provider is missing or disabled: " + provider_id)
             raw_tools = item.get("tools")
-            tools = [str(value) for value in raw_tools
-                     if str(value) in _TEAM_ROLE_TOOLS[role_id]] \
-                if isinstance(raw_tools, list) else []
-            if not tools:
-                tools = list(_TEAM_ROLE_TOOLS[role_id])
+            tools, restored_tools = _normalize_role_tools(role_id, raw_tools)
+            if restored_tools:
+                tool_adjustments[role_id] = restored_tools
+                self._bus.emit(Event(
+                    source="agents", level="info",
+                    message=("Restored required tools for specialist " + role_id + ": "
+                             + ", ".join(restored_tools)),
+                    payload={"role_id": role_id, "tools": restored_tools}))
             normalized.append({
                 "role_id": role_id,
                 "name": str(item.get("name") or "Specialist").strip()[:120] or "Specialist",
@@ -864,7 +913,7 @@ class AppServices:
                 saved.append(dict(current))
             self._write_custom_agents(agents)
         return {"ok": True, "created": created, "updated": updated,
-                "agents": saved}
+                "agents": saved, "tool_adjustments": tool_adjustments}
 
     def plan_generate(self, project_id: int, model: str, objective: str) -> dict:
         """Generate a structured execution plan; never create a goal or mission."""
@@ -1130,8 +1179,10 @@ class AppServices:
             "Every role_id must be one of architect, developer, debugger, reviewer, auditor; "
             "these are the specialist roles the Supervisor actually executes. Every model must "
             "be one of the available routes; prefer distinct routes when resources allow. "
-            "Tools may only be selected from read_file, list_dir, write_file, patch_file and "
-            "run_tests, appropriate to that role. Do not invent licenses or capabilities. "
+            "Tools may only be selected from read_file, list_dir, git_status, git_diff, "
+            "write_file, patch_file, run_tests and run_command, appropriate to that role; "
+            "give the developer/debugger the write and verification tools they need and keep "
+            "architect/auditor/reviewer read-only. Do not invent licenses or capabilities. "
             "No missions, no file edits, no permission changes."
         )
         user = json.dumps({"focus": str(focus or ""), "resources": resources,
@@ -1166,25 +1217,49 @@ class AppServices:
             used_fallback = True
             roles = _fallback_team_roles(fallback_route)
         available = {item.get("route") for item in catalog if isinstance(item, dict)}
+        dropped_roles: list[dict] = []
+        remapped_roles: list[dict] = []
+        tool_adjustments: dict[str, list[str]] = {}
+
         def clean_team_roles(candidates) -> list[dict]:
             cleaned: list[dict] = []
             used_roles: set[str] = set()
             for item in candidates[:32]:
                 if not isinstance(item, dict):
                     continue
+                declared = str(item.get("role_id") or "").strip().lower().replace("-", "_")
+                label = str(item.get("name") or item.get("role") or declared or "Specialist")[:160]
                 role_id = _team_role_id(item)
-                if not role_id or role_id in used_roles:
+                if not role_id:
+                    # Never drop a proposed specialist silently: the owner must see that
+                    # the Supervisor cannot execute that role.
+                    dropped_roles.append({
+                        "role_id": declared, "name": label,
+                        "reason": ("role is not executable by the Supervisor; supported roles are "
+                                   + ", ".join(sorted(_TEAM_ROLE_TOOLS))),
+                    })
                     continue
+                if role_id in used_roles:
+                    dropped_roles.append({
+                        "role_id": role_id, "name": label,
+                        "reason": "duplicate role; the Supervisor runs one specialist per role",
+                    })
+                    continue
+                if not declared or declared not in _TEAM_ROLE_TOOLS:
+                    remapped_roles.append({
+                        "role_id": role_id, "declared_role_id": declared, "name": label,
+                        "reason": ("declared role is not executable; mapped by name/role tokens"
+                                   if declared else
+                                   "role_id missing; mapped by name/role tokens"),
+                    })
                 used_roles.add(role_id)
                 route = str(item.get("model") or "").strip() or fallback_route
                 if available and route not in available:
                     route = fallback_route
                 requested_tools = item.get("tools")
-                tools = [str(tool) for tool in requested_tools
-                         if str(tool) in _TEAM_ROLE_TOOLS[role_id]] \
-                    if isinstance(requested_tools, list) else []
-                if not tools:
-                    tools = list(_TEAM_ROLE_TOOLS[role_id])
+                tools, restored = _normalize_role_tools(role_id, requested_tools)
+                if restored:
+                    tool_adjustments[role_id] = restored
                 cleaned.append({
                     "role_id": role_id,
                     "name": str(item.get("name") or "Specialist")[:120],
@@ -1204,7 +1279,10 @@ class AppServices:
                 "summary": str((payload or {}).get("summary") or "")[:4000],
                 "roles": cleaned, "resources": resources, "catalog": catalog,
                 "analysis_error": analysis_error,
-                "fallback": used_fallback}
+                "fallback": used_fallback,
+                "dropped_roles": dropped_roles,
+                "remapped_roles": remapped_roles,
+                "tool_adjustments": tool_adjustments}
 
     def list_custom_agents(self) -> list[dict]:
         path = self._custom_agents_path()
@@ -2343,6 +2421,7 @@ class AppServices:
         from nl_coding_agent.persistence.missions import delete_mission as _delete
         mission = _delete(mission_id, project_id=project_id)
         self._cleanup_mission_baselines([int(mission_id)])
+        self._cleanup_mission_stages([mission])
         self._bus.emit(Event(
             source="missions", level="info",
             message=f"Deleted mission #{mission_id}",
@@ -2355,6 +2434,7 @@ class AppServices:
         from nl_coding_agent.persistence.missions import delete_missions as _delete
         deleted = _delete(mission_ids, project_id=project_id)
         self._cleanup_mission_baselines([int(item["id"]) for item in deleted])
+        self._cleanup_mission_stages(deleted)
         self._bus.emit(Event(
             source="missions", level="info",
             message=f"Deleted {len(deleted)} mission(s)",
@@ -2376,6 +2456,60 @@ class AppServices:
                     message=f"Mission #{mission_id} was deleted but its baseline file could not be removed: {exc}",
                     payload={"mission_id": int(mission_id), "path": str(path)},
                 ))
+
+    def _cleanup_mission_stages(self, missions: list[dict]) -> None:
+        """Remove the disposable staging copies of deleted missions, never live files.
+
+        A stage with a promotion journal is retained: it may describe an interrupted
+        promotion that still needs reconciliation, so deleting it would destroy recovery
+        evidence. The live project files are never touched by mission deletion.
+        """
+        from nl_coding_agent.core.promotion import PROMOTION_JOURNAL
+        for mission in missions:
+            if not isinstance(mission, dict):
+                continue
+            mission_id = int(mission.get("id") or 0)
+            candidates: list[Path] = []
+            raw = str(mission.get("staging_dir") or "").strip()
+            if raw:
+                candidates.append(Path(raw))
+            project_id = mission.get("project_id")
+            if project_id is not None:
+                project = self.get_project(int(project_id))
+                if project:
+                    staging_root = Path(project["root"]) / "data" / "staging"
+                    if staging_root.is_dir():
+                        candidates.extend(sorted(
+                            staging_root.glob("mission-" + str(mission_id) + "-*")))
+            seen: set[str] = set()
+            for stage_dir in candidates:
+                key = str(stage_dir).lower()
+                if key in seen or not stage_dir.is_dir():
+                    continue
+                seen.add(key)
+                try:
+                    if (stage_dir / PROMOTION_JOURNAL).exists():
+                        self._bus.emit(Event(
+                            source="missions", level="warning",
+                            message=(f"Mission #{mission_id} deleted; staging kept because it "
+                                     "has an unreconciled promotion journal"),
+                            payload={"mission_id": mission_id,
+                                     "path": str(stage_dir)},
+                        ))
+                        continue
+                    shutil.rmtree(stage_dir)
+                    self._bus.emit(Event(
+                        source="missions", level="info",
+                        message=f"Removed disposable staging for deleted mission #{mission_id}",
+                        payload={"mission_id": mission_id, "path": str(stage_dir)},
+                    ))
+                except OSError as exc:
+                    self._bus.emit(Event(
+                        source="missions", level="warning",
+                        message=(f"Mission #{mission_id} deleted; staging could not be "
+                                 f"removed: {exc}"),
+                        payload={"mission_id": mission_id, "path": str(stage_dir)},
+                    ))
 
     def steer_mission(self, mission_id: int, text: str, *,
                       project_id: int | None = None) -> dict:
@@ -2558,6 +2692,34 @@ class AppServices:
         except Exception:
             return {}
 
+    def _mission_specialists(self, mission: dict) -> list[dict]:
+        """Expose the project team as operational assignments for one mission."""
+        project_id = mission.get("project_id")
+        if project_id is None:
+            return []
+        tasks_by_role: dict[str, list[int]] = {}
+        for task in mission.get("tasks") or []:
+            role = str(task.get("agent_role") or "")
+            tasks_by_role.setdefault(role, []).append(int(task.get("id") or 0))
+        result = []
+        for profile in project_team_agents(int(project_id)):
+            role_id = str(profile.get("role_id") or "")
+            task_ids = [item for item in tasks_by_role.get(role_id, []) if item]
+            result.append({
+                "role_id": role_id,
+                "name": str(profile.get("name") or role_id),
+                "model": str(profile.get("model") or ""),
+                "instructions": str(profile.get("instructions") or ""),
+                "tools": list(profile.get("tools") or []),
+                "task_ids": task_ids,
+                "standby": not task_ids,
+                "standby_reason": (
+                    "" if task_ids
+                    else "invoked only when verification fails" if role_id == "debugger"
+                    else "no matching task in this mission's plan"),
+            })
+        return result
+
     def get_mission_details(self, mission_id: int) -> dict | None:
         from nl_coding_agent.persistence.missions import (
             get_mission, get_tasks, get_handoffs, get_verification_runs,
@@ -2571,6 +2733,7 @@ class AppServices:
         m["verification_runs"] = get_verification_runs(mission_id)
         m["attempts"] = get_task_attempts(mission_id)
         m["progress"] = mission_progress(mission_id)
+        m["specialists"] = self._mission_specialists(m)
         try:
             from nl_coding_agent.persistence import supervisor_store
 
@@ -3305,6 +3468,35 @@ class AppServices:
         payload["url"] = payload.get("canonical_url") or url
         payload["text"] = text
         payload["chunks"] = chunks
+        payload["metadata"] = {"kind": page.get("kind") or "",
+                               "truncated": bool(page.get("truncated")),
+                               "supported": bool(payload.get("supported", False))}
+        payload["provenance"] = dict(payload.get("provenance") or {})
+        payload["redirects"] = list(payload["provenance"].get("redirect_chain") or [])
+        return payload
+
+    def research_preview(self, url: str, *, project_id: int | None = None,
+                         mission_id: int | None = None) -> dict:
+        """Read-only preview of one user-selected URL for the Research surface.
+
+        The research service is the permission boundary and already evaluates
+        capability/auto-review per hop; this facade only shapes its result into the
+        preview payload (title/text/chunks/metadata/provenance/redirects). It performs
+        no network access of its own and never fetches implicitly.
+        """
+        try:
+            service = self._research_service()
+            result = service.fetch_read(str(url), project_id=project_id,
+                                        mission_id=mission_id)
+        except Exception as exc:
+            return self._research_failure("preview", exc)
+        payload = self._research_payload(result)
+        page = payload.get("page") or {}
+        text = str(page.get("text") or "")
+        payload["title"] = page.get("title") or payload.get("title") or ""
+        payload["url"] = payload.get("canonical_url") or str(url)
+        payload["text"] = text
+        payload["chunks"] = [line for line in text.splitlines() if line.strip()][:40]
         payload["metadata"] = {"kind": page.get("kind") or "",
                                "truncated": bool(page.get("truncated")),
                                "supported": bool(payload.get("supported", False))}
@@ -4485,7 +4677,7 @@ class _ResearchFacade:
         return self._app.research_search(query, provider_id)
 
     def preview(self, url: str) -> dict:
-        return self._app.research_fetch_read(url)
+        return self._app.research_preview(url)
 
     def history(self, project_id=None, mission_id=None, limit: int = 50) -> list[dict]:
         result = self._app.research_search_saved(project_id=project_id,

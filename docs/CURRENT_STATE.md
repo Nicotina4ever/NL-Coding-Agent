@@ -1,7 +1,26 @@
-**Checkpoint 2 novembre 2026 — estensione 0.7.2.** Chat e missioni condividono il motore Python; la Chat supporta Queue persistente, Missioni, Team Architect, attachment multimodali con Ctrl+V e handoff Vision capability-aware. Cloud resta opt-in; modelli senza capability Vision misurata non ricevono byte immagine. Stato dettagliato sotto.
+**Checkpoint 2 novembre 2026.** Baseline verificata su `876c420` + modifiche non consolidate (GUI Qt legacy di Copilot, `config/models.yaml`): suite Python completa **1366 passed, 1 failed** (il solo fallimento è `test_ci_workflows` che legge il working tree mentre veniva modificato durante la stessa esecuzione; in isolamento PASS). Correzioni harness applicate e coperte da test: percorso Team Architect→specialisti, parità tool, deadline missione, pulizia staging. Restano aperte le lacune strutturali elencate sotto (context engine, memoria di progetto, code intelligence, skills, hook, subagenti, difetti NL Coder, VSIX/payload stale).
 # Stato corrente — NL Coding Agent / NL Code
 
-**Verifica aggiornata: 2 novembre 2026, estensione NL Coder 0.7.2.** La versione **1.0 STABLE non è stata raggiunta**. Il test VSIX installato in profilo isolato ha completato Team Architect mentre `mission_detail`, rimozione Queue e salvataggio ruolo erano concorrenti; Chat, attachments, fetch autorizzato, history e shutdown hanno superato la stessa acceptance.
+**Verifica aggiornata: 2 novembre 2026.** La versione **1.0 STABLE non è stata raggiunta**. Due audit indipendenti (motore e percorso team) più una verifica frontend hanno classificato lo stato reale; le affermazioni di questo file sono allineate al codice/test al momento del checkpoint, non ai documenti storici.
+
+### Checkpoint harness (2 novembre 2026)
+
+- **Baseline**: suite completa ~8 minuti, 1366 PASS. Tre test erano rimasti indietro rispetto al codice e sono stati riallineati al comportamento voluto: contratto `core.instructions` in `test_crew_backend`, guardia statica del servizio research (la risoluzione DNS SSRF ora usa `socket.getaddrinfo`, senza I/O di rete nel servizio), preview Research (facade `research_preview` mancante).
+- **Team Architect → specialisti (difetti riprodotti e corretti)**: l'auditor nel percorso sequenziale usava il modello del developer invece della route assegnata; un profilo con tool ridotti poteva azzerare la capacità di scrittura; il planner deterministico ignorava la squadra attiva (architect/auditor/debugger senza task); `team_plan` scartava/rimappava ruoli senza dirlo. Ora: route auditor risolta dal profilo, tool essenziali di scrittura ripristinati e riportati (`tool_adjustments`), architect/auditor assegnati ricevono un task pianificato, `dropped_roles`/`remapped_roles` esposti, `mission_detail`/risultato missione includono gli specialisti con `task_ids` e stato `standby` (debugger).
+- **Affidabilità**: `mission_wall_time_s` (prima solo descrittivo) è imposto ai checkpoint tramite `RunControl`; developer e debugger ricevono i tool che i loro prompt promettono (`run_tests`, `run_command`, lettura per il debugger); Delete missione rimuove la copia di staging usa-e-getta ma conserva gli stage con journal di promozione non riconciliato (evidenza di recovery) e non tocca mai i file del progetto.
+- **Catalogo tool**: `_TEAM_ROLE_TOOLS` include ora `git_status`/`git_diff`/`run_command`/`run_tests` coerenti con i picker dell'estensione e con `tools/crew_tools.py`; test che verifica l'assenza di opzioni morte.
+
+### Lacune harness ancora aperte (ordinate)
+
+1. **Context engine assente**: nessun tokenizer/compaction; Chat con tool ha un muro a 60.000 caratteri JSON ("start a narrower turn") e history limitata agli ultimi 20 messaggi; i prompt missione ricostruiscono il contesto da zero (snapshot alfabetico di 18k char). Nessun project profile persistito né recupero selettivo.
+2. **Memoria di progetto assente**: handoff/decisioni/errori sono per missione; nessuna recall cross-missione delle lezioni o dei fallimenti precedenti.
+3. **Code intelligence fuori dal loop**: LSP esiste solo in GUI/services, non è un tool del modello; la ricerca è `rglob`+substring; la verifica è solo pytest, senza diagnostica post-write.
+4. **Skills e subagenti assenti**: nessun caricamento progressivo di skill; 7 ruoli fissi in `agents/specs.py`, pipeline sequenziale obbligata, nessuna delega con contesto isolato.
+5. **Hook pre/post tool assenti**: i gate sono a fine stage; un solo retry dopo la validazione, nessun lint/typecheck/diagnostica per singola scrittura.
+6. **Chat resilience**: un turno con tool in volo non è recuperabile dopo crash; Stop Chat non annulla la chiamata in corso nell'estensione.
+7. **NL Coder / distribuzione**: difetti frontend verificati (stato "connected" con engine morto, coda non drenata all'avvio, doppio invio, monitor che sovrascrive la missione, CLOUD concesso senza conferma, `/help` mancante); VSIX in `.workspace/dist` e zip portabile **stale** rispetto a HEAD, `BUILD_INFO.json` non veritiero; la build usa `out/` non la VSIX.
+8. **Documentazione**: riferimenti superati in `README`/`docs/README`/`NL_CODE_STANDALONE`/`FRONTEND_ARCHITECTURE`/piano 1.0; `NEXT_SELF_BUILD_MISSION.md` (Linux/macOS) va sostituito dalla priorità harness corrente.
+
 
 ### URL fetch e ricerca web
 

@@ -19,9 +19,19 @@ been run with a live local model and an interruption/resume cycle. Safety stagin
 persistent supervisor are implemented with gate evidence; the CrewAI/Flows runtime seam and model
 intelligence are integrated. The supported interfaces are the NL Coder VS Code extension and the
 NL Code Code - OSS workbench; both use the same Python engine. The PySide6 GUI remains in the
-repository as a legacy interface and is excluded from normal development and acceptance. Multimodal
-chat/attachments, voice/ASR and the final portable release are still in progress (see the program plan in
-`docs/product-blueprint/INDEX.json` and the current state in `docs/CURRENT_STATE.md`).
+repository as a legacy interface and is excluded from normal development and acceptance.
+
+Baseline at the 2 November 2026 checkpoint: the Python suite passes (1366 tests; the only failure
+observed was a CI smoke test reading the working tree while it was being edited concurrently).
+Recent work fixed the Team Architect -> specialist execution path, restored the tools each agent
+stage is promised, enforced the mission wall-time budget and removed orphan staging copies on
+mission delete. Multimodal attachments, Vision handoff, local ASR and web research are implemented
+and tested; see `docs/CURRENT_STATE.md` for what is verified and what is still missing.
+
+The harness-level gaps are explicit and tracked in `docs/CURRENT_STATE.md`: there is no context
+compaction/token accounting, no cross-mission project memory, code intelligence (LSP/diagnostics)
+is not yet a model tool, skills and sub-agents are absent, runtime hooks are stage-level only, and
+the packaged VSIX/portable payload in `.workspace/dist` is older than the working tree.
 No release claim is made until the acceptance gates in `docs/08_ACCEPTANCE_GATES.md` and the
 release requirements in `docs/PRODUCT_BACKLOG.md` pass.
 

@@ -438,7 +438,11 @@ def test_orchestrator_call_model_uses_injected_runtime():
     assert call["role_id"] == "developer"
     assert call["prompt"] == "PROMPT BODY"
     assert call["goal"] == "Implement the change"
-    assert call["backstory"] == "Senior engineer"
+    # Every model seam receives the canonical NL Code contract (core.instructions);
+    # the call-specific backstory is appended as its final block, not replaced.
+    assert call["backstory"].startswith("You are NL Code")
+    assert "Current role: Implementation Developer" in call["backstory"]
+    assert call["backstory"].rstrip().endswith("Senior engineer")
     assert call["model_name"] == "ollama/test-model"
     assert call["expected_output"] == "APPROVE or REJECT"
     assert call["tools"] is tools

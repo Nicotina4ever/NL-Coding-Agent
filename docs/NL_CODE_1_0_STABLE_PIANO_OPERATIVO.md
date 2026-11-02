@@ -173,21 +173,110 @@ I quattro TODO iniziali segnati «fatti» non equivalgono a «tutto provato in r
 
 ## Objective
 
-Portare a verifica il ciclo Gate C/D del piano consolidato, preservando i requisiti `NL-BP-*` del backlog e senza creare roadmap parallele. Il prossimo lavoro deve completare l'affidabilità del tool calling locale, il Model Router e la gestione persistente di conversazioni/missioni; i moduli coinvolti sono `nl_coding_agent/agents/orchestrator.py`, `nl_coding_agent/app/mcp_engine.py`, `nl_coding_agent/models/model_router.py`, `tests/test_execution_reliability.py` e `docs/NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md`.
+Costruire il Context Engine e la memoria di progetto di NL Code: budget di contesto misurato con
+degrado graduale, summarization persistita, project profile e recupero selettivo, così che Chat e
+missioni recuperino il contesto reale del progetto invece di rileggere il repository o fallire per
+budget.
 
 ## Scope of Work
 
-- Usare un solo motore e gli stessi servizi backend per tool, permessi, missioni e settings.
-- Implementare il protocollo tool native/fallback strutturato e registrare invocazioni reali.
-- Misurare le capacità Ollama e usare i risultati nel Model Router con motivazione persistita.
-- Completare la gestione di conversazioni, missioni, coda/steering/stop, archiviazione e pulizia selettiva.
-- Verificare il ciclo completo sulla fixture originale, senza semplificare test o requisiti.
+- Nuovo modulo `nl_coding_agent/context/` per budget, stima token, finestra scorrevole e summary.
+- Integrare budget e summary in `nl_coding_agent/app/chat_tools.py` e nei prompt missione di
+  `nl_coding_agent/agents/orchestrator.py`.
+- Persistenza di profile/memoria in `nl_coding_agent/persistence/database.py` e servizio in
+  `nl_coding_agent/app/services.py`.
+- Test di accettazione in `tests/test_context_engine.py`.
+- Mantenere `docs/NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md` come unica fonte del piano.
 
 ## Acceptance Gates
 
-- [ ] Tool calling robusto e autorizzato, con trace reale distinto dall'elenco disponibile.
-- [ ] Model Router usa misure e storico, rispetta route esplicite e cloud opt-in.
-- [ ] Una missione multi-modulo completa pianificazione, patch reali, verifica, repair, review e promozione.
-- [ ] Interruzioni ed eccezioni lasciano missione, Flow, task e log coerenti e recuperabili.
-- [ ] Chat e GUI permettono impostazioni, sessioni, coda, stop/resume e recupero missioni con effetti persistiti.
-- [ ] Regressione completa verde salvo i test documentali aggiornati alla nuova struttura `docs/`.
+- [ ] Chat oltre budget degrada con summary persistita, senza "start a narrower turn".
+- [ ] Riavvio di client/motore conserva summary e project profile.
+- [ ] Una missione multi-modulo usa il retrieval e cita i file pertinenti.
+- [ ] La memoria di progetto recupera errori/decisioni di missioni precedenti.
+- [ ] Nessuna regressione della suite completa.
+
+## Programma corrente — evoluzione harness (checkpoint 2 novembre 2026)
+
+Questo blocco sostituisce le "prossime missioni" precedenti ed è la priorità operativa reale,
+derivata da quattro audit sul codice (motore, percorso team, frontend, storage/docs) e dalla
+baseline di test. Non è una roadmap teorica: ogni voce indica il codice interessato e la prova.
+
+**Stato verificato**: baseline 1366 PASS; percorso Team Architect→specialisti corretto (route
+auditor, tool di scrittura garantiti, task pianificati per architect/auditor assegnati,
+`dropped_roles`/`remapped_roles` esposti); `mission_wall_time_s` imposto ai checkpoint; tool di
+developer/debugger coerenti con i prompt; Delete missione pulisce lo staging usa-e-getta e conserva
+gli stage con journal; preview Research ripristinata. Restano aperte le lacune elencate in
+`CURRENT_STATE.md`.
+
+### P0 — Chiusura affidabilità (in corso)
+
+1. Suite completa verde su albero fermo e commit di checkpoint; nessuna modifica concorrente durante
+   la suite.
+2. NL Coder: stato connessione reale quando l'engine muore, Stop Chat che annulla la chiamata in
+   volo, drain della coda all'avvio, blocco del doppio invio, monitor che non sovrascrive la
+   missione selezionata, conferma esplicita per CLOUD, `/help`. File: `frontend/src/chatProvider.ts`,
+   `frontend/src/backend.ts`, `frontend/media/main.js`.
+3. Rigenerare VSIX e payload portabile dallo stesso HEAD e correggere `BUILD_INFO.json`; nessuna
+   distribuzione dichiarata valida se la VSIX inclusa non corrisponde al sorgente.
+
+### P1 — Context Engine e project profile (prossima missione)
+
+Obiettivo: contesto misurato e degradabile invece del muro a 60k caratteri; memoria di progetto
+persistita e recupero selettivo; continuità fra sessioni lunghe. Codice: nuovo
+`nl_coding_agent/context/` (budget, tokenizer stimato, finestra scorrevole, summarization locale
+opzionale persistita), `app/chat_tools.py`, `agents/orchestrator.py`, `persistence/database.py`
+(project profile e memorie), `app/services.py` (`get_project_context`). Prove: turno Chat che supera
+il budget senza errore; summary persistita e riusata dopo restart; prompt missione costruito da
+profile+retrieval invece che da snapshot alfabetico; nessuna perdita di allegati/history.
+
+### P2 — Code Intelligence e hook
+
+Obiettivo: il modello vede il codice come un IDE. Esporre `lsp_diagnostics` e ricerca simboli come
+tool read-only sia in Chat sia in missione; check post-write (sintassi/import/diagnostica) con
+recovery bounded; usare il ledger `tool_invocations` per le verifiche. Codice: `app/lsp.py`,
+`app/chat_tools.py`, `tools/crew_tools.py`, `agents/orchestrator.py`,
+`core/code_integrity_gate.py`. Prove: errore introdotto in una patch rilevato prima del tester;
+diagnostica mostrata con file/riga; nessun falso PASS.
+
+### P3 — Team Architect dinamico, skills e subagenti
+
+Obiettivo: specialisti realmente dinamici (oltre i 5 ruoli base) con assegnazione operativa
+persistita e visibile; skills caricate progressivamente (`.agents/skills`, `.nlcode/skills`);
+subagenti read-only con contesto isolato e handoff strutturato, parallelizzabili quando non
+confliggono. Codice: `agents/specs.py`, `agents/orchestrator.py`, `app/services.py`,
+`persistence/missions.py`, nuovo `nl_coding_agent/skills/` e `nl_coding_agent/agents/subagents.py`.
+Prove: una squadra con ruoli non-base riceve task propri; una skill viene caricata solo quando
+richiesta e il suo uso è tracciato; un subagente produce un handoff consumato dal Supervisor.
+
+### P4 — Model intelligence e risorse
+
+Obiettivo: Chat e missioni usano la stessa evidenza (capability misurate, storico per ruolo,
+latenza/VRAM, gate risorse); nessuna sostituzione silenziosa di route; override espliciti
+persistenti. Codice: `models/model_router.py`, `app/services.py` (`_chat_candidates`),
+`core/resource_gate.py`, `models/operational_probes.py`. Prove: Chat con route `auto` motiva la
+scelta persisted; route esplicita vince; modello offline/timeout produce fallback dichiarato.
+
+### P5 — Interfaccia, storage e documentazione
+
+Obiettivo: una sola esperienza coerente, non un pannello per funzione; pulizia storage con
+preview/misura e conferma esplicita; documentazione consolidata (README, `docs/README`,
+`CURRENT_STATE`, questo piano, gate, operations, safety) senza nuovi file di fase. La pulizia
+proposta (audit storage) è: Livello A 2.761 MB, Livello B 4.224 MB, Livello C 9.821 MB; nessuna
+cancellazione senza autorizzazione dell'utente e senza processi/test fermi.
+
+## Acceptance Gates correnti
+
+- [x] Percorso Team Architect→specialisti: route, istruzioni, tool e task verificati con test.
+- [x] `mission_wall_time_s` imposto e ripresa possibile dopo interruzione.
+- [x] Delete missione non perde file del progetto e non lascia staging usa-e-getta.
+- [ ] Suite completa verde su albero fermo (unico residuo noto: flakiness CI smoke sotto editing
+      concorrente, da riprovare a tree fermo).
+- [ ] VSIX/payload rigenerati dallo stesso HEAD e verificati.
+- [ ] Context engine con budget/summary e project memory (P1).
+- [ ] Code intelligence e diagnostica post-write (P2).
+- [ ] Specialisti dinamici, skills e subagenti (P3).
+- [ ] Routing unificato Chat/missioni con evidence (P4).
+- [ ] Una missione end-to-end su progetto esistente con errore reale, repair, review e resume,
+      eseguita dall'interfaccia installata e registrata con evidenze.
+

@@ -1,13 +1,16 @@
 # NL Code — documentazione operativa unica
 
-**Aggiornamento documentale: 30 ottobre 2026.** Questa directory sostituisce il vecchio accumulo di audit, roadmap e log. È un corpus **di lavoro**, NON una dichiarazione di versione 1.0 stabile. Alcune affermazioni descrivono report di DeepSeek e richiedono controprova nel repository attivo.
+**Aggiornamento documentale: 2 novembre 2026 (checkpoint harness).** Questa directory sostituisce il vecchio accumulo di audit, roadmap e log. È un corpus **di lavoro**, NON una dichiarazione di versione 1.0 stabile. Le affermazioni verificate al checkpoint sono in `CURRENT_STATE.md`; il programma operativo corrente è nel piano 1.0 (sezione "Programma corrente"). I rapporti storici restano come riferimento, non come stato.
 
 ## Prima di lavorare: soltanto 4 documenti
 
-1. **[CURRENT_STATE.md](CURRENT_STATE.md)** — checkpoint reale, bug osservati dall'utente e blocchi aperti.
-2. **[NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md](NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md)** — **unico piano esecutivo 1.0** per DeepSeek, mantenuto integralmente.
+1. **[CURRENT_STATE.md](CURRENT_STATE.md)** — checkpoint reale, difetti verificati, lacune harness aperte.
+2. **[NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md](NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md)** — **unico piano esecutivo**, con il "Programma corrente P0–P5" aggiornato alle lacune reali.
 3. **[08_ACCEPTANCE_GATES.md](08_ACCEPTANCE_GATES.md)** — prove richieste prima di dichiarare stable.
 4. **[OPERATIONS_AND_RESTART.md](OPERATIONS_AND_RESTART.md)** — ripresa, comandi e cosa non toccare.
+
+`NEXT_SELF_BUILD_MISSION.md` descrive la prossima missione (Context Engine e memoria di progetto);
+non è un piano parallelo.
 
 ## Dove trovare gli altri dettagli, soltanto quando servono
 

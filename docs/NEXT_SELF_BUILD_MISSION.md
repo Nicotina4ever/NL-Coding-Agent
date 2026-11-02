@@ -1,35 +1,34 @@
-# Prossima missione — distribuzione nativa Linux e macOS
+# Prossima missione — Context Engine e memoria di progetto
 
 ## Stato
 
-La build NL Code Code - OSS verificata è Windows x64. Linux e macOS hanno launcher POSIX,
-target dichiarati e un bootstrapper fail-closed, ma nessun runtime nativo misurato né una build
-standalone accettata. I pacchetti source-beta esistenti non sono installazioni eseguibili e non
-vanno pubblicati come release native.
-
-Il repository GitHub `Nicotina4ever/NL-Coding-Agent` contiene un solo commit iniziale, mentre il
-repository di lavoro ha una storia Git distinta e non configurava un remote. Prima di pubblicare,
-integrare le due storie senza force-push e far passare il pre-push guard sull'esatto contenuto
-staged.
+Baseline 2 novembre 2026: suite Python verde sul codice verificato, percorso Team Architect →
+specialisti corretto, deadline missione imposta, staging di missione ripulito. Le lacune reali
+rimaste sono elencate in `CURRENT_STATE.md`; il programma completo è nel piano operativo
+`NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md` (P0–P5). La distribuzione nativa Linux/macOS resta
+rinviata: non è la priorità corrente e non va dichiarata supportata.
 
 ## Obiettivo
 
-Produrre e accettare distribuzioni NL Code standalone native per Linux e macOS usando il motore
-Python condiviso e la VSIX NL Coder corrente. Non sviluppare né testare la GUI PySide6 legacy.
+Costruire il **Context Engine** del motore condiviso e una **memoria di progetto persistente**, così
+che Chat e missioni recuperino il contesto necessario invece di rileggere il repository o fallire per
+budget. Moduli previsti: nuovo `nl_coding_agent/context/`, `app/chat_tools.py`,
+`agents/orchestrator.py`, `persistence/database.py`, `app/services.py`. Nessuna nuova interfaccia:
+il lavoro deve risultare nella Chat NL Coder e nelle missioni esistenti.
 
 ## Scope e gate
 
-1. Implementare build riproducibili su runner nativi per Linux x86_64 e macOS x86_64/arm64;
-   decidere separatamente se Linux ARM64 è supportabile.
-2. Costruire e misurare runtime e dipendenze per ogni target; non riusare il runtime Windows.
-   Universal 2 resta escluso finché tutti i componenti nativi non sono verificati.
-3. Riutilizzare il workflow di Code - OSS e i confini di packaging esistenti senza modificare il
-   checkout vendor; includere soltanto l'estensione NL Coder e i file necessari.
-4. Verificare su host pulito installazione, primo avvio, project discovery, Chat con Ollama,
-   missione e arresto dell'engine. Registrare separatamente dipendenze hardware-only, signing e
-   notarizzazione.
-5. Eseguire secret/content guard, inventario e checksum sugli artefatti finali. Non includere
-   database, progetti, modelli, log, credenziali, checkpoint o staging.
-6. Pubblicare gli asset per OS/architettura in una GitHub Release solo dopo il superamento dei
-   gate nativi e la verifica dei checksum. Una release source-only può essere etichettata solo
-   esplicitamente come tale e non sostituisce queste prove.
+1. Budget di contesto centralizzato e misurato (stima token, finestra scorrevole, limiti per
+   sezione: istruzioni, history, allegati, risultati tool) con degrado graduale invece del muro a
+   60.000 caratteri JSON.
+2. Summarization locale opzionale della conversazione, persistita come messaggio/metadato e riusata
+   dopo restart; nessuna perdita di tool call pendenti o allegati.
+3. Project profile persistito per progetto: linguaggi, entry point, test command, moduli principali,
+   documenti autorevoli, rischi noti; aggiornabile e interrogabile.
+4. Recupero selettivo per missione: i prompt di developer/architect/reviewer ricevono i file e i
+   simboli pertinenti (scope, import, test, decisioni precedenti) invece di uno snapshot alfabetico.
+5. Memoria di progetto: decisioni, errori ricorrenti, verifiche e lezioni delle missioni precedenti
+   recuperabili con un comando/tool e mostrate nel contesto quando pertinenti.
+6. Prove: un turno Chat oltre budget non fallisce; riavvio del client conserva summary e profilo;
+   missione su progetto multi-modulo usa il retrieval e cita i file; un errore già visto in una
+   missione precedente viene recuperato dalla memoria.

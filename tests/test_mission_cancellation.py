@@ -78,3 +78,40 @@ def test_wrong_root_cannot_consume_owner_cancellation(mission, tmp_path):
     with pytest.raises(ValueError, match="requested project"):
         services.run_mission(mid, tmp_path / "other")
     assert database.get_setting("mission.stop." + str(mid), "")
+
+
+def test_wall_time_deadline_is_enforced_only_at_checkpoints(mission):
+    """mission_wall_time_s used to be descriptive; it now stops at a safe boundary."""
+    clock = [0.0]
+    control = RunControl(clock=lambda: clock[0])
+    control.set_deadline(1800)
+    control.checkpoint("start")  # inside budget
+    clock[0] = 1801.0
+    with pytest.raises(RunStopped) as excinfo:
+        control.checkpoint("after-model")
+    assert "wall-time" in str(excinfo.value).lower()
+    assert control.deadline_exceeded
+    # Resumption clears the deadline so the next run is not immediately stopped.
+    control.clear_deadline()
+    assert control.deadline_remaining_s is None
+    control.checkpoint("resumed")
+
+
+def test_supervisor_applies_and_clears_the_configured_wall_time(mission, monkeypatch):
+    from nl_coding_agent.core.supervisor import Supervisor, SupervisorConfig
+    services, project, mid = mission
+    supervisor = Supervisor(
+        project["root"], project_id=project["id"],
+        config=SupervisorConfig(mission_wall_time_s=42))
+    seen = {}
+
+    def invoke(mission_id, goal):
+        seen["remaining"] = supervisor.control.deadline_remaining_s
+        return {"status": "completed", "mission_id": mission_id}
+
+    monkeypatch.setattr(supervisor, "_invoke_orchestrator", invoke)
+    result = supervisor._invoke_mission(mid, None)
+    assert result["status"] == "completed"
+    assert seen["remaining"] is not None
+    assert 0 < seen["remaining"] <= 42
+    assert supervisor.control.deadline_remaining_s is None

@@ -1128,21 +1128,34 @@ class MultiAgentOrchestrator:
         test_paths = [path for path in write_paths
                       if path.replace("\\", "/").lower().startswith("tests/")]
         analysis_tasks: list[dict] = []
-        if self._needs_architecture_review(goal, write_paths):
+        # An active project team is an operational assignment, not a decoration: if the
+        # owner assigned an architect/auditor specialist for this project, give that
+        # specialist a planned task even when the objective's keyword heuristic would
+        # not select it. Keyword-based planning remains the fallback when no team exists.
+        team_roles = set(self._team_by_role)
+        wants_architect = self._needs_architecture_review(goal, write_paths) or "architect" in team_roles
+        wants_auditor = self._needs_audit(goal) or "auditor" in team_roles
+        if wants_architect:
+            profile = self._team_by_role.get("architect") or {}
+            assigned = str(profile.get("name") or "").strip()
             analysis_tasks.append(add_task(
                 mission_id,
                 "Architecture Analysis",
                 "Read-only architectural analysis of the current project for the mission objective; "
-                "produce constraints and an implementation outline for the developer.",
+                "produce constraints and an implementation outline for the developer."
+                + (f" Assigned specialist: {assigned}." if assigned else ""),
                 "architect",
                 write_paths=[],
             ))
-        if self._needs_audit(goal):
+        if wants_auditor:
+            profile = self._team_by_role.get("auditor") or {}
+            assigned = str(profile.get("name") or "").strip()
             analysis_tasks.append(add_task(
                 mission_id,
                 "Risk & Test Audit",
                 "Read-only audit of security, dependency, compatibility and test risks relevant to the "
-                "mission objective; hand constraints to the developer.",
+                "mission objective; hand constraints to the developer."
+                + (f" Assigned specialist: {assigned}." if assigned else ""),
                 "auditor",
                 depends_on=[analysis_tasks[-1]] if analysis_tasks else [],
                 write_paths=[],
@@ -1523,6 +1536,7 @@ class MultiAgentOrchestrator:
         if promotion_status is None:
             mission = get_mission(mission_id) or {}
             promotion_status = mission.get("promotion_status")
+        tasks = get_tasks(mission_id)
         payload = {
             "status": status,
             "mission_id": mission_id,
@@ -1535,13 +1549,49 @@ class MultiAgentOrchestrator:
             "promotion_status": promotion_status,
             "handoffs": get_handoffs(mission_id),
             "verification_runs": get_verification_runs(mission_id),
-            "tasks": get_tasks(mission_id),
+            "tasks": tasks,
             "attempts": get_task_attempts(mission_id),
             "progress": mission_progress(mission_id),
+            "specialists": self._specialist_assignments(tasks),
         }
         if error is not None:
             payload["error"] = error
         return payload
+
+    def _specialist_assignments(self, tasks: list[dict] | None = None) -> list[dict]:
+        """Report which project specialists this mission actually assigned and where.
+
+        The owner sees an operational assignment (role, model, task ids) instead of a
+        team that exists only in configuration. Debugger/standby roles are marked
+        explicitly rather than being invented as fake tasks.
+        """
+        if not self._team_by_role:
+            return []
+        tasks = tasks if tasks is not None else []
+        tasks_by_role: dict[str, list[int]] = {}
+        for task in tasks:
+            role = str(task.get("agent_role") or "")
+            tasks_by_role.setdefault(role, []).append(int(task.get("id") or 0))
+        assignments = []
+        for role_id, profile in self._team_by_role.items():
+            task_ids = [item for item in tasks_by_role.get(role_id, []) if item]
+            assignments.append({
+                "role_id": role_id,
+                "name": str(profile.get("name") or role_id),
+                "model": str(profile.get("model") or ""),
+                "instructions": str(profile.get("instructions") or ""),
+                "tools": list(profile.get("tools") or []),
+                "task_ids": task_ids,
+                "standby": not task_ids,
+                "standby_reason": (
+                    ""
+                    if task_ids
+                    else "invoked only when verification fails"
+                    if role_id == "debugger"
+                    else "no matching task in this mission's plan"
+                ),
+            })
+        return assignments
 
     def _finalize_completed(
         self,
@@ -1786,6 +1836,7 @@ class MultiAgentOrchestrator:
         stop_after: str | None = None,
         control: RunControl | None = None,
         architect_model: str | None = None,
+        auditor_model: str | None = None,
     ) -> dict:
         """Execute or resume a complete mission through all gates.
 
@@ -1812,6 +1863,7 @@ class MultiAgentOrchestrator:
         reviewer_model = reviewer_model or DEFAULT_REVIEWER_MODEL
         debug_model = debug_model or DEFAULT_DEBUG_MODEL
         architect_model = architect_model or developer_model
+        auditor_model = auditor_model or developer_model
 
         if mission["status"] == "completed":
             return self._result_payload(
@@ -1837,6 +1889,7 @@ class MultiAgentOrchestrator:
                     stop_after,
                     control,
                     architect_model,
+                    auditor_model,
                 )
         except MissionLockError as exc:
             self._emit("orchestrator", "error", str(exc), mission_id=mission_id)
@@ -1853,6 +1906,7 @@ class MultiAgentOrchestrator:
         stop_after: str | None,
         control: RunControl | None = None,
         architect_model: str | None = None,
+        auditor_model: str | None = None,
     ) -> dict:
         mission = get_mission(mission_id) or {}
         self._ledger_mission_id = int(mission_id)
@@ -1860,11 +1914,13 @@ class MultiAgentOrchestrator:
         stage: promotion.Stage | None = None
         baseline: dict[str, str] = {}
         architect_model = str(architect_model or developer_model or "")
+        auditor_model = str(auditor_model or developer_model or "")
         try:
             developer_model = self._resolve_route("developer", developer_model)
             reviewer_model = self._resolve_route("reviewer", reviewer_model)
             debug_model = self._resolve_route("debugger", debug_model)
             architect_model = self._resolve_route("architect", architect_model)
+            auditor_model = self._resolve_route("auditor", auditor_model)
             from nl_coding_agent.core.doc_planning import is_document_plan_request
             if is_document_plan_request(goal):
                 raise GateFailure(
@@ -1893,6 +1949,20 @@ class MultiAgentOrchestrator:
                 mission_id=mission_id,
                 project=str(self.root),
             )
+            if self._team_by_role:
+                self._emit(
+                    "orchestrator", "info",
+                    "Active project team: " + ", ".join(
+                        str(profile.get("name") or role_id)
+                        + " (" + str(profile.get("model") or "default route") + ")"
+                        for role_id, profile in self._team_by_role.items()),
+                    mission_id=mission_id,
+                    team=[{"role_id": role_id,
+                           "name": profile.get("name"),
+                           "model": profile.get("model"),
+                           "tools": list(profile.get("tools") or [])}
+                          for role_id, profile in self._team_by_role.items()],
+                )
 
             tasks = get_tasks(mission_id) if existing_tasks else self._plan_tasks(mission_id, goal)
             self._validate_plan(tasks)
@@ -1904,7 +1974,7 @@ class MultiAgentOrchestrator:
                 "debugger": debug_model,
             }
             if "auditor" in planned_roles:
-                assignment_routes["auditor"] = developer_model
+                assignment_routes["auditor"] = auditor_model
             self._record_model_assignments(mission_id, assignment_routes)
             if existing_tasks:
                 loaded = self._load_baseline(mission_id)
@@ -1965,7 +2035,7 @@ class MultiAgentOrchestrator:
             self._checkpoint(control, "before-architect")
             architecture_notes = self._run_planned_analysis(
                 mission_id, tasks, goal,
-                {"architect": architect_model, "auditor": developer_model},
+                {"architect": architect_model, "auditor": auditor_model},
             )
             self._checkpoint(control, "after-architect")
 
@@ -2299,8 +2369,10 @@ Do not claim that changes were made. The Developer will perform them in a staged
             stage_dir=str(stage.stage_dir),
         )
 
-        tools = [item for item in get_project_tools(stage.workspace, project_id=self.project_id)
-                 if getattr(item, "name", "") not in ("run_command", "run_tests")]
+        # The developer prompt promises read/patch plus real self-checks. Offer the same
+        # bounded tool surface the prompt describes; the independent tester still runs the
+        # authoritative candidate/oracle verification.
+        tools = get_project_tools(stage.workspace, project_id=self.project_id)
         scope_text = (
             "Declared write scope for THIS subtask (do not modify other files):\n- "
             + "\n- ".join(write_paths)
@@ -2771,8 +2843,9 @@ INSTRUCTIONS:
         from nl_coding_agent.core.code_integrity_gate import detect_stub
 
         before_debug = snapshot_workspace(stage.workspace)
-        tools = [item for item in get_project_tools(stage.workspace, project_id=self.project_id)
-                 if getattr(item, "name", "") not in ("read_file", "list_dir")]
+        # A debugger that cannot read the failing code cannot repair it: the prompt asks it
+        # to examine tests and sources, so expose read tools alongside the write/verify ones.
+        tools = get_project_tools(stage.workspace, project_id=self.project_id)
         scope_text = (
             "Stay inside the staged declared write scope:\n- " + "\n- ".join(write_paths)
             if write_paths

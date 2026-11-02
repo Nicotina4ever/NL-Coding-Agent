@@ -1,4 +1,5 @@
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 
@@ -55,6 +56,34 @@ def test_batch_delete_is_atomic_and_refuses_running_missions(project):
 
     assert get_mission(first) is not None
     assert get_mission(second)["status"] == "running"
+
+
+def test_delete_removes_disposable_staging_but_keeps_project_files(project, tmp_path):
+    """Deleting a mission must not leave candidate copies behind nor touch live files."""
+    services, registered, source = project
+    mission_id = create_mission(registered["id"], "Staged", "Do work")
+    staging = Path(registered["root"]) / "data" / "staging" / f"mission-{mission_id}-abc"
+    staging.mkdir(parents=True)
+    (staging / "calc.py").write_text("candidate copy", encoding="utf-8")
+
+    services.delete_mission(mission_id, project_id=registered["id"])
+
+    assert not staging.exists()
+    assert source.read_text(encoding="utf-8") == "project source"
+    assert get_mission(mission_id) is None
+
+
+def test_delete_keeps_staging_with_unreconciled_promotion_journal(project):
+    """A journaled stage is recovery evidence, not disposable garbage."""
+    services, registered, _ = project
+    mission_id = create_mission(registered["id"], "Journaled", "Do work")
+    staging = Path(registered["root"]) / "data" / "staging" / f"mission-{mission_id}-def"
+    staging.mkdir(parents=True)
+    (staging / "promotion-journal.json").write_text("{}", encoding="utf-8")
+
+    services.delete_mission(mission_id, project_id=registered["id"])
+
+    assert staging.is_dir()
 
 
 def test_delete_cleans_goal_links_and_resets_milestone(project):

@@ -23,9 +23,10 @@ class TestRoadmap(unittest.TestCase):
     def test_repository_roadmap_parses(self):
         mission = next_mission(Path(__file__).resolve().parents[1])
         self.assertIn("NL Code 1.0 STABLE", mission["title"])
+        self.assertIn("nl_coding_agent/context/", mission["write_paths"])
         self.assertIn("nl_coding_agent/agents/orchestrator.py", mission["write_paths"])
-        self.assertIn("nl_coding_agent/models/model_router.py", mission["write_paths"])
-        self.assertIn("tests/test_execution_reliability.py", mission["write_paths"])
+        self.assertIn("nl_coding_agent/app/chat_tools.py", mission["write_paths"])
+        self.assertIn("tests/test_context_engine.py", mission["write_paths"])
         self.assertIn("docs/NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md", mission["write_paths"])
         self.assertGreaterEqual(len(mission["write_paths"]), 4)
         self.assertGreaterEqual(len(mission["acceptance_gates"]), 5)
