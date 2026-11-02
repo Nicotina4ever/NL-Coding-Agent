@@ -616,9 +616,19 @@ class AppServices:
             text = text[: min(9000, budget)]
             budget -= len(text)
             evidence.append({"path": candidate.relative_to(root).as_posix(), "text": text})
+        lower_objective = str(objective or "").lower()
+        italian_markers = (" il ", " la ", " per ", " progetto ", " svilupp", " document",
+                           " crea ", " prepara ", " leggi ", " rendi ", " completo ")
+        language_hint = ("Italian" if any(marker in " " + lower_objective + " "
+                                          for marker in italian_markers)
+                         else "the same language as the objective")
         system = (
             "You are the NL Code planner. Read the supplied project evidence and produce "
-            "ONLY a JSON execution plan. No file edits, no missions, no commands. Shape: "
+            "ONLY a JSON execution plan. No file edits, no missions, no commands. "
+            "Write every human-readable value (title, objective, milestone titles, "
+            "descriptions, acceptance criteria, mission intents, risks) in "
+            + language_hint + "; do not translate or reply in English unless the objective is English. "
+            "Shape: "
             '{"title":"...","objective":"...","acceptance_criteria":["..."],'
             '"milestones":[{"key":"m1","title":"...","description":"...",'
             '"dependencies":[],"acceptance_criteria":["..."],"mission_intent":"...",'
@@ -737,7 +747,8 @@ class AppServices:
             milestone = {key: value for key, value in item.items()
                          if key in allowed_milestone_fields}
             milestones.append(milestone)
-        goal = self._goal_service().create_goal_from_plan(
+        goal_service = self._goal_service()
+        goal = goal_service.create_goal_from_plan(
             str(plan.get("objective") or plan.get("title") or ""),
             title=str(plan.get("title") or "Execution plan"),
             project_id=int(project_id),
@@ -745,10 +756,18 @@ class AppServices:
             reference_metadata={"source": "chat_plan", "analyst_model": plan.get("analyst_model")},
             milestones=milestones,
         )
+        goal_service.replan_goal(
+            int(goal["id"]), milestones,
+            "Imported from the Chat execution plan; milestones become the executable current plan.",
+            trigger="manual")
+        approved = goal_service.approve_plan(
+            int(goal["id"]), rationale="Approved when /apply created the execution goal",
+            approver="user")
         if activate:
-            goal = self._goal_service().activate_goal(int(goal["id"]))
+            goal = goal_service.activate_goal(int(goal["id"]))
         return {"ok": True, "goal": goal, "executed": False,
-                "status": goal.get("status"), "milestones": len(plan["milestones"])}
+                "approved": True, "plan_version": approved.get("version"),
+                "status": goal.get("status"), "milestones": len(milestones)}
 
     def auto_review_check(self, project_id: int, *, capability: str = "read",
                           target_paths=(), description: str = "") -> dict:
@@ -1394,6 +1413,12 @@ class AppServices:
         """Generate with local recovery first; escalate to cloud only after real failure."""
         errors: list[str] = []
         permission_error = None
+        try:
+            from nl_coding_agent.core import instructions
+            messages = instructions.merge_messages(
+                messages, project_id, role=str(role or "chat"))
+        except Exception:
+            pass
         candidates = self._chat_candidates(requested_spec)
         for index, candidate in enumerate(candidates):
             provider = candidate["provider"]

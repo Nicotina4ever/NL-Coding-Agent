@@ -1314,6 +1314,7 @@
         { name: '/team', insert: '/team', label: 'Build the specialist team', detail: 'Assign the best available models/providers to project roles.' },
         { name: '/apply', insert: '/apply', label: 'Apply the generated plan', detail: 'Create a Goal and milestones; nothing is executed.' },
         { name: '/runplan', insert: '/runplan', label: 'Run the applied plan', detail: 'Start Supervisor missions explicitly after /apply.' },
+        { name: '/mcp', insert: '/mcp', label: 'List MCP servers', detail: 'Show configured MCP servers; ask the model to discover/invoke their allowed tools.' },
         { name: '/checkpoint', insert: '/checkpoint', label: 'Checkpoint files', detail: 'Save filesystem state without touching chat history.' },
         { name: '/checkpoints', insert: '/checkpoints', label: 'List checkpoints', detail: 'Show recent filesystem checkpoints.' },
         { name: '/help', insert: '/help', label: 'Show commands', detail: 'List the available Chat commands.' }

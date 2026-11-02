@@ -928,7 +928,8 @@ export class EngineConnection {
         params.max_seconds = Math.max(5, Math.min(3600,
             Math.floor((timeoutMs || this.timeoutMs) / 1000) - 5));
         const result = await this.callJson<ConverseResult>('nlc_converse', params, timeoutMs || this.timeoutMs);
-        if (!result || result.ok !== true || typeof result.reply !== 'string') {
+        if (!result || ((result.ok !== true) && result.status !== 'budget_exhausted') ||
+            typeof result.reply !== 'string') {
             const detail = (result && (result.reply || (result.error && result.error.message))) ||
                 'The engine could not produce a reply.';
             throw new EngineError('chat-failed', detail);

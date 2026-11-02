@@ -834,6 +834,12 @@ class MultiAgentOrchestrator:
         """
         self._assert_execution_permissions()
         spec = resolve_role(role)
+        try:
+            from nl_coding_agent.core import instructions as shared_instructions
+            backstory = shared_instructions.system_prompt(
+                self.project_id, root=self.root, role=role, extra=backstory)
+        except Exception:
+            pass
         result = self.crew_runtime.run_agent(
             spec,
             prompt,

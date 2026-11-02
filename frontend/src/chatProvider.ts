@@ -315,6 +315,16 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             await this.generateSpecialistTeam();
             return;
         }
+        if (/^\/mcp$/i.test(message.trim())) {
+            const config = (this.mcpConfig || {}) as Record<string, unknown>;
+            const servers = (config.servers || config) as Record<string, unknown>;
+            const names = Object.keys(servers || {});
+            this.postChat('system', names.length
+                ? 'MCP servers configured: ' + names.join(', ') +
+                  '\nAsk NL Code to list the tools of one server, then invoke an allowed tool by name.'
+                : 'No MCP servers configured. Add them in Settings > MCP servers (JSON).');
+            return;
+        }
         if (/^\/checkpoint$/i.test(message.trim())) {
             if (!this.currentSessionId) {
                 this.postChat('error', 'No active conversation to checkpoint.');
@@ -366,11 +376,20 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             return;
         }
         if (/^\/runplan$/i.test(message.trim())) {
-            if (!this.lastPlanGoalId) {
-                this.postChat('error', 'Apply a generated plan with /apply first.');
+            if (!this.lastPlan && !this.lastPlanGoalId) {
+                this.postChat('error', 'Generate a plan with /plan first.');
                 return;
             }
             try {
+                if (!this.lastPlanGoalId && this.lastPlan) {
+                    const applied = await this.connection.planApply(this.lastPlan, false);
+                    const goal = (applied.goal || {}) as Record<string, unknown>;
+                    this.lastPlanGoalId = goal.id ? Number(goal.id) : undefined;
+                    this.postChat('system', 'Plan applied and approved automatically; starting it now.');
+                }
+                if (!this.lastPlanGoalId) {
+                    throw new Error('Plan goal was not created.');
+                }
                 const result = await this.connection.planRun(this.lastPlanGoalId, 1);
                 this.postChat('system', 'Plan execution launched: goal #' + this.lastPlanGoalId +
                     ', supervisor pid ' + String(result.pid || '?') +
