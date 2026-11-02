@@ -3136,6 +3136,20 @@ INSTRUCTIONS:
                 debug_context = self._mission_pack.for_role("debugger", budget_chars=4_500)
         except Exception:
             debug_context = ""
+        # The debugger must see the current candidate, not only the original repository:
+        # otherwise a local model tends to emit just the changed function and the
+        # destructive-edit gate reverts its repair, leaving the failure unfixed.
+        current_files: list[str] = []
+        for relative in (write_paths or [])[:8]:
+            candidate_path = stage.workspace / str(relative).replace("\\", "/").lstrip("./")
+            try:
+                text = candidate_path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            current_files.append("--- " + str(relative) + " (current staged content) ---\n"
+                                 + text[:8_000])
+        current_files_text = ("\n\n".join(current_files)
+                              if current_files else "(no staged file content available)")
         prompt = f"""
 PROJECT ROOT: {self.root}
 WORKSPACE (staged copy; write relative paths here): {stage.workspace}
@@ -3143,6 +3157,9 @@ TEST FAILURE LOGS:
 {_truncate(error_msg, 12_000)}
 
 {scope_text}
+
+CURRENT STAGED FILE CONTENT (authoritative; edit this, not the live repository):
+{current_files_text}
 
 SHARED MISSION CONTEXT (recovered once for this mission; do not re-read the repository):
 {debug_context}
@@ -3153,6 +3170,8 @@ INSTRUCTIONS:
 ```write:<relative_path>
 <valid source code>
 ```
+When you use a write block, reproduce the ENTIRE file: keep every existing function/class
+(including unrelated ones) and add the minimal fix. Never output only the changed function.
 3. Do NOT edit files outside the declared write scope; out-of-scope changes are rejected.
 4. Nothing is live until review and promotion; only the staged copy may change.
 5. Real tools are available: file read/write/patch, git status/diff, run tests and a bounded shell allowlist. Use them to diagnose the real failure.
@@ -3201,6 +3220,25 @@ INSTRUCTIONS:
             self._emit("debugger", "warning",
                        "Reverted destructive debugger edits: " + ", ".join(sorted(reverted)),
                        mission_id=mission_id)
+        # Re-snapshot after reverts: otherwise a reverted destructive edit is counted as a
+        # successful repair even though the candidate is unchanged.
+        after_debug = snapshot_workspace(stage.workspace)
+        repaired_change = any(
+            before_debug.get(path) != after_debug.get(path)
+            for path in set(before_debug) | set(after_debug)
+        )
+        if not repaired_change:
+            record_handoff(
+                mission_id, "debugger", "tester",
+                "Debugger produced no staged change; repair cannot be accepted.",
+                {"model": model_name, "changed_paths": [], "actions": actions,
+                 "error": "debugger-no-change", "output_sample": _truncate(output, 1500)},
+            )
+            self._emit("debugger", "warning",
+                       "Debugger produced no staged change; the repair is not accepted.",
+                       mission_id=mission_id)
+            raise DeveloperNoChangeError(
+                "Debugger produced no staged change for the verification failure")
         diff, changed, _stat = promotion.candidate_diff(stage)
         metadata = self._agent_metadata(model_name, "debugger")
         summary = (
@@ -3246,6 +3284,13 @@ INSTRUCTIONS:
             f"({'PASS' if run.get('passed') else 'FAIL'})"
             for run in get_verification_runs(mission_id)
         ) or "- No verification run recorded."
+        latest_runs = get_verification_runs(mission_id)
+        latest = latest_runs[-1] if latest_runs else None
+        latest_text = (
+            f"{latest.get('command')}: exit {latest.get('exit_code')} "
+            f"({'PASS' if latest.get('passed') else 'FAIL'})"
+            if latest else "no verification run"
+        )
         mission = get_mission(mission_id) or {}
         objective = str(mission.get("goal") or "(missing persisted objective)")
         steering = self._take_steering(mission_id)
@@ -3283,8 +3328,12 @@ AUTHORIZED CANDIDATE WRITE SCOPE:
 VALIDATION RESULT:
 {validation_text}
 
-VERIFICATION RUNS:
+VERIFICATION RUNS (audit history; the latest run is authoritative):
 {verification_text}
+
+LATEST VERIFICATION: {latest_text}
+If the latest verification PASSED, earlier FAIL runs are superseded by the repair that
+preceded this review; do not reject a candidate only because a historical run failed.
 
 CANDIDATE DIFF TO REVIEW:
 {_truncate(diff, 60_000)}

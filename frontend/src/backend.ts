@@ -600,13 +600,16 @@ export function resolveEngineLocation(options: EngineConnectionOptions): EngineL
     }
     const attempted: string[] = [];
     for (const root of dedupe(candidates)) {
-        const pythonPath = (options.pythonPath || '').trim()
-            ? path.resolve(options.pythonPath as string)
-            : path.join(root, 'python', 'python.exe');
-        const nlAgentPath = path.join(root, 'nl_agent.py');
-        attempted.push(root);
-        if (isFile(nlAgentPath) && isFile(pythonPath)) {
-            return { engineRoot: root, pythonPath, nlAgentPath };
+        // A packaged distribution embeds one engine runtime under <app>/engine.
+        for (const engineRoot of dedupe([root, path.join(root, 'engine')])) {
+            const pythonPath = (options.pythonPath || '').trim()
+                ? path.resolve(options.pythonPath as string)
+                : path.join(engineRoot, 'python', 'python.exe');
+            const nlAgentPath = path.join(engineRoot, 'nl_agent.py');
+            attempted.push(engineRoot);
+            if (isFile(nlAgentPath) && isFile(pythonPath)) {
+                return { engineRoot, pythonPath, nlAgentPath };
+            }
         }
     }
     throw new EngineError(

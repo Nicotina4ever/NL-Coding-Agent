@@ -1,15 +1,17 @@
 @echo off
 rem NL Code portable launcher.
-rem The Code - OSS frontend is self-contained in this folder; the NL Coding
-rem Engine stays in its existing installation so models, agents, permissions,
-rem missions and history are the same data the Studio uses.
+rem The Code - OSS frontend and one embedded engine runtime live in this folder.
+rem Models stay in Ollama; the shared Studio engine and its data are not modified.
 setlocal
 set "NLCODE_ROOT=%~dp0"
-if not defined NLCODE_ENGINE_ROOT set "NLCODE_ENGINE_ROOT=__ENGINE_ROOT__"
+if not defined NLCODE_ENGINE_ROOT set "NLCODE_ENGINE_ROOT=%~dp0__ENGINE_ROOT__"
 set "NL_ENGINE_ROOT=%NLCODE_ENGINE_ROOT%"
 set "ELECTRON_RUN_AS_NODE="
-rem Reuse the engine's existing data (settings, agents, models, permissions, history).
-if not defined NL_DATA_DIR if exist "%NLCODE_ENGINE_ROOT%\data" set "NL_DATA_DIR=%NLCODE_ENGINE_ROOT%\data"
+if not defined NL_DATA_DIR set "NL_DATA_DIR=%NLCODE_ROOT%data\engine-data"
+if not defined NL_WORKSPACE_DIR set "NL_WORKSPACE_DIR=%NLCODE_ROOT%data\workspace"
+if not defined NL_MODELS_CONFIG set "NL_MODELS_CONFIG=%NLCODE_ENGINE_ROOT%\config\models.yaml"
+if not exist "%NL_DATA_DIR%" mkdir "%NL_DATA_DIR%"
+if not exist "%NL_WORKSPACE_DIR%" mkdir "%NL_WORKSPACE_DIR%"
 if not exist "%NLCODE_ENGINE_ROOT%\nl_agent.py" goto missing_engine
 if not exist "%NLCODE_ENGINE_ROOT%\python\python.exe" goto missing_engine
 if not exist "%NLCODE_ROOT%__APP_EXE__" goto missing_app

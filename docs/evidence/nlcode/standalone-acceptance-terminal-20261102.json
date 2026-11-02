@@ -1,0 +1,103 @@
+{
+  "dist": "K:\\AI\\NL Coding Agent\\.workspace\\dist\\NL Code",
+  "project": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept-20261102-210936044\\project",
+  "dataDir": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept-20261102-210936044\\data",
+  "screenshots": [
+    "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept-20261102-210936044\\screenshots\\before-chat.png",
+    "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept-20261102-210936044\\screenshots\\home.png",
+    "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept-20261102-210936044\\screenshots\\watermark.png",
+    "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept-20261102-210936044\\screenshots\\terminal.png",
+    "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept-20261102-210936044\\screenshots\\agents.png",
+    "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept-20261102-210936044\\screenshots\\after-send.png",
+    "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept-20261102-210936044\\screenshots\\after-reply.png"
+  ],
+  "results": [
+    {
+      "name": "packaged application executable present",
+      "ok": true,
+      "detail": "NL Code.exe"
+    },
+    {
+      "name": "portable launcher present",
+      "ok": true,
+      "detail": "K:\\AI\\NL Coding Agent\\.workspace\\dist\\NL Code\\NL Code.bat"
+    },
+    {
+      "name": "extension installed in portable profile",
+      "ok": true,
+      "detail": "nlcodingagent.nl-coding-agent-0.7.2"
+    },
+    {
+      "name": "build metadata present",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "application window started",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "screenshot captured before interaction",
+      "ok": true,
+      "detail": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept-20261102-210936044\\screenshots\\before-chat.png"
+    },
+    {
+      "name": "NL Code home dashboard captured",
+      "ok": true,
+      "detail": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept-20261102-210936044\\screenshots\\home.png"
+    },
+    {
+      "name": "NL Code editor watermark captured",
+      "ok": true,
+      "detail": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept-20261102-210936044\\screenshots\\watermark.png"
+    },
+    {
+      "name": "PowerShell terminal executed a real command",
+      "ok": true,
+      "detail": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept-20261102-210936044\\screenshots\\terminal.png"
+    },
+    {
+      "name": "Command Prompt terminal executed a real command",
+      "ok": true,
+      "detail": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept-20261102-210936044\\screenshots\\terminal.png"
+    },
+    {
+      "name": "Agents and model assignments tab captured",
+      "ok": true,
+      "detail": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept-20261102-210936044\\screenshots\\agents.png"
+    },
+    {
+      "name": "NL Chat interaction captured",
+      "ok": true,
+      "detail": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\nlcode-accept-20261102-210936044\\screenshots\\after-reply.png"
+    },
+    {
+      "name": "Python engine child bound to the acceptance project",
+      "ok": true,
+      "detail": "43948"
+    },
+    {
+      "name": "embedded engine used without the repository path",
+      "ok": true,
+      "detail": "K:\\AI\\NL Coding Agent\\.workspace\\dist\\NL Code\\engine\\python\\python.exe"
+    },
+    {
+      "name": "application closed",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Python engine child released on shutdown",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "existing engine settings preserved",
+      "ok": true,
+      "detail": "preserved 0 preexisting key(s); new internal migration keys are allowed"
+    }
+  ],
+  "passed": true,
+  "finishedAt": "2026-11-02T21:10:45.4212240+01:00"
+}

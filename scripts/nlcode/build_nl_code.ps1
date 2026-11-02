@@ -110,6 +110,10 @@ $backupPath = Join-Path $src 'product.original.json'
 if (-not (Test-Path $backupPath)) { Copy-Item $productPath $backupPath }
 $product = Get-Content $productPath -Raw | ConvertFrom-Json
 $branding = [ordered]@{
+    # The 1.145 stable/undefined-quality code path leaves the local pty host without a
+    # working terminal backend (Create New Terminal fails). The upstream Insiders quality
+    # value selects the working terminal implementation, so the standalone must declare it.
+    quality              = 'insider'
     nameShort            = $brandNameShort
     nameLong             = 'NL Code'
     applicationName      = 'nl-code'
@@ -121,11 +125,22 @@ $branding = [ordered]@{
     win32AppUserModelId  = 'NL.Code'
     win32ShellNameShort  = 'NL Code'
     win32MutexName       = 'nlcode'
+    win32ContextMenu     = [ordered]@{
+        x64   = [ordered]@{ clsid = '799F4F7E-5934-4001-A74C-E207F44F05B8' }
+        arm64 = [ordered]@{ clsid = '7D34756D-32DD-4EE6-B99F-2691C0DAD875' }
+    }
     urlProtocol          = 'nl-code'
 }
 foreach ($key in $branding.Keys) {
     $product | Add-Member -NotePropertyName $key -NotePropertyValue $branding[$key] -Force
 }
+# The workbench terminal backend in 1.145 also expects a real product version/commit pair;
+# without them local terminals are created but the pty host never connects (generic error).
+$sourceCommit = (& git -C $Source rev-parse HEAD 2>$null)
+if (-not $sourceCommit) { $sourceCommit = '67710841ad061a9e253214f87bf5415a185ab2ff' }
+$product | Add-Member -NotePropertyName version -NotePropertyValue '1.145.0-insider' -Force
+$product | Add-Member -NotePropertyName commit -NotePropertyValue ([string]$sourceCommit).Trim() -Force
+$product | Add-Member -NotePropertyName date -NotePropertyValue (Get-Date).ToString('o') -Force
 # Upstream Insiders product keeps defaultChatAgent/trustedExtensionAuthAccess; the workbench
 # agent host in 1.145 needs them to render. The first-run Copilot onboarding dialog is a
 # one-time upstream behaviour (the acceptance harness presses Escape); NL Chat is independent.
@@ -241,6 +256,10 @@ if (-not $SkipCompile) {
     }
 
     Write-Step 'Compile client and built-in extensions'
+    # A resync wipes .build/typings; tsgo needs the exact Electron declarations.
+    if (-not (Test-Path (Join-Path $src '.build\typings\electron.d.ts'))) {
+        Invoke-Native (Join-Path $NodeDir 'node.exe') @('build/npm/electronTypes.ts') $src
+    }
     Invoke-Native $npm @('run', 'gulp', 'compile') $src
 }
 
@@ -269,7 +288,7 @@ if (-not $SkipPackage) {
     } else {
         Write-Host 'build tree already has the Copilot ripgrep shim task disabled'
     }
-    if (-not $env:VSCODE_QUALITY) { $env:VSCODE_QUALITY = 'stable' }
+    if (-not $env:VSCODE_QUALITY) { $env:VSCODE_QUALITY = 'insider' }
     # The Windows packaging task verifies Authenticode signatures; signtool lives in the SDK.
     $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe' -ErrorAction SilentlyContinue |
         Sort-Object FullName -Descending | Select-Object -First 1
@@ -371,9 +390,32 @@ if (-not (Test-Path $settingsPath)) {
     } | ConvertTo-Json -Depth 5 | Set-Content -Path $settingsPath -Encoding UTF8
 }
 
+Write-Step 'Embed a standalone copy of the NL Coding Engine (one runtime; no models)'
+$engineDist = Join-Path $dist 'engine'
+New-Item -ItemType Directory -Force -Path $engineDist | Out-Null
+$engineRobocopyExcludeDirs = @('__pycache__', '.git', '.pytest_cache', 'data', '.workspace')
+if (Test-Path (Join-Path $repoRoot 'nl_agent.py')) {
+    Copy-Item (Join-Path $repoRoot 'nl_agent.py') $engineDist -Force
+}
+foreach ($engineItem in @('nl_coding_agent', 'python', 'config', 'assets')) {
+    $engineSource = Join-Path $repoRoot $engineItem
+    if (-not (Test-Path $engineSource)) { continue }
+    $engineTarget = Join-Path $engineDist $engineItem
+    New-Item -ItemType Directory -Force -Path $engineTarget | Out-Null
+    $robocopyArgs = @($engineSource, $engineTarget, '/E', '/NFL', '/NDL', '/NJH', '/NJS', '/NP',
+        '/R:1', '/W:1', '/XD') + $engineRobocopyExcludeDirs
+    robocopy @robocopyArgs | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw "engine copy failed for $engineItem ($LASTEXITCODE)" }
+}
+# One runtime only: the embedded copy is the standalone engine. Models stay in Ollama,
+# and the shared repository engine remains the one used by the VSIX.
+$engineData = Join-Path $dist 'data\engine-data'
+$engineWorkspace = Join-Path $dist 'data\workspace'
+New-Item -ItemType Directory -Force -Path $engineData, $engineWorkspace | Out-Null
+
 Write-Step 'Write launcher and build metadata'
 $launcherTemplate = Get-Content (Join-Path $PSScriptRoot 'launcher.bat') -Raw
-$launcher = $launcherTemplate.Replace('__ENGINE_ROOT__', $repoRoot).Replace('__APP_EXE__', $appExeName)
+$launcher = $launcherTemplate.Replace('__ENGINE_ROOT__', '%~dp0engine').Replace('__APP_EXE__', $appExeName)
 Set-Content -Path (Join-Path $dist 'NL Code.bat') -Value $launcher -Encoding ASCII
 
 Write-Step 'Compile the NL Code Launcher executable'
@@ -403,7 +445,8 @@ $buildInfo = [ordered]@{
     appExecutable     = $appExeName
     codeOssVersion    = (Get-Content (Join-Path $src 'package.json') -Raw | ConvertFrom-Json).version
     codeOssCommit     = $commitInfo
-    engineRoot        = $repoRoot
+    engineRoot        = 'engine'
+    engineBundled     = $true
     extension         = $extDirName
     node              = (& (Join-Path $NodeDir 'node.exe') --version)
     builtAt           = (Get-Date).ToString('o')
@@ -419,4 +462,4 @@ if (Test-Path (Join-Path $repoRoot 'docs\NL_CODE_STANDALONE.md')) {
 Write-Host ''
 Write-Host ("NL Code staged: " + $dist) -ForegroundColor Green
 Write-Host ("Launcher: " + (Join-Path $dist 'NL Code.bat'))
-Write-Host ("Engine:   " + $repoRoot)
+Write-Host ("Engine:   " + $engineDist)

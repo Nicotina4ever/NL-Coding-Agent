@@ -37,7 +37,10 @@ wall-time budget, removed orphan staging copies on mission delete, and implement
 - one ModelRouter-based routing evidence path shared by Chat and Missions, with explicit requests
   preserved and cloud escalation still opt-in;
 - a rebuilt VSIX (installed acceptance passed) and a rebuilt Code - OSS standalone (GUI acceptance
-  `NLCODE-STANDALONE-ACCEPTANCE-PASS`) with a regenerated portable ZIP.
+  `NLCODE-STANDALONE-ACCEPTANCE-PASS`) with a regenerated portable ZIP. The standalone acceptance
+  now runs real commands in both the PowerShell and Command Prompt terminals and fails if either
+  does not work; the terminal regression was traced to the packaged `product.json` missing
+  insider quality/version/commit fields (fixed in the build branding).
 
 Real local-model evidence (mission with advisor and skills, repair, Chat continuity) is under
 `docs/evidence/nlcode/`. Multimodal attachments, Vision handoff, local ASR and web research are

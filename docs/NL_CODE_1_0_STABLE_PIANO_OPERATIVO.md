@@ -280,6 +280,6 @@ cancellazione senza autorizzazione dell'utente e senza processi/test fermi.
 - [x] Skills progressive, subagenti isolati con handoff strutturato e specialisti advisory dinamici multipli, usati in una missione completa — `tests/test_skills.py`, `tests/test_subagents.py`, `tests/test_advisors.py`.
 - [x] Routing Chat/missioni unificato sul `ModelRouter` con evidence, richiesta esplicita prioritaria e cloud opt-in — `tests/test_model_routing.py`; verificato con Chat reale.
 - [x] VSIX ricompilata da HEAD e verificata installata: webview PASS, integrazione MCP 16 PASS, `VSIX-INSTALLED-MISSION-PASS`.
-- [x] Standalone Code - OSS ricompilato e accettato end-to-end: **NLCODE-STANDALONE-ACCEPTANCE-PASS**; ZIP portabile rigenerato.
-- [ ] Missione end-to-end dall'interfaccia installata per il percorso **team completo** (la VSIX installata ha eseguito una missione reale; lo standalone ha eseguito chat+dashboard+engine). Residuo minore: il payload standalone referenzia l'engine del repo invece di incorporarne una copia indipendente.
+- [x] Standalone Code - OSS ricompilato e accettato end-to-end: **NLCODE-STANDALONE-ACCEPTANCE-PASS**, con esecuzione reale di comandi nei terminali PowerShell e Command Prompt, engine embedded risolto dal payload (non dal repository) e shutdown pulito dei processi; ZIP portabile rigenerato.
+- [ ] Missione end-to-end dall'interfaccia installata per il percorso **team completo**: la VSIX installata ha eseguito una missione reale; la UI standalone ha avviato una missione (poi bloccata dal modello) ma il completamento team dalla standalone e il cambio progetto nella stessa finestra restano da automatizzare.
 

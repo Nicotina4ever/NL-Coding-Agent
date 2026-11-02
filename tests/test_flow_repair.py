@@ -81,6 +81,46 @@ def _executor(root, project_id, goal, scripts):
     return executor, mission_id, runtime
 
 
+def test_destructive_debugger_output_is_not_accepted_as_repair(repair_env):
+    """A debugger that rewrites only one function must not be reported as a repair."""
+    services, project, root = repair_env
+    goal = "In src/calc.py add double(x) returning x * 2. Change only src/calc.py."
+    executor, mission_id, _runtime = _executor(root, project["id"], goal, {
+        "developer": [_write_block("src/calc.py", CALC_REGRESSION)],
+        "debugger": [_write_block("src/calc.py", "def subtract(a, b):\n    return a - b\n")],
+    })
+    executor.prepare()
+    assert executor.run_developer(None).status == "ok"
+    assert executor.run_verification(None).status == "needs_repair"
+    blocked = executor.run_repair(None)
+    assert blocked.status == "blocked", blocked
+    assert "no staged change" in str(blocked.payload.get("error", "")).lower()
+    candidate = (executor.stage.workspace / "src" / "calc.py").read_text(encoding="utf-8")
+    assert "agent regression" in candidate
+    assert "def double" not in candidate
+
+
+def test_reviewer_prompt_marks_the_latest_verification_as_authoritative(repair_env):
+    services, project, root = repair_env
+    goal = "In src/calc.py add double(x) returning x * 2. Change only src/calc.py."
+    executor, _mission_id, runtime = _executor(root, project["id"], goal, {
+        "developer": [_write_block("src/calc.py", CALC_REGRESSION)],
+        "debugger": [_write_block("src/calc.py", CALC_FIXED)],
+        "reviewer": ["APPROVE\nOK.\n"],
+    })
+    executor.prepare()
+    executor.run_developer(None)
+    executor.run_verification(None)
+    executor.run_repair(None)
+    executor.run_verification(None)
+    executor.run_reviewer(None)
+    reviewer_calls = [call for call in runtime.calls if call["role_id"] == "reviewer"]
+    prompt = reviewer_calls[-1]["prompt"]
+    assert "LATEST VERIFICATION" in prompt
+    assert "PASS" in prompt
+    assert "superseded" in prompt
+
+
 def test_flow_repairs_an_agent_introduced_semantic_error(repair_env):
     services, project, root = repair_env
     goal = ("In src/calc.py add double(x) returning x * 2 and keep existing behaviour. "

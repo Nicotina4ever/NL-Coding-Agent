@@ -1,0 +1,74 @@
+{
+  "started_at": "2026-11-02T19:40:35",
+  "model": "ollama/qwen2.5-coder:7b-instruct-q4_K_M",
+  "developer_actions": [
+    "Wrote src/calc.py via code block",
+    "Wrote tests/test_calc.py via code block"
+  ],
+  "fault_injection_actions": [
+    "Wrote src/calc.py via code block"
+  ],
+  "candidate_after_fault": "def add(a, b):\n    return a + b\n\n\ndef subtract(a, b):\n    return a + b  # Introducing a subtle semantic bug\n\n\ndef double(x):\n    return x * 2\n",
+  "verification_before_repair": "needs_repair",
+  "repair_status": "ok",
+  "verification_after_repair": "ok",
+  "review_verdict": "APPROVE",
+  "promotion_status": "promoted",
+  "final": {
+    "status": "completed",
+    "error": null
+  },
+  "live_calc": "def add(a, b):\n    return a + b\n\n\ndef subtract(a, b):\n    return a - b  # Corrected the bug\n\n\ndef double(x):\n    return x * 2\n",
+  "live_test": "from src.calc import add, subtract, double\n\n\ndef test_add():\n    assert add(1, 2) == 3\n\n\ndef test_subtract():\n    assert subtract(5, 2) == 3\n\n\ndef test_double():\n    assert double(2) == 4\n    assert double(0) == 0\n    assert double(-3) == -6\n",
+  "live_has_difference": true,
+  "live_has_double": true,
+  "verification_runs": [
+    {
+      "command": "verify:candidate K:\\AI\\NL Coding Agent\\python\\python.exe K:\\AI\\NL Coding Agent\\.workspace\\temp\\real-self-repair-20261102-194013\\project\\data\\staging\\mission-1-9qta3fyc\\verification\\candidate\\_pytest_runner.py -q -p no:cacheprovider --no-header --junitxml=K:\\AI\\NL Coding Agent\\.workspace\\temp\\real-self-repair-20261102-194013\\project\\data\\staging\\mission-1-9qta3fyc\\verification\\evidence\\junit-candidate.xml tests",
+      "exit_code": 1,
+      "passed": 0
+    },
+    {
+      "command": "verify:oracle K:\\AI\\NL Coding Agent\\python\\python.exe K:\\AI\\NL Coding Agent\\.workspace\\temp\\real-self-repair-20261102-194013\\project\\data\\staging\\mission-1-9qta3fyc\\verification\\oracle\\_pytest_runner.py -q -p no:cacheprovider --no-header --junitxml=K:\\AI\\NL Coding Agent\\.workspace\\temp\\real-self-repair-20261102-194013\\project\\data\\staging\\mission-1-9qta3fyc\\verification\\evidence\\junit-oracle.xml tests",
+      "exit_code": 1,
+      "passed": 0
+    },
+    {
+      "command": "verify:candidate K:\\AI\\NL Coding Agent\\python\\python.exe K:\\AI\\NL Coding Agent\\.workspace\\temp\\real-self-repair-20261102-194013\\project\\data\\staging\\mission-1-9qta3fyc\\verification\\candidate\\_pytest_runner.py -q -p no:cacheprovider --no-header --junitxml=K:\\AI\\NL Coding Agent\\.workspace\\temp\\real-self-repair-20261102-194013\\project\\data\\staging\\mission-1-9qta3fyc\\verification\\evidence\\junit-candidate.xml tests",
+      "exit_code": 0,
+      "passed": 1
+    },
+    {
+      "command": "verify:oracle K:\\AI\\NL Coding Agent\\python\\python.exe K:\\AI\\NL Coding Agent\\.workspace\\temp\\real-self-repair-20261102-194013\\project\\data\\staging\\mission-1-9qta3fyc\\verification\\oracle\\_pytest_runner.py -q -p no:cacheprovider --no-header --junitxml=K:\\AI\\NL Coding Agent\\.workspace\\temp\\real-self-repair-20261102-194013\\project\\data\\staging\\mission-1-9qta3fyc\\verification\\evidence\\junit-oracle.xml tests",
+      "exit_code": 0,
+      "passed": 1
+    }
+  ],
+  "model_calls": [
+    {
+      "role": "Implementation Developer",
+      "model": "ollama/qwen2.5-coder:7b-instruct-q4_K_M",
+      "prompt_tail": "Edit the staged files. Current src/calc.py:\ndef add(a, b):\n    return a + b\n\n\ndef subtract(a, b):\n    return a - b\n\nCurrent tests/test_calc.py:\nfrom src.calc import add, subtract\n\n\ndef test_add():\n    assert add(1, 2) == 3\n\n\ndef test_subtract():\n    assert subtract(5, 2) == 3\n\nAdd def double(x): return x * 2 to src/calc.py and add a test for double to tests/test_calc.py. Output exactly two fenced blocks, one per file: ```write:src/calc.py <full file>``` and ```write:tests/test_calc.py <full file>```.",
+      "output": "```write:src/calc.py\ndef add(a, b):\n    return a + b\n\n\ndef subtract(a, b):\n    return a - b\n\n\ndef double(x):\n    return x * 2\n```\n\n```write:tests/test_calc.py\nfrom src.calc import add, subtract, double\n\n\ndef test_add():\n    assert add(1, 2) == 3\n\n\ndef test_subtract():\n    assert subtract(5, 2) == 3\n\n\ndef test_double():\n    assert double(2) == 4\n    assert double(0) == 0\n    assert double(-3) == -6\n```"
+    },
+    {
+      "role": "Implementation Developer",
+      "model": "ollama/qwen2.5-coder:7b-instruct-q4_K_M",
+      "prompt_tail": "Fault-injection experiment. Current staged src/calc.py:\ndef add(a, b):\n    return a + b\n\n\ndef subtract(a, b):\n    return a - b\n\n\ndef double(x):\n    return x * 2\n\nIntroduce exactly one subtle semantic bug in subtract() so that it returns a + b instead of a - b. Keep valid Python, keep every other function and the tests intact. Output ONLY one fenced block ```write:src/calc.py <full file>```.",
+      "output": "```write:src/calc.py\ndef add(a, b):\n    return a + b\n\n\ndef subtract(a, b):\n    return a + b  # Introducing a subtle semantic bug\n\n\ndef double(x):\n    return x * 2\n```"
+    },
+    {
+      "role": "Software Debugger",
+      "model": "ollama/qwen2.5-coder:7b-instruct-q4_K_M",
+      "prompt_tail": "_calc.py\n\nCURRENT STAGED FILE CONTENT (authoritative; edit this, not the live repository):\n--- src/calc.py (current staged content) ---\ndef add(a, b):\n    return a + b\n\n\ndef subtract(a, b):\n    return a + b  # Introducing a subtle semantic bug\n\n\ndef double(x):\n    return x * 2\n\n\n--- tests/test_calc.py (current staged content) ---\nfrom src.calc import add, subtract, double\n\n\ndef test_add():\n    assert add(1, 2) == 3\n\n\ndef test_subtract():\n    assert subtract(5, 2) == 3\n\n\ndef test_double():\n    assert double(2) == 4\n    assert double(0) == 0\n    assert double(-3) == -6\n\n\nSHARED MISSION CONTEXT (recovered once for this mission; do not re-read the repository):\n\n\nINSTRUCTIONS:\n1. Examine the failing tests and the current staged code.\n2. Fix the error directly in the staged source files using patch_file or:\n```write:<relative_path>\n<valid source code>\n```\nWhen you use a write block, reproduce the ENTIRE file: keep every existing function/class\n(including unrelated ones) and add the minimal fix. Never output only the changed function.\n3. Do NOT edit files outside the declared write scope; out-of-scope changes are rejected.\n4. Nothing is live until review and promotion; only the staged copy may change.\n5. Real tools are available: file read/write/patch, git status/diff, run tests and a bounded shell allowlist. Use them to diagnose the real failure.\n6. Do NOT include 'diff --git' or unified-diff headers inside a source file.\n7. Keep changes minimal and focused on resolving the error.\n",
+      "output": "```write:src/calc.py\ndef add(a, b):\n    return a + b\n\n\ndef subtract(a, b):\n    return a - b  # Corrected the bug\n\n\ndef double(x):\n    return x * 2\n```"
+    },
+    {
+      "role": "Code Reviewer & Quality Gatekeeper",
+      "model": "ollama/qwen2.5-coder:7b-instruct-q4_K_M",
+      "prompt_tail": "taging\\mission-1-9qta3fyc\\verification\\evidence\\junit-oracle.xml tests: exit 0 (PASS)\nIf the latest verification PASSED, earlier FAIL runs are superseded by the repair that\npreceded this review; do not reject a candidate only because a historical run failed.\n\nCANDIDATE DIFF TO REVIEW:\n--- a/src/calc.py\n+++ b/src/calc.py\n@@ -3,4 +3,8 @@\n \n \n def subtract(a, b):\n-    return a - b\n+    return a - b  # Corrected the bug\n+\n+\n+def double(x):\n+    return x * 2\n--- a/tests/test_calc.py\n+++ b/tests/test_calc.py\n@@ -1,4 +1,4 @@\n-from src.calc import add, subtract\n+from src.calc import add, subtract, double\n \n \n def test_add():\n@@ -7,3 +7,9 @@\n \n def test_subtract():\n     assert subtract(5, 2) == 3\n+\n+\n+def test_double():\n+    assert double(2) == 4\n+    assert double(0) == 0\n+    assert double(-3) == -6\n\nINSTRUCTIONS:\n1. This candidate is NOT yet applied to the live project. Review only the candidate diff above.\n2. An APPROVE verdict leads to promotion; a REJECT verdict keeps the candidate unapplied.\n3. Check correctness, safety, scope adherence, and missing tests.\n4. Assess the diff against the persisted mission objective and authorized write scope above. Base every claim on that objective, scope, diff, changed-file list, validation result and verification runs. Do not invent imports, files, or failures that are not present in that evidence.\n5. Start your response with exactly 'APPROVE' or 'REJECT' on the first line.\n6. Follow the verdict with concise review notes and blocking issues.\n",
+      "output": "APPROVE\n\nLa différence proposée ajoute une fonction `double` dans `src/calc.py` et un test correspondant dans `tests/test_calc.py`. Voici les points clés à noter :\n\n1. **Correctivité** : La fonction `double` est correctement implémentée et retourne `x * 2`.\n2. **Adhérence au scope** : La modification est effectuée uniquement dans les fichiers `src/calc.py` et `tests/test_calc.py`, ce qui est conforme au scope autorisé.\n3. **Tests** : Un test pour la fonction `double` a été ajouté dans `tests/test_calc.py`, ce qui est conforme à l'objectif de la mission.\n4. **Validation** : Les tests ont été exécutés et ont réussi, ce qui indique que la fonction et le test sont corrects.\n\nAucun problème majeur n'est détecté dans cette différence. Elle respecte les critères de la mission et les restrictions de l'agent."
+    }
+  ],
+  "finished_at": "2026-11-02T19:40:35"
+}

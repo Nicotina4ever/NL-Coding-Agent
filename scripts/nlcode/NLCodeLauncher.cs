@@ -30,14 +30,29 @@ internal static class NLCodeLauncher
         }
         if (string.IsNullOrWhiteSpace(engine))
         {
-            engine = @"K:\AI\NL Coding Agent";
+            engine = Path.Combine(root, "engine");
+        }
+        else if (!Path.IsPathRooted(engine))
+        {
+            // Relative engineRoot in BUILD_INFO is resolved against the payload:
+            // the distribution is independent of the development repository path.
+            engine = Path.GetFullPath(Path.Combine(root, engine));
         }
         Environment.SetEnvironmentVariable("NL_ENGINE_ROOT", engine);
         Environment.SetEnvironmentVariable("ELECTRON_RUN_AS_NODE", null);
-        string data = Path.Combine(engine, "data");
-        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NL_DATA_DIR")) && Directory.Exists(data))
+        Environment.SetEnvironmentVariable("NL_MODELS_CONFIG",
+            Path.Combine(engine, "config", "models.yaml"));
+        string data = Path.Combine(root, "data", "engine-data");
+        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NL_DATA_DIR")))
         {
+            Directory.CreateDirectory(data);
             Environment.SetEnvironmentVariable("NL_DATA_DIR", data);
+        }
+        string workspace = Path.Combine(root, "data", "workspace");
+        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NL_WORKSPACE_DIR")))
+        {
+            Directory.CreateDirectory(workspace);
+            Environment.SetEnvironmentVariable("NL_WORKSPACE_DIR", workspace);
         }
         string exe = Path.Combine(root, "NL Code.exe");
         if (!File.Exists(exe))
