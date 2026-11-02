@@ -1,0 +1,107 @@
+name: Build NL Code artifacts
+
+# Cross-platform verification and extension packaging are automatic.
+# The Windows standalone carries an embedded Python engine and is built on a
+# self-hosted Windows runner registered with the label `nlcode-windows`
+# (Settings -> Actions -> Runners). macOS/Linux standalone packages are NOT
+# produced here until a runner on that OS validates them; no placeholder binaries
+# are published.
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to attach artifacts to (empty = no release)"
+        required: false
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  python-suite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install engine dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+      - name: Run the engine suite
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest -q --tb=short
+
+  extension:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run compile
+      - run: npm run test:webview
+      - name: Package VSIX
+        run: npx vsce package --out NL-Coder-${{ runner.os }}.vsix
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix-${{ runner.os }}
+          path: frontend/NL-Coder-${{ runner.os }}.vsix
+
+  windows-standalone:
+    # The build needs the embedded Python runtime and a real desktop session for
+    # the GUI acceptance; register a Windows runner with this label to enable it.
+    if: vars.NLCODE_WINDOWS_RUNNER == 'true'
+    runs-on: [self-hosted, Windows, X64, nlcode-windows]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build standalone with embedded engine
+        shell: pwsh
+        run: ./scripts/nlcode/build_nl_code.ps1 -ResyncSource -Force
+      - name: Assemble release packages
+        shell: pwsh
+        run: ./scripts/nlcode/build_release.ps1
+      - name: GUI acceptance (terminals, Chat, embedded engine, shutdown)
+        shell: pwsh
+        run: ./scripts/nlcode/accept_nl_code.ps1 -ReplyTimeoutSeconds 60
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-standalone
+          path: |
+            .workspace/releases/windows/NL-Code-Portable.zip
+            .workspace/releases/windows/NL-Code-Setup.exe
+            .workspace/releases/windows/NL-Code-Portable.zip.sha256
+            .workspace/releases/extension/NL-Coder.vsix
+            .workspace/releases/release-manifest.json
+
+  publish:
+    needs: [extension]
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: vsix-*
+      - name: Publish verified artifacts only
+        if: vars.NLCODE_AUTO_RELEASE == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag || github.ref_name }}
+          prerelease: true
+          files: artifacts/**/*.vsix
+          fail_on_unmatched_files: true

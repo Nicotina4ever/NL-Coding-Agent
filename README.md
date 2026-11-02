@@ -12,6 +12,44 @@ The product is not a chat wrapper and not a cloud coding assistant. Its defining
 **orchestration**: task decomposition, precise handoffs, resource-aware scheduling, verification,
 conflict prevention, persistent state and controlled self-development.
 
+## Download and install
+
+Latest beta packages are published on the
+[GitHub Releases page](https://github.com/Nicotina4ever/NL-Coding-Agent/releases):
+
+- **Windows portable** (`NL-Code-Portable.zip`) — unpack and run `NL Code.bat`.
+- **Windows setup** (`NL-Code-Setup.exe`) — small bootstrapper; downloads the portable payload
+  from the same release and installs it under `%LOCALAPPDATA%\Programs\NL Code`, with Desktop and
+  Start shortcuts. It carries no duplicated engine/runtime.
+- **NL Coder extension** (`NL-Coder.vsix`) — install into VS Code Insiders, or use
+  `Installa NL Coder.cmd`.
+
+Platform status: **Windows x64 is built and verified locally** (launch, embedded engine, PowerShell
+and Command Prompt terminals, Chat, clean process shutdown). macOS and Linux packages are **not
+published yet**: they require their own build/validation runners and are not declared available.
+
+## Quick start (this checkout)
+
+From the repository root (no absolute path is stored in the launchers):
+
+- `Avvia NL Code.cmd` — starts the local standalone payload, resolving it relative to this file.
+- `Apri Installer.cmd` — opens `.workspace\releases\windows`.
+- `Installa NL Coder.cmd` — installs the VSIX into VS Code Insiders.
+- `GitHub Releases.cmd` — opens the public releases page.
+- `scripts\nlcode\install_shortcuts.ps1` — creates/removes the corresponding Desktop and Start-menu
+  shortcuts. `scripts\nlcode\build_release.ps1` assembles the local release folder.
+- The legacy `NL Coding Agent.bat` starts the old PySide6 GUI; it is not part of the new
+  standalone/extension distribution.
+
+## Documentation
+
+- [Current state and verified limits](docs/CURRENT_STATE.md)
+- [Operational plan and acceptance gates](docs/NL_CODE_1_0_STABLE_PIANO_OPERATIVO.md)
+- [Next self-build mission](docs/NEXT_SELF_BUILD_MISSION.md)
+- [Safety, storage and packaging rules](docs/SAFETY_AND_STORAGE.md)
+- [Documentation index](docs/README.md)
+
+
 ## Status
 
 Early-stage but functionally exercised: the end-to-end developer/tester/debugger/reviewer cycle has
