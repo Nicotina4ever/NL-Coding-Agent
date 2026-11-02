@@ -108,4 +108,32 @@ def test_dirty_editor_cancel_preserves_entire_window_project_and_close(window, t
     assert not event.isAccepted()
     assert not window._closing
     assert window._editor_panel._tabs_widget.currentWidget().toPlainText() == "unsaved\n"
+
+
+def test_mission_delete_refreshes_chat_goals_inspector_and_task_board(
+        window, tmp_path, monkeypatch):
+    from nl_coding_agent.persistence.missions import create_mission
+
+    root = tmp_path / "mission-project"
+    root.mkdir()
+    project = window._services.open_project(root)
+    window._on_project_opened(project)
+    mission_id = create_mission(project["id"], "Remove me", "Delete this mission")
+    mission = window._services.get_mission_details(mission_id)
+    window._inspector.show_mission(mission)
+
+    goal_refreshes = []
+    task_refreshes = []
+    monkeypatch.setattr(
+        window._goals_panel, "refresh", lambda: goal_refreshes.append(True))
+    monkeypatch.setattr(
+        window._tasks_panel, "refresh", lambda: task_refreshes.append(True))
+    window._services.delete_mission(mission_id, project_id=project["id"])
+    QApplication.processEvents()
+
+    assert "Deleted mission #" + str(mission_id) in (
+        window._chat_panel._transcript.toPlainText())
+    assert goal_refreshes
+    assert task_refreshes
+    assert window._inspector._last_render[0] == "project"
     window._editor_panel._confirm = lambda path: True

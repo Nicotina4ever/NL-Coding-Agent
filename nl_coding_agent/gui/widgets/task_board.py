@@ -1,13 +1,15 @@
 """Mission and task board backed by AppServices (no direct database access)."""
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtCore import Qt, QTimer, Signal, Slot
 from PySide6.QtWidgets import (
-    QCheckBox, QHBoxLayout, QInputDialog, QLabel, QListWidget, QListWidgetItem,
-    QMessageBox, QProgressBar, QPushButton, QSplitter, QTextEdit, QTreeWidget,
-    QTreeWidgetItem, QVBoxLayout, QWidget,
+    QAbstractItemView, QCheckBox, QComboBox, QHBoxLayout, QInputDialog, QLabel,
+    QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QProgressBar,
+    QPushButton, QSplitter, QTextEdit, QTreeWidget, QTreeWidgetItem, QVBoxLayout,
+    QWidget,
 )
 
 from nl_coding_agent.app.services import AppServices
@@ -51,6 +53,12 @@ class TaskBoardWidget(QWidget):
         self._services = services
         self._project: dict | None = None
         self._selected_mission_id: int | None = None
+        self._mission_cache: dict[int, dict] = {}
+        self._bulk_operation: dict | None = None
+        self._bulk_deadline = 0.0
+        self._bulk_timer = QTimer(self)
+        self._bulk_timer.setInterval(1000)
+        self._bulk_timer.timeout.connect(self._poll_bulk_operation)
         self._build_ui()
         _register_retranslate(self)
         self.refresh()
@@ -90,11 +98,53 @@ class TaskBoardWidget(QWidget):
         header.addWidget(self._document_btn)
         layout.addLayout(header)
 
+        filters = QHBoxLayout()
+        self._search_filter = QLineEdit()
+        self._search_filter.setObjectName("missionSearchFilter")
+        self._search_filter.setAccessibleName("Search missions")
+        self._search_filter.setPlaceholderText(_tr(
+            "task_board.filter_placeholder", "Filter missions by title or goal"))
+        self._search_filter.editingFinished.connect(self.refresh)
+        filters.addWidget(self._search_filter, 1)
+        self._status_filter = QComboBox()
+        self._status_filter.setObjectName("missionStatusFilter")
+        self._status_filter.setAccessibleName("Filter missions by status")
+        self._status_filter.addItem(_tr("task_board.all_states", "All states"), "")
+        for status in ("running", "pending", "interrupted", "blocked", "failed", "completed"):
+            self._status_filter.addItem(
+                _tr("task_board.status_" + status, status.capitalize()), status)
+        self._status_filter.currentIndexChanged.connect(self.refresh)
+        filters.addWidget(self._status_filter)
+        self._archived_toggle = QCheckBox(_tr(
+            "task_board.include_archived", "Include archived"))
+        self._archived_toggle.setObjectName("includeArchivedMissions")
+        self._archived_toggle.setAccessibleName("Include archived missions")
+        self._archived_toggle.toggled.connect(self.refresh)
+        filters.addWidget(self._archived_toggle)
+        self._select_filtered_btn = QPushButton(_tr(
+            "task_board.select_filtered", "Select filtered"))
+        self._select_filtered_btn.setObjectName("selectFilteredMissionsButton")
+        self._select_filtered_btn.clicked.connect(self._select_filtered_missions)
+        filters.addWidget(self._select_filtered_btn)
+        self._clear_selection_btn = QPushButton(_tr(
+            "task_board.clear_selection", "Clear selection"))
+        self._clear_selection_btn.setObjectName("clearMissionSelectionButton")
+        self._clear_selection_btn.clicked.connect(self._clear_mission_selection)
+        filters.addWidget(self._clear_selection_btn)
+        self._selection_summary = QLabel(_tr(
+            "task_board.selection_count", "{count} selected", count=0))
+        self._selection_summary.setStyleSheet("color: #7E8798; font-size: 12px;")
+        filters.addWidget(self._selection_summary)
+        layout.addLayout(filters)
+
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
         self._mission_list = QListWidget()
         self._mission_list.setMinimumWidth(260)
+        self._mission_list.setSelectionMode(
+            QAbstractItemView.SelectionMode.ExtendedSelection)
         self._mission_list.currentItemChanged.connect(self._on_mission_selected)
+        self._mission_list.itemSelectionChanged.connect(self._update_selection_actions)
         splitter.addWidget(self._mission_list)
 
         right = QSplitter(Qt.Orientation.Vertical)
@@ -140,20 +190,25 @@ class TaskBoardWidget(QWidget):
         self._review_btn = QPushButton(_tr("task_board.review", "Review candidate"))
         self._review_btn.clicked.connect(lambda: self.review_requested.emit(self._selected_mission_id)
                                          if self._selected_mission_id else None)
-        self._archive_btn = QPushButton("Archive")
+        self._stop_btn = QPushButton(_tr("task_board.stop", "Stop"))
+        self._stop_btn.setObjectName("stopMissionButton")
+        self._stop_btn.setEnabled(False)
+        self._stop_btn.clicked.connect(self._stop_selected)
+        self._archive_btn = QPushButton(_tr("task_board.archive", "Archive"))
         self._archive_btn.setObjectName("archiveMissionButton")
         self._archive_btn.setEnabled(False)
         self._archive_btn.clicked.connect(self._archive_selected)
-        self._delete_btn = QPushButton("Delete")
+        self._delete_btn = QPushButton(_tr("task_board.delete", "Delete"))
         self._delete_btn.setObjectName("deleteMissionButton")
         self._delete_btn.setEnabled(False)
         self._delete_btn.clicked.connect(self._delete_selected)
-        self._steer_btn = QPushButton("Steer")
+        self._steer_btn = QPushButton(_tr("task_board.steer", "Steer"))
         self._steer_btn.setObjectName("steerMissionButton")
         self._steer_btn.setEnabled(False)
         self._steer_btn.clicked.connect(self._steer_selected)
         footer.addWidget(self._review_btn)
         footer.addWidget(self._steer_btn)
+        footer.addWidget(self._stop_btn)
         footer.addWidget(self._archive_btn)
         footer.addWidget(self._delete_btn)
         footer.addWidget(self._run_btn)
@@ -171,17 +226,42 @@ class TaskBoardWidget(QWidget):
         self._history_toggle.setText(_tr("task_board.history", "History"))
         self._document_btn.setText(_tr("workspace.documents", "Document plan"))
         self._run_btn.setText(_tr("task_board.run_resume", "Run / Resume"))
+        self._stop_btn.setText(_tr("task_board.stop", "Stop"))
+        self._archive_btn.setText(_tr("task_board.archive", "Archive"))
+        self._delete_btn.setText(_tr("task_board.delete", "Delete"))
+        self._steer_btn.setText(_tr("task_board.steer", "Steer"))
+        self._search_filter.setPlaceholderText(_tr(
+            "task_board.filter_placeholder", "Filter missions by title or goal"))
+        self._archived_toggle.setText(_tr(
+            "task_board.include_archived", "Include archived"))
+        self._select_filtered_btn.setText(_tr(
+            "task_board.select_filtered", "Select filtered"))
+        self._clear_selection_btn.setText(_tr(
+            "task_board.clear_selection", "Clear selection"))
+        self._selection_summary.setText(_tr(
+            "task_board.selection_count", "{count} selected",
+            count=len(self._selected_mission_ids())))
+        self._status_filter.setItemText(
+            0, _tr("task_board.all_states", "All states"))
+        for index in range(1, self._status_filter.count()):
+            status = str(self._status_filter.itemData(index) or "")
+            self._status_filter.setItemText(
+                index, _tr("task_board.status_" + status, status.capitalize()))
         self._task_tree.setHeaderLabels([
             _tr("task_board.header_task", "Task"),
             _tr("task_board.header_role", "Role"),
             _tr("task_board.header_status", "Status"),
             _tr("task_board.header_attempts", "Attempts")])
+        self._review_btn.setText(_tr("task_board.review", "Review candidate"))
         self._update_queue_summary()
 
     # ------------------------------------------------------------------ project
 
     def set_project(self, project: dict | None):
-        self._project = project
+        previous_id = (self._project or {}).get("id")
+        self._project = dict(project) if project else None
+        if previous_id != (self._project or {}).get("id"):
+            self._selected_mission_id = None
         self.refresh()
 
     def _project_root(self) -> Path | None:
@@ -193,43 +273,151 @@ class TaskBoardWidget(QWidget):
 
     @Slot()
     def refresh(self):
-        selected = self._selected_mission_id
+        previous_selected_id = self._selected_mission_id
+        selected_ids = {
+            int(item.data(Qt.ItemDataRole.UserRole))
+            for item in self._mission_list.selectedItems()
+            if item.data(Qt.ItemDataRole.UserRole) is not None
+        }
+        if self._selected_mission_id is not None:
+            selected_ids.add(int(self._selected_mission_id))
+        self._mission_list.blockSignals(True)
         self._mission_list.clear()
-        project_id = self._project["id"] if self._project else None
-        missions = self._services.list_missions(project_id)
-        if project_id is not None and not missions:
+        project_id = int(self._project["id"]) if self._project else None
+        missions = self._services.list_missions(project_id) if project_id else []
+        if not self._archived_toggle.isChecked():
+            missions = [mission for mission in missions if not mission.get("archived_at")]
+        selected_status = str(self._status_filter.currentData() or "")
+        if selected_status:
+            missions = [mission for mission in missions
+                        if mission.get("status") == selected_status]
+        query = self._search_filter.text().strip().casefold()
+        if query:
             missions = [
-                m for m in self._services.list_missions(None)
-                if m.get("project_id") is None
+                mission for mission in missions
+                if query in str(mission.get("title") or "").casefold()
+                or query in str(mission.get("goal") or "").casefold()
             ]
         from nl_coding_agent.core.doc_planning import is_document_plan_request
-        visible = [m for m in missions if self._history_toggle.isChecked() or not (
-            m.get("status") == "blocked" and is_document_plan_request(m.get("goal") or ""))]
+        visible = [
+            mission for mission in missions
+            if self._history_toggle.isChecked() or not (
+                mission.get("status") == "blocked"
+                and is_document_plan_request(mission.get("goal") or ""))
+        ]
+        self._mission_cache = {int(mission["id"]): mission for mission in visible}
         for mission in visible:
             requirement = mission.get("requirement_id")
             suffix = ("  [" + str(requirement) + "]") if requirement else ""
+            archived = "  [archived]" if mission.get("archived_at") else ""
             label = (
                 f"#{mission['id']}  [{mission['status']}]  "
-                f"{mission.get('title', '')[:70]}{suffix}"
+                f"{mission.get('title', '')[:70]}{suffix}{archived}"
             )
             item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, mission["id"])
             self._mission_list.addItem(item)
-            if selected == mission["id"]:
-                self._mission_list.setCurrentItem(item)
+            if int(mission["id"]) in selected_ids:
+                item.setSelected(True)
         self._update_queue_summary()
-        if visible and self._mission_list.currentRow() < 0:
-            self._mission_list.setCurrentRow(0)
-        elif not visible:
+        if visible and not self._mission_list.selectedItems():
+            first = self._mission_list.item(0)
+            if first is not None:
+                first.setSelected(True)
+                self._mission_list.setCurrentItem(first)
+        current = self._mission_list.currentItem()
+        if current is None and self._mission_list.selectedItems():
+            current = self._mission_list.selectedItems()[-1]
+            self._mission_list.setCurrentItem(current)
+        self._mission_list.blockSignals(False)
+        if current is None:
             self._selected_mission_id = None
-            self._run_btn.setEnabled(False)
             self._task_tree.clear()
             self._details.setPlainText(_tr(
                 "task_board.no_missions_detail",
                 "No missions yet. Create one from the CLI or load a roadmap mission."))
             self._status_label.setText(_tr(
-                "task_board.no_missions", "No missions"))
+                "task_board.no_missions", "No missions matching these filters"))
             self._progress.setValue(0)
+            self._review_btn.setEnabled(False)
+            self._document_btn.setVisible(False)
+            self._run_btn.setEnabled(False)
+            self._steer_btn.setEnabled(False)
+        else:
+            mission_id = current.data(Qt.ItemDataRole.UserRole)
+            self._selected_mission_id = int(mission_id) if mission_id is not None else None
+            if self._selected_mission_id is not None:
+                self._show_mission(self._selected_mission_id)
+                if self._selected_mission_id != previous_selected_id:
+                    self.mission_selected.emit(self._selected_mission_id)
+        self._select_filtered_btn.setEnabled(project_id is not None and bool(visible))
+        self._update_selection_actions()
+
+    def _selected_mission_ids(self) -> list[int]:
+        return list(dict.fromkeys(
+            int(item.data(Qt.ItemDataRole.UserRole))
+            for item in self._mission_list.selectedItems()
+            if item.data(Qt.ItemDataRole.UserRole) is not None
+        ))
+
+    @Slot()
+    def _select_filtered_missions(self) -> None:
+        if not self._project:
+            return
+        self._mission_list.selectAll()
+        self._update_selection_actions()
+
+    @Slot()
+    def _clear_mission_selection(self) -> None:
+        self._mission_list.clearSelection()
+        self._mission_list.setCurrentItem(None)
+        self._selected_mission_id = None
+        self._task_tree.clear()
+        self._details.setPlainText(_tr("task_board.select_mission", "Select a mission"))
+        self._progress.setValue(0)
+        self._status_label.setText(_tr("task_board.select_mission", "Select a mission"))
+        self._update_selection_actions()
+
+    @Slot()
+    def _update_selection_actions(self) -> None:
+        selected_ids = self._selected_mission_ids()
+        self._selection_summary.setText(_tr(
+            "task_board.selection_count", "{count} selected", count=len(selected_ids)))
+        single = len(selected_ids) == 1
+        busy = self._bulk_operation is not None
+        running = any(
+            self._mission_cache.get(mission_id, {}).get("status") == "running"
+            for mission_id in selected_ids
+        )
+        self._stop_btn.setEnabled(bool(selected_ids and running and not busy))
+        self._archive_btn.setEnabled(bool(selected_ids and not busy))
+        self._delete_btn.setEnabled(bool(selected_ids and not busy))
+        self._clear_selection_btn.setEnabled(bool(selected_ids) and not busy)
+        self._select_filtered_btn.setEnabled(
+            bool(self._project and self._mission_list.count()) and not busy)
+        if not single:
+            self._run_btn.setEnabled(False)
+            self._review_btn.setEnabled(False)
+            self._steer_btn.setEnabled(False)
+            self._document_btn.setVisible(False)
+        else:
+            mission_id = selected_ids[0]
+            self._selected_mission_id = mission_id
+            mission = self._mission_cache.get(mission_id) or {}
+            from nl_coding_agent.core.doc_planning import is_document_plan_request
+            document_only = is_document_plan_request(mission.get("goal") or "")
+            status = mission.get("status")
+            self._run_btn.setToolTip(
+                _tr("task_board.document_only",
+                    "Historical document request: open Document plan; coding execution is unavailable.")
+                if document_only else "")
+            self._run_btn.setEnabled(
+                not busy and not document_only
+                and status in ("pending", "interrupted", "failed", "blocked"))
+            self._review_btn.setEnabled(not busy and bool(mission.get("staging_dir")))
+            self._steer_btn.setEnabled(
+                not busy and status in ("pending", "running", "interrupted", "blocked"))
+            self._document_btn.setVisible(document_only)
 
     def _queue_by_mission(self, project_id: int) -> dict[int, dict]:
         queue: dict[int, dict] = {}
@@ -268,13 +456,21 @@ class TaskBoardWidget(QWidget):
     @Slot(QListWidgetItem, QListWidgetItem)
     def _on_mission_selected(self, current, previous):
         if current is None:
+            selected = self._mission_list.selectedItems()
+            current = selected[-1] if selected else None
+        if current is None:
             self._selected_mission_id = None
-            self._run_btn.setEnabled(False)
+            self._task_tree.clear()
+            self._details.setPlainText("Select a mission")
+            self._progress.setValue(0)
+            self._update_selection_actions()
             return
         mission_id = current.data(Qt.ItemDataRole.UserRole)
-        self._selected_mission_id = mission_id
-        self.mission_selected.emit(mission_id)
-        self._show_mission(mission_id)
+        if mission_id is not None:
+            self._selected_mission_id = int(mission_id)
+            self.mission_selected.emit(int(mission_id))
+            self._show_mission(int(mission_id))
+        self._update_selection_actions()
 
     def _show_mission(self, mission_id: int):
         details = self._services.get_mission_details(mission_id)
@@ -316,14 +512,7 @@ class TaskBoardWidget(QWidget):
             resumes=details.get("resume_count", 0)))
         from nl_coding_agent.core.doc_planning import is_document_plan_request
         document_only = is_document_plan_request(details.get("goal") or "")
-        self._review_btn.setEnabled(bool(details.get("staging_dir")))
         self._document_btn.setVisible(document_only)
-        self._run_btn.setToolTip(_tr("task_board.document_only", "Historical document request: open Document plan; coding execution is unavailable.") if document_only else "")
-        self._run_btn.setEnabled(not document_only and details.get("status") in ("pending", "interrupted", "failed", "blocked"))
-        terminal = details.get("status") in ("completed", "failed", "blocked", "interrupted")
-        self._archive_btn.setEnabled(terminal and not details.get("archived_at"))
-        self._delete_btn.setEnabled(terminal and bool(details.get("archived_at")))
-        self._steer_btn.setEnabled(details.get("status") in ("pending", "running", "interrupted", "blocked"))
 
         queue_item = None
         project_id = details.get("project_id")
@@ -365,6 +554,184 @@ class TaskBoardWidget(QWidget):
 
     # ------------------------------------------------------------------ actions
 
+    def _confirm_bulk_action(self, action: str, missions: list[dict]) -> bool:
+        labels = [
+            f"#{item['id']} [{item.get('status')}] {str(item.get('title') or '')[:80]}"
+            for item in missions[:8]
+        ]
+        if len(missions) > len(labels):
+            labels.append(f"... and {len(missions) - len(labels)} more")
+        selected = "\n".join(labels)
+        count = len(missions)
+        if action == "stop":
+            title = _tr("task_board.stop_title", "Stop missions")
+            message = (
+                _tr("task_board.stop_confirm",
+                    "Request a cooperative stop for {count} running mission(s)? "
+                    "Each will stop at its next safe checkpoint.", count=count)
+            )
+        elif action == "archive":
+            title = _tr("task_board.archive_title", "Archive missions")
+            message = (
+                _tr("task_board.archive_confirm",
+                    "Archive {count} selected mission(s)? Mission data and evidence are retained.",
+                    count=count)
+            )
+        else:
+            title = _tr("task_board.delete_title", "Delete missions")
+            message = (
+                _tr("task_board.delete_confirm",
+                    "Delete {count} selected mission(s) and their NL database records? "
+                    "Project files are not deleted. Staged files remain under Storage Manager control.",
+                    count=count)
+            )
+        answer = QMessageBox.question(
+            self, title, message + "\n\n" + selected,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
+    def _begin_bulk_action(self, action: str) -> None:
+        ids = self._selected_mission_ids()
+        project_id = int(self._project["id"]) if self._project else None
+        if not ids or project_id is None:
+            return
+        try:
+            missions = [self._services.get_mission_details(mission_id) for mission_id in ids]
+            if any(mission is None for mission in missions):
+                raise ValueError("One or more selected missions no longer exist")
+            if any(int(mission.get("project_id") or -1) != project_id for mission in missions):
+                raise ValueError("A selected mission belongs to another project")
+            running = [mission for mission in missions if mission.get("status") == "running"]
+            if action == "stop":
+                missions = running
+                if not missions:
+                    QMessageBox.information(
+                        self,
+                        _tr("task_board.no_running_title", "No running missions"),
+                        _tr("task_board.no_running_detail",
+                            "The selection contains no running missions."),
+                    )
+                    return
+            if not self._confirm_bulk_action(action, missions):
+                return
+            if running:
+                for mission in running:
+                    response = self._services.cancel_mission(
+                        int(mission["id"]), project_id=project_id)
+                    if not response.get("ok"):
+                        raise RuntimeError(
+                            f"Stop request failed for mission #{mission['id']}")
+                self._bulk_operation = {
+                    "action": action,
+                    "mission_ids": ids,
+                    "project_id": project_id,
+                    "running_ids": [int(item["id"]) for item in running],
+                }
+                self._bulk_deadline = time.monotonic() + 600
+                self._set_bulk_busy(True)
+                self._status_label.setText(
+                        _tr("task_board.waiting_stop",
+                            "Waiting for {count} mission(s) to stop safely…",
+                            count=len(running)))
+                self._bulk_timer.start()
+                self._poll_bulk_operation()
+                return
+            if action == "stop":
+                return
+            self._apply_bulk_action(action, ids, project_id)
+        except Exception as exc:
+            QMessageBox.warning(self, f"{action.title()} failed", str(exc))
+
+    def _set_bulk_busy(self, busy: bool) -> None:
+        for widget in (
+            self._refresh_btn, self._history_toggle, self._search_filter,
+            self._status_filter, self._archived_toggle, self._select_filtered_btn,
+            self._clear_selection_btn, self._stop_btn, self._archive_btn,
+            self._delete_btn, self._run_btn, self._review_btn, self._steer_btn,
+        ):
+            widget.setEnabled(not busy)
+        if not busy:
+            self._update_selection_actions()
+
+    @Slot()
+    def _poll_bulk_operation(self) -> None:
+        operation = self._bulk_operation
+        if operation is None:
+            self._bulk_timer.stop()
+            return
+        try:
+            current = [
+                self._services.get_mission_details(mission_id)
+                for mission_id in operation["running_ids"]
+            ]
+            if any(mission is None for mission in current):
+                raise ValueError("A mission disappeared while waiting for its stop")
+            still_running = [
+                mission for mission in current if mission.get("status") == "running"
+            ]
+            if still_running and time.monotonic() < self._bulk_deadline:
+                self._status_label.setText(
+                    _tr("task_board.waiting_checkpoint",
+                        "Waiting for {count} mission(s) to reach a safe stop…",
+                        count=len(still_running)))
+                return
+            if still_running:
+                self._bulk_operation = None
+                self._bulk_timer.stop()
+                self._set_bulk_busy(False)
+                self.refresh()
+                QMessageBox.warning(
+                    self, _tr("task_board.stop_pending_title", "Stop still pending"),
+                    _tr("task_board.stop_pending_detail",
+                        "The cooperative stop was requested, but the mission has not reached "
+                        "a safe checkpoint yet. No archive or delete action was performed."),
+                )
+                return
+            action = operation["action"]
+            ids = operation["mission_ids"]
+            project_id = operation["project_id"]
+            self._bulk_operation = None
+            self._bulk_timer.stop()
+            self._set_bulk_busy(False)
+            if action == "stop":
+                self._status_label.setText(
+                    _tr("task_board.stop_complete",
+                        "Stop reached a safe terminal state for {count} mission(s).",
+                        count=len(operation["running_ids"])))
+                self.refresh()
+            else:
+                self._apply_bulk_action(action, ids, project_id)
+        except Exception as exc:
+            self._bulk_operation = None
+            self._bulk_timer.stop()
+            self._set_bulk_busy(False)
+            self.refresh()
+            QMessageBox.warning(
+                self, _tr("task_board.action_failed", "Mission action failed"), str(exc))
+
+    def _apply_bulk_action(self, action: str, ids: list[int], project_id: int) -> None:
+        try:
+            if action == "archive":
+                changed = self._services.archive_missions(ids, project_id=project_id)
+            elif action == "delete":
+                changed = self._services.delete_missions(ids, project_id=project_id)
+            else:
+                raise ValueError("Unknown mission action: " + action)
+        except Exception as exc:
+            self.refresh()
+            QMessageBox.warning(self, f"{action.title()} failed", str(exc))
+            return
+        self._selected_mission_id = None
+        self._status_label.setText(_tr(
+            "task_board.archive_complete" if action == "archive"
+            else "task_board.delete_complete",
+            "Archived {count} mission(s)." if action == "archive"
+            else "Deleted {count} mission(s).",
+            count=len(changed)))
+        self.refresh()
+
     def _resolve_root(self, details: dict) -> Path | None:
         project_id = details.get("project_id")
         if project_id:
@@ -375,42 +742,15 @@ class TaskBoardWidget(QWidget):
 
     @Slot()
     def _archive_selected(self) -> None:
-        mission_id = self._selected_mission_id
-        if not mission_id:
-            return
-        answer = QMessageBox.question(
-            self, "Archive mission",
-            f"Archive mission #{mission_id}? Data and evidence are retained."
-        )
-        if answer != QMessageBox.StandardButton.Yes:
-            return
-        try:
-            details = self._services.get_mission_details(mission_id) or {}
-            self._services.archive_mission(mission_id, project_id=details.get("project_id"))
-        except Exception as exc:
-            QMessageBox.warning(self, "Archive failed", str(exc))
-            return
-        self.refresh()
+        self._begin_bulk_action("archive")
 
+    @Slot()
     def _delete_selected(self) -> None:
-        mission_id = self._selected_mission_id
-        if not mission_id:
-            return
-        answer = QMessageBox.question(
-            self, "Delete archived mission",
-            f"Delete mission #{mission_id} from the mission database? "
-            "Staged files remain and are handled only by the Storage Manager."
-        )
-        if answer != QMessageBox.StandardButton.Yes:
-            return
-        try:
-            details = self._services.get_mission_details(mission_id) or {}
-            self._services.delete_mission(mission_id, project_id=details.get("project_id"))
-        except Exception as exc:
-            QMessageBox.warning(self, "Delete failed", str(exc))
-            return
-        self._selected_mission_id = None
-        self.refresh()
+        self._begin_bulk_action("delete")
+
+    @Slot()
+    def _stop_selected(self) -> None:
+        self._begin_bulk_action("stop")
 
     def _steer_selected(self) -> None:
         mission_id = self._selected_mission_id

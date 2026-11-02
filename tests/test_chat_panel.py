@@ -63,6 +63,25 @@ def test_panel_has_accessible_controls_and_shortcuts(panel):
     assert "Ctrl+Enter" in panel._hint.text()
     shortcuts = {shortcut.key().toString() for shortcut in panel.findChildren(QShortcut)}
     assert not any("Ctrl+Enter" in item or "Ctrl+Return" in item for item in shortcuts)
+
+
+def test_tool_consent_is_one_turn_and_clears_on_project_switch(panel):
+    payloads = []
+    panel.submitted.connect(payloads.append)
+    panel._tools_enabled.setChecked(True)
+    panel._coding_enabled.setChecked(True)
+    panel._input.setPlainText("Change source with tools")
+    panel._submit()
+    assert payloads[-1]["tool_options"]["tools_enabled"]
+    assert payloads[-1]["tool_options"]["allow_coding"]
+    assert not panel._tools_enabled.isChecked()
+    assert not panel._coding_enabled.isChecked()
+    panel._tools_enabled.setChecked(True)
+    panel._coding_enabled.setChecked(True)
+    panel._research_profile.setCurrentIndex(1)
+    panel.set_project({"id": 2, "root": "other", "name": "other"})
+    assert not panel._tools_enabled.isChecked() and not panel._coding_enabled.isChecked()
+    assert panel._research_profile.currentData() == "manual"
     assert panel._project_label.text()  # project root is displayed
 
 

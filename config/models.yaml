@@ -33,3 +33,5 @@ roles:
     enabled: false
     model: ollama/gpt-oss:120b-cloud
     temperature: 0.1
+  chat:
+    model: ollama/granite4.2:3b

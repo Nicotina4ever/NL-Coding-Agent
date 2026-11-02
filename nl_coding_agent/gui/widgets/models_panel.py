@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QFileDialog,
     QMessageBox,
     QPushButton,
     QTabWidget,
@@ -61,6 +62,22 @@ class ModelHubFetchThread(QThread):
             self.failed.emit(str(exc))
 
 
+class SpeechActionThread(QThread):
+    completed = Signal(str, object)
+    failed = Signal(str, str)
+
+    def __init__(self, action: str, operation, parent=None):
+        super().__init__(parent)
+        self._action = action
+        self._operation = operation
+
+    def run(self):
+        try:
+            self.completed.emit(self._action, self._operation())
+        except Exception as exc:
+            self.failed.emit(self._action, str(exc))
+
+
 class ModelsPanel(QWidget):
     """Center panel for provider, model, speech, hardware and storage status."""
 
@@ -68,7 +85,10 @@ class ModelsPanel(QWidget):
         super().__init__(parent)
         self._services = services
         self._thread: ModelHubFetchThread | None = None
+        self._speech_thread: SpeechActionThread | None = None
         self._snapshot = None
+        self._speech_catalog = {}
+        self._speech_refresh_pending = False
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
@@ -247,20 +267,170 @@ class ModelsPanel(QWidget):
         tab = QWidget()
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(0, 8, 0, 0)
-        heading = QLabel("Speech and transcription engines")
+        heading = QLabel("Speech and transcription")
         heading.setStyleSheet("font-weight: 600;")
         layout.addWidget(heading)
-        body = QLabel(
-            "No speech engine is installed. The optional ASR Manager will support "
-            "Qwen3-ASR, Faster-Whisper, WhisperX and Vosk without becoming a "
-            "requirement for the coding engine. Model installation and transcription "
-            "tests will be explicit user actions."
-        )
-        body.setWordWrap(True)
-        body.setStyleSheet("color: #B8BECA; font-size: 12px;")
-        layout.addWidget(body)
+        self._speech_status = QLabel("Loading local speech engines and models.")
+        self._speech_status.setWordWrap(True)
+        self._speech_status.setStyleSheet("color: #7E8798; font-size: 12px;")
+        layout.addWidget(self._speech_status)
+
+        selectors = QHBoxLayout()
+        self._speech_engine = QComboBox()
+        self._speech_engine.setAccessibleName("Speech engine")
+        self._speech_engine.currentIndexChanged.connect(self._render_speech_models)
+        selectors.addWidget(self._speech_engine, 1)
+        self._speech_model = QComboBox()
+        self._speech_model.setAccessibleName("Speech model")
+        selectors.addWidget(self._speech_model, 2)
+        self._speech_use = QPushButton("Use model")
+        self._speech_use.clicked.connect(self._use_speech_model)
+        selectors.addWidget(self._speech_use)
+        self._speech_refresh = QPushButton("Refresh")
+        self._speech_refresh.clicked.connect(self._refresh_speech_catalog)
+        selectors.addWidget(self._speech_refresh)
+        layout.addLayout(selectors)
+
+        external = QHBoxLayout()
+        self._speech_external_path = QLineEdit()
+        self._speech_external_path.setPlaceholderText(
+            "Folder containing a local ASR model (external models stay in place)")
+        self._speech_external_path.setAccessibleName("External ASR model folder")
+        external.addWidget(self._speech_external_path, 1)
+        self._speech_browse = QPushButton("Browse…")
+        self._speech_browse.clicked.connect(self._browse_speech_model)
+        external.addWidget(self._speech_browse)
+        self._speech_add_external = QPushButton("Add external model")
+        self._speech_add_external.clicked.connect(self._add_external_speech_model)
+        external.addWidget(self._speech_add_external)
+        layout.addLayout(external)
+
+        self._speech_engine_details = QLabel("")
+        self._speech_engine_details.setWordWrap(True)
+        self._speech_engine_details.setStyleSheet("color: #7E8798; font-size: 12px;")
+        layout.addWidget(self._speech_engine_details)
         layout.addStretch()
         return tab
+
+    def _render_speech_models(self, *_args) -> None:
+        catalog = self._speech_catalog
+        engine = str(self._speech_engine.currentData() or "")
+        previous = self._speech_model.currentData()
+        active = catalog.get("active_model") or {}
+        self._speech_model.blockSignals(True)
+        self._speech_model.clear()
+        models = [item for item in catalog.get("models", [])
+                  if item.get("engine") == engine]
+        for model in models:
+            label = f"{model.get('model_id', '')} · local"
+            self._speech_model.addItem(label, model.get("model_id", ""))
+            self._speech_model.setItemData(
+                self._speech_model.count() - 1, model.get("path", ""), Qt.ItemDataRole.ToolTipRole)
+        selected_id = previous if any(item.get("model_id") == previous for item in models) else ""
+        if active.get("engine") == engine and any(
+                item.get("model_id") == active.get("model_id") for item in models):
+            selected_id = active.get("model_id", "")
+        if selected_id:
+            self._speech_model.setCurrentIndex(self._speech_model.findData(selected_id))
+        self._speech_model.blockSignals(False)
+        self._speech_use.setEnabled(self._speech_model.currentIndex() >= 0)
+        selected_engine = next(
+            (item for item in catalog.get("engines", []) if item.get("engine") == engine), {})
+        installed = bool(selected_engine.get("installed"))
+        self._speech_use.setEnabled(
+            self._speech_model.currentIndex() >= 0 and installed)
+        detail = selected_engine.get("hint") or ""
+        if not installed:
+            detail = "Engine not detected; install its local runtime before using a model. " + detail
+        elif not models:
+            detail = "No local models found for this engine. Add an external model folder below. " + detail
+        self._speech_engine_details.setText(detail)
+
+    def _render_speech_catalog(self, catalog: dict) -> None:
+        self._speech_catalog = catalog if isinstance(catalog, dict) else {}
+        engines = self._speech_catalog.get("engines") or []
+        current_engine = self._speech_engine.currentData()
+        active = self._speech_catalog.get("active_model") or {}
+        self._speech_engine.blockSignals(True)
+        self._speech_engine.clear()
+        for item in engines:
+            state = "installed" if item.get("installed") else "not installed"
+            self._speech_engine.addItem(f"{item.get('engine', '')} · {state}", item.get("engine", ""))
+        engine_id = active.get("engine") or current_engine
+        index = self._speech_engine.findData(engine_id)
+        self._speech_engine.setCurrentIndex(index if index >= 0 else (0 if engines else -1))
+        self._speech_engine.blockSignals(False)
+        self._render_speech_models()
+        model_count = len(self._speech_catalog.get("models") or [])
+        self._speech_status.setText(
+            f"{model_count} local ASR model(s); active: "
+            f"{active.get('model_id') or 'none'}"
+            + (f" ({active.get('path')})" if active.get("path") else ""))
+
+    def _start_speech_action(self, action: str, operation) -> None:
+        if self._speech_thread is not None and self._speech_thread.isRunning():
+            return
+        self._speech_status.setText("Refreshing local speech models…" if action == "refresh"
+                                    else "Working with the selected speech model…")
+        self._speech_use.setEnabled(False)
+        self._speech_add_external.setEnabled(False)
+        self._speech_refresh.setEnabled(False)
+        self._speech_thread = SpeechActionThread(action, operation, parent=self)
+        self._speech_thread.completed.connect(self._on_speech_action_completed)
+        self._speech_thread.failed.connect(self._on_speech_action_failed)
+        self._speech_thread.finished.connect(self._on_speech_action_finished)
+        self._speech_thread.start()
+
+    def _refresh_speech_catalog(self) -> None:
+        self._start_speech_action("refresh", self._services.speech_catalog)
+
+    def _browse_speech_model(self) -> None:
+        folder = QFileDialog.getExistingDirectory(self, "Select external ASR model folder")
+        if folder:
+            self._speech_external_path.setText(folder)
+
+    def _add_external_speech_model(self) -> None:
+        folder = self._speech_external_path.text().strip()
+        if not folder:
+            self._speech_status.setText("Choose a folder containing a local ASR model first.")
+            return
+        self._start_speech_action(
+            "external", lambda: self._services.speech_set_external_home(folder))
+
+    def _use_speech_model(self) -> None:
+        model_id = str(self._speech_model.currentData() or "")
+        if not model_id:
+            self._speech_status.setText("Select a local model for the chosen engine.")
+            return
+        engine = str(self._speech_engine.currentData() or "")
+        self._start_speech_action(
+            "select", lambda: self._services.speech_switch_model(model_id, engine))
+
+    def _on_speech_action_completed(self, action: str, result) -> None:
+        if action == "refresh":
+            self._render_speech_catalog(result)
+        elif action == "external":
+            catalog = result.get("catalog") if isinstance(result, dict) else None
+            if isinstance(catalog, dict):
+                self._render_speech_catalog(catalog)
+            models = result.get("models") if isinstance(result, dict) else []
+            self._speech_status.setText(
+                f"Added {len(models or [])} external model(s) in place; files were not copied.")
+        else:
+            self._speech_status.setText("Speech model selected.")
+            self._speech_refresh_pending = True
+
+    def _on_speech_action_failed(self, action: str, message: str) -> None:
+        self._speech_status.setText(f"{action.capitalize()} failed: {message}")
+
+    def _on_speech_action_finished(self) -> None:
+        self._speech_thread = None
+        self._speech_use.setEnabled(self._speech_model.currentIndex() >= 0)
+        self._speech_add_external.setEnabled(True)
+        self._speech_refresh.setEnabled(True)
+        if self._speech_refresh_pending:
+            self._speech_refresh_pending = False
+            self._refresh_speech_catalog()
 
     def _build_hardware_tab(self) -> QWidget:
         tab = QWidget()
@@ -380,6 +550,11 @@ class ModelsPanel(QWidget):
             thread.requestInterruption()
             thread.wait(30000)
         self._thread = None
+        speech_thread = self._speech_thread
+        if speech_thread is not None and speech_thread.isRunning():
+            speech_thread.requestInterruption()
+            speech_thread.wait(30000)
+        self._speech_thread = None
 
     def refresh(self):
         if self._thread is not None and self._thread.isRunning():
@@ -395,12 +570,7 @@ class ModelsPanel(QWidget):
         self._thread.failed.connect(self._on_error)
         self._thread.finished.connect(self._on_thread_finished)
         self._thread.start()
-        # Refresh speech UI if the tab exists
-        try:
-            self._refresh_speech_tab()
-        except Exception:
-            # Non‑critical – UI may not be fully initialized yet
-            pass
+        self._refresh_speech_catalog()
 
     def _on_thread_finished(self):
         self._thread = None

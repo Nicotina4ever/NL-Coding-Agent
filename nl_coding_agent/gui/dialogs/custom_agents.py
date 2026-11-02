@@ -1,9 +1,6 @@
 """Custom agent configuration dialog for NL Coding Agent presets."""
 from __future__ import annotations
 
-import json
-from typing import Any
-
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFormLayout,
                                QHBoxLayout, QLabel, QLineEdit, QListWidget,
@@ -46,10 +43,6 @@ class _EditDialog(QDialog):
         self._tools.setAccessibleName("Enabled tools")
         self._tools.setPlaceholderText("read, edit, terminal")
         form.addRow("Tools", self._tools)
-        self._permissions = QLineEdit(", ".join(self._agent.get("permissions") or []))
-        self._permissions.setAccessibleName("Permissions")
-        self._permissions.setPlaceholderText("read-only, project-write")
-        form.addRow("Permissions", self._permissions)
         self._enabled = QCheckBox("Enabled")
         self._enabled.setChecked(bool(self._agent.get("enabled", True)))
         self._enabled.setAccessibleName("Custom agent enabled")
@@ -75,21 +68,21 @@ class _EditDialog(QDialog):
             "role": self._role.text().strip() or "assistant",
             "instructions": self._instructions.toPlainText().strip(),
             "tools": [item.strip() for item in self._tools.text().split(",") if item.strip()],
-            "permissions": [item.strip() for item in self._permissions.text().split(",") if item.strip()],
             "enabled": self._enabled.isChecked(),
         }
 
 
 class CustomAgentsDialog(QDialog):
-    def __init__(self, services, parent=None):
+    def __init__(self, services, parent=None, *, project_id: int | None = None):
         super().__init__(parent)
         self._services = services
+        self._project_id = project_id
         self.setWindowTitle("Custom agents")
         self.resize(680, 480)
         self.setAccessibleName("Custom agents configuration")
         layout = QVBoxLayout(self)
         layout.addWidget(section_header("CUSTOM AGENTS",
-                                       "Treat predefined agents as presets."))
+                                       "Tools are customizable; operational access is controlled by Project Access."))
         self._list = QListWidget()
         self._list.setAccessibleName("Configured custom agents")
         layout.addWidget(self._list, 1)
@@ -131,7 +124,13 @@ class CustomAgentsDialog(QDialog):
     def _refresh(self) -> None:
         self._list.clear()
         for agent in self._services.list_custom_agents():
-            item = QListWidgetItem(str(agent.get("name") or "Custom agent"))
+            label = str(agent.get("name") or "Custom agent")
+            if (self._project_id is not None
+                    and str(agent.get("project_id") or "") == str(self._project_id)
+                    and agent.get("team_active") is True
+                    and agent.get("enabled", True)):
+                label += " [active in current project team]"
+            item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, agent.get("id"))
             self._list.addItem(item)
 

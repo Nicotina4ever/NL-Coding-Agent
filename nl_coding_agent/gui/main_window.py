@@ -848,6 +848,18 @@ class MainWindow(QMainWindow):
     @Slot(object)
     def _on_bus_event(self, event: Event):
         self._log_panel.append_log(event.source, event.level, event.message)
+        payload = event.payload or {}
+        if (event.source == "missions" and payload.get("action") == "delete"
+                and self._current_project
+                and payload.get("project_id") == self._current_project["id"]):
+            mission_ids = payload.get("mission_ids") or [payload.get("mission_id")]
+            mission_ids = [value for value in mission_ids if value is not None]
+            self._chat_panel.append_system_message(event.message)
+            self._tasks_panel.refresh()
+            self._goals_panel.refresh()
+            self._inspector.clear_deleted_mission(
+                mission_ids, self._current_project,
+                self._services.get_project_facts(self._current_project["id"]))
         if event.source == "chat-tools" and self._current_project and (event.payload or {}).get("project_id") == self._current_project["id"]:
             self._chat_panel.append_system_message(event.message)
         mission_id = (event.payload or {}).get("mission_id")
@@ -916,6 +928,7 @@ class MainWindow(QMainWindow):
         self._inspector.show_project(project, facts)
         self._files_panel.set_project(project)
         self._tasks_panel.set_project(project)
+        self._agents_panel.set_project(project)
         self._settings_panel.set_project(project)
         self._autonomy_panel.set_project(project)
         self._chat_panel.set_project(project)

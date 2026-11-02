@@ -213,6 +213,21 @@ class InspectorPanel(QWidget):
             lines.append("Changed paths: " + str(mission["changed_paths"]))
         self._add_diag(ui_text("Mission"), lines)
 
+    def clear_deleted_mission(self, mission_ids, project: dict,
+                              facts: dict | None = None) -> bool:
+        last = self._last_render
+        if not last or last[0] != "mission":
+            return False
+        try:
+            selected_id = int(last[1].get("id"))
+            deleted_ids = {int(value) for value in mission_ids}
+        except (TypeError, ValueError, AttributeError):
+            return False
+        if selected_id not in deleted_ids:
+            return False
+        self.show_project(project, facts)
+        return True
+
     def show_message(self, msg: str):
         self._set_card("activity", "Message", str(msg)[:300])
         self._status_badge.setText(ui_text("MESSAGE"))
