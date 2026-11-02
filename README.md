@@ -25,8 +25,26 @@ Latest beta packages are published on the
   `Installa NL Coder.cmd`.
 
 Platform status: **Windows x64 is built and verified locally** (launch, embedded engine, PowerShell
-and Command Prompt terminals, Chat, clean process shutdown). macOS and Linux packages are **not
-published yet**: they require their own build/validation runners and are not declared available.
+and Command Prompt terminals, Chat, clean process shutdown). macOS and Linux standalone packages are
+**not published yet**: they require their own build/validation runners and are not declared available.
+
+### NL Coder on other VS Code editions and operating systems
+
+The VSIX is platform-independent and is built for the standard VS Code API (`engines.vscode >=
+1.85.0`). It is currently **verified only on VS Code Insiders 1.145**; VS Code stable and
+VS Code-compatible forks may work but are not yet validated.
+
+- On Windows, `Installa NL Coder.cmd` detects VS Code Insiders, VS Code, VSCodium and Cursor CLIs
+  (PATH/common locations), lists them and installs into the chosen one; if none is detected it
+  prints the manual command.
+- On any OS with PowerShell 7: `scripts/nlcode/install_nl_coder.ps1 -List` then run it again and
+  choose the editor.
+- On macOS/Linux (no PowerShell needed): `sh scripts/nlcode/install_nl_coder.sh` (or
+  `code --install-extension NL-Coder.vsix --force`, same with `code-insiders`/`codium`/`cursor`).
+- The extension still needs a reachable NL Coding Engine. The Windows installer/portable package
+  provides one embedded engine; on macOS/Linux only the VSIX is portable today — running the Python
+  engine from source is possible, but no packaged engine has been validated there.
+
 
 ## Quick start (this checkout)
 

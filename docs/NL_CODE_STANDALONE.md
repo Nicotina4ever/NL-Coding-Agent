@@ -153,7 +153,11 @@ for that model/role only. The default is never silently changed.
 
 The current extension build is `frontend` version `0.7.2`, packaged as
 `.workspace/releases/extension/NL-Coder.vsix` (the build also keeps a copy under `.workspace/dist`).
-Install it through VS Code's “Install from VSIX…” or `Installa NL Coder.cmd`.
+`Installa NL Coder.cmd` detects VS Code Insiders, VS Code, VSCodium and Cursor CLIs on Windows and
+lets the user choose; on macOS/Linux use `scripts/nlcode/install_nl_coder.sh` or the editor's
+`--install-extension`. Only VS Code Insiders 1.145 is verified; other VS Code editions/forks are
+compatible in principle but not declared validated. The extension remains an editor UI: it needs a
+reachable NL Coding Engine, and only the Windows standalone package currently bundles one.
 
 If a portable profile was edited by copying an extension directory manually and
 the Chat panel stays empty, VS Code is still using stale `data/extensions/extensions.json`

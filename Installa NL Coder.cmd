@@ -1,5 +1,6 @@
 @echo off
-REM Installs NL Coder into VS Code Insiders when available, otherwise opens the VSIX.
+REM Installs NL Coder into the VS Code-family editor found on this machine.
+REM Supports VS Code Insiders, VS Code stable, VSCodium and Cursor when their CLI is available.
 setlocal
 set "ROOT=%~dp0"
 set "VSIX=%ROOT%.workspace\releases\extension\NL-Coder.vsix"
@@ -9,14 +10,15 @@ if not exist "%VSIX%" (
     pause
     exit /b 2
 )
-where code-insiders.cmd >nul 2>nul
-if %ERRORLEVEL%==0 (
-    call code-insiders.cmd --install-extension "%VSIX%" --force
-    if %ERRORLEVEL%==0 (
-        echo NL Coder installed in VS Code Insiders.
-        pause
-        exit /b 0
-    )
+set "PS=powershell"
+where pwsh.exe >nul 2>nul && set "PS=pwsh"
+%PS% -NoProfile -ExecutionPolicy Bypass -File "%ROOT%scripts\nlcode\install_nl_coder.ps1" -Vsix "%VSIX%"
+set "CODE=%ERRORLEVEL%"
+if not "%CODE%"=="0" (
+    echo.
+    echo Automatic install did not complete. You can install manually with:
+    echo   code --install-extension "%VSIX%"
+    echo   code-insiders --install-extension "%VSIX%"
 )
-start "" "%VSIX%"
-exit /b 0
+pause
+exit /b %CODE%
