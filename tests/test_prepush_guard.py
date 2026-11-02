@@ -30,7 +30,11 @@ SYNTHETIC = _assemble("sk-", "proj-", "abcdefghijklmnopqrstuvwx")
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True,
+    command = ["git", "-C", str(repo)]
+    if repo.name.endswith(".git"):
+        command.extend(["-c", "safe.bareRepository=all"])
+    command.extend(args)
+    return subprocess.run(command, capture_output=True,
                           text=True, encoding="utf-8", errors="replace", timeout=60)
 
 
@@ -98,6 +102,34 @@ def test_clean_repo_passes_all_scopes(tmp_path):
         assert payload["ok"] is True and payload["blocked"] is False
         assert payload["no_push"] is True and payload["no_network"] is True
         assert payload["history_rewritten"] is False
+
+
+def test_scan_all_finding_bound_is_per_scope(tmp_path, monkeypatch):
+    guard = _load_guard_module()
+    monkeypatch.setattr(guard, "MAX_FINDINGS", 2)
+    scanner = guard.Scanner(tmp_path)
+    for scope in ("staged", "head", "history"):
+        for index in range(2):
+            value = str(index)
+            scanner.add(
+                scope=scope, path="sample.txt", line=index + 1,
+                rule="high_entropy_secret", kind="heuristic",
+                classification="review", action="review",
+                value=value, context=value,
+            )
+
+    report = scanner.report("scan-all")
+    assert report["counts"]["findings"] == 6
+    assert report["truncated"] is False
+    assert report["bounds"]["max_findings_per_scope"] == 2
+
+    scanner.add(
+        scope="history", path="sample.txt", line=3,
+        rule="high_entropy_secret", kind="heuristic",
+        classification="review", action="review",
+        value="extra", context="extra",
+    )
+    assert scanner.report("scan-all")["truncated"] is True
 
 
 def test_staged_secret_blocks_and_never_prints_value(tmp_path):

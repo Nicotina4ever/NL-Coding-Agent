@@ -17,7 +17,8 @@ complete history coverage.
 - scan-head: scans tracked files at HEAD plus the working tree.
 - scan-history: scans a bounded window of Git history (up to 30 commits, changed
   paths, bounded bytes) for secrets/artifacts that were committed and later removed.
-- scan-all: runs staged + head + bounded history (used by CI).
+- scan-all: runs staged + head + bounded history (used by CI). The finding limit
+  applies independently to each scope; reaching it in any scope still fails closed.
 - hook: Git pre-push mode; reads the refs Git sends on stdin, scans the staged
   index and the bounded history, and exits non-zero before any push when blocked.
 - install-hook: prints the hook that would be installed (dry-print by default).
@@ -32,7 +33,7 @@ Global flags: --repo PATH, --allowlist FILE, --json, --json-out FILE,
 | Situation | Exit | Behavior |
 |---|---|---|
 | Clean scan (no blocking findings, no truncated bounds) | 0 | allowed to continue |
-| Blocking findings, or any scan bound reached (files/bytes/findings/commits) | 1 | BLOCKED; no upload/push should proceed |
+| Blocking findings, or any per-scope scan bound reached (files/bytes/findings/commits) | 1 | BLOCKED; no upload/push should proceed |
 | Usage error, invalid allowlist, not a Git repository | 2 | refused |
 | Operational failure (Git missing/timeout/non-zero read-only Git command, hook cannot resolve repo) | 3 | fails closed; hook aborts the push |
 
@@ -88,7 +89,10 @@ scripts/audit_release_secrets.py; the guard does not duplicate regexes. It check
 Findings are redacted (SHA-256[0:12], at most 4-char prefix, length; context
 matches replaced with [REDACTED:<hash>]). Full values never appear in stdout,
 JSON, Markdown or reports. Scans are bounded (file/total bytes, commit count,
-findings), and reaching a bound fails closed. Markdown/docs files are still scanned
+up to 500 findings independently for staged, head and history), and reaching a
+bound in any one scope fails closed. The combined report can therefore contain up
+to 1,500 findings without treating separate bounded scans as one exhausted bound.
+Markdown/docs files are still scanned
 for explicit credential patterns; review-only personal-path/entropy heuristics are
 skipped there to avoid documentation examples blocking releases (documented review
 policy, not a silent skip).

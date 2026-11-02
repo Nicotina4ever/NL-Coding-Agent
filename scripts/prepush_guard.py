@@ -202,6 +202,7 @@ class Scanner:
         self.root = root
         self.allowlist = allowlist or {}
         self.findings: list[dict] = []
+        self.findings_by_scope: dict[str, int] = {}
         self.scanned_files = 0
         self.scanned_bytes = 0
         self.truncated = False
@@ -220,7 +221,8 @@ class Scanner:
     def add(self, *, scope: str, path: str, line: int, rule: str, kind: str,
             classification: str, action: str, value: str, context: str,
             commit: str | None = None) -> None:
-        if len(self.findings) >= MAX_FINDINGS:
+        scope_count = self.findings_by_scope.get(scope, 0)
+        if scope_count >= MAX_FINDINGS:
             self.truncated = True
             return
         known_synthetic = _known_synthetic_allowlist_match(
@@ -266,6 +268,7 @@ class Scanner:
                 "commits": list(known_synthetic.get("commits") or ()),
             }
         self.findings.append(finding)
+        self.findings_by_scope[scope] = scope_count + 1
 
     def scan_text(self, rel: str, text: str, *, scope: str,
                   commit: str | None = None) -> None:
@@ -407,7 +410,7 @@ class Scanner:
             "findings": self.findings,
             "bounds": {"max_file_bytes": MAX_FILE_BYTES,
                        "max_total_bytes": MAX_TOTAL_BYTES,
-                       "max_findings": MAX_FINDINGS,
+                       "max_findings_per_scope": MAX_FINDINGS,
                        "max_commits": MAX_COMMITS},
             "allowlist": {
                 "known_synthetic_fixtures": [
