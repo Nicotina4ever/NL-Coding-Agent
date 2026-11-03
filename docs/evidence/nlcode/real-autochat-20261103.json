@@ -1,0 +1,36 @@
+{
+  "kind": "real-natural-language-autonomous-mission",
+  "date": "2026-11-03",
+  "working_copy": "K:\\AI\\NL Coding Agent",
+  "project_fixture": ".workspace/temp/auto-chat-real5/project",
+  "engine": "repository Python/CrewAI engine (real Ollama provider)",
+  "chat_model": "ollama/qwen2.5-coder:7b-instruct-q4_K_M",
+  "user_message": "Aggiungi a calc.py una funzione subtract(a, b) che restituisce a - b. Preserva add e i test esistenti.",
+  "commands_used_by_user": ["natural-language Chat message"],
+  "internal_commands_required": [],
+  "result": {
+    "chat_ok": true,
+    "mission_id": 1,
+    "status": "completed",
+    "promotion_status": "promoted",
+    "result_summary": "Reviewer APPROVED; promoted 2 file(s).",
+    "changed_paths": ["calc.py", "test_calc.py"],
+    "handoffs": 8,
+    "verification_runs": 2,
+    "live_calc_contains_subtract": true,
+    "tests_preserved": true
+  },
+  "flow_observed": [
+    "the natural-language message started a verified mission immediately without /apply or /runplan",
+    "the default specialist team (architect, developer, auditor, reviewer, debugger) was assigned automatically",
+    "the architect/auditor analyzed the project and handed notes to the developer",
+    "the developer applied the patch through the model-output fallback (comment-labelled complete files)",
+    "candidate and oracle suites ran; root-level test_calc.py was discovered and pinned",
+    "the reviewer approved and the candidate was promoted to the live project"
+  ],
+  "notes": [
+    "This is a real local-model run, not a mocked-provider unit test.",
+    "The developer first returned code blocks instead of patch_file calls; the deterministic comment-labelled fallback is what applied the change.",
+    "The verification gate was fixed to discover root-level test_*.py files and pin them in the oracle copy."
+  ]
+}

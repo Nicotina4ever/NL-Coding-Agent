@@ -29,6 +29,83 @@ def _queue_lock(project_id: int) -> threading.RLock:
         return _QUEUE_LOCKS.setdefault(key, threading.RLock())
 
 
+# Natural-language coding intent. This is deliberately conservative: an explicit
+# action verb is required, questions and document-planning requests are excluded,
+# and the normal permission/mission gates still apply.
+_CODING_REQUEST = re.compile(
+    r"\b(crea|creare|crei|aggiungi|aggiungere|implementa|implementare|"
+    r"correggi|correggere|sistema|sistemare|modifica|modificare|scrivi|scrivere|"
+    r"realizza|realizzare|rifattorizza|rifattorizzare|rimuovi|rimuovere|"
+    r"migliora|migliorare|fix|add|implement|create|write|build|make|change|"
+    r"update|remove|delete|refactor|develop|repair)\b",
+    re.IGNORECASE,
+)
+_QUESTION_START = re.compile(
+    r"^\s*(come|perch[eé]|cosa|quale|quali|spiega|puoi spiegare|"
+    r"what|why|how|explain|is|are|does|can you explain)\b",
+    re.IGNORECASE,
+)
+
+
+def looks_like_coding_request(text: str) -> bool:
+    """Return True for a concrete source-change request, never for a question."""
+    value = str(text or "").strip()
+    if not value or value.endswith("?") or _QUESTION_START.search(value):
+        return False
+    if re.search(r"^\s*/", value):
+        return False
+    try:
+        from nl_coding_agent.core.doc_planning import is_document_plan_request
+        if is_document_plan_request(value):
+            return False
+    except Exception:
+        pass
+    return bool(_CODING_REQUEST.search(value))
+
+
+def _auto_delegate_coding(services, project, text, state, *, allow_coding, roles,
+                          spec, activity, save) -> bool:
+    """Deterministically start one verified mission for a clear coding request.
+
+    This is the natural-language fallback for models that answer a build request
+    without calling ``start_coding``. It never bypasses permissions, staging,
+    verification or promotion: it only removes the need to know internal commands.
+    """
+    if not allow_coding or state.get("missions") or not looks_like_coding_request(text):
+        return False
+    try:
+        for scope in (permissions.WRITE, permissions.EXECUTE):
+            permissions.require(scope, project_id=int(project["id"]))
+    except Exception:
+        return False
+    try:
+        goal = str(text or "").strip()
+        # Ensure the Supervisor has an active specialist team. A pre-existing
+        # user-configured team always wins; otherwise use the documented fallback
+        # roles with the configured route (persisted config only, no execution).
+        try:
+            from nl_coding_agent.app.services import project_team_agents, _fallback_team_roles
+            route = str(spec or "").strip()
+            if route and not project_team_agents(int(project["id"])):
+                services.assign_project_team(int(project["id"]), _fallback_team_roles(route))
+                activity("team-auto", "default specialist team assigned")
+        except Exception as exc:
+            activity("team-auto", "skipped: " + str(exc))
+        mid = services.create_mission(int(project["id"]), goal[:80], goal)
+        state["missions"].append(mid)
+        state.setdefault("dispatch_pending", []).append({
+            "mission_id": mid,
+            "developer_model": str((roles.get("developer") or {}).get("model") or spec),
+            "reviewer_model": str((roles.get("reviewer") or {}).get("model") or spec),
+        })
+        activity("mission-auto", "prepared mission #" + str(mid))
+        save()
+        return True
+    except Exception as exc:
+        activity("mission-auto", "not started: " + str(exc))
+        return False
+
+
 def state_path(project_id):
     return database.db_path().parent / "chat" / f"tools-project-{int(project_id)}.json"
 
@@ -679,6 +756,24 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
 
     save()
     try:
+        # Natural-language build request: start the verified mission immediately.
+        # Waiting for a model to decide whether to call start_coding wastes the
+        # tool-step budget and is exactly the /apply-/runplan friction this flow
+        # removes. Questions/planning requests are excluded by the classifier.
+        if allow_coding and not state["missions"]:
+            if _auto_delegate_coding(services, registered, text, state,
+                                     allow_coding=allow_coding, roles=roles, spec=spec,
+                                     activity=activity, save=save):
+                state["status"] = "completed"
+                mid = state["missions"][-1]
+                return {"ok": True,
+                        "reply": ("Missione #" + str(mid) + " avviata. Analizzo il progetto, "
+                                  "uso la squadra di specialisti, eseguo con verifica e review; "
+                                  "ti riporto qui il risultato verificato."),
+                        "run_id": state["id"], "route": route, "routing": routing,
+                        "tool_activity": json.dumps(state["activity"]),
+                        "tool_trace": list(state["activity"]),
+                        "missions": state["missions"]}
         force_no_tools = False
         tool_cache: dict[str, str] = {}
         while checkpoint():
@@ -827,6 +922,18 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
                         raise ValueError("Model returned a textual tool request instead of native calls; select validated JSON mode explicitly")
                     if not message["content"].strip():
                         raise ValueError("Model returned no response or native tool call")
+                    assigned = _auto_delegate_coding(
+                        services, registered, text, state,
+                        allow_coding=allow_coding, roles=roles, spec=spec,
+                        activity=activity, save=save)
+                    if assigned:
+                        message["content"] = (
+                            message["content"].rstrip()
+                            + "\n\n[Missione avviata automaticamente: #" +
+                            str(state["missions"][-1]) +
+                            ". La eseguo con analisi, specialisti, verifica e review; "
+                            "ti riporto l'esito qui.]"
+                        )
                     state["status"] = "completed"
                     return {"ok": True, "reply": message["content"], "run_id": state["id"],
                             "route": route, "routing": routing,

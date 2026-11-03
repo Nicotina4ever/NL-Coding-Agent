@@ -170,3 +170,21 @@ class CandidateVerificationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_root_level_pytest_files_are_discovered_and_pinned(self):
+        """Projects without a tests/ directory must still get candidate+oracle."""
+        shutil.rmtree(self.project / "tests")
+        (self.project / "test_calc.py").write_text(TEST_SOURCE, encoding="utf-8", newline="")
+        baseline = snapshot_workspace(self.project)
+        self.workspace = self.stage / "workspace"
+        if self.workspace.exists():
+            shutil.rmtree(self.workspace)
+        shutil.copytree(self.project, self.workspace)
+        report = verify_candidate(self.workspace, self.stage, baseline, timeout_s=180)
+        self.assertTrue(report.passed, report.error)
+        # A green-but-weakened candidate must be caught by the pinned root test.
+        (self.workspace / "demo" / "calc.py").write_text(CALC_BROKEN, encoding="utf-8", newline="")
+        (self.workspace / "test_calc.py").write_text(TEST_WEAK, encoding="utf-8", newline="")
+        report = verify_candidate(self.workspace, self.stage, baseline, timeout_s=180)
+        self.assertTrue(report.candidate.passed, "candidate suite should be green")
+        self.assertFalse(report.oracle.passed, "oracle must use the baseline root test")

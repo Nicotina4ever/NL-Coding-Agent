@@ -157,6 +157,22 @@ if not package.is_relative_to(root):
     return candidate, oracle, overlay_ops
 
 
+def _test_file_path(rel: str) -> bool:
+    name = str(rel).replace("\\", "/").rsplit("/", 1)[-1]
+    return (name.startswith("test_") and name.endswith(".py")) or name.endswith("_test.py")
+
+
+def _pytest_target(copy_root: Path) -> str:
+    """Prefer tests/ when present, otherwise discover root-level pytest files."""
+    root = Path(copy_root)
+    if (root / ORACLE_TESTS_DIR).is_dir():
+        return ORACLE_TESTS_DIR
+    for path in root.rglob("*.py"):
+        if _test_file_path(path.relative_to(root).as_posix()):
+            return "."
+    return ORACLE_TESTS_DIR
+
+
 def overlay_oracle(copy_root: Path, baseline: dict[str, str]) -> list[str]:
     copy_root = Path(copy_root).resolve()
     ops: list[str] = []
@@ -166,9 +182,21 @@ def overlay_oracle(copy_root: Path, baseline: dict[str, str]) -> list[str]:
         ops.append("removed candidate tests dir")
     restored = 0
     for rel, content in baseline.items():
-        if rel == ORACLE_TESTS_DIR or rel.startswith(ORACLE_TESTS_DIR + "/"):
+        if (rel == ORACLE_TESTS_DIR or rel.startswith(ORACLE_TESTS_DIR + "/")
+                or _test_file_path(rel)):
             _write_text(copy_root / rel, content)
             restored += 1
+    # Candidate-added root-level tests are not part of the oracle; only baseline
+    # test files may judge the candidate.
+    for path in sorted(copy_root.rglob("*.py")):
+        rel = path.relative_to(copy_root).as_posix()
+        if not _test_file_path(rel) or rel in baseline:
+            continue
+        try:
+            path.unlink()
+            ops.append("removed candidate-added " + rel)
+        except OSError:
+            pass
     if restored:
         ops.append("restored " + str(restored) + " baseline test file(s)")
     for rel in ORACLE_PINNED_FILES:
@@ -360,7 +388,7 @@ def run_suite(
         "no:cacheprovider",
         "--no-header",
         "--junitxml=" + str(junit_path),
-        "tests",
+        _pytest_target(copy_root),
     ]
     started = time.time()
     timed_out = False

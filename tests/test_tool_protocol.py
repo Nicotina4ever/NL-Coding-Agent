@@ -100,3 +100,22 @@ def test_crew_output_extracts_real_calls_and_error_results():
     assert invocations[0]["status"] == "completed"
     assert invocations[0]["arguments"] == {"path": "a.py"}
     assert "target not found" in invocations[0]["result"]
+
+def test_comment_labelled_complete_files_are_applied(tmp_path, isolated_db):
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "calc.py").write_text("def add(a, b):\n    return a + b\n", encoding="utf-8")
+    (root / "test_calc.py").write_text("from calc import add\n\ndef test_add():\n    assert add(2, 3) == 5\n", encoding="utf-8")
+    text = (
+        "```python\n# calc.py\n"
+        "def add(a, b):\n    return a + b\n\ndef subtract(a, b):\n    return a - b\n"
+        "```\n"
+        "```python\n# test_calc.py\n"
+        "from calc import add, subtract\n\ndef test_add():\n    assert add(2, 3) == 5\n\n"
+        "def test_subtract():\n    assert subtract(5, 3) == 2\n"
+        "```"
+    )
+    actions = _apply_text_actions(root, text, expected_paths=["calc.py", "test_calc.py"])
+    assert any("calc.py" in item for item in actions)
+    assert "def subtract" in (root / "calc.py").read_text(encoding="utf-8")
+    assert "test_subtract" in (root / "test_calc.py").read_text(encoding="utf-8")

@@ -560,7 +560,11 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 this.activeMissionId = delegatedMissions[delegatedMissions.length - 1];
                 await this.refreshMissions();
                 this.postChat('system', 'Coding mission #' + this.activeMissionId +
-                    ' was created and will run through staging, verification and review.');
+                    ' was created and will run through staging, verification and review. ' +
+                    'I will report the verified result here.');
+                // Chat-delegated missions must be monitored like explicitly started ones,
+                // otherwise the final verified result never reaches the Chat transcript.
+                this.startMonitoring(this.activeMissionId);
             }
             await this.loadHistory();
             await this.refreshQueue(false);

@@ -243,7 +243,15 @@ shows the existing model/agent/permission configuration, local ASR engine/model 
 read-only research profile/NETWORK status. Choose an ASR engine and one of its local models before
 dictation; curated downloads appear in the same model menu and require the project NETWORK grant and
 explicit confirmation. External Faster-Whisper, Vosk, Qwen3-ASR and whisper.cpp model folders are
-registered and reused in place, never copied. Switch the composer
+registered and reused in place, never copied.
+
+**Natural-language build:** write what you want in Chat (for example “aggiungi una funzione subtract
+a calc.py con i test”) and, when mission execution and project WRITE/EXECUTE access are enabled, Chat
+starts one verified Supervisor mission automatically, with project analysis, the configured
+specialist team, candidate/oracle verification, reviewer and error recovery. The final verified
+result is posted back in the Chat transcript; `/apply`, `/runplan`, `/mission` and `/team` remain
+available for explicit control but are not required for normal work. Questions and document-planning
+requests never start a mission. Switch the composer
 to **Mission** (or use `/mission <objective>`) to start a real Supervisor
 mission on the opened project. Missions show progress, task/agent handoffs, candidate + oracle
 verification, reviewer verdict and the candidate or retained diff; Stop and Resume use the engine's

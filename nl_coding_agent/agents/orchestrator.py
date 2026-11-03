@@ -525,6 +525,25 @@ def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None
             actions.append(f"Wrote {rel_path} via section code block")
         except Exception as exc:
             actions.append(f"Failed to write {rel_path}: {exc}")
+    # Local models also emit a complete file with the path as the first comment:
+    # ```python
+    # calc.py
+    # def subtract(a, b): ...
+    # ```
+    comment_label_pattern = re.compile(
+        r"```[A-Za-z0-9_+.-]*\r?\n[#/]{1,2}\s*([A-Za-z0-9_./\\-]+)\s*\r?\n(.*?)```",
+        re.DOTALL,
+    )
+    for match in comment_label_pattern.finditer(text):
+        rel_path = match.group(1).strip().replace("\\", "/").lstrip("./")
+        if not rel_path or " " in rel_path or not path_allowed(rel_path):
+            continue
+        try:
+            scoped_write_file(root, rel_path,
+                              clean_file_content(match.group(2), rel_path))
+            actions.append(f"Wrote {rel_path} via comment-labelled code block")
+        except Exception as exc:
+            actions.append(f"Failed to write {rel_path}: {exc}")
     # JSON tool calls: ```json {"name": "write_file", "arguments": {...}} ```
     for block in re.findall(r"```json\r?\n(.*?)```", text, re.DOTALL):
         try:

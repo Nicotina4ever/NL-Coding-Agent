@@ -485,3 +485,52 @@ def test_discovered_tools_need_current_explicit_allowlist(chat, monkeypatch):
     result, provider = run([call("discover_mcp", server="fixture"), selected, {"content": "Tool denied"}])
     assert result["ok"]
     assert "no longer explicitly allowlisted" in provider.requests[-1][0][-1]["content"]
+
+def test_natural_language_coding_request_starts_one_mission(chat, monkeypatch):
+    """A clear build request must not require /apply or /runplan."""
+    services, project, run = chat
+    permissions.grant(permissions.WRITE, project_id=project["id"])
+    permissions.grant(permissions.EXECUTE, project_id=project["id"])
+    started = []
+    teams = []
+    monkeypatch.setattr(services, "run_mission",
+                        lambda mission_id, root, **kwargs: started.append((mission_id, kwargs)))
+    monkeypatch.setattr(services, "assign_project_team",
+                        lambda project_id, roles: teams.append((project_id, roles)))
+    monkeypatch.setattr("nl_coding_agent.app.services.project_team_agents", lambda project_id: [])
+    result, _ = run([{"content": "Va bene, procedo."}],
+                    text="Aggiungi una funzione subtract a calc.py che restituisce a meno b",
+                    allow_coding=True)
+    assert result["ok"], result
+    assert result["missions"], result
+    assert "Missione #" in result["reply"] and "avviata" in result["reply"]
+    assert len(started) == 1
+    assert started[0][0] == result["missions"][0]
+    assert teams and teams[0][0] == project["id"]
+    assert any(role.get("role_id") == "developer" for role in teams[0][1])
+    rows = services.list_missions(project["id"])
+    assert rows and rows[0]["goal"].startswith("Aggiungi una funzione subtract")
+
+def test_natural_language_question_does_not_start_mission(chat, monkeypatch):
+    services, project, run = chat
+    permissions.grant(permissions.WRITE, project_id=project["id"])
+    permissions.grant(permissions.EXECUTE, project_id=project["id"])
+    monkeypatch.setattr(services, "run_mission", lambda *a, **kw: pytest.fail("question started a mission"))
+    result, _ = run([{"content": "Sette."}],
+                    text="Come funziona attualmente calc.py?", allow_coding=True)
+    assert result["ok"]
+    assert result["missions"] == []
+
+def test_chat_queue_is_durable_fifo_and_reorderable(chat):
+    from nl_coding_agent.app import chat_tools
+    services, project, run = chat
+    for text in ("prima", "seconda", "terza"):
+        chat_tools.enqueue(services, project["id"], text)
+    first = chat_tools.take_next(project["id"])
+    assert first and first["text"] == "prima"
+    remaining = chat_tools.list_queue(project["id"])["items"]
+    assert [item["text"] for item in remaining] == ["seconda", "terza"]
+    reordered = chat_tools.reorder_queue(project["id"], [remaining[1]["id"], remaining[0]["id"]])
+    assert [item["text"] for item in reordered["items"]] == ["terza", "seconda"]
+    chat_tools.remove_queued(project["id"], reordered["items"][0]["id"])
+    assert [item["text"] for item in chat_tools.list_queue(project["id"])["items"]] == ["seconda"]
