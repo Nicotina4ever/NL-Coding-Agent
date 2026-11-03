@@ -1,7 +1,7 @@
 # NL Code — standalone Code - OSS distribution
 
 **Status:** beta Windows x64 published on 2026-11-02 as prerelease
-[`v0.7.2-beta.1`](https://github.com/Nicotina4ever/NL-Coding-Agent/releases/tag/v0.7.2-beta.1).
+[`v0.7.2-beta.2`](https://github.com/Nicotina4ever/NL-Coding-Agent/releases/tag/v0.7.2-beta.2).
 The current distribution is built from Code - OSS 1.145.0 with insider quality metadata and verified
 locally: launch, embedded engine, PowerShell **and** Command Prompt terminals executing real
 commands, NL Chat, and clean process shutdown. macOS/Linux packages are not published or declared
@@ -226,7 +226,7 @@ will be introduced for it.
 
 ## Current limits
 
-- No installer/auto-update: the distribution is a portable folder.
+- Standard Windows installer/uninstaller (Inno Setup) with user-selectable install/data paths; no automatic update yet.
 - 95 built-in extensions are bundled (including js-debug); the upstream Copilot extension is present
   but its SDK is not bundled, so native Copilot chat is not part of this build. NL Chat is the
   supported assistant.
@@ -256,14 +256,18 @@ The staged standalone folder contains:
 - engine\ — one embedded Python/CrewAI runtime, the models stay in Ollama;
 - data\ — portable profile, engine data and workspace.
 
-Double-click NL Code Launcher.exe (or the .lnk). The Setup bootstrapper installs this payload under
-`%LOCALAPPDATA%\Programs\NL Code` and creates Desktop/Start shortcuts; it downloads the portable zip
-from the matching GitHub Release instead of embedding the runtime itself.
+Double-click NL Code Launcher.exe (or the .lnk). `NL-Code-Setup.exe` is a standard Inno Setup
+installer: it ships this payload, lets the user choose the install folder (any disk, spaces allowed)
+and a separate data/database/workspace/cache root, offers optional Desktop/Start shortcuts, registers
+in Windows “App e funzionalità”, and installs per-user or all-users when elevated. Updates reuse the
+previous paths and preserve data; uninstall removes the application/runtime components while keeping
+projects, shared models and personal data unless the user explicitly removes the selected data folder.
+The portable ZIP remains independent and creates its own local data when unpacked.
 
 ## Releases and platforms
 
 Windows x64 portable, Setup and VSIX are published as
-[`v0.7.2-beta.1`](https://github.com/Nicotina4ever/NL-Coding-Agent/releases/tag/v0.7.2-beta.1).
+[`v0.7.2-beta.2`](https://github.com/Nicotina4ever/NL-Coding-Agent/releases/tag/v0.7.2-beta.2).
 The GitHub Actions workflow builds the engine suite and the VSIX on Linux/macOS/Windows and exposes a
 self-hosted Windows job for the verified standalone; macOS/Linux standalone packages are not
 published until a runner on each system actually compiles and validates them.

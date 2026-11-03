@@ -1,0 +1,100 @@
+{
+  "kind": "windows-installer-lifecycle",
+  "date": "2026-11-03T16:18:38.4531573+01:00",
+  "setup": "K:\\AI\\NL Coding Agent\\.workspace\\releases\\windows\\NL-Code-Setup.exe",
+  "createdWith": "Inno Setup 6",
+  "root": "K:\\NL Code Installer Test 20261103-161259",
+  "passed": true,
+  "checks": [
+    {
+      "name": "custom installation path with spaces",
+      "ok": true,
+      "detail": "K:\\NL Code Installer Test 20261103-161259\\App Folder"
+    },
+    {
+      "name": "embedded engine in selected path",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "external data folder created",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "extension installed in external data",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "portable profile not created in app folder",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "configured data path recorded",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "uninstall registered in Apps",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop shortcut created",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "installed application launches",
+      "ok": true,
+      "detail": "8204,18108,24648,26848,28232,31836,34128,34260,34524"
+    },
+    {
+      "name": "installed profile uses external data folder",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "upgrade preserves data",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "upgrade preserves installation path",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "uninstall removes application files",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "uninstall removes app folder",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "uninstall keeps personal data by default",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "uninstall removes Apps registration",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "explicit data removal deletes data folder",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "explicit data removal still removes app folder",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

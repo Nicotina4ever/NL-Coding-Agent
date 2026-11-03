@@ -69,12 +69,26 @@ jobs:
     runs-on: [self-hosted, Windows, X64, nlcode-windows]
     steps:
       - uses: actions/checkout@v4
+      - name: Ensure Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = @(
+            (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'),
+            (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe'),
+            (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe')
+          ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+          if (-not $iscc) {
+            choco install innosetup -y --no-progress
+          }
       - name: Build standalone with embedded engine
         shell: pwsh
         run: ./scripts/nlcode/build_nl_code.ps1 -ResyncSource -Force
-      - name: Assemble release packages
+      - name: Assemble release packages (portable ZIP + Inno installer)
         shell: pwsh
         run: ./scripts/nlcode/build_release.ps1
+      - name: Verify installer lifecycle on a custom path
+        shell: pwsh
+        run: ./scripts/nlcode/test_windows_installer.ps1
       - name: GUI acceptance (terminals, Chat, embedded engine, shutdown)
         shell: pwsh
         run: ./scripts/nlcode/accept_nl_code.ps1 -ReplyTimeoutSeconds 60
@@ -87,6 +101,7 @@ jobs:
             .workspace/releases/windows/NL-Code-Portable.zip.sha256
             .workspace/releases/extension/NL-Coder.vsix
             .workspace/releases/release-manifest.json
+            .workspace/evidence/windows-installer-verification.json
 
   publish:
     needs: [extension]

@@ -17,12 +17,21 @@ conflict prevention, persistent state and controlled self-development.
 Latest beta packages are published on the
 [GitHub Releases page](https://github.com/Nicotina4ever/NL-Coding-Agent/releases):
 
-- **Windows portable** (`NL-Code-Portable.zip`) — unpack and run `NL Code.bat`.
-- **Windows setup** (`NL-Code-Setup.exe`) — small bootstrapper; downloads the portable payload
-  from the same release and installs it under `%LOCALAPPDATA%\Programs\NL Code`, with Desktop and
-  Start shortcuts. It carries no duplicated engine/runtime.
+- **Windows portable** (`NL-Code-Portable.zip`) — unpack and run `NL Code.bat`; self-contained,
+  independent from the installed copy.
+- **Windows setup** (`NL-Code-Setup.exe`) — standard Inno Setup installer/uninstaller registered in
+  Windows “App e funzionalità”. During setup you freely choose the installation folder (any disk,
+  spaces allowed) and a separate data folder; Desktop/Start shortcuts are optional. A per-user
+  install needs no elevation; choosing all users requests elevation. Updates reuse the previous app
+  and data paths and never delete settings. Uninstall removes the application and its runtime
+  components, keeps projects/shared models, and removes the selected data folder only when the user
+  chooses to (or `/REMOVEDATA=1` in silent uninstall).
 - **NL Coder extension** (`NL-Coder.vsix`) — install into VS Code Insiders, or use
   `Installa NL Coder.cmd`.
+
+Windows installer paths are configurable; the installer owns `NL Code.exe`, `engine\` and its own
+uninstaller, while data, database, workspace and cache live in the folder selected on the data page.
+The portable ZIP remains independent and creates its own local data when unpacked.
 
 Platform status: **Windows x64 is built and verified locally** (launch, embedded engine, PowerShell
 and Command Prompt terminals, Chat, clean process shutdown). macOS and Linux standalone packages are

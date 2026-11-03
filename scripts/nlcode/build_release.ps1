@@ -1,5 +1,5 @@
 # NL Code release assembly (local workspace only; artifacts are never committed).
-# Produces the Windows portable package, the light setup bootstrap and the VSIX under
+# Produces the Windows portable package, the Inno Setup installer and the VSIX under
 # .workspace/releases. macOS/Linux directories are created only to hold future verified
 # artifacts; no placeholder binary is written.
 [CmdletBinding()]
@@ -30,31 +30,38 @@ $linux = Join-Path $Releases 'linux'
 New-Item -ItemType Directory -Force -Path $windows, $extension, $macos, $linux | Out-Null
 
 $zip = Join-Path $windows 'NL-Code-Portable.zip'
-if (Test-Path $zipSource) {
-    Copy-Item $zipSource $zip -Force
-} else {
-    if (Test-Path $zip) { Remove-Item $zip -Force }
-    Compress-Archive -Path (Join-Path $payload '*') -DestinationPath $zip -CompressionLevel Fastest
+# Build a clean portable ZIP from the verified payload, never including the
+# machine/profile data/ directory. The portable launcher creates fresh local data.
+$tar = Join-Path $env:WINDIR 'System32\tar.exe'
+if (Test-Path $zip) { Remove-Item $zip -Force }
+& $tar -a -c -f $zip --exclude 'data/*' -C $payload .
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $zip)) {
+    throw "portable archive creation failed: $LASTEXITCODE"
 }
 $sha = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
 $size = (Get-Item $zip).Length
 "$sha  NL-Code-Portable.zip" | Set-Content (Join-Path $windows 'NL-Code-Portable.zip.sha256') -Encoding ASCII
 
-# Light installer: embeds only the checksum, release tag and bootstrapper logic.
-$source = Get-Content (Join-Path $PSScriptRoot 'NLCodeSetup.cs') -Raw
-$source = $source.Replace('__VERSION__', $Version).Replace('__RELEASE_TAG__', $ReleaseTag).Replace('__ZIP_SHA256__', $sha)
-$setupSource = Join-Path $Releases 'NLCodeSetup.generated.cs'
-Set-Content -Path $setupSource -Value $source -Encoding UTF8
-$cscCandidates = @(
-    (Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'),
-    (Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe')
+# Standard Windows installer/uninstaller (Inno Setup). It ships the verified
+# payload and lets the user choose install/data roots; the portable ZIP remains
+# independent and self-contained.
+$isccCandidates = @(
+    (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'),
+    (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe'),
+    (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),
+    (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 7\ISCC.exe')
 )
-$csc = $cscCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-if (-not $csc) { throw 'C# compiler not available for the setup bootstrap' }
+$iscc = $isccCandidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+if (-not $iscc) { $iscc = (Get-Command iscc.exe -ErrorAction SilentlyContinue | Select-Object -First 1).Source }
+if (-not $iscc) {
+    throw 'Inno Setup (ISCC.exe) not found. Install it locally (winget install JRSoftware.InnoSetup) before building the standard installer.'
+}
 $setupExe = Join-Path $windows 'NL-Code-Setup.exe'
-& $csc /nologo /target:winexe "/out:$setupExe" /r:System.Windows.Forms.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll /r:System.Net.Http.dll $setupSource
-if ($LASTEXITCODE -ne 0) { throw "setup bootstrap compilation failed: $LASTEXITCODE" }
-Remove-Item $setupSource -Force
+$iss = Join-Path $PSScriptRoot 'NLCode.iss'
+$icon = Join-Path $payload 'resources\app\resources\win32\code.ico'
+& $iscc "/DPayloadDir=$payload" "/DAppVersion=$Version" "/DOutputDir=$windows" "/DSetupIcon=$icon" $iss
+if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed: $LASTEXITCODE" }
+if (-not (Test-Path $setupExe)) { throw "installer not produced: $setupExe" }
 
 if (Test-Path $vsixSource) {
     Copy-Item $vsixSource (Join-Path $extension 'NL-Coder.vsix') -Force
@@ -72,6 +79,7 @@ $manifest = [ordered]@{
         status = 'verified-locally'
         portable = 'windows/NL-Code-Portable.zip'
         setup = 'windows/NL-Code-Setup.exe'
+        installer = 'inno-setup'
         sha256 = $sha
         bytes = $size
     }
