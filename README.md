@@ -292,12 +292,36 @@ URL fetch→context; installed-VSIX chat and mission acceptance) is recorded in
 details are in `docs/FRONTEND_ARCHITECTURE.md`. A standalone distribution is current only when its
 portable profile contains the same accepted NL Coder VSIX version.
 
+## Rebuilding the Windows packages from source
+
+`da_eliminare/` is **not** a build input and can be deleted. A complete rebuild only needs the
+tracked repository plus these local, intentionally non-tracked inputs:
+
+- `vscode/` — Code - OSS vendor checkout;
+- `python/` — embedded Python/CrewAI runtime;
+- `frontend/node_modules/` — extension dependencies (also used to package the VSIX);
+- `.workspace/tools/` — portable Node.js used by the build;
+- Inno Setup 6 (`winget install JRSoftware.InnoSetup`), MSVC Build Tools and network access for
+  npm/Electron artifacts.
+
+```powershell
+pwsh -File scripts/nlcode/build_nl_code.ps1 -ResyncSource -Force
+pwsh -File scripts/nlcode/build_release.ps1
+pwsh -File scripts/nlcode/test_windows_installer.ps1
+```
+
+The first command recreates the entire Code - OSS build tree from `vscode/`; it does not use a
+previously quarantined build directory. The second produces the portable ZIP, Inno Setup installer
+and VSIX under `.workspace/releases`. A clean reconstruction of all three was verified without any
+`da_eliminare` content.
+
 ## NL Code standalone (objective 2)
 
-The standalone Windows distribution is built from the local Code - OSS checkout and reuses the same
-extension and the same Python engine installation (no duplicated runtime or database). Accepted on
-2026-10-29: it starts from its portable profile, loads NL Chat with the real backend project and
-tools, returns a real Ollama reply and releases the engine child on close.
+The standalone Windows distribution is built from the local Code - OSS checkout, ships its own
+embedded Python engine under `engine/`, and reuses the same extension source. Accepted on
+2026-10-29 and re-verified repeatedly, including the current beta: it starts from its portable
+profile, loads NL Chat with the real backend project and tools, returns a real Ollama reply and
+releases the engine child on close.
 
 ```powershell
 pwsh -File scripts/nlcode/build_nl_code.ps1 -ResyncSource

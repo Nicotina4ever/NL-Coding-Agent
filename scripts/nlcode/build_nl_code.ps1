@@ -44,6 +44,11 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 if (-not $Source) { $Source = Join-Path $repoRoot 'vscode' }
 if (-not $BuildRoot) { $BuildRoot = Join-Path $repoRoot '.workspace\build\nl-code-oss' }
 if (-not $DistBase) { $DistBase = Join-Path $repoRoot '.workspace\dist' }
+# Invoke-Native changes the working directory, so normalize any caller-supplied
+# relative source/build/dist paths before nested tools resolve them.
+if (-not [System.IO.Path]::IsPathRooted($Source)) { $Source = Join-Path $repoRoot $Source }
+if (-not [System.IO.Path]::IsPathRooted($BuildRoot)) { $BuildRoot = Join-Path $repoRoot $BuildRoot }
+if (-not [System.IO.Path]::IsPathRooted($DistBase)) { $DistBase = Join-Path $repoRoot $DistBase }
 $src = Join-Path $BuildRoot 'src'
 $packageDir = Join-Path $BuildRoot 'VSCode-win32-x64'
 $distName = 'NL Code'
@@ -310,6 +315,7 @@ if ($SkipStage) {
 # ------------------------------------------------------------------------ stage
 Write-Step "Stage portable distribution: $dist"
 if (-not (Test-Path $packageDir)) { throw "package output not found: $packageDir (use -SkipPackage only after a build)" }
+New-Item -ItemType Directory -Force -Path $DistBase | Out-Null
 $distBaseResolved = (Resolve-Path $DistBase).Path
 if (-not $dist.StartsWith($distBaseResolved, [System.StringComparison]::OrdinalIgnoreCase)) { throw 'unsafe dist path' }
 if (Test-Path $dist) { Remove-Item -Recurse -Force $dist }

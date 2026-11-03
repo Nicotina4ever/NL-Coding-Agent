@@ -63,6 +63,21 @@ $icon = Join-Path $payload 'resources\app\resources\win32\code.ico'
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed: $LASTEXITCODE" }
 if (-not (Test-Path $setupExe)) { throw "installer not produced: $setupExe" }
 
+if (-not (Test-Path $vsixSource)) {
+    # A fresh BuildRoot/DistBase does not contain a VSIX yet; package it from the
+    # already compiled frontend so a clean reconstruction remains complete.
+    $frontend = Join-Path $repoRoot 'frontend'
+    $vsce = Join-Path $frontend 'node_modules\.bin\vsce.cmd'
+    if (-not (Test-Path $vsce)) { $vsce = Join-Path $frontend 'node_modules\.bin\vsce' }
+    if (-not (Test-Path $vsce)) { throw "VSIX not found and vsce is unavailable: $vsixSource" }
+    Push-Location $frontend
+    try {
+        & $vsce package --out $vsixSource
+        if ($LASTEXITCODE -ne 0) { throw "VSIX packaging failed: $LASTEXITCODE" }
+    } finally {
+        Pop-Location
+    }
+}
 if (Test-Path $vsixSource) {
     Copy-Item $vsixSource (Join-Path $extension 'NL-Coder.vsix') -Force
 } elseif (Test-Path (Join-Path $extension 'NL-Coder.vsix')) {
