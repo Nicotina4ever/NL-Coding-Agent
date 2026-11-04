@@ -4,6 +4,9 @@ from __future__ import annotations
 import json
 import os
 import time
+import socket
+import threading
+from contextlib import contextmanager
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -95,6 +98,191 @@ def _post_json(url: str, body: dict, timeout: float, headers=None) -> dict:
     if data.get("error"):
         raise ValueError(str(data["error"]))
     return data
+
+
+_MAX_STREAM_LINE = 4 * 1024 * 1024
+
+
+@contextmanager
+def _stream_response(request, timeout, cancelled):
+    """Wake a blocked stream read when its owner requests cancellation."""
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        finished = threading.Event()
+        def observe():
+            while not finished.wait(0.05):
+                if cancelled and cancelled():
+                    try:
+                        response.fp.raw._sock.shutdown(socket.SHUT_RDWR)
+                    except (AttributeError, OSError):
+                        pass
+                    return
+        watcher = threading.Thread(target=observe, daemon=True) if cancelled else None
+        if watcher:
+            watcher.start()
+        try:
+            yield response
+        except (OSError, ValueError):
+            _check_cancelled(cancelled)
+            raise
+        finally:
+            finished.set()
+            if watcher:
+                watcher.join(0.2)
+
+
+def _check_cancelled(cancelled) -> None:
+    if cancelled is not None and cancelled():
+        raise InterruptedError("Model stream was cancelled")
+
+
+def _iter_stream_lines(response, cancelled, deadline=None):
+    """Yield complete lines from a live HTTP response using bounded reads.
+
+    ``read1`` performs at most one underlying socket read, which keeps the
+    stream incremental instead of buffering the whole response. The caller's
+    socket timeout still applies to each read.
+    """
+    reader = getattr(response, "read1", None) or response.read
+    buffer = b""
+    total = 0
+    while True:
+        _check_cancelled(cancelled)
+        if deadline is not None and time.monotonic() >= deadline:
+            raise TimeoutError("Provider stream exceeded its turn deadline")
+        chunk = reader(8192)
+        _check_cancelled(cancelled)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > 16 * 1024 * 1024:
+            raise ValueError("Provider stream exceeds the response safety limit")
+        buffer += chunk
+        if len(buffer) > _MAX_STREAM_LINE and b"\n" not in buffer:
+            raise ValueError("Provider stream line exceeds the safety limit")
+        while True:
+            newline = buffer.find(b"\n")
+            if newline < 0:
+                break
+            line = buffer[:newline]
+            buffer = buffer[newline + 1:]
+            _check_cancelled(cancelled)
+            yield line.rstrip(b"\r")
+    if buffer:
+        _check_cancelled(cancelled)
+        yield buffer.rstrip(b"\r")
+
+
+def _iter_ndjson(response, cancelled, deadline=None):
+    for raw in _iter_stream_lines(response, cancelled, deadline):
+        text = raw.decode("utf-8", "replace").strip()
+        if not text:
+            continue
+        try:
+            yield json.loads(text)
+        except ValueError as exc:
+            raise ValueError("Malformed provider stream line") from exc
+
+
+def _iter_sse(response, cancelled, deadline=None):
+    """Yield SSE data payloads (``None`` for the terminating [DONE] marker)."""
+    for raw in _iter_stream_lines(response, cancelled, deadline):
+        text = raw.decode("utf-8", "replace").strip()
+        if not text or text.startswith(":"):
+            continue
+        if text.startswith("data:"):
+            text = text[5:].lstrip()
+        elif not text.startswith("{"):
+            # Ignore other SSE fields (event/id/retry); raw JSON lines are
+            # tolerated for providers that do not emit the data: prefix.
+            continue
+        if not text:
+            continue
+        if text == "[DONE]":
+            yield None
+            continue
+        yield text
+
+
+class _ToolCallAccumulator:
+    """Merge streamed tool-call fragments by index and parse their arguments."""
+
+    def __init__(self) -> None:
+        self._calls: dict[int, dict] = {}
+        self._next_index = 0
+
+    def add(self, call, index=None) -> None:
+        if not isinstance(call, dict):
+            return
+        if index is None:
+            index = call.get("index")
+        if index is None:
+            call_id = call.get("id")
+            if call_id:
+                for existing_index, existing in self._calls.items():
+                    if existing.get("id") == call_id:
+                        index = existing_index
+                        break
+            if index is None:
+                function = call.get("function") if isinstance(call.get("function"), dict) else {}
+                if len(self._calls) == 1 and not function.get("name"):
+                    # No index/id and no name: this is an arguments continuation.
+                    index = next(iter(self._calls))
+                else:
+                    index = self._next_index
+                    self._next_index += 1
+        else:
+            try:
+                index = int(index)
+            except (TypeError, ValueError):
+                index = self._next_index
+                self._next_index += 1
+            else:
+                self._next_index = max(self._next_index, index + 1)
+        item = self._calls.setdefault(index, {
+            "id": "",
+            "type": "",
+            "function": {"name": "", "arguments": ""},
+        })
+        if call.get("id"):
+            item["id"] = str(call["id"])
+        if call.get("type"):
+            item["type"] = str(call["type"])
+        function = call.get("function")
+        if not isinstance(function, dict):
+            return
+        name = function.get("name")
+        if isinstance(name, str) and name:
+            item["function"]["name"] += name
+        arguments = function.get("arguments")
+        if isinstance(arguments, str):
+            item["function"]["arguments"] += arguments
+        elif isinstance(arguments, dict):
+            item["_arguments_object"] = arguments
+
+    def finish(self) -> list[dict]:
+        result: list[dict] = []
+        for index in sorted(self._calls):
+            item = self._calls[index]
+            function = item["function"]
+            raw_arguments = function.get("arguments", "")
+            arguments_object = item.pop("_arguments_object", None)
+            if raw_arguments:
+                try:
+                    arguments = json.loads(raw_arguments)
+                except ValueError as exc:
+                    raise ValueError("Malformed streamed tool-call arguments") from exc
+            elif arguments_object is not None:
+                arguments = arguments_object
+            else:
+                arguments = {}
+            call = {"function": {"name": function.get("name", ""),
+                                 "arguments": arguments}}
+            if item.get("id"):
+                call["id"] = item["id"]
+            if item.get("type"):
+                call["type"] = item["type"]
+            result.append(call)
+        return result
 
 
 class OllamaProvider:
@@ -216,7 +404,7 @@ class OllamaProvider:
         """Preserve actual native tool calls; never parse prose as execution."""
         self.assert_generation_permitted(model, project_id)
         capabilities = getattr(self, "_capabilities", {}).get(model, ())
-        if capabilities and "tools" not in capabilities:
+        if tools and capabilities and "tools" not in capabilities:
             raise ValueError("Selected model reports no native tools capability; select validated JSON mode explicitly")
         wire_messages = [{key: value for key, value in
                           {**m, **({"tool_name": m.get("name", "")} if m["role"] == "tool" else {})}.items()
@@ -238,6 +426,79 @@ class OllamaProvider:
         }
         if message.get("thinking"):
             message["_thinking"] = str(message.get("thinking") or "")
+        return message
+
+    def chat_turn_stream(self, model, messages, tools, *, project_id=None,
+                         timeout=120, role: str = "chat", on_delta=None,
+                         cancelled=None):
+        """Stream one native tool-capable chat turn over Ollama NDJSON.
+
+        ``on_delta`` receives each content fragment exactly when it arrives from
+        the provider. Cancellation is checked between bounded socket reads and
+        raises ``InterruptedError``. A stream that ends without its completion
+        marker is rejected instead of being reported as a complete answer.
+        """
+        self.assert_generation_permitted(model, project_id)
+        _check_cancelled(cancelled)
+        capabilities = getattr(self, "_capabilities", {}).get(model, ())
+        if tools and capabilities and "tools" not in capabilities:
+            raise ValueError("Selected model reports no native tools capability; select validated JSON mode explicitly")
+        wire_messages = [{key: value for key, value in
+                          {**m, **({"tool_name": m.get("name", "")} if m["role"] == "tool" else {})}.items()
+                          if not str(key).startswith("_")}
+                         for m in messages]
+        body = {
+            "model": model, "messages": wire_messages, "tools": tools,
+            "stream": True, "think": False,
+        }
+        options = self._generation_options(model, role=role)
+        if options:
+            body["options"] = options
+        content_parts: list[str] = []
+        thinking_parts: list[str] = []
+        message_role = "assistant"
+        tool_calls = _ToolCallAccumulator()
+        usage = {"prompt_tokens": None, "output_tokens": None}
+        completed = False
+        request = urllib.request.Request(
+            self.base_url + "/api/chat",
+            data=json.dumps(body).encode("utf-8"),
+            headers={"Content-Type": "application/json"}, method="POST")
+        with _stream_response(request, timeout, cancelled) as response:
+            for event in _iter_ndjson(response, cancelled, time.monotonic() + timeout):
+                if not isinstance(event, dict):
+                    continue
+                if event.get("error"):
+                    raise ValueError(str(event["error"]))
+                delta = event.get("message")
+                if isinstance(delta, dict):
+                    message_role = str(delta.get("role") or message_role)
+                    text = delta.get("content")
+                    if isinstance(text, str) and text:
+                        content_parts.append(text)
+                        if on_delta is not None:
+                            on_delta(text)
+                    thinking = delta.get("thinking")
+                    if isinstance(thinking, str) and thinking:
+                        thinking_parts.append(thinking)
+                    for call in delta.get("tool_calls") or []:
+                        tool_calls.add(call)
+                if event.get("done"):
+                    completed = True
+                    usage["prompt_tokens"] = event.get("prompt_eval_count")
+                    usage["output_tokens"] = event.get("eval_count")
+                    break
+        if not completed:
+            raise ConnectionError("Ollama stream ended before the completion marker")
+        message = {"role": message_role, "content": "".join(content_parts)}
+        assembled = tool_calls.finish()
+        if assembled:
+            message["tool_calls"] = assembled
+        if thinking_parts:
+            thinking = "".join(thinking_parts)
+            message["thinking"] = thinking
+            message["_thinking"] = thinking
+        message["_usage"] = usage
         return message
 
 
@@ -379,6 +640,102 @@ class OpenAICompatibleProvider:
         reasoning = message.get("reasoning_content") or message.get("reasoning")
         if reasoning:
             message["_thinking"] = str(reasoning)
+        return message
+
+    def chat_turn_stream(self, model, messages, tools, *, project_id=None,
+                         timeout=120, role: str = "chat", on_delta=None,
+                         cancelled=None):
+        """Stream one native tool-capable chat turn over SSE ``/chat/completions``.
+
+        Fragmented ``tool_calls`` are accumulated by index, their arguments are
+        assembled and JSON-decoded before returning, and the provider-assigned
+        ids are preserved. ``on_delta`` only receives real content fragments.
+        """
+        self.assert_generation_permitted(model, project_id)
+        _check_cancelled(cancelled)
+        wire_messages = []
+        for message in messages:
+            item = {key: value for key, value in dict(message).items()
+                    if not str(key).startswith("_")}
+            if item.get("tool_calls"):
+                item["tool_calls"] = [{**call, "function": {**call["function"], "arguments":
+                    json.dumps(call["function"]["arguments"]) if isinstance(call["function"]["arguments"], dict)
+                    else call["function"]["arguments"]}} for call in item["tool_calls"]]
+            wire_messages.append(item)
+        body = {
+            "model": model, "messages": wire_messages, "tools": tools,
+            "stream": True, "stream_options": {"include_usage": True},
+        }
+        content_parts: list[str] = []
+        reasoning_parts: list[str] = []
+        reasoning_key = ""
+        message_role = "assistant"
+        tool_calls = _ToolCallAccumulator()
+        usage = {"prompt_tokens": None, "output_tokens": None}
+        completed = False
+        request = urllib.request.Request(
+            self.base_url + "/chat/completions",
+            data=json.dumps(body).encode("utf-8"),
+            headers={"Content-Type": "application/json", **self._headers()},
+            method="POST")
+        with _stream_response(request, timeout, cancelled) as response:
+            for payload in _iter_sse(response, cancelled, time.monotonic() + timeout):
+                if payload is None:
+                    completed = True
+                    break
+                try:
+                    event = json.loads(payload)
+                except ValueError as exc:
+                    raise ValueError("Malformed provider stream event") from exc
+                if not isinstance(event, dict):
+                    continue
+                if event.get("error"):
+                    raise ValueError(str(event["error"]))
+                event_usage = event.get("usage")
+                if isinstance(event_usage, dict):
+                    usage["prompt_tokens"] = event_usage.get(
+                        "prompt_tokens", usage["prompt_tokens"])
+                    usage["output_tokens"] = event_usage.get(
+                        "completion_tokens", usage["output_tokens"])
+                choices = event.get("choices") or []
+                if not choices or not isinstance(choices[0], dict):
+                    continue
+                choice = choices[0]
+                delta = choice.get("delta")
+                if not isinstance(delta, dict):
+                    delta = choice.get("message")
+                if isinstance(delta, dict):
+                    message_role = str(delta.get("role") or message_role)
+                    text = delta.get("content")
+                    if isinstance(text, str) and text:
+                        content_parts.append(text)
+                        if on_delta is not None:
+                            on_delta(text)
+                    reasoning = delta.get("reasoning_content")
+                    if isinstance(reasoning, str) and reasoning:
+                        reasoning_key = "reasoning_content"
+                        reasoning_parts.append(reasoning)
+                    else:
+                        reasoning = delta.get("reasoning")
+                        if isinstance(reasoning, str) and reasoning:
+                            reasoning_key = "reasoning"
+                            reasoning_parts.append(reasoning)
+                    for call in delta.get("tool_calls") or []:
+                        tool_calls.add(call, index=call.get("index")
+                                       if isinstance(call, dict) else None)
+                if choice.get("finish_reason") is not None:
+                    completed = True
+        if not completed:
+            raise ConnectionError("OpenAI-compatible stream ended before completion")
+        message = {"role": message_role, "content": "".join(content_parts)}
+        assembled = tool_calls.finish()
+        if assembled:
+            message["tool_calls"] = assembled
+        if reasoning_parts:
+            reasoning = "".join(reasoning_parts)
+            message[reasoning_key or "reasoning_content"] = reasoning
+            message["_thinking"] = reasoning
+        message["_usage"] = usage
         return message
 
 
