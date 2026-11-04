@@ -52,6 +52,19 @@ def test_concurrent_duplicate_acceptance_has_one_message_and_one_turn(runtime, m
         rt.submit(pid, sid, "same-request", "different")
 
 
+def test_concurrent_chat_hosts_create_one_initial_conversation(runtime, tmp_path):
+    from nl_coding_agent.app.chat_sessions import ensure_default_session
+    rt, services, _, _ = runtime
+    root = tmp_path / "another-project"
+    root.mkdir()
+    pid = services.open_project(root)["id"]
+    with ThreadPoolExecutor(8) as pool:
+        sessions = list(pool.map(lambda _: ensure_default_session(pid)["id"], range(16)))
+    assert len(set(sessions)) == 1
+    with rt.db() as conn:
+        assert conn.execute("SELECT count(*) FROM chat_sessions WHERE project_id=?", (pid,)).fetchone()[0] == 1
+
+
 def test_explicit_mcp_mission_is_idempotent_and_finishes_in_its_session_without_ui(runtime, monkeypatch):
     from nl_coding_agent.app.mcp_engine import create_engine_server
     from nl_coding_agent.persistence.missions import get_mission, update_mission_status

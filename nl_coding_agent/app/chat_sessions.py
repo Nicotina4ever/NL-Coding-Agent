@@ -68,6 +68,7 @@ def ensure_default_session(project_id: int) -> dict:
     """Return the latest active session, creating/migrating one if necessary."""
     conn = database.init_db()
     try:
+        conn.execute("BEGIN IMMEDIATE")
         row = conn.execute(
             "SELECT * FROM chat_sessions WHERE project_id=? AND archived_at IS NULL "
             "ORDER BY updated_at DESC, created_at DESC LIMIT 1",
@@ -75,8 +76,9 @@ def ensure_default_session(project_id: int) -> dict:
         ).fetchone()
         if row:
             return dict(row)
-        legacy = [] if database.get_setting(
-            "chat.legacy_migrated." + str(int(project_id))) == "1" else _legacy_messages(project_id)
+        migrated = conn.execute("SELECT value FROM app_settings WHERE key=?",
+                                ("chat.legacy_migrated." + str(int(project_id)),)).fetchone()
+        legacy = [] if migrated and migrated[0] == "1" else _legacy_messages(project_id)
         session_id = "legacy-" + str(int(project_id)) if legacy else uuid.uuid4().hex
         title = "Imported conversation" if legacy else "Main"
         if legacy:
