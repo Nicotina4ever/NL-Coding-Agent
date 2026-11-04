@@ -384,6 +384,39 @@ def test_stop_during_provider_stream_is_cancelled_and_can_resume(runtime, monkey
     assert len(rt.snapshot(pid, sid)["runs"]) == 1
 
 
+@pytest.mark.parametrize("partial,local_fails", [(False, False), (True, False), (False, True)])
+def test_cloud_stream_quota_falls_back_only_before_any_output(runtime, monkeypatch, partial, local_fails):
+    rt, services, pid, sid = runtime
+    calls = []
+    class Provider:
+        kind = "ollama"
+        provider_id = "ollama"
+        def assert_generation_permitted(self, *args, **kwargs):
+            pass
+        def chat_turn_stream(self, model, messages, tools, **options):
+            calls.append(model)
+            if model == "quota-cloud":
+                if partial:
+                    options["on_delta"]("saved partial")
+                raise RuntimeError("429 quota exhausted")
+            if local_fails:
+                raise RuntimeError("429 local fixture unavailable")
+            options["on_delta"]("local answer")
+            return {"content": "local answer"}
+    provider = Provider()
+    monkeypatch.setattr(services, "_resolve_chat_provider", lambda *a, **kw: (provider, "quota-cloud", "ollama", ""))
+    monkeypatch.setattr(services, "_chat_candidates", lambda *a: [
+        {"provider": provider, "provider_id": "ollama", "model": "quota-cloud"},
+        {"provider": provider, "provider_id": "ollama", "model": "local-coder"}])
+    rid = rt.submit(pid, sid, "quota", "Explain testing", model_spec="ollama/quota-cloud")["run_id"]
+    result = wait_status(rt, rid, "failed" if partial or local_fails else "completed")
+    assert calls == (["quota-cloud"] if partial else ["quota-cloud", "local-coder"])
+    if partial:
+        assert "saved partial" in result["result"].get("partial_reply", "")
+    elif not local_fails:
+        assert result["result"]["reply"] == "local answer"
+
+
 def test_followup_mission_receives_prior_decisions_from_the_same_session(runtime, monkeypatch):
     from nl_coding_agent.persistence.missions import get_mission
     rt, services, pid, sid = runtime

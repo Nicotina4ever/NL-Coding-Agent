@@ -18,6 +18,7 @@ class ScheduledTask:
     error: str | None = None
     started_at: str | None = None
     finished_at: str | None = None
+    on_done: Callable[[Any], None] | None = None
 
 
 class SequentialScheduler:
@@ -33,8 +34,8 @@ class SequentialScheduler:
         self._thread = threading.Thread(target=self._worker, daemon=True, name="scheduler")
         self._thread.start()
 
-    def submit(self, task_id: str, fn: Callable[[], Any], label: str = "") -> ScheduledTask:
-        task = ScheduledTask(id=task_id, fn=fn, label=label)
+    def submit(self, task_id: str, fn: Callable[[], Any], label: str = "", on_done=None) -> ScheduledTask:
+        task = ScheduledTask(id=task_id, fn=fn, label=label, on_done=on_done)
         with self._lock:
             existing = self._tasks.get(task_id)
             if existing and existing.status in ("pending", "running"):
@@ -66,6 +67,11 @@ class SequentialScheduler:
                 task.status = "error"
             finally:
                 task.finished_at = datetime.utcnow().isoformat()
+            if task.on_done:
+                try:
+                    task.on_done(task.result if task.status == "done" else {"status": "failed", "error": task.error, "code": "executor_exception"})
+                except Exception as exc:
+                    task.error = "Completion callback failed: " + str(exc)
             self._queue.task_done()
 
     def shutdown(self):

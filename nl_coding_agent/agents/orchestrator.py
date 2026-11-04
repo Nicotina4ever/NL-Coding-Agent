@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import dataclasses
 import json
+import time
 import os
 import re
 from pathlib import Path
@@ -341,7 +342,7 @@ def _apply_unified_diff(project_root: Path, rel_path: str, diff_text: str) -> No
     scoped_write_file(project_root, rel_path, "".join(output))
 
 
-def _apply_python_tool_calls(project_root: Path, text: str) -> list[str]:
+def _apply_python_tool_calls(project_root: Path, text: str, *, path_resolver=None) -> list[str]:
     """Recover model-emitted Python calls such as patch_file('p', '''diff''')."""
     import ast
 
@@ -368,6 +369,7 @@ def _apply_python_tool_calls(project_root: Path, text: str) -> list[str]:
                 rel_path = match.group(3)
                 content = match.group(5)
                 try:
+                    rel_path = path_resolver(rel_path) if path_resolver else rel_path
                     if name == "write_file":
                         scoped_write_file(root, rel_path, clean_file_content(content, rel_path))
                         actions.append(f"Wrote {rel_path} via malformed Python tool call")
@@ -396,6 +398,7 @@ def _apply_python_tool_calls(project_root: Path, text: str) -> list[str]:
             if not rel_path:
                 continue
             try:
+                rel_path = path_resolver(rel_path) if path_resolver else rel_path
                 if name == "write_file":
                     content = keywords.get("content") or (
                         positional[1] if len(positional) > 1 else "")
@@ -438,19 +441,59 @@ def _apply_snippet_patch(project_root: Path, rel_path: str, target: str,
 def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None = None,
                         mission_id: int | None = None, role: str | None = None,
                         model: str | None = None,
-                        expected_paths: list[str] | None = None) -> list[str]:
+                        expected_paths: list[str] | None = None,
+                        source_root: Path | None = None) -> list[str]:
     """Execute write/patch actions emitted as text by a local model.
 
     This is a fallback for models that describe a tool call instead of using the
     native tool API.  Every action is scoped through the filesystem safety layer.
     """
     actions: list[str] = []
+    try:
+        literal = json.loads(text.strip())
+        if isinstance(literal, dict) and literal.get("name") in ("write_file", "patch_file"):
+            text = "```json\n" + json.dumps(literal) + "\n```"
+    except (TypeError, ValueError):
+        pass
     root = Path(project_root).resolve()
-    scope = [str(item).replace("\\", "/").lstrip("./") for item in (expected_paths or [])]
+    scope = [str(item).replace("\\", "/").rstrip("/") for item in (expected_paths or [])]
+
+    def relative_path(value):
+        path = Path(str(value).replace("\\", "/"))
+        if path.is_absolute():
+            for owner in (root, Path(source_root).resolve() if source_root else root):
+                try:
+                    return path.resolve().relative_to(owner).as_posix()
+                except ValueError:
+                    continue
+            raise ValueError("Action path is outside the staged project")
+        return path.as_posix()
 
     def path_allowed(rel_path: str) -> bool:
-        return not scope or any(rel_path == item or rel_path.endswith("/" + item)
-                                for item in scope)
+        try:
+            rel_path = relative_path(rel_path)
+        except ValueError:
+            return False
+        return not scope or any(rel_path == item or rel_path.startswith(item + "/") for item in scope)
+
+    def checked_path(value):
+        relative = relative_path(value)
+        if not path_allowed(relative):
+            raise ValueError("Action path is outside the declared scope: " + str(value))
+        return relative
+
+    def write_file(value, content):
+        return scoped_write_file(root, checked_path(value), content)
+
+    def patch_snippet(value, target, replacement):
+        return _apply_snippet_patch(root, checked_path(value), target, replacement)
+
+    def patch_diff(value, diff):
+        return _apply_unified_diff(root, checked_path(value), diff)
+
+    # Canonicalize only path labels, never source contents or arbitrary prose.
+    text = re.sub(r"(```(?:write|file|patch):)([^\r\n`]+)",
+                  lambda match: match[1] + (relative_path(match[2]) if path_allowed(match[2]) else match[2]), text)
 
     # Models often emit several labelled sections in one fence (current vs patched
     # content). Pick the final/patched section for each declared target path.
@@ -480,7 +523,7 @@ def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None
                 content = clean_file_content(body, rel_path)
                 if not content.strip():
                     continue
-                scoped_write_file(root, rel_path, content)
+                write_file( rel_path, content)
                 actions.append(f"Wrote {rel_path} via labelled section block")
             except Exception as exc:
                 actions.append(f"Failed to write {rel_path}: {exc}")
@@ -505,13 +548,13 @@ def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None
             try:
                 if name == "write_file" and "path" in args and "content" in args:
                     content = clean_file_content(str(args["content"]), str(args["path"]))
-                    scoped_write_file(root, str(args["path"]), content)
+                    write_file( str(args["path"]), content)
                     actions.append(f"Wrote {args['path']} via fenced JSON line")
                 elif name == "patch_file" and {"path", "target", "replacement"} <= set(args):
                     target = str(args["target"])
                     if not target:
                         raise ValueError("empty patch target")
-                    _apply_snippet_patch(root, str(args["path"]), target,
+                    patch_snippet( str(args["path"]), target,
                                          str(args["replacement"]))
                     actions.append(f"Patched {args['path']} via fenced JSON line")
             except Exception as exc:
@@ -531,7 +574,7 @@ def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None
         if not rel_path or " " in rel_path or not path_allowed(rel_path):
             continue
         try:
-            scoped_write_file(root, rel_path,
+            write_file( rel_path,
                               clean_file_content(match.group(2), rel_path))
             actions.append(f"Wrote {rel_path} via section code block")
         except Exception as exc:
@@ -550,7 +593,7 @@ def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None
         if not rel_path or " " in rel_path or not path_allowed(rel_path):
             continue
         try:
-            scoped_write_file(root, rel_path,
+            write_file( rel_path,
                               clean_file_content(match.group(2), rel_path))
             actions.append(f"Wrote {rel_path} via comment-labelled code block")
         except Exception as exc:
@@ -569,10 +612,10 @@ def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None
                     continue
                 if name == "write_file" and "path" in args and "content" in args:
                     content = clean_file_content(str(args["content"]), str(args["path"]))
-                    scoped_write_file(root, str(args["path"]), content)
+                    write_file( str(args["path"]), content)
                     actions.append(f"Wrote {args['path']} via JSON tool call")
                 elif name == "patch_file" and {"path", "target", "replacement"} <= set(args):
-                    _apply_snippet_patch(root, str(args["path"]),
+                    patch_snippet( str(args["path"]),
                                          str(args["target"]), str(args["replacement"]))
                     actions.append(f"Patched {args['path']} via JSON tool call")
         except Exception as exc:
@@ -587,7 +630,7 @@ def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None
             continue
         content = clean_file_content(match.group(2), rel_path)
         try:
-            scoped_write_file(root, rel_path, content)
+            write_file( rel_path, content)
             actions.append(f"Wrote {rel_path} via code block")
         except Exception as exc:
             actions.append(f"Failed to write {rel_path}: {exc}")
@@ -604,7 +647,7 @@ def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None
             continue
         content = clean_file_content(match.group(2), rel_path)
         try:
-            scoped_write_file(root, rel_path, content)
+            write_file( rel_path, content)
             actions.append(f"Wrote {rel_path} via labelled code block")
         except Exception as exc:
             actions.append(f"Failed to write {rel_path}: {exc}")
@@ -617,12 +660,12 @@ def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None
     for match in patch_pattern.finditer(text):
         rel_path = match.group(1).strip()
         try:
-            _apply_snippet_patch(root, rel_path, match.group(2), match.group(3))
+            patch_snippet( rel_path, match.group(2), match.group(3))
             actions.append(f"Patched {rel_path} via patch block")
         except Exception as exc:
             actions.append(f"Failed to patch {rel_path}: {exc}")
 
-    actions.extend(_apply_python_tool_calls(root, text))
+    actions.extend(_apply_python_tool_calls(root, text, path_resolver=checked_path))
 
     # Last-resort recovery for a single declared target: a model may answer with one
     # plain fenced file (sometimes with pseudo "current/patched" headings) instead of
@@ -654,7 +697,7 @@ def _apply_text_actions(project_root: Path, text: str, *, project_id: int | None
                 except SyntaxError:
                     continue
             try:
-                scoped_write_file(root, target, content)
+                write_file( target, content)
                 actions.append(f"Wrote {target} via recovered code block")
                 break
             except Exception as exc:
@@ -728,8 +771,10 @@ class MultiAgentOrchestrator:
 
     def _agent_metadata(self, model_name: str, role: str = "developer") -> dict:
         """Actual CrewAI result evidence for the last call, bounded and JSON-safe."""
+        requested_model = model_name
+        model_name = getattr(self, "_effective_model_route", None) or model_name
         result = self._last_agent_result
-        metadata = {"model": str(model_name or ""), "provider": "ollama"}
+        metadata = {"model": str(model_name or ""), "requested_model": requested_model, "provider": "ollama"}
         if result is not None:
             metadata.update({
                 "model": str(getattr(result, "model", None) or model_name or ""),
@@ -781,6 +826,9 @@ class MultiAgentOrchestrator:
                        required_capabilities=(), max_cost_usd: float | None = None) -> str:
         """Resolve an explicit route, or an explicitly requested ``auto`` route."""
         route = str(requested or "").strip()
+        recovered = getattr(self, "_recovery_routes", {}).get(role)
+        if recovered:
+            return str(recovered)
         profile = self._specialist_for_role(role)
         if profile and str(profile.get("model") or "").strip():
             return str(profile["model"]).strip()
@@ -942,6 +990,10 @@ class MultiAgentOrchestrator:
             request = self._textual_tool_request(output)
             if not request or round_index >= max_rounds:
                 break
+            if request.get("name") in ("write_file", "patch_file"):
+                # Mutations are applied once by the caller's scoped action
+                # parser, with normal validation and candidate verification.
+                break
             result = self._execute_textual_tool(workspace, request)
             current_prompt = (
                 prompt
@@ -1049,16 +1101,35 @@ class MultiAgentOrchestrator:
                 self.project_id, root=self.root, role=role, extra=backstory)
         except Exception:
             pass
-        result = self.crew_runtime.run_agent(
-            spec,
-            prompt,
-            goal=goal,
-            backstory=backstory,
-            model_name=model_name,
-            expected_output=expected_output,
-            tools=tools,
-            project_id=self.project_id,
-        )
+        from nl_coding_agent.models.recovery import cloud_route, local_equivalent
+        from nl_coding_agent.models.model_config_store import load as load_model_config
+        config = load_model_config()
+        exhausted = getattr(self, "_exhausted_routes", set())
+        requested = model_name
+        if model_name in exhausted:
+            binding = local_equivalent(spec.role_id, model_name, self.project_id, config)
+            model_name = binding.provider_id + "/" + binding.model_name
+        def invoke(route):
+            return self.crew_runtime.run_agent(spec, prompt, goal=goal, backstory=backstory,
+                model_name=route, expected_output=expected_output, tools=tools, project_id=self.project_id)
+        try:
+            result = invoke(model_name)
+        except Exception as exc:
+            from nl_coding_agent.app.services import AppServices
+            from nl_coding_agent.core.permissions import PermissionDenied, CLOUD
+            cloud_denied = isinstance(exc, PermissionDenied) and exc.scope == CLOUD
+            if not cloud_route(model_name, config) or (not cloud_denied and AppServices._classify_model_error(exc) not in ("quota", "auth", "unavailable", "timeout")):
+                raise
+            exhausted.add(model_name)
+            self._exhausted_routes = exhausted
+            binding = local_equivalent(spec.role_id, model_name, self.project_id, config)
+            model_name = binding.provider_id + "/" + binding.model_name
+            self._emit("recovery", "warning", "Cloud non disponibile: continuo con un modello locale per " + role,
+                mission_id=getattr(self, "_ledger_mission_id", None), role=role, requested=requested,
+                used=model_name, selection=dict(binding.selection))
+            self._assert_execution_permissions()
+            result = invoke(model_name)
+        self._effective_model_route = model_name
         self._last_agent_result = result
         try:
             from nl_coding_agent.core.tool_invocations import record_many
@@ -1272,7 +1343,8 @@ class MultiAgentOrchestrator:
         order), or from explicit clauses when the objective has no path list. This is
         what allows more than one task per role without a second orchestrator.
         """
-        write_paths = list(dict.fromkeys(extract_paths(goal)))
+        objective = re.split(r"\n\n(?:SESSION CONVERSATION HANDOFF|USER-SUPPLIED PROJECT CONTEXT)", goal, maxsplit=1)[0]
+        write_paths = promotion.canonical_scope_paths(self.root, list(dict.fromkeys(extract_paths(objective))))
         source_paths = [path for path in write_paths
                         if not path.replace("\\", "/").lower().startswith("tests/")
                         and not path.lower().endswith((".md", ".rst", ".txt"))]
@@ -1501,8 +1573,19 @@ class MultiAgentOrchestrator:
             stage = promotion.load_stage(stored)
             if stage.project_root != self.root:
                 raise GateFailure("Staged candidate belongs to a different project root", code="stage-mismatch")
+            normalized = promotion.canonical_scope_paths(self.root, list(stage.scope))
+            if tuple(normalized) != stage.scope:
+                if mission.get("promotion_status") not in (None, "staged") or promotion.candidate_delta(stage)[2]:
+                    raise GateFailure("Legacy scope needs inspection before recovery", code="scope")
+                scope = normalized or promotion.derive_scope(self.root, [])
+                manifest = promotion.read_manifest(stage)
+                manifest.setdefault("scope_reconciliations", []).append({"previous": list(stage.scope), "scope": scope})
+                manifest["scope"] = scope
+                promotion._save_manifest(stage, manifest)
+                stage = promotion.load_stage(stored)
+                self._emit("recovery", "info", "Write scope recovered from project paths; staged files preserved", mission_id=mission_id)
             return stage
-        write_paths = list(scope_paths or (dev_task or {}).get("write_paths") or [])
+        write_paths = promotion.canonical_scope_paths(self.root, list(scope_paths or (dev_task or {}).get("write_paths") or []))
         scope = promotion.derive_scope(self.root, write_paths or extract_paths(goal))
         stage = promotion.begin_stage(self.root, mission_id, scope)
         set_mission_staging(mission_id, str(stage.stage_dir))
@@ -1906,7 +1989,7 @@ class MultiAgentOrchestrator:
             mission_id=mission_id,
             code=code,
         )
-        return self._result_payload(
+        return {**self._result_payload(
             mission_id,
             status="blocked",
             diff_stat="",
@@ -1914,7 +1997,7 @@ class MultiAgentOrchestrator:
             review=review_text,
             verdict=verdict,
             error=reason,
-        )
+        ), "code": code}
 
     def _finalize_interrupted(
         self,
@@ -2378,7 +2461,8 @@ class MultiAgentOrchestrator:
                 str(exc),
                 "REJECT",
                 stage=stage,
-                code=type(exc).__name__,
+                code=("developer-no-change" if isinstance(exc, DeveloperNoChangeError) else
+                      "verification-failed" if isinstance(exc, VerificationError) else "scope-violation"),
             )
         except Exception as exc:  # noqa: BLE001 - surfaced as a failed mission with stage retained
             return {**self._failed_result(mission_id, exc), "promotion_status": "error"}
@@ -2673,7 +2757,7 @@ Do not claim that changes were made. The Developer will perform them in a staged
         task_count: int = 1,
     ) -> str:
         task_id = task_rec["id"]
-        write_paths = task_rec.get("write_paths") or list(stage.scope)
+        write_paths = promotion.canonical_scope_paths(self.root, task_rec.get("write_paths") or []) or list(stage.scope)
         before_files = snapshot_workspace(stage.workspace)
         update_task_status(task_id, "running")
         self._emit(
@@ -2821,8 +2905,11 @@ INSTRUCTIONS:
                         "\n\nRECOVERY AFTER A REPEATED-TOOL LOOP:\n"
                         "The previous attempt spent its turn repeating the same read/list call. "
                         "Do not call read_file, list_dir or any discovery tool again. "
-                        "You already have the task; write the target file now with write_file, "
-                        "or patch it with patch_file using an exact target snippet.\n\n" +
+                        "You already have the task. For existing files return one compact JSON "
+                        "tool request: {\"name\":\"patch_file\",\"arguments\":{\"path\":\"relative/path\","
+                        "\"target\":\"exact existing snippet\",\"replacement\":\"changed snippet\"}}. "
+                        "Use patch_file with an exact target snippet; never reproduce the entire "
+                        "existing file or a truncated file. Use write_file only for a new file.\n\n" +
                         "\n\n".join(recovery_context)
                     )
                     try:
@@ -2835,7 +2922,7 @@ INSTRUCTIONS:
                                 "tool loop. You must write the target files immediately and must not "
                                 "read or list files again."
                             ),
-                            expected_output="Summary of files actually modified in the staged workspace.",
+                            expected_output="One compact patch_file request with path, target and replacement; preserve all other file content.",
                             tools=write_tools,
                         )
                     except Exception:
@@ -2850,6 +2937,7 @@ INSTRUCTIONS:
                                 project_id=self.project_id, mission_id=mission_id,
                                 role="developer", model=model_name,
                                 expected_paths=write_paths,
+                                source_root=self.root,
                             )
                             promotion.normalize_staged_newlines(stage)
                         break
@@ -2864,6 +2952,7 @@ INSTRUCTIONS:
                             project_id=self.project_id, mission_id=mission_id,
                             role="developer", model=model_name,
                             expected_paths=write_paths,
+                            source_root=self.root,
                         )
                         promotion.normalize_staged_newlines(stage)
                     output = first_output
@@ -2875,6 +2964,7 @@ INSTRUCTIONS:
                 project_id=self.project_id, mission_id=mission_id,
                 role="developer", model=model_name,
                 expected_paths=write_paths,
+                source_root=self.root,
             )
             promotion.normalize_staged_newlines(stage)
             after_files = snapshot_workspace(stage.workspace)
@@ -2882,7 +2972,7 @@ INSTRUCTIONS:
             unauthorized = [
                 path for path in set(before_files) | set(after_files)
                 if before_files.get(path) != after_files.get(path)
-                and allowed and path.replace("\\", "/") not in allowed
+                and allowed and not any(path.replace("\\", "/") == item or path.replace("\\", "/").startswith(item.rstrip("/") + "/") for item in allowed)
             ]
             if unauthorized:
                 # Revert this subtask's out-of-scope edits instead of corrupting the work
@@ -2911,7 +3001,10 @@ INSTRUCTIONS:
             if attempt_index == 0:
                 first_verdict = dict(verdict)
                 first_changed = list(changed)
-                first_output = str(output or "")                # A destructive rewrite is not retried against the corrupted file:
+                if actions:
+                    validation_feedback += "\nAction feedback: " + "; ".join(actions)[-1600:]
+                first_output = str(output or "")
+                # A destructive rewrite is not retried against the corrupted file:
                 # restore the exact pre-attempt snapshot and give the model one
                 # bounded corrective attempt with the actual gate feedback.
                 for path in set(before_files) | set(after_files):
@@ -2955,6 +3048,22 @@ INSTRUCTIONS:
             record_task_attempt(task_id, "failed", output=_truncate(output), error=_truncate(error_msg, 2000),
                                 metadata=metadata)
             update_task_status(task_id, "failed", error=_truncate(error_msg, 2000))
+            # Keep the rejected artifact as evidence, then restore only this
+            # task's pre-attempt candidate. A subsequent repair must not start
+            # from a truncated file or discard earlier completed subtasks.
+            rejected = stage.stage_dir / "rejected-attempts"
+            rejected.mkdir(exist_ok=True)
+            (rejected / f"task-{task_id}-{time.time_ns()}.json").write_text(
+                json.dumps({"errors": verdict["errors"], "files": snapshot_workspace(stage.workspace)}, ensure_ascii=False),
+                encoding="utf-8")
+            for path in set(before_files) | set(snapshot_workspace(stage.workspace)):
+                target = stage.workspace / path
+                if path in before_files:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text(before_files[path], encoding="utf-8")
+                else:
+                    target.unlink(missing_ok=True)
+            promotion.normalize_staged_newlines(stage)
             raise GateFailure(
                 "Staged candidate rejected by the validation gate: " + error_msg,
                 code="candidate-rejected",
@@ -3166,7 +3275,7 @@ INSTRUCTIONS:
     ) -> None:
         """Debugger agent repairs only the staged candidate based on verification failures."""
         from nl_coding_agent.core.code_integrity_gate import detect_stub
-
+        write_paths = promotion.canonical_scope_paths(self.root, write_paths) or list(stage.scope)
         before_debug = snapshot_workspace(stage.workspace)
         # A debugger that cannot read the failing code cannot repair it: the prompt asks it
         # to examine tests and sources, so expose read tools alongside the write/verify ones.
@@ -3241,6 +3350,7 @@ When you use a write block, reproduce the ENTIRE file: keep every existing funct
             project_id=self.project_id, mission_id=mission_id,
             role="debugger", model=model_name,
             expected_paths=write_paths,
+            source_root=self.root,
         )
         promotion.normalize_staged_newlines(stage)
         after_debug = snapshot_workspace(stage.workspace)

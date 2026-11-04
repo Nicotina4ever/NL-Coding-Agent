@@ -539,7 +539,7 @@ def test_natural_language_coding_request_starts_one_mission(chat, monkeypatch):
                     allow_coding=True)
     assert result["ok"], result
     assert result["missions"], result
-    assert "Missione #" in result["reply"] and "avviata" in result["reply"]
+    assert "Missione #" in result["reply"] and "in coda" in result["reply"]
     assert len(started) == 1
     assert started[0][0] == result["missions"][0]
     assert teams and teams[0][0] == project["id"]

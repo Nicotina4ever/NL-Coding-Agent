@@ -130,8 +130,25 @@ def find_stage(project_root: Path | str, mission_id: int) -> Stage | None:
     return load_stage(matches[0])
 
 
+def canonical_scope_paths(project_root: Path | str, paths: list[str]) -> list[str]:
+    """Convert project-owned absolute paths to relative scope; root is context."""
+    root = Path(project_root).resolve()
+    result = []
+    for value in paths:
+        raw = str(value).replace("\\", "/").strip()
+        target = (root / raw).resolve()
+        try:
+            relative = target.relative_to(root).as_posix()
+        except ValueError as exc:
+            raise GateFailure("Path is outside the project: " + raw, code="scope") from exc
+        if relative != "." and relative not in result:
+            result.append(relative)
+    return result
+
+
 def derive_scope(project_root: Path | str, write_paths: list[str]) -> list[str]:
     root = Path(project_root).resolve()
+    write_paths = canonical_scope_paths(root, write_paths)
     if write_paths:
         return list(write_paths)
     snapshot = snapshot_workspace(root)

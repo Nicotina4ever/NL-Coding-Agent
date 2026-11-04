@@ -38,7 +38,7 @@ def _run_git(root: Path, args: list[str], timeout: int = 30) -> tuple[int, str, 
 def get_git_status(project_root: Path | str) -> str:
     """Return 'git status --short' output for project_root."""
     root = Path(project_root).resolve()
-    code, out, err = _run_git(root, ["status", "--short"], timeout=15)
+    code, out, err = _run_git(root, ["status", "--short", "--", "."], timeout=15)
     if code == 0:
         return out.strip() or "Clean working tree (no modifications)."
     return f"Git error (code {code}): {err.strip()}"
@@ -53,12 +53,13 @@ def get_git_diff(project_root: Path | str, cached: bool = False) -> str:
     args = ["diff"]
     if cached:
         args.append("--cached")
+    args.extend(["--", "."])
 
     code, diff_text, err = _run_git(root, args)
     if code != 0:
         return f"Failed to get git diff: {err.strip()}"
 
-    code, status_text, _ = _run_git(root, ["status", "--porcelain"], timeout=15)
+    code, status_text, _ = _run_git(root, ["status", "--porcelain", "--", "."], timeout=15)
     if code == 0:
         untracked = []
         for line in status_text.splitlines():

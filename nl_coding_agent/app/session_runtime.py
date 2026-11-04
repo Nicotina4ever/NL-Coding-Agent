@@ -339,6 +339,9 @@ class SessionRuntime:
                 raise ValueError("Tool outcome is uncertain; inspect its evidence before resuming")
             if run["payload"].get("allow_coding") and not allow_execution:
                 raise PermissionError("Enable mission execution before resuming coding work")
+            if run.get("mission_id"):
+                for scope in (permissions.WRITE, permissions.EXECUTE):
+                    permissions.require(scope, project_id=project_id)
             with self.db() as conn, conn:
                 conn.execute("BEGIN IMMEDIATE")
                 current_session = conn.execute("SELECT archived_at FROM chat_sessions WHERE id=?", (session_id,)).fetchone()
@@ -356,6 +359,15 @@ class SessionRuntime:
                 if mission_options is not None:
                     payload = {**run["payload"], "mission_options": mission_options}
                     conn.execute("UPDATE session_runs SET payload_json=? WHERE id=?", (_json(payload), run_id))
+                else:
+                    payload = {**run["payload"]}
+                    if payload.get("mission_options"):
+                        payload["mission_options"] = {key: value for key, value in payload["mission_options"].items() if key != "recovery_overrides"}
+                    conn.execute("UPDATE session_runs SET payload_json=? WHERE id=?", (_json(payload), run_id))
+                conn.execute("UPDATE session_runs SET state_json=? WHERE id=?", (_json({**run["state"], "recovery_attempts": 0}), run_id))
+                if run.get("mission_id"):
+                    from nl_coding_agent.core.run_control import persist_mission_resume
+                    persist_mission_resume(conn, run["mission_id"])
                 self._event(conn, session_id, run_id, "resume.requested", {})
         elif action == "remove":
             with self.db() as conn, conn:
@@ -528,7 +540,7 @@ class SessionRuntime:
         except ValueError:
             return
         with self.db() as conn, conn:
-            if status in TERMINAL and not result.get("ok"):
+            if status in TERMINAL and not result.get("ok") and not run.get("mission_id"):
                 start = conn.execute("SELECT coalesce(max(seq),0) FROM session_events WHERE run_id=? AND type='assistant.start'",
                                      (run_id,)).fetchone()[0]
                 chunks = conn.execute("SELECT payload_json FROM session_events WHERE run_id=? AND type='assistant.delta' "
@@ -574,6 +586,14 @@ class SessionRuntime:
                         self.services.run_mission(mission["id"], self.services.get_project(run["project_id"])["root"],
                                                  on_done=turn.mission_done, **run["payload"].get("mission_options", {}))
                 elif outcome.get("status") in ("blocked", "failed") and status not in ("completed", "failed", "blocked", "interrupted"):
+                    if self._recover_internal_failure(run_id, mission, outcome):
+                        run = self.run(run_id)
+                        turn = RuntimeTurn(self, run_id)
+                        waiting_since = time.monotonic()
+                        last_dispatch_seq = 0
+                        self.services.run_mission(mission["id"], self.services.get_project(run["project_id"])["root"],
+                            on_done=turn.mission_done, **run["payload"].get("mission_options", {}))
+                        continue
                     self._status(run_id, outcome["status"], {"reply": str(outcome.get("error") or outcome["status"])})
                     return
             if status != previous:
@@ -592,6 +612,16 @@ class SessionRuntime:
             # certify that the row represents the current execution.
             finished_dispatch = dispatch and json.loads(dispatch["payload_json"]).get("status") != "waiting_for_resources"
             if status in ("completed", "failed", "blocked", "interrupted") and finished_dispatch:
+                outcome = json.loads(dispatch["payload_json"])
+                if status in ("failed", "blocked") and self._recover_internal_failure(run_id, mission, outcome):
+                    run = self.run(run_id)
+                    turn = RuntimeTurn(self, run_id)
+                    previous = None
+                    waiting_since = time.monotonic()
+                    last_dispatch_seq = 0
+                    self.services.run_mission(mission["id"], self.services.get_project(run["project_id"])["root"],
+                        on_done=turn.mission_done, **run["payload"].get("mission_options", {}))
+                    continue
                 details = self.services.get_mission_details(mission["id"]) or mission
                 changed = details.get("changed_paths") or []
                 if isinstance(changed, str):
@@ -610,10 +640,65 @@ class SessionRuntime:
                 if latest_checks:
                     summary += "\nVerifiche: " + " · ".join(
                         name.split(":", 1)[1] + (" PASS" if passed else " FAIL") for name, passed in latest_checks.items())
+                if status in ("blocked", "failed"):
+                    summary += ("\nIl lavoro e gli errori sono salvati. Premi «Riprova riparazione» per un nuovo tentativo "
+                                "sulla stessa missione; puoi cambiare il modello negli Agenti prima di riprovare.")
                 self._status(run_id, status, {"ok": status == "completed", "reply": summary, "mission_id": mission["id"],
                     "changed_paths": changed, "verification_runs": [{key: item.get(key) for key in ("id", "command", "passed", "exit_code")}
                                                                   for item in details.get("verification_runs") or []]})
                 return
+
+    def _recover_internal_failure(self, run_id, mission, outcome):
+        """Bounded repair of internal stage failures; never resume an owner's Stop."""
+        allowed = {"developer-no-change", "candidate-rejected", "flow-blocked", "executor_exception"}
+        if outcome.get("code") not in allowed or outcome.get("failure_stage") in ("promote", "promotion", "_step_promote"):
+            return False
+        if mission.get("promotion_status") not in (None, "staged", "validated", "verified", "candidate_rejected"):
+            return False
+        from pathlib import Path
+        from nl_coding_agent.core.promotion import PROMOTION_JOURNAL
+        if mission.get("staging_dir") and (Path(mission["staging_dir"]) / PROMOTION_JOURNAL).exists():
+            return False
+        run = self.run(run_id)
+        if not self.execution_allowed or run["stop_requested"] or run["state"].get("in_flight"):
+            return False
+        if int(run["state"].get("recovery_attempts", 0)) >= 2:
+            return False
+        try:
+            for scope in (permissions.READ, permissions.WRITE, permissions.EXECUTE):
+                permissions.require(scope, project_id=run["project_id"])
+        except permissions.PermissionDenied:
+            return False
+        options = dict(run["payload"].get("mission_options") or {})
+        if outcome.get("code") == "developer-no-change":
+            try:
+                from nl_coding_agent.models.recovery import local_equivalent
+                old = (options.get("recovery_overrides") or {}).get("developer") or options.get("developer_model") or run["payload"].get("model_spec") or ""
+                for attempt in reversed(outcome.get("attempts") or []):
+                    if attempt.get("agent_role") == "developer" and (attempt.get("metadata") or {}).get("model"):
+                        old = attempt["metadata"]["model"]
+                        break
+                binding = local_equivalent("developer", old, run["project_id"])
+                options["recovery_overrides"] = {"developer": binding.provider_id + "/" + binding.model_name}
+            except Exception:
+                return False
+        with self.db() as conn, conn:
+            conn.execute("BEGIN IMMEDIATE")
+            current = conn.execute("SELECT stop_requested,state_json FROM session_runs WHERE id=?", (run_id,)).fetchone()
+            stopped = conn.execute("SELECT value FROM app_settings WHERE key=?", ("mission.stop." + str(mission["id"]),)).fetchone()
+            if current["stop_requested"] or (stopped and stopped[0]) or conn.execute("SELECT 1 FROM session_pauses WHERE session_id=?", (run["session_id"],)).fetchone():
+                return False
+            state = json.loads(current["state_json"])
+            count = int(state.get("recovery_attempts", 0)) + 1
+            if count > 2:
+                return False
+            from nl_coding_agent.core.run_control import persist_mission_resume
+            persist_mission_resume(conn, mission["id"])
+            conn.execute("UPDATE session_runs SET state_json=?,payload_json=? WHERE id=?",
+                (_json({**state, "recovery_attempts": count}), _json({**run["payload"], "mission_options": options}), run_id))
+            self._event(conn, run["session_id"], run_id, "activity", {"source": "recovery", "level": "warning",
+                "mission_id": mission["id"], "message": f"Riparazione automatica {count}/2: {outcome['code']}. Riparto dalla fase fallita conservando il lavoro."})
+        return True
 
     def _on_event(self, event):
         payload = event.payload or {}

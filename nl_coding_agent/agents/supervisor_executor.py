@@ -77,6 +77,7 @@ class SupervisorMissionExecutor:
         if not mission:
             raise ExecutorError("Mission not found: " + str(self.mission_id))
         orch._assert_harness_mission(mission)
+        orch._ledger_mission_id = self.mission_id
         self.developer_model = orch._resolve_route("developer", self.developer_model)
         self.reviewer_model = orch._resolve_route("reviewer", self.reviewer_model)
         self.debug_model = orch._resolve_route("debugger", self.debug_model)
@@ -132,6 +133,9 @@ class SupervisorMissionExecutor:
         self._prepared = True
 
     def _blocked(self, exc: Exception) -> StepResult:
+        from nl_coding_agent.core.permissions import PermissionDenied
+        if isinstance(exc, PermissionDenied):
+            return StepResult.blocked(str(exc), error_code="permission-denied")
         if isinstance(exc, GateFailure):
             return StepResult.blocked(str(exc), error_code=exc.code)
         if isinstance(exc, VerificationError):

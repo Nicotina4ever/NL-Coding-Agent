@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from contextlib import closing
 from typing import Any
 
 from nl_coding_agent.flows.mission_flow import MissionFlow
@@ -92,6 +93,19 @@ class SupervisorRunFlow:
             supervisor_run_id=mission.get("supervisor_run_id"),
             max_repairs=int(self.supervisor.config.max_attempts_per_requirement),
         )
+        from nl_coding_agent.persistence import database
+        resume_key = "mission.resume." + str(mission_id)
+        resume_token = database.get_setting(resume_key)
+        if resume_token:
+            # The explicit resume boundary authorizes a new attempt, preserving
+            # the pinned Flow id and all previous snapshots/evidence.
+            saved = self.persistence.load_state(flow_id)
+            if saved:
+                initial = MissionState.model_validate({**saved, "phase": "planned", "repair_round": 0, "last_error": None,
+                    "error_code": None, "failure_stage": None, "error_traceback": None, "exception_type": None})
+            self.persistence.save_state(flow_id, "explicit_resume", initial)
+            with closing(database.get_connection()) as conn, conn:
+                conn.execute("DELETE FROM app_settings WHERE key=? AND value=?", (resume_key, resume_token))
         flow = MissionFlow(
             initial_state=initial, persistence=self.persistence, executor=executor,
             facts_provider=lambda state: MissionFacts.from_durable(mission_id),

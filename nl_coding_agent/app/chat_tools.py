@@ -101,7 +101,7 @@ def _auto_delegate_coding(services, project, text, state, *, allow_coding, roles
         try:
             from nl_coding_agent.app.services import project_team_agents, _fallback_team_roles
             route = str(spec or "").strip()
-            if route and not project_team_agents(int(project["id"])):
+            if route and runtime_turn is None and not project_team_agents(int(project["id"])):
                 services.assign_project_team(int(project["id"]), _fallback_team_roles(route))
                 activity("team-auto", "default specialist team assigned")
         except Exception as exc:
@@ -883,13 +883,18 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
                 timeout = max(1, min(120, deadline - time.monotonic()))
 
                 def call_model(selected_provider, selected_model, selected_timeout):
+                    nonlocal stream_partial
                     if runtime_turn and protocol == "native" and callable(getattr(selected_provider, "chat_turn_stream", None)):
                         runtime_turn.emit("assistant.start", {})
+                        def on_delta(fragment):
+                            nonlocal stream_partial
+                            stream_partial = stream_partial or bool(fragment)
+                            runtime_turn.delta(fragment)
                         try:
                             return selected_provider.chat_turn_stream(
                                 selected_model, turn_messages, model_tools,
                                 project_id=pid, timeout=selected_timeout,
-                                on_delta=runtime_turn.delta, cancelled=runtime_turn.cancelled)
+                                on_delta=on_delta, cancelled=runtime_turn.cancelled)
                         finally:
                             runtime_turn.flush()
                     if not tools_enabled and callable(getattr(selected_provider, "generate", None)):
@@ -919,13 +924,15 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
 
                 response = None
                 local_timeout_retry = False
+                failed_routes = set()
                 while response is None:
+                    stream_partial = False
                     try:
                         response = model_turn(lambda: call_model(provider, model, timeout))
                     except Exception as exc:
                         if isinstance(exc, InterruptedError) or (runtime_turn and runtime_turn.cancelled()):
                             raise InterruptedError("Generation stopped") from exc
-                        if runtime_turn:
+                        if runtime_turn and stream_partial:
                             # Partial replies are durable evidence; never silently retry them.
                             raise
                         kind = services._classify_model_error(exc)
@@ -938,10 +945,10 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
                             timeout = min(300.0, max(timeout * 1.5, timeout + 30.0))
                             activity("model", "local timeout; retrying with a longer deadline")
                             continue
+                        failed_routes.add((provider.provider_id, model))
                         next_candidate = None
                         for candidate in services._chat_candidates(spec):
-                            if (candidate["provider"].provider_id == provider.provider_id
-                                    and candidate["model"] == model):
+                            if (candidate["provider"].provider_id, candidate["model"]) in failed_routes:
                                 continue
                             try:
                                 candidate["provider"].assert_generation_permitted(

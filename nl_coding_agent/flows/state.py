@@ -202,6 +202,11 @@ class MissionFacts:
             (task for task in tasks if str(task.get("agent_role") or "") == "developer"),
             None,
         )
+        developer_tasks = [task for task in tasks if task.get("agent_role") == "developer"]
+        if developer_tasks and any(task.get("status") not in _DEVELOPER_DONE_STATES for task in developer_tasks):
+            developer = next(task for task in developer_tasks if task.get("status") not in _DEVELOPER_DONE_STATES)
+        tester = next((task for task in tasks if task.get("agent_role") == "tester"), None)
+        reviewer = next((task for task in tasks if task.get("agent_role") == "reviewer"), None)
         candidate_runs = [r for r in runs if str(r.get("command") or "").startswith("verify:candidate")]
         oracle_runs = [r for r in runs if str(r.get("command") or "").startswith("verify:oracle")]
         review = next(
@@ -209,9 +214,9 @@ class MissionFacts:
             None,
         )
         verdict = None
-        if review is not None:
+        if review is not None and (reviewer is None or reviewer.get("status") == "completed"):
             verdict = (review.get("payload") or {}).get("verdict")
-        if verdict is None:
+        if verdict is None and (reviewer is None or reviewer.get("status") == "completed"):
             verdict = mission.get("review_verdict")
         promotion_status = mission.get("promotion_status")
         return cls(
@@ -221,7 +226,7 @@ class MissionFacts:
             developer_status=(
                 str(developer.get("status")) if developer else None
             ),
-            verification_persisted=bool(runs),
+            verification_persisted=bool(candidate_runs or oracle_runs) and (not developer_tasks or all(task.get("status") in _DEVELOPER_DONE_STATES for task in developer_tasks)) and (tester is None or tester.get("status") != "pending"),
             candidate_passed=(
                 bool(candidate_runs[-1].get("passed")) if candidate_runs else None
             ),

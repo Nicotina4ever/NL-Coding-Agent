@@ -411,10 +411,13 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                 "enabled": bool(entry.get("enabled", False)),
                 "api_key_env": str(entry.get("api_key_env") or ""),
             })
-        discovered = None
+        signature = json.dumps(providers, sort_keys=True)
+        cached = getattr(services, "_model_inventory_cache", (None, None))
+        discovered = cached[1] if cached[0] == signature else None
         if include_models:
             timeout = max(0.5, min(float(timeout_s), 5.0))
             discovered = _plain_json(asdict(services.discover_models(timeout=timeout)))
+            services._model_inventory_cache = (signature, discovered)
         from nl_coding_agent.agents.orchestrator import (
             DEFAULT_DEBUG_MODEL, DEFAULT_DEVELOPER_MODEL, DEFAULT_REVIEWER_MODEL,
         )
@@ -600,10 +603,10 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
             target_paths=target_paths or [], description=description)
 
     @server.tool(annotations=read_only)
-    def team_plan(model: str, focus: str = "") -> dict:
+    def team_plan(model: str, focus: str = "", model_routes: list[str] | None = None) -> dict:
         """Analyse project evidence and propose a dynamic specialist team (no edits)."""
         require_read()
-        return services.team_plan(bound_project_id, str(model), focus=str(focus or ""))
+        return services.team_plan(bound_project_id, str(model), focus=str(focus or ""), model_routes=model_routes)
 
     @server.tool()
     def assign_specialist_team(roles: list[dict]) -> dict:
@@ -665,7 +668,10 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
             "team_active": bool(team_active) if team_active is not None else None,
             "enabled": bool(enabled),
         }
-        if agent_id:
+        if team_active is True:
+            active_fields = {key: value for key, value in fields.items() if key != "project_id"}
+            saved = services.save_team_specialist(bound_project_id, agent_id, **active_fields)
+        elif agent_id:
             saved = services.update_custom_agent(str(agent_id), **fields)
             if saved is None:
                 raise ValueError("Custom agent not found")
@@ -768,7 +774,8 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False,
                                              idempotentHint=False, openWorldHint=False))
     def attachment_ingest(paths: list[str] | None = None, text: str | None = None,
-                          name: str = "", image_base64: str | None = None) -> dict:
+                          name: str = "", image_base64: str | None = None,
+                          file_base64: str | None = None) -> dict:
         """Ingest project files, pasted text or one pasted clipboard image.
 
         Files are copied into the engine's existing attachment store and their
@@ -812,7 +819,18 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                 bound_project_id, image_bytes)
             gathered.append(_attachment_view(item))
             total_bytes += int(item.get("size_bytes") or 0)
-        if not raw_paths and not (text is not None and str(text).strip()) and not image_base64:
+        if file_base64 is not None:
+            if len(file_base64) > ((25 * 1024 * 1024 + 2) // 3) * 4:
+                raise ValueError("Dropped file exceeds the 25 MiB attachment limit")
+            try:
+                payload = base64.b64decode(file_base64, validate=True)
+            except (binascii.Error, ValueError):
+                raise ValueError("Dropped file must be valid base64") from None
+            from nl_coding_agent.app.attachments import prepare_bytes
+            item = prepare_bytes(payload, name or "dropped-file.txt", source="drop-upload", project_id=bound_project_id)
+            gathered.append(_attachment_view(item))
+            total_bytes += int(item.get("size_bytes") or 0)
+        if not raw_paths and not (text is not None and str(text).strip()) and not image_base64 and file_base64 is None:
             raise ValueError("Provide at least one file path or text to ingest")
         return {"ok": bool(gathered), "attachments": gathered, "errors": errors,
                 "total_bytes": total_bytes,

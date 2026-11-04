@@ -9,10 +9,26 @@ from __future__ import annotations
 
 import threading
 import time
+import uuid
 from contextlib import contextmanager
+from contextlib import closing
 from typing import Callable
 
 __all__ = ["RunStopped", "RunControl", "acknowledge_mission_resume"]
+
+
+def persist_mission_resume(conn, mission_id):
+    """Record a new authorized attempt together with consumption of the old Stop."""
+    mission = conn.execute("SELECT review_verdict FROM missions WHERE id=?", (mission_id,)).fetchone()
+    conn.execute("UPDATE tasks SET status='pending',last_error=NULL WHERE mission_id=? AND agent_role='tester' AND status IN ('failed','running','interrupted')", (mission_id,))
+    if mission and mission["review_verdict"] == "REJECT":
+        reviewed = conn.execute("SELECT 1 FROM tasks WHERE mission_id=? AND agent_role='reviewer' AND status='completed'", (mission_id,)).fetchone()
+        if reviewed:
+            conn.execute("UPDATE tasks SET status='pending',last_error=NULL WHERE mission_id=? AND agent_role IN ('developer','tester','reviewer')", (mission_id,))
+        conn.execute("UPDATE missions SET review_verdict=NULL WHERE id=?", (mission_id,))
+    for key, value in (("mission.stop." + str(mission_id), ""), ("mission.resume." + str(mission_id), uuid.uuid4().hex)):
+        conn.execute("INSERT INTO app_settings(key,value,updated_at) VALUES(?,?,datetime('now')) "
+                     "ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at", (key, value))
 
 
 def acknowledge_mission_resume(mission_id: int, *, project_id: int) -> None:
@@ -31,8 +47,11 @@ def acknowledge_mission_resume(mission_id: int, *, project_id: int) -> None:
         mission = get_mission(mission_id)
         if not mission or mission.get("project_id") != project_id:
             raise ValueError("Mission does not belong to the selected project")
-        if mission["status"] == "interrupted":
-            database.set_setting("mission.stop." + str(int(mission_id)), "")
+        if mission["status"] in ("interrupted", "blocked", "failed"):
+            with closing(database.get_connection()) as conn, conn:
+                conn.execute("BEGIN IMMEDIATE")
+                if not conn.execute("SELECT 1 FROM app_settings WHERE key=? AND value!=''", ("mission.resume." + str(mission_id),)).fetchone():
+                    persist_mission_resume(conn, mission_id)
 
 
 class RunStopped(RuntimeError):

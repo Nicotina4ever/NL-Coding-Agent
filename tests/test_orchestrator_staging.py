@@ -274,7 +274,9 @@ def test_stub_candidate_blocks_without_promotion(project, mission_env):
     assert (mission["diff_stat"] or "") == ""
     stage_dir = Path(mission["staging_dir"])
     assert stage_dir.is_dir()  # staged candidate retained for diagnosis
-    assert "pass" in read_text(stage_dir / "workspace" / "src" / "calc.py")
+    assert "return a + b" in read_text(stage_dir / "workspace" / "src" / "calc.py")
+    rejected = list((stage_dir / "rejected-attempts").glob("*.json"))
+    assert rejected and "pass" in read_text(rejected[0])
     assert [path.name for path in stage_dirs(project)] == [stage_dir.name]
     assert not (stage_dir / "promotion-journal.json").exists()
 

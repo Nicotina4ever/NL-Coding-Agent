@@ -1210,7 +1210,7 @@ class AppServices:
             "capability": decision.capability, "risk": decision.risk,
         }}
 
-    def team_plan(self, project_id: int, model: str, *, focus: str = "") -> dict:
+    def team_plan(self, project_id: int, model: str, *, focus: str = "", model_routes=None, analyze=True) -> dict:
         """Ask an explicitly chosen analyst model to design a project team.
 
         The result is advisory configuration only: it never edits files, starts
@@ -1250,6 +1250,12 @@ class AppServices:
                     })
         except Exception as exc:
             catalog = [{"error": str(exc)}]
+        if model_routes is not None:
+            chosen = {str(route) for route in model_routes}
+            known = {item.get("route") for item in catalog}
+            if not chosen or chosen - known:
+                raise ValueError("Choose available models for the specialist team")
+            catalog = [item for item in catalog if item.get("route") in chosen]
         system = (
             "You are the NL Code Team Architect. Analyse the supplied project evidence "
             "and available model/resource inventory. Design the smallest effective team, "
@@ -1276,6 +1282,8 @@ class AppServices:
                           ensure_ascii=False)[:60000]
         analysis_error = ""
         try:
+            if not analyze:
+                raise ValueError("Use deterministic project-profile team")
             result = self._generate_with_fallback(
                 int(project_id), str(model), user,
                 messages=[{"role": "system", "content": system},
@@ -1298,7 +1306,8 @@ class AppServices:
         roles = payload.get("roles") if isinstance(payload, dict) else None
         available_routes = [item.get("route") for item in catalog
                             if isinstance(item, dict) and item.get("route")]
-        fallback_route = available_routes[0] if available_routes else str(model)
+        usable = [item for item in catalog if item.get("route") and item.get("fits_vram") and "embed" not in item["route"].lower()]
+        fallback_route = str(model) if str(model) in [item["route"] for item in usable] else (usable[0]["route"] if usable else (available_routes[0] if available_routes else str(model)))
         if not isinstance(roles, list) or not roles:
             used_fallback = True
             roles = _fallback_team_roles(fallback_route)
@@ -1363,6 +1372,24 @@ class AppServices:
         if not cleaned:
             used_fallback = True
             cleaned = clean_team_roles(_fallback_team_roles(fallback_route))
+        if model_routes is not None:
+            existing = {item["role_id"] for item in cleaned}
+            for index, item in enumerate(_fallback_team_roles(fallback_route)):
+                if item["role_id"] not in existing:
+                    item["model"] = fallback_route
+                    item["reason"] = "Required execution role restored from the selected model pool"
+                    cleaned.extend(clean_team_roles([item]))
+        if used_fallback:
+            evidence = (str(focus) + "\n" + json.dumps(docs, ensure_ascii=False)).lower()
+            domains = [
+                ("Audio / DSP", ("mossformer", "frcrn", "waveform", "audio", "dsp"), "Review audio formats, processing boundaries and reproducible DSP tests; distinguish hardware measurements from automated checks."),
+                ("Desktop / Qt", ("pyside6", "qml", "qt6", "qapplication"), "Review desktop interaction, worker thread boundaries and UI responsiveness; return precise constraints for developer and independent verification."),
+                ("Security", ("authentication", "credentials", "api key", "autenticazione"), "Review credential handling and trust boundaries without changing project permissions."),
+            ]
+            for name, terms, instruction in domains:
+                if any(term in evidence for term in terms):
+                    cleaned.extend(clean_team_roles([{"role_id": "advisor", "name": name + " Advisor", "role": name,
+                        "instructions": instruction, "model": fallback_route, "tools": list(_TEAM_READONLY_TOOLS)}]))
         return {"ok": True, "analyst_model": str(model),
                 "summary": str((payload or {}).get("summary") or "")[:4000],
                 "roles": cleaned, "resources": resources, "catalog": catalog,
@@ -1371,6 +1398,27 @@ class AppServices:
                 "dropped_roles": dropped_roles,
                 "remapped_roles": remapped_roles,
                 "tool_adjustments": tool_adjustments}
+
+    def ensure_automatic_team(self, project_id, goal, routes):
+        existing = project_team_agents(project_id)
+        if existing:
+            return existing
+        configured = (self.get_model_config() or {}).get("roles") or {}
+        routes = {role: routes.get(role) or (configured.get(role) or {}).get("model")
+                  for role in ("architect", "developer", "debugger", "reviewer", "auditor")}
+        routes = {role: ("ollama/" + str(route) if route and "/" not in str(route)
+                         and str(route).lower() not in ("auto", "automatic") else route)
+                  for role, route in routes.items()}
+        primary = routes.get("architect") or routes.get("developer") or ""
+        plan = self.team_plan(project_id, primary, focus=goal, analyze=False)
+        for role in plan["roles"]:
+            preferred = routes.get(role["role_id"])
+            if preferred and preferred.lower() not in ("auto", "automatic"):
+                role["model"] = preferred
+        result = self.assign_project_team(project_id, plan["roles"])
+        self._bus.emit(Event("agents", "info", "Squadra di specialisti creata automaticamente dal profilo del progetto",
+            {"project_id": project_id, "roles": [item["role_id"] for item in plan["roles"]]}))
+        return result["agents"]
 
     def list_custom_agents(self) -> list[dict]:
         path = self._custom_agents_path()
@@ -1394,6 +1442,31 @@ class AppServices:
             if str(item.get("id")) == str(agent_id):
                 return dict(item)
         return None
+
+    def save_team_specialist(self, project_id, agent_id=None, **fields):
+        """Save one active assignment atomically; advisors may coexist."""
+        import uuid
+        role_id = str(fields.get("role_id") or "")
+        if role_id not in _TEAM_ROLE_TOOLS:
+            raise ValueError("Choose a runtime role for the active specialist")
+        with _CUSTOM_AGENT_LOCK:
+            agents = self.list_custom_agents()
+            selected = next((item for item in agents if item.get("id") == agent_id), None) if agent_id else None
+            if agent_id and selected is None:
+                raise ValueError("Specialist not found")
+            if selected and selected.get("project_id") not in (None, int(project_id)):
+                raise ValueError("Duplicate this specialist before assigning it to another project")
+            if selected is None:
+                selected = {"id": uuid.uuid4().hex[:12]}
+                agents.append(selected)
+            tools, _ = _normalize_role_tools(role_id, fields.get("tools"))
+            if role_id != "advisor":
+                for item in agents:
+                    if item.get("project_id") == int(project_id) and item.get("role_id") == role_id:
+                        item["team_active"] = False
+            selected.update(fields, tools=tools, project_id=int(project_id), team_active=True)
+            self._write_custom_agents(agents)
+            return dict(selected)
 
     def consult_specialist(self, project_id: int, agent: str, question: str,
                            *, context: str = "", timeout: float = 120.0) -> dict:
@@ -1808,6 +1881,9 @@ class AppServices:
                 if vision:
                     result["vision"] = vision
                 if result.get("ok"):
+                    if result.get("missions"):
+                        mid = result["missions"][-1]
+                        result["reply"] = f"Missione #{mid} in coda. Avvio analisi, modifiche e verifiche; qui vedrai avanzamento ed esito."
                     route = result.get("route") or {}
                     self._append_chat_message(
                         project_id, "assistant", result["reply"], session_id=session_id,
@@ -1913,14 +1989,28 @@ class AppServices:
             candidates.append({"provider": provider, "model": str(model),
                                "provider_id": provider_id, "spec": spec,
                                "cloud": cloud})
+        if candidates and candidates[0]["cloud"]:
+            local = self._local_recovery_candidate("chat", candidates[0]["spec"], None)
+            if local and not any(item["spec"] == local["spec"] for item in candidates):
+                candidates.insert(1, local)
         return candidates
+
+    def _local_recovery_candidate(self, role, failed_route, project_id):
+        try:
+            from nl_coding_agent.models.recovery import local_equivalent
+            binding = local_equivalent(role, failed_route, project_id, self.get_model_config())
+            provider = next(item for item in build_providers(self.get_model_config()) if item.provider_id == binding.provider_id)
+            return {"provider": provider, "model": binding.model_name, "provider_id": binding.provider_id,
+                    "spec": binding.provider_id + "/" + binding.model_name, "cloud": False}
+        except Exception:
+            return None
 
     @staticmethod
     def _classify_model_error(exc: Exception) -> str:
         text = str(exc).lower()
         if isinstance(exc, (TimeoutError,)) or "timed out" in text or "timeout" in text:
             return "timeout"
-        if any(term in text for term in ("429", "quota", "rate limit", "credit",
+        if any(term in text for term in ("402", "429", "quota", "rate limit", "credit",
                                          "insufficient", "too many requests")):
             return "quota"
         if any(term in text for term in ("401", "403", "unauthorized", "forbidden",
@@ -1986,6 +2076,10 @@ class AppServices:
                     # Auth/quota cloud routes are exhausted immediately; never
                     # retry a cloud request that cannot succeed.
                     if cloud or kind in ("auth", "quota"):
+                        if cloud:
+                            local = self._local_recovery_candidate(role, candidate["spec"], project_id)
+                            if local and not any(item["spec"] == local["spec"] for item in candidates[:index + 1]):
+                                candidates.insert(index + 1, local)
                         break
                     break
         if permission_error is not None:
@@ -2899,6 +2993,7 @@ class AppServices:
         architect_model: str | None = None,
         stop_after: str | None = None,
         pipeline: str | None = None,
+        recovery_overrides: dict | None = None,
     ) -> str:
         """Schedule autonomous multi-agent mission execution on the sequential scheduler."""
         import hashlib
@@ -2910,7 +3005,7 @@ class AppServices:
         project = self.get_project(mission["project_id"]) if mission else None
         if not project or Path(project["root"]).resolve() != root:
             raise ValueError("Mission does not belong to the requested project")
-        if mission and mission["status"] == "interrupted":
+        if mission and mission["status"] in ("interrupted", "blocked", "failed"):
             from nl_coding_agent.core.run_control import acknowledge_mission_resume
             acknowledge_mission_resume(mission_id, project_id=mission["project_id"])
 
@@ -2927,27 +3022,27 @@ class AppServices:
                     "pipeline": pipeline}.items()
                     if value is not None}
                 config = SupervisorConfig.load(mission.get("project_id"), overrides=overrides)
+                self.ensure_automatic_team(mission["project_id"], mission.get("goal") or goal or "",
+                    {"developer": config.developer_model, "reviewer": config.reviewer_model,
+                     "debugger": config.debug_model, "architect": config.architect_model})
                 def factory(project_root):
                     orchestrator = MultiAgentOrchestrator(project_root, project_id=mission.get("project_id"))
+                    orchestrator._recovery_routes = dict(recovery_overrides or {})
                     if stop_after:
                         orchestrator.run_mission = partial(orchestrator.run_mission, stop_after=stop_after)
                     return orchestrator
                 res = Supervisor(root, project_id=mission.get("project_id"), config=config,
                                  orchestrator_factory=factory).execute_mission(mission_id)
-                if on_done:
-                    on_done(res)
                 return res
             except Exception as e:
                 self._bus.emit(Event(
                     source="orchestrator", level="error",
                     message=f"Mission #{mission_id} failed: {e}",
                 ))
-                if on_done:
-                    on_done({"status": "failed", "error": str(e)})
                 raise
 
         scheduler = get_scheduler()
-        scheduler.submit(task_id, _do_mission, label=f"Mission #{mission_id}: {(goal or '')[:30]}")
+        scheduler.submit(task_id, _do_mission, label=f"Mission #{mission_id}: {(goal or '')[:30]}", on_done=on_done)
         return task_id
 
     def cancel_mission(self, mission_id: int, *, project_id: int, reason="User cancellation") -> dict:

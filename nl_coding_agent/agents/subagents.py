@@ -98,11 +98,25 @@ class SubagentRunner:
         )
         if instructions:
             backstory += "\n\nSpecialist instructions:\n" + str(instructions)[:4000]
-        result = self.runtime.run_agent(
-            spec, prompt, goal=str(objective or "")[:2_000],
-            backstory=backstory, model_name=model or "", expected_output="Structured handoff.",
-            tools=tools, project_id=self.project_id,
-        )
+        def invoke(route):
+            return self.runtime.run_agent(
+                spec, prompt, goal=str(objective or "")[:2_000],
+                backstory=backstory, model_name=route, expected_output="Structured handoff.",
+                tools=tools, project_id=self.project_id)
+        try:
+            result = invoke(model or "")
+        except Exception as exc:
+            from nl_coding_agent.app.services import AppServices
+            from nl_coding_agent.core.permissions import CLOUD, PermissionDenied
+            from nl_coding_agent.models.model_config_store import load
+            from nl_coding_agent.models.recovery import cloud_route, local_equivalent
+            config = load()
+            denied = isinstance(exc, PermissionDenied) and exc.scope == CLOUD
+            if not cloud_route(model, config) or (not denied and AppServices._classify_model_error(exc) not in ("quota", "auth", "unavailable", "timeout")):
+                raise
+            binding = local_equivalent(spec.role_id, model, self.project_id, config)
+            model = binding.provider_id + "/" + binding.model_name
+            result = invoke(model)
         text = str(getattr(result, "text", "") or "")
         handoff = _parse_handoff(text, name=str(name or spec.display_role))
         return SubagentResult(
