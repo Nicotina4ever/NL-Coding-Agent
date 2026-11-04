@@ -1,0 +1,64 @@
+{
+  "host": "standalone",
+  "scratch": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\session-ui-standalone-repair-real-1793834248111",
+  "checks": [
+    {
+      "label": "current VSIX installed in isolated profile",
+      "detail": "qwen2.5-coder:7b-instruct-q4_K_M",
+      "passed": true
+    },
+    {
+      "label": "real editor Chat webview connected",
+      "passed": true
+    },
+    {
+      "label": "project-specific specialist team created automatically",
+      "detail": "7",
+      "passed": true
+    },
+    {
+      "label": "internal failure repaired automatically on the same mission without Resume",
+      "passed": true
+    },
+    {
+      "label": "simulated cloud quota recovered with an actual dynamically detected local model",
+      "passed": true
+    },
+    {
+      "label": "real-source copy promoted after candidate/oracle PASS and reviewer APPROVE; original unchanged",
+      "passed": true
+    },
+    {
+      "label": "verified recovery result restored after Chat reopening",
+      "passed": true
+    }
+  ],
+  "started_at": "2026-11-04T23:17:28.111Z",
+  "model": "qwen2.5-coder:7b-instruct-q4_K_M",
+  "original_source": "K:\\AI\\NL_AudioLab\\scripts\\app.py",
+  "original_sha256": "b289194c352e8ea17f7eb31c23007d87715e7e35ff3f1a07194694328ab775ec",
+  "mission": {
+    "id": 1,
+    "project_id": 1,
+    "title": "Modifica scripts/app.py: aggiungi alla funzione InputList.paths la docstring esa",
+    "goal": "Modifica scripts/app.py: aggiungi alla funzione InputList.paths la docstring esatta \"Return the selected input paths.\". Preserva tutte le classi, funzioni e il comportamento esistente. Esegui test e review.",
+    "status": "completed",
+    "created_at": "2026-11-05T00:17:46",
+    "updated_at": "2026-11-05T00:19:36",
+    "result_summary": "Flow pipeline completed; candidate promoted.",
+    "review_verdict": "APPROVE",
+    "diff_stat": "1 file(s), +3/-1",
+    "changed_paths": "[\"scripts/app.py\"]",
+    "resume_count": 0,
+    "started_at": "2026-11-05T00:18:04",
+    "finished_at": "2026-11-05T00:19:36",
+    "harness_version": 2,
+    "staging_dir": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\session-ui-standalone-repair-real-1793834248111\\project\\data\\staging\\mission-1-uoa0pu9_",
+    "promotion_status": "promoted",
+    "requirement_id": null,
+    "supervisor_run_id": null,
+    "flow_id": "2e1cfb6e8fb7482394b8de72f21d3f67",
+    "archived_at": null
+  },
+  "finished_at": "2026-11-04T23:19:39.259Z"
+}

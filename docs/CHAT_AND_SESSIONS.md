@@ -1,5 +1,43 @@
 # NL Chat: agente operativo, contesto, queue, conversazioni
 
+## Recupero e squadra del progetto — 5 novembre 2026
+
+All'avvio di una missione autorizzata, il backend crea una squadra se il progetto non
+ne possiede già una attiva. Usa i modelli configurati, i ruoli del Supervisor e advisor
+Audio/DSP, Desktop/Qt o Security quando la documentazione del progetto li richiede.
+Una squadra esistente viene conservata. Generate Team consente di scegliere il pool
+fra tutti i modelli generativi rilevati; i profili manuali possono aggiungere più advisor.
+Le autorizzazioni continuano a dipendere da Project Access.
+
+Il runtime riprova al massimo due volte gli errori interni recuperabili, mantenendo
+missione, stage, evidenze e conversazione. La timeline mostra ogni riparazione.
+Stop, revoca dei permessi, esiti tool incerti e journal di promozione impediscono
+il replay automatico. Un candidato non valido viene conservato in `rejected-attempts`
+e il workspace candidato torna allo stato precedente al sottotask fallito. Esauriti
+i tentativi, **Riprova riparazione** riapre esplicitamente la stessa missione con
+un nuovo budget. Riprendi azzera lo stato terminale del Flow e ripete le verifiche
+fallite; non riusa un vecchio verdetto come prova del tentativo corrente.
+
+Quota/autenticazione/indisponibilità cloud possono attivare un modello Ollama locale
+per lo stesso ruolo, scelto dall'inventario dinamico e dal ModelRouter. Vale anche
+per gli advisor. Lo streaming Chat cambia modello soltanto prima del primo frammento:
+un output parziale resta salvato e richiede ripresa esplicita. Le rotte già fallite
+non vengono ritentate ciclicamente. La riconnessione MCP usa tre tentativi automatici
+con attese crescenti, poi lascia visibile l'errore e il comando di riconnessione.
+Non aggiunge una copia dell'errore alla conversazione a ogni tentativo.
+
+Il trascinamento supporta sia gli URI di Explorer/VS Code sia i file forniti dal
+browser senza percorso, acquisiti nello store allegati con i normali limiti.
+Il catalogo modelli sopravvive agli aggiornamenti delle impostazioni senza nuova discovery.
+
+Accettazione reale e screenshot del checkpoint:
+`docs/evidence/nlcode/real-project-recovery-20261105/verification.json`.
+Il suffisso `real` dell'harness prova lettura, Generate Team, modelli e drop sul
+progetto originale; `repair-real` copia soltanto i sorgenti necessari in una fixture
+e inietta un errore interno e una quota cloud esaurita nel launcher di test.
+I modelli locali, i gate e la promozione sono reali. Il launcher di fault non entra
+nella VSIX né nel prodotto. Nella standalone usa Python e sorgenti del payload embedded.
+
 ## Runtime condiviso — 4 novembre 2026
 
 NL Chat usa il `SessionRuntime` del motore Python: `session_submit` accetta subito un

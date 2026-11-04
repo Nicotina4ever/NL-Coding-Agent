@@ -1,0 +1,65 @@
+{
+  "checkpoint": "2026-11-05",
+  "commits": [
+    "b48d4c2",
+    "434fe5d"
+  ],
+  "tests": [
+    {
+      "suite": "broad operational regression (legacy GUI files excluded)",
+      "passed": 1406,
+      "note": "Precedes the final fixes; these are covered by the focused matrices."
+    },
+    {
+      "suite": "final relevant matrix",
+      "passed": 157
+    },
+    {
+      "suite": "Chat and bounded cloud fallback",
+      "passed": 32
+    },
+    {
+      "suite": "Flow fallback events and repair",
+      "passed": 12
+    },
+    {
+      "suite": "advisor fallback and subagents",
+      "passed": 4
+    },
+    {
+      "suite": "TypeScript noEmit, webview, session controller, real-process reconnect",
+      "status": "PASS"
+    }
+  ],
+  "independent_review": "APPROVE",
+  "acceptance": {
+    "standalone_recovery": "PASS",
+    "standalone_real_project_team_models_drop": "PASS",
+    "insiders_real_project_team_models_drop": "PASS",
+    "cloud_quota": "simulated in acceptance-only launcher; recovery inference is actual dynamically discovered Ollama",
+    "original_project_source_unchanged": true,
+    "original_app_sha256": "b289194c352e8ea17f7eb31c23007d87715e7e35ff3f1a07194694328ab775ec"
+  },
+  "installed": {
+    "vsix_sha256": "ba83668444e01305e4d8c8d2e83c25321325eca0bfaaf753d9853c8f27b33bb2",
+    "profiles": [
+      "Insiders main",
+      "Standalone main"
+    ],
+    "frontend_hashes_match": true,
+    "embedded_changed_modules_match": 14,
+    "reload_required_for_existing_windows": true
+  },
+  "pending": [
+    "Manual Windows scaling and physical drag gestures (OS-style FileList tested through CDP).",
+    "Audio and hardware behavior is outside this source-documentation acceptance.",
+    "Rebuild and publication of ZIP/Setup archives.",
+    "Existing mission #60 was inspected and its regressions reproduced; owner mission/stage were not resumed or modified.",
+    "Pre-existing nested Git untracked-file rendering limitation; sibling changes are now excluded."
+  ],
+  "source_logs": [
+    ".workspace/temp/real-project-final-broad.log",
+    ".workspace/temp/real-project-final-matrix.log"
+  ],
+  "prior_stop_resume_acceptance": "docs/evidence/nlcode/session-runtime-20261104/verification.json"
+}

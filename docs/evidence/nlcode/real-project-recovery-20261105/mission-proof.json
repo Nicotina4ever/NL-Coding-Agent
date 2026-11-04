@@ -1,0 +1,115 @@
+{
+  "run_id": "36d776fa6f654eab892d511180a27e35",
+  "status": "completed",
+  "mission_id": 1,
+  "automatic_recovery_attempts": 1,
+  "recovery_events": [
+    {
+      "seq": 13,
+      "type": "activity",
+      "payload": {
+        "source": "recovery",
+        "level": "warning",
+        "mission_id": 1,
+        "message": "Riparazione automatica 1/2: executor_exception. Riparto dalla fase fallita conservando il lavoro."
+      }
+    },
+    {
+      "seq": 27,
+      "type": "activity",
+      "payload": {
+        "source": "recovery",
+        "level": "warning",
+        "message": "Cloud non disponibile: continuo con un modello locale per Implementation Developer",
+        "mission_id": 1,
+        "role": "Implementation Developer",
+        "requested": "ollama/acceptance-cloud",
+        "used": "ollama/qwen2.5-coder:7b-instruct-q4_K_M",
+        "selection": {
+          "strategy": "measured_capabilities+historical_results",
+          "score": 25.0,
+          "attempts": 0,
+          "successes": 0,
+          "success_rate": 0.5,
+          "avg_duration_s": 0.0,
+          "capability_score": 0,
+          "required_capabilities": [],
+          "prefer_capabilities": [
+            "tool_calling",
+            "structured_output",
+            "patch_quality"
+          ],
+          "capability_states": {},
+          "patch_quality_score": 0.0,
+          "reason": "selected by measured capabilities and historical role outcomes; explicit caller candidates only, no cloud fallback",
+          "max_cost_usd": null
+        }
+      }
+    }
+  ],
+  "checks": [
+    {
+      "command": "verify:candidate K:\\AI\\NL Coding Agent\\.workspace\\dist\\NL Code\\engine\\python\\python.exe K:\\AI\\NL Coding Agent\\.workspace\\temp\\session-ui-standalone-repair-real-1793834248111\\project\\data\\staging\\mission-1-uoa0pu9_\\verification\\candidate\\_pytest_runner.py -q -p no:cacheprovider --no-header --junitxml=K:\\AI\\NL Coding Agent\\.workspace\\temp\\session-ui-standalone-repair-real-1793834248111\\project\\data\\staging\\mission-1-uoa0pu9_\\verification\\evidence\\junit-candidate.xml tests",
+      "passed": 1,
+      "exit_code": 0
+    },
+    {
+      "command": "verify:oracle K:\\AI\\NL Coding Agent\\.workspace\\dist\\NL Code\\engine\\python\\python.exe K:\\AI\\NL Coding Agent\\.workspace\\temp\\session-ui-standalone-repair-real-1793834248111\\project\\data\\staging\\mission-1-uoa0pu9_\\verification\\oracle\\_pytest_runner.py -q -p no:cacheprovider --no-header --junitxml=K:\\AI\\NL Coding Agent\\.workspace\\temp\\session-ui-standalone-repair-real-1793834248111\\project\\data\\staging\\mission-1-uoa0pu9_\\verification\\evidence\\junit-oracle.xml tests",
+      "passed": 1,
+      "exit_code": 0
+    }
+  ],
+  "developer_attempts": [
+    {
+      "status": "completed",
+      "metadata_json": "{\"model\": \"ollama/qwen2.5-coder:7b-instruct-q4_K_M\", \"requested_model\": \"ollama/acceptance-cloud\", \"provider\": \"ollama\", \"duration_s\": 5.0, \"tools_used\": [], \"available_tools\": [\"read_file\", \"list_dir\", \"search_symbols\", \"lsp_diagnostics\", \"list_skills\", \"load_skill\", \"write_file\", \"patch_file\", \"run_command\", \"run_tests\", \"git_status\", \"git_diff\"], \"tool_invocations\": [], \"usage\": {\"total_tokens\": 4515, \"prompt_tokens\": 4417, \"cached_prompt_tokens\": 0, \"completion_tokens\": 98, \"reasoning_tokens\": 0, \"cache_creation_tokens\": 0, \"successful_requests\": 1}, \"generation_params\": {\"num_predict\": 2048, \"seed\": 42, \"temperature\": 0.0}, \"effective_context\": 8192, \"task_id\": 3, \"subtask\": \"Code Implementation\", \"subtask_index\": 0, \"subtask_count\": 1, \"handoff_to\": \"tester\"}",
+      "metadata": {
+        "model": "ollama/qwen2.5-coder:7b-instruct-q4_K_M",
+        "requested_model": "ollama/acceptance-cloud",
+        "provider": "ollama",
+        "duration_s": 5.0,
+        "tools_used": [],
+        "available_tools": [
+          "read_file",
+          "list_dir",
+          "search_symbols",
+          "lsp_diagnostics",
+          "list_skills",
+          "load_skill",
+          "write_file",
+          "patch_file",
+          "run_command",
+          "run_tests",
+          "git_status",
+          "git_diff"
+        ],
+        "tool_invocations": [],
+        "usage": {
+          "total_tokens": 4515,
+          "prompt_tokens": 4417,
+          "cached_prompt_tokens": 0,
+          "completion_tokens": 98,
+          "reasoning_tokens": 0,
+          "cache_creation_tokens": 0,
+          "successful_requests": 1
+        },
+        "generation_params": {
+          "num_predict": 2048,
+          "seed": 42,
+          "temperature": 0.0
+        },
+        "effective_context": 8192,
+        "task_id": 3,
+        "subtask": "Code Implementation",
+        "subtask_index": 0,
+        "subtask_count": 1,
+        "handoff_to": "tester"
+      }
+    }
+  ],
+  "persisted_result": [
+    {
+      "content": "Missione #1: completed.\nFlow pipeline completed; candidate promoted.\nReview: APPROVE · Promozione: promoted\nFile modificati: scripts/app.py\nVerifiche: candidate PASS · oracle PASS"
+    }
+  ]
+}

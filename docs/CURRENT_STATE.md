@@ -1,5 +1,45 @@
 # Stato corrente — NL Coding Agent / NL Code
 
+**Checkpoint recupero missione #60 — 5 novembre 2026.** Corretti lo scope che
+scambiava la directory del progetto per un file, i percorsi assoluti nelle patch,
+il riuso dello stato terminale Flow e delle verifiche fallite dopo Resume. Le
+regressioni della missione NL_AudioLab sono riprodotte in fixture isolate. La
+missione utente #60 e il suo staging originale non sono stati rilanciati o alterati
+durante lo sviluppo.
+
+Squadra automatica dal profilo del progetto, Generate Team con pool dei modelli
+rilevati, assegnazioni manuali di più advisor, catalogo persistente fra refresh,
+fallback cloud→locale per ruoli operativi/advisor/Chat e allegati trascinati senza
+URI sono implementati. Il recupero automatico degli errori interni è durevole e
+limitato a due tentativi; rispetta Stop anche da CLI/MCP, permessi e journal.
+Il candidato rifiutato rimane come evidenza e non diventa il punto di partenza
+corrotto del nuovo tentativo. La riconnessione ha un budget e non genera una
+sequenza di errori duplicati nel transcript. Dettagli in `CHAT_AND_SESSIONS.md`.
+
+Verifiche automatiche: **1406 PASS** nella suite ampia; dopo le successive
+correzioni, **157 PASS** nella matrice pertinente, **32 PASS** su Chat/fallback,
+**12 PASS** su eventi Flow/repair e **4 PASS** su advisor/subagent. TypeScript senza
+emissione, webview, session controller e processo reale di riconnessione PASS.
+Revisione indipendente del diff **APPROVE**. La suite ampia precede le ultime
+correzioni, coperte dalle matrici mirate indicate.
+
+Generate Team, catalogo completo e drop provati nella VSIX installata sul vero
+NL_AudioLab, anche nella standalone. **Accettazione standalone PASS** con il suo
+Python/engine embedded: creazione automatica di 7 specialisti, errore interno
+recuperato senza Resume, fallback locale dopo quota cloud simulata, modifica reale,
+candidate/oracle PASS, reviewer APPROVE e promozione. La Chat chiusa durante il
+lavoro recupera il risultato persistito alla riapertura. La prova di modifica usa
+una copia controllata dei sorgenti; l'hash del file originale resta identico.
+Nessun comportamento audio/hardware viene dichiarato verificato. L'inferenza di
+recupero usa Ollama reale, rilevato dinamicamente. Evidenze e screenshot in
+`docs/evidence/nlcode/real-project-recovery-20261105/`.
+
+La medesima VSIX verificata è installata nei profili principali Insiders e standalone;
+hash dei file frontend e dei 14 moduli engine modificati controllati. Per finestre
+già aperte serve reload/riavvio; non viene eseguito un aggiornamento a caldo.
+Restano pendenti
+lo scaling Windows manuale e la rigenerazione degli archivi ZIP/Setup pubblicati.
+
 **Checkpoint Session Runtime — 4 novembre 2026.** Implementati identità sessione end-to-end,
 accettazione/coda/eventi/controlli SQLite, dispatcher backend con lock fra processi,
 streaming reale NDJSON/SSE, Stop/Riprendi, riconciliazione degli invii non confermati,

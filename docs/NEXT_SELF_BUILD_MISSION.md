@@ -2,6 +2,12 @@
 
 ## Stato
 
+Checkpoint del 5 novembre: corrette le regressioni osservate nella missione #60,
+la squadra automatica, il recupero limitato, i modelli cloud/locali e gli allegati
+trascinati. La verifica sul progetto reale distingue accesso al progetto originale
+e modifiche alla sua copia controllata; la missione utente non viene ripresa dallo
+sviluppo. Consultare `CURRENT_STATE.md` per test e limiti effettivi.
+
 P1–P5 sono implementati; il nucleo è verificato con test e con evidenze reali (missione advisor,
 repair Flow, LSP reale, Chat con routing e continuità, VSIX installata, standalone accettato).
 Restano solo i residui elencati nel piano operativo.
