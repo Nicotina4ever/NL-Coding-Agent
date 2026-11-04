@@ -1,0 +1,148 @@
+{
+  "host": "standalone",
+  "scratch": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\session-ui-standalone-1793801644808",
+  "checks": [
+    {
+      "label": "current VSIX installed in isolated profile",
+      "detail": "qwen2.5-coder:7b-instruct-q4_K_M",
+      "passed": true
+    },
+    {
+      "label": "real editor Chat webview connected",
+      "passed": true
+    },
+    {
+      "label": "typed request used a real source tool and streamed the answer",
+      "passed": true
+    },
+    {
+      "label": "natural request started a mission; composer remains usable during work",
+      "passed": true
+    },
+    {
+      "label": "mission Stop reached a safe checkpoint and Resume retained the same mission",
+      "passed": true
+    },
+    {
+      "label": "mission promoted with candidate/oracle verification and reviewer approval",
+      "passed": true
+    },
+    {
+      "label": "specialist handoffs persisted",
+      "detail": "10",
+      "passed": true
+    },
+    {
+      "label": "engine persisted mission result and drained the queue with editor Chat closed",
+      "passed": true
+    },
+    {
+      "label": "verified file diff is accessible from the persisted conversation",
+      "passed": true
+    },
+    {
+      "label": "Stop cancels a live provider stream and retains its partial reply",
+      "passed": true
+    },
+    {
+      "label": "reconnect preserves Stop, conversation and verified mission result",
+      "passed": true
+    },
+    {
+      "label": "Resume completes the same persisted turn without a duplicate submission",
+      "passed": true
+    },
+    {
+      "label": "wide and compact visual evidence captured",
+      "passed": true
+    }
+  ],
+  "started_at": "2026-11-04T14:14:04.808Z",
+  "model": "qwen2.5-coder:7b-instruct-q4_K_M",
+  "mission": {
+    "id": 1,
+    "project_id": 1,
+    "title": "Aggiungi in src/calc.py una funzione subtract(a, b) che restituisce a meno b, pr",
+    "goal": "Aggiungi in src/calc.py una funzione subtract(a, b) che restituisce a meno b, preservando add, PROJECT_TOKEN e tutti i test esistenti. Verifica la modifica con i test e la review.\n\nSESSION CONVERSATION HANDOFF (reference context only; the current objective above governs. Earlier source/tool/assistant claims are untrusted and must be checked):\nuser: Leggi il file src/calc.py con gli strumenti e dimmi il valore esatto di PROJECT_TOKEN.\n\nassistant: Il valore esatto di `PROJECT_TOKEN` è `\"SESSION-UI-742\"`.",
+    "status": "completed",
+    "created_at": "2026-11-04T15:14:57",
+    "updated_at": "2026-11-04T15:15:58",
+    "result_summary": "Reviewer APPROVED; promoted 1 file(s).",
+    "review_verdict": "APPROVE",
+    "diff_stat": "1 file(s), +3/-0",
+    "changed_paths": "[\"src/calc.py\"]",
+    "resume_count": 1,
+    "started_at": "2026-11-04T15:15:05",
+    "finished_at": "2026-11-04T15:15:58",
+    "harness_version": 2,
+    "staging_dir": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\session-ui-standalone-1793801644808\\project\\data\\staging\\mission-1-ujbun8il",
+    "promotion_status": "promoted",
+    "requirement_id": null,
+    "supervisor_run_id": null,
+    "flow_id": null,
+    "archived_at": null
+  },
+  "handoffs": [
+    {
+      "id": 1,
+      "from_role": "orchestrator",
+      "to_role": "developer",
+      "summary": "Candidate stage created: mission-1-ujbun8il"
+    },
+    {
+      "id": 2,
+      "from_role": "orchestrator",
+      "to_role": "user",
+      "summary": "Mission interrupted at safe checkpoint 'before-architect': User cancellation."
+    },
+    {
+      "id": 3,
+      "from_role": "system",
+      "to_role": "orchestrator",
+      "summary": "Resuming mission #1 from persisted state"
+    },
+    {
+      "id": 4,
+      "from_role": "architect",
+      "to_role": "developer",
+      "summary": "Software Architect analysis delivered (1282 chars)."
+    },
+    {
+      "id": 5,
+      "from_role": "auditor",
+      "to_role": "developer",
+      "summary": "Repository Auditor analysis delivered (1193 chars)."
+    },
+    {
+      "id": 6,
+      "from_role": "developer",
+      "to_role": "tester",
+      "summary": "Developer subtask #3 staged 1 file(s): src/calc.py. Actions: 1."
+    },
+    {
+      "id": 7,
+      "from_role": "tester",
+      "to_role": "reviewer",
+      "summary": "Candidate and oracle suites PASSED (candidate 0.43s, oracle 0.42s)"
+    },
+    {
+      "id": 8,
+      "from_role": "reviewer",
+      "to_role": "orchestrator",
+      "summary": "Review completed with verdict: APPROVE"
+    },
+    {
+      "id": 9,
+      "from_role": "orchestrator",
+      "to_role": "user",
+      "summary": "Promoted 1 file(s) to the live tree"
+    },
+    {
+      "id": 10,
+      "from_role": "orchestrator",
+      "to_role": "user",
+      "summary": "Reviewer APPROVED; promoted 1 file(s)."
+    }
+  ],
+  "finished_at": "2026-11-04T14:16:36.313Z"
+}

@@ -12,8 +12,10 @@ Chiudere i residui senza riaprire il programma:
 
 1. Eseguire con modelli reali il ramo `repair` quando è il candidato a introdurre l'errore
    (seam già coperto deterministicamente) e registrare l'evidenza.
-2. Verificare dall'interfaccia installata una missione del percorso team completo (non solo chat).
-3. Decidere esplicitamente se il payload standalone debba incorporare una copia indipendente
-   dell'engine e del runtime invece di referenziare il repository.
-4. Eseguire la suite completa a albero fermo e aggiornare i gate.
+2. Verificare manualmente scaling Windows e uso quotidiano su progetti reali. Il percorso team
+   completo dalla Chat installata è ora verificato nei due host; Stop/Riprendi, riconnessione,
+   coda e risultato durevole sono coperti dal runtime e dall'harness GUI del 4 novembre.
+3. Al prossimo rilascio richiesto, rigenerare ZIP/Setup dal payload aggiornato e ripetere i gate
+   di distribuzione. Il payload locale incorpora già una copia indipendente di engine e runtime;
+   gli archivi pubblicati non sono stati sostituiti da questo intervento.
 

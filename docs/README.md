@@ -1,6 +1,6 @@
 # NL Code — documentazione operativa unica
 
-**Aggiornamento documentale: 2 novembre 2026 (checkpoint harness).** Questa directory sostituisce il vecchio accumulo di audit, roadmap e log. È un corpus **di lavoro**, NON una dichiarazione di versione 1.0 stabile. Le affermazioni verificate al checkpoint sono in `CURRENT_STATE.md`; il programma operativo corrente è nel piano 1.0 (sezione "Programma corrente"). I rapporti storici restano come riferimento, non come stato.
+**Aggiornamento documentale: 4 novembre 2026 (checkpoint Session Runtime).** Questa directory sostituisce il vecchio accumulo di audit, roadmap e log. È un corpus **di lavoro**, NON una dichiarazione di versione 1.0 stabile. Le affermazioni verificate al checkpoint sono in `CURRENT_STATE.md`; il programma operativo corrente è nel piano 1.0 (sezione "Programma corrente"). I rapporti storici restano come riferimento, non come stato.
 
 ## Prima di lavorare: soltanto 4 documenti
 
@@ -9,8 +9,9 @@
 3. **[08_ACCEPTANCE_GATES.md](08_ACCEPTANCE_GATES.md)** — prove richieste prima di dichiarare stable.
 4. **[OPERATIONS_AND_RESTART.md](OPERATIONS_AND_RESTART.md)** — ripresa, comandi e cosa non toccare.
 
-`NEXT_SELF_BUILD_MISSION.md` descrive la prossima missione (P2 Code Intelligence e runtime hooks);
-non è un piano parallelo. P1 Context Engine e memoria di progetto sono implementati e verificati.
+`NEXT_SELF_BUILD_MISSION.md` elenca i residui verificati, senza creare un piano parallelo.
+Il checkpoint del 4 novembre in `CURRENT_STATE.md` descrive il runtime conversazionale,
+Stop/Riprendi e le prove della Chat installata nei due host.
 
 ## Dove trovare gli altri dettagli, soltanto quando servono
 

@@ -1,0 +1,335 @@
+/** Real installed-webview acceptance via Electron CDP. All data is isolated. */
+'use strict';
+const fs = require('fs');
+const path = require('path');
+const net = require('net');
+const { spawn, spawnSync } = require('child_process');
+const assert = require('assert');
+const repo = path.resolve(__dirname, '../..');
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const host = process.argv[2] || 'standalone';
+const sessionOnly = process.argv[3] === 'sessions';
+const executable = host === 'standalone'
+    ? path.join(repo, '.workspace/dist/NL Code/NL Code.exe')
+    : path.join(process.env.LOCALAPPDATA, 'Programs/Microsoft VS Code Insiders/Code - Insiders.exe');
+const scratch = path.join(repo, '.workspace/temp', 'session-ui-' + host + (sessionOnly ? '-sessions' : '') + '-' + Date.now());
+const project = path.join(scratch, 'project');
+const data = path.join(scratch, 'data');
+const engineRoot = host === 'standalone' ? path.join(path.dirname(executable), 'engine') : repo;
+const profile = host === 'standalone' ? path.join(scratch, 'portable/user-data') : path.join(scratch, 'profile');
+const extensions = path.join(scratch, 'extensions');
+const report = { host, scratch, checks: [], started_at: new Date().toISOString() };
+const env = { ...process.env, NL_DATA_DIR: data, NL_WORKSPACE_DIR: path.join(scratch, 'workspace'),
+    NL_MODELS_CONFIG: path.join(data, 'models.yaml'), NL_ENGINE_ROOT: engineRoot };
+delete env.ELECTRON_RUN_AS_NODE;
+delete env.VSCODE_PORTABLE;
+if (host === 'standalone') { env.VSCODE_PORTABLE = path.join(scratch, 'portable'); }
+let child, browser, workbench;
+const clients = [];
+
+class Cdp {
+    constructor(url) {
+        this.next = 0; this.pending = new Map();
+        this.socket = new WebSocket(url);
+        this.ready = new Promise((resolve, reject) => {
+            this.socket.onopen = resolve;
+            this.socket.onerror = reject;
+        });
+        this.socket.onmessage = ({ data }) => {
+            const msg = JSON.parse(data);
+            if (!msg.id) { return; }
+            const pending = this.pending.get(msg.id);
+            if (!pending) { return; }
+            this.pending.delete(msg.id);
+            if (msg.error) { pending.reject(new Error(JSON.stringify(msg.error))); }
+            else { pending.resolve(msg.result); }
+        };
+        clients.push(this);
+    }
+    async call(method, params = {}, sessionId) {
+        await this.ready;
+        const id = ++this.next;
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('CDP timeout: ' + method)); }, 20000);
+            this.pending.set(id, { resolve: (v) => { clearTimeout(timer); resolve(v); },
+                reject: (e) => { clearTimeout(timer); reject(e); } });
+            this.socket.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
+        });
+    }
+    async evaluate(expression, sessionId) {
+        const result = await this.call('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }, sessionId);
+        if (result.exceptionDetails) { throw new Error(JSON.stringify(result.exceptionDetails)); }
+        return result.result.value;
+    }
+}
+
+async function waitFor(fn, timeout, label) {
+    const until = Date.now() + timeout;
+    let error;
+    while (Date.now() < until) {
+        try { const result = await fn(); if (result) { return result; } } catch (err) { error = err; }
+        await sleep(300);
+    }
+    throw new Error('Timed out: ' + label + (error ? ' (' + error.message + ')' : ''));
+}
+function check(label, detail) {
+    report.checks.push({ label, detail, passed: true });
+    console.log('PASS ' + label + (detail ? ': ' + detail : ''));
+    fs.writeFileSync(path.join(scratch, 'evidence.json'), JSON.stringify(report, null, 2));
+}
+function db(query) {
+    const result = spawnSync(path.join(repo, 'python/python.exe'), ['-c',
+        'import sqlite3,json,sys; c=sqlite3.connect(sys.argv[1]); c.row_factory=sqlite3.Row; print(json.dumps([dict(r) for r in c.execute(sys.argv[2])]))',
+        path.join(data, 'nl_coding_agent.sqlite3'), query], { encoding: 'utf8', windowsHide: true });
+    if (result.status !== 0) { throw new Error(result.stderr); }
+    return JSON.parse(result.stdout);
+}
+async function command(text) {
+    await workbench.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'P', code: 'KeyP', modifiers: 10, windowsVirtualKeyCode: 80 });
+    await workbench.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'P', code: 'KeyP', modifiers: 10, windowsVirtualKeyCode: 80 });
+    await sleep(500);
+    await workbench.call('Input.insertText', { text });
+    await sleep(400);
+    await workbench.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+    await workbench.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+}
+
+async function main() {
+    assert(fs.existsSync(executable), executable);
+    for (const dir of [project, data, profile, extensions, path.join(project, 'src'), path.join(project, 'tests')]) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+    const inventory = await (await fetch('http://127.0.0.1:11434/api/tags')).json();
+    const models = inventory.models.filter((m) => !/cloud|embed/i.test(m.name) && m.size < 8e9)
+        .sort((a, b) => Number(/coder/i.test(b.name)) - Number(/coder/i.test(a.name)) || a.size - b.size);
+    let model = process.env.NL_ACCEPTANCE_MODEL;
+    if (!model) {
+        for (const candidate of models) {
+            const details = await (await fetch('http://127.0.0.1:11434/api/show', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: candidate.name })
+            })).json();
+            if ((details.capabilities || []).includes('tools')) { model = candidate.name; break; }
+        }
+    }
+    assert(inventory.models.some((m) => m.name === model), 'an available local model is required');
+    report.model = model;
+    fs.writeFileSync(path.join(data, 'models.yaml'), 'providers:\n  ollama:\n    kind: ollama\n    enabled: true\n    base_url: http://127.0.0.1:11434\nroles:\n' +
+        ['chat', 'developer', 'reviewer', 'architect', 'debugger'].map((role) => '  ' + role + ':\n    model: ollama/' + model).join('\n') + '\n');
+    const seeded = spawnSync(path.join(repo, 'python/python.exe'), ['-c',
+        'import sys; sys.path.insert(0,sys.argv[1]); from nl_coding_agent.models.generation_params import save_params; save_params({"num_ctx":8192,"num_predict":2048,"temperature":0,"seed":42},scope="global")', repo],
+        { cwd: repo, env, encoding: 'utf8', windowsHide: true });
+    assert.strictEqual(seeded.status, 0, seeded.stderr);
+    fs.writeFileSync(path.join(project, 'README.md'), '# Isolated session acceptance\nPython calculation module. Preserve add and existing tests.\n');
+    fs.writeFileSync(path.join(project, 'src/calc.py'), 'def add(a, b):\n    return a + b\n\nPROJECT_TOKEN = "SESSION-UI-742"\n');
+    fs.writeFileSync(path.join(project, 'tests/test_calc.py'), 'from src.calc import add\n\ndef test_add():\n    assert add(2, 3) == 5\n');
+    const settingsDir = path.join(profile, 'User');
+    fs.mkdirSync(settingsDir, { recursive: true });
+    fs.writeFileSync(path.join(settingsDir, 'settings.json'), JSON.stringify({
+        'nlCodingAgent.engineRoot': engineRoot, 'nlCodingAgent.allowExecution': true,
+        'nlCodingAgent.showHomeOnStartup': false,
+        'chat.disableAIFeatures': true,
+        'workbench.secondarySideBar.defaultVisibility': 'hidden',
+        ...(host === 'standalone' ? { 'workbench.colorTheme': 'NL Code Dark' } : {}),
+        'window.restoreWindows': 'none', 'security.workspace.trust.enabled': false,
+        'workbench.startupEditor': 'none'
+    }, null, 2));
+    const vsix = path.join(repo, '.workspace/temp/session-package/NL-Coder.vsix');
+    assert(fs.existsSync(vsix), 'package current extension first');
+    const appDir = path.dirname(executable);
+    const cli = [path.join(appDir, 'resources/app/out/cli.js'),
+        ...fs.readdirSync(appDir, { withFileTypes: true }).filter((item) => item.isDirectory())
+            .map((item) => path.join(appDir, item.name, 'resources/app/out/cli.js'))].find((item) => fs.existsSync(item));
+    assert(cli, 'installed editor CLI is available');
+    const installed = spawnSync(executable, [cli, '--install-extension', vsix, '--extensions-dir', extensions,
+        '--user-data-dir', profile, '--force'], { env: { ...env, ELECTRON_RUN_AS_NODE: '1' }, encoding: 'utf8', windowsHide: true });
+    assert.strictEqual(installed.status, 0, installed.stderr + installed.stdout);
+    check('current VSIX installed in isolated profile', model);
+    const portServer = net.createServer();
+    await new Promise((resolve) => portServer.listen(0, '127.0.0.1', resolve));
+    const port = portServer.address().port;
+    await new Promise((resolve) => portServer.close(resolve));
+    child = spawn(executable, [project, '--new-window', '--user-data-dir', profile, '--extensions-dir', extensions,
+        '--disable-workspace-trust', '--skip-welcome', '--skip-release-notes', '--remote-debugging-port=' + port],
+        { env, cwd: repo, windowsHide: false, stdio: ['ignore', 'pipe', 'pipe'] });
+    const log = fs.createWriteStream(path.join(scratch, 'application.log'));
+    child.stdout.pipe(log); child.stderr.pipe(log);
+    const version = await waitFor(async () => {
+        const r = await fetch('http://127.0.0.1:' + port + '/json/version'); return r.json();
+    }, 60000, 'Electron CDP');
+    browser = new Cdp(version.webSocketDebuggerUrl);
+    const page = await waitFor(async () => (await (await fetch('http://127.0.0.1:' + port + '/json/list')).json())
+        .find((target) => target.type === 'page' && /workbench/.test(target.url)), 60000, 'workbench');
+    workbench = new Cdp(page.webSocketDebuggerUrl);
+    await sleep(5000);
+    await command('NL Code: Open Chat');
+    let webSession;
+    const connectWebview = () => waitFor(async () => {
+        const targets = (await browser.call('Target.getTargets')).targetInfos;
+        for (const target of targets.filter((item) => item.type === 'iframe' || /webview/.test(item.url))
+            .sort((a, b) => Number(a.url.includes('purpose=webviewView')) - Number(b.url.includes('purpose=webviewView')))) {
+            try {
+                const session = await browser.call('Target.attachToTarget', { targetId: target.targetId, flatten: true });
+                if (await browser.evaluate('!!(document.getElementById("composer") || document.querySelector("iframe")?.contentDocument?.getElementById("composer"))', session.sessionId)) {
+                    webSession = session.sessionId; return true;
+                }
+                await browser.call('Target.detachFromTarget', { sessionId: session.sessionId });
+            } catch { /* frame may be navigating */ }
+        }
+        return false;
+    }, 60000, 'NL Chat webview DOM');
+    await connectWebview();
+    const ui = (expression) => browser.evaluate('((document)=>(' + expression +
+        '))(document.getElementById("composer") ? document : document.querySelector("iframe").contentDocument)', webSession);
+    const capture = async (prefix) => {
+        await workbench.call('Page.enable');
+        for (const width of [1100, 750]) {
+            await workbench.call('Emulation.setDeviceMetricsOverride', { width, height: 950, deviceScaleFactor: 1, mobile: false });
+            await ui('(()=>{const messages=document.getElementById("messages"); messages.scrollTop=messages.scrollHeight; return true;})()');
+            await sleep(700);
+            const screenshot = await workbench.call('Page.captureScreenshot', { format: 'png' });
+            fs.writeFileSync(path.join(scratch, prefix + '-' + width + '.png'), Buffer.from(screenshot.data, 'base64'));
+        }
+    };
+    await waitFor(() => ui('document.getElementById("status").textContent.includes("read-only") || document.getElementById("status").textContent.includes("missions")'), 60000, 'engine ready');
+    check('real editor Chat webview connected');
+    if (sessionOnly) {
+        const originalSession = await waitFor(() => ui('document.getElementById("chat-session").value'),
+            30000, 'initial conversation loaded');
+        await ui('(()=>{document.querySelector(".nl-session-drawer").open=true;document.getElementById("session-new").click(); return true;})()');
+        await waitFor(() => workbench.evaluate('(()=>{const widget=document.querySelector(".quick-input-widget");const input=widget?.querySelector("input");if(!input||!widget.offsetHeight)return false;input.focus();return document.activeElement===input;})()'),
+            10000, 'session title dialog focused');
+        await workbench.call('Input.insertText', { text: 'Isolated second conversation' });
+        await workbench.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+        await workbench.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+        const secondSession = await waitFor(async () => {
+            const sid = await ui('document.getElementById("chat-session").value');
+            return sid && sid !== originalSession && sid;
+        }, 20000, 'second session selected');
+        const selectSession = (sid) => ui('(()=>{const select=document.getElementById("chat-session");select.value=' +
+            JSON.stringify(sid) + ';select.dispatchEvent(new Event("change",{bubbles:true}));return true;})()');
+        await selectSession(originalSession);
+        await waitFor(() => ui('document.getElementById("chat-session").value===' + JSON.stringify(originalSession)), 20000, 'first session restored');
+        await selectSession(secondSession);
+        await waitFor(() => ui('document.getElementById("chat-session").value===' + JSON.stringify(secondSession)), 20000, 'second session restored');
+        assert.strictEqual(db('SELECT count(*) AS n FROM chat_sessions')[0].n, 2);
+        assert.strictEqual(db('SELECT count(*) AS n FROM session_runs')[0].n, 0);
+        check('session drawer creates and switches conversations without submitting or resuming work');
+        await capture('session-drawer');
+        console.log('SESSION-UI-SESSIONS-PASS ' + scratch);
+        return;
+    }
+    const send = (text) => ui('(()=>{document.getElementById("input").value=' + JSON.stringify(text) +
+        '; document.getElementById("composer").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true})); return true;})()');
+    await send('Leggi il file src/calc.py con gli strumenti e dimmi il valore esatto di PROJECT_TOKEN.');
+    await waitFor(() => db("SELECT * FROM session_runs WHERE status='completed'").length, 180000, 'read-only Chat turn');
+    assert(db("SELECT * FROM tool_invocations WHERE tool_name IN ('read_source','read_file') AND status='completed'").length);
+    assert(db("SELECT content FROM chat_messages WHERE role='assistant'").some((row) => row.content.includes('SESSION-UI-742')));
+    assert(db("SELECT seq FROM session_events WHERE type='assistant.delta'").length);
+    check('typed request used a real source tool and streamed the answer');
+    const before = db('SELECT count(*) AS n FROM session_runs')[0].n;
+    await send('Aggiungi in src/calc.py una funzione subtract(a, b) che restituisce a meno b, preservando add, PROJECT_TOKEN e tutti i test esistenti. Verifica la modifica con i test e la review.');
+    await waitFor(() => db('SELECT * FROM session_runs WHERE mission_id IS NOT NULL').length, 60000, 'natural-language mission');
+    await send('Al termine rispondi brevemente indicando se i test sono passati.');
+    await waitFor(() => db('SELECT count(*) AS n FROM session_runs')[0].n >= before + 2, 20000, 'queued follow-up accepted');
+    check('natural request started a mission; composer remains usable during work');
+    await waitFor(() => db("SELECT * FROM missions WHERE status='running'").length, 60000, 'mission begins before Stop');
+    await ui('(()=>{document.getElementById("btn-chat-stop").click(); return true;})()');
+    await waitFor(() => db("SELECT * FROM session_runs WHERE mission_id IS NOT NULL AND status='interrupted'").length,
+        180000, 'mission acknowledges Stop at a safe checkpoint');
+    assert.strictEqual(db('SELECT count(*) AS n FROM missions')[0].n, 1);
+    await waitFor(() => ui('!document.getElementById("session-resume").classList.contains("hidden")'), 20000, 'mission Resume control');
+    await ui('(()=>{document.getElementById("session-resume").click(); return true;})()');
+    await waitFor(() => db("SELECT * FROM session_runs WHERE mission_id IS NOT NULL AND status IN ('running','waiting_mission')").length,
+        30000, 'same mission resumes');
+    await waitFor(() => db("SELECT * FROM missions WHERE status IN ('running','completed')").length,
+        60000, 'resumed mission worker starts');
+    check('mission Stop reached a safe checkpoint and Resume retained the same mission');
+    await command('View: Close Editor');
+    await sleep(700);
+    const until = Date.now() + 720000;
+    let last;
+    while (Date.now() < until) {
+        const mission = db('SELECT * FROM missions ORDER BY id DESC LIMIT 1')[0];
+        if (mission?.status !== last) { console.log('MISSION ' + mission?.status); last = mission?.status; }
+        if (mission && ['completed', 'failed', 'blocked', 'interrupted'].includes(mission.status)) {
+            report.mission = mission;
+            assert.strictEqual(mission.status, 'completed', JSON.stringify(mission));
+            assert.strictEqual(mission.promotion_status, 'promoted');
+            assert.strictEqual(mission.review_verdict, 'APPROVE');
+            break;
+        }
+        await sleep(1500);
+    }
+    assert(report.mission, 'mission finished within acceptance deadline');
+    assert(fs.readFileSync(path.join(project, 'src/calc.py'), 'utf8').includes('def subtract'));
+    assert(db('SELECT * FROM verification_runs WHERE passed=1').length >= 2);
+    await waitFor(() => db("SELECT * FROM chat_messages WHERE content LIKE 'Missione #%completed%'").length, 20000, 'durable mission result');
+    check('mission promoted with candidate/oracle verification and reviewer approval');
+    report.handoffs = db('SELECT id,from_role,to_role,summary FROM handoffs');
+    assert(report.handoffs.length >= 4);
+    check('specialist handoffs persisted', String(report.handoffs.length));
+    await waitFor(() => db("SELECT count(*) AS n FROM session_runs WHERE status IN ('queued','running','waiting_mission')")[0].n === 0,
+        180000, 'queued follow-up');
+    check('engine persisted mission result and drained the queue with editor Chat closed');
+    await command('NL Code: Open Chat');
+    await connectWebview();
+    await waitFor(() => ui('document.getElementById("messages").textContent.includes("Missione #1: completed")'),
+        30000, 'persisted mission result restored after Chat reopening');
+    await waitFor(() => ui('Array.from(document.querySelectorAll("#messages button")).some(b=>b.textContent.includes("Apri diff"))'),
+        20000, 'persisted mission diff action restored');
+    await ui('(()=>{Array.from(document.querySelectorAll("#messages button")).find(b=>b.textContent.includes("Apri diff")).click(); return true;})()');
+    await waitFor(() => ui('Array.from(document.querySelectorAll("#messages details")).some(d=>d.textContent.includes("def subtract"))'),
+        20000, 'actual candidate diff opened from the conversation');
+    check('verified file diff is accessible from the persisted conversation');
+    await capture('mission-complete');
+    const initialRuns = db('SELECT count(*) AS n FROM session_runs')[0].n;
+    await send('Scrivi una spiegazione dettagliata di almeno 700 parole sul testing del software. Non modificare file e non usare strumenti.');
+    const stoppedRun = await waitFor(() => {
+        const rows = db("SELECT id,status FROM session_runs ORDER BY ordering DESC LIMIT 1");
+        return rows[0] && rows[0].status === 'running' && rows[0];
+    }, 30000, 'generation starts before Stop');
+    await waitFor(() => db("SELECT seq FROM session_events WHERE run_id='" + stoppedRun.id + "' AND type='assistant.delta'").length,
+        60000, 'real partial generation before Stop');
+    await ui('(()=>{document.getElementById("btn-chat-stop").click(); return true;})()');
+    await waitFor(() => db("SELECT status FROM session_runs WHERE id='" + stoppedRun.id + "'")[0].status === 'cancelled',
+        20000, 'durable Stop acknowledgement');
+    check('Stop cancels a live provider stream and retains its partial reply');
+    const previousOwner = db('SELECT owner FROM session_dispatchers LIMIT 1')[0].owner;
+    await command('NL Code: Reconnect Backend');
+    await waitFor(async () => db('SELECT owner FROM session_dispatchers LIMIT 1')[0]?.owner !== previousOwner &&
+        await ui('document.getElementById("status").textContent.includes("missions")'), 60000, 'new backend process reconnects');
+    assert.strictEqual(db("SELECT status FROM session_runs WHERE id='" + stoppedRun.id + "'")[0].status, 'cancelled');
+    assert(db("SELECT * FROM chat_messages WHERE content LIKE 'Missione #%completed%'").length);
+    check('reconnect preserves Stop, conversation and verified mission result');
+    await waitFor(() => ui('!document.getElementById("session-resume").classList.contains("hidden")'), 20000, 'Resume control');
+    await ui('(()=>{document.getElementById("session-resume").click(); return true;})()');
+    await waitFor(() => db("SELECT status FROM session_runs WHERE id='" + stoppedRun.id + "'")[0].status === 'completed',
+        180000, 'same turn resumed to completion');
+    assert.strictEqual(db('SELECT count(*) AS n FROM session_runs')[0].n, initialRuns + 1);
+    const resumedResult = JSON.parse(db("SELECT result_json FROM session_runs WHERE id='" + stoppedRun.id + "'")[0].result_json);
+    assert(!/<tool_call>|<function=/.test(resumedResult.reply), 'resume returns an answer, not unexecuted tool markup');
+    assert(resumedResult.reply.length > 200 && /test|software/i.test(resumedResult.reply), 'resumed answer addresses the original prose request');
+    assert.strictEqual(db('SELECT count(*) AS n FROM missions')[0].n, 1, 'prose/stop/resume never creates an extra mission');
+    check('Resume completes the same persisted turn without a duplicate submission');
+    await capture('chat');
+    check('wide and compact visual evidence captured');
+    console.log('SESSION-UI-ACCEPTANCE-PASS ' + scratch);
+}
+
+main().catch(async (error) => {
+    report.error = error.stack;
+    console.error(error.stack);
+    process.exitCode = 1;
+    if (workbench) {
+        const shot = await workbench.call('Page.captureScreenshot', { format: 'png' }).catch(() => undefined);
+        if (shot) { fs.writeFileSync(path.join(scratch, 'failure.png'), Buffer.from(shot.data, 'base64')); }
+    }
+}).finally(async () => {
+    report.finished_at = new Date().toISOString();
+    fs.mkdirSync(scratch, { recursive: true });
+    fs.writeFileSync(path.join(scratch, 'evidence.json'), JSON.stringify(report, null, 2));
+    if (workbench) { await workbench.call('Browser.close').catch(() => {}); }
+    for (const client of clients) { client.socket.close(); }
+    // Only the isolated application launched by this harness is closed.
+    if (child && child.exitCode === null) { child.kill(); }
+});

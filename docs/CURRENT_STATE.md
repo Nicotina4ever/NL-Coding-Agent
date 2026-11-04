@@ -1,5 +1,48 @@
-**Checkpoint 2 novembre 2026 (sessione harness, P1–P5 + consolidamento distribuzione).** P1–P5 implementati; suite Python completa **1407 passed** a working tree fermo; distribuzione ricompilata e accettata con **terminale reale PowerShell e CMD** (`NLCODE-STANDALONE-ACCEPTANCE-PASS`, evidenza `docs/evidence/nlcode/standalone-acceptance-terminal-20261102.json`). Beta **v0.7.2-beta.1** pubblicata come prerelease GitHub con Windows portable, Setup leggero (scarica il payload dalla release e installa in `%LOCALAPPDATA%`), VSIX e checksum; launcher locali, scorciatoie Desktop/Start e workflow Actions sono in `README`/`docs/NL_CODE_STANDALONE.md`. macOS/Linux non sono dichiarati disponibili: il workflow li prepara solo per build/validazione future. Causa reale della regressione terminale trovata e corretta: il `product.json` brandizzato non dichiarava `quality`, `version`/`commit` coerenti con il runtime; il backend pty della 1.145 in quello stato creava il pty host ma non collegava il terminale. Ora il branding imposta quality/version/commit reali e `win32ContextMenu`; l'accettazione esegue comandi reali in PowerShell e Command Prompt e fallisce se il terminale non funziona. Consolidamento storage: **10.175,9 MB** spostati (non eliminati) in `da_eliminare\cleanup-2026-11-02-consolidation`; workspace attivo ridotto a `dist`, `releases`, `tools` e `state`. Restano: cambio progetto nella stessa finestra non automatizzato e missione team completa dalla UI standalone (avvio UI verificato, completamento no).
 # Stato corrente — NL Coding Agent / NL Code
+
+**Checkpoint Session Runtime — 4 novembre 2026.** Implementati identità sessione end-to-end,
+accettazione/coda/eventi/controlli SQLite, dispatcher backend con lock fra processi,
+streaming reale NDJSON/SSE, Stop/Riprendi, riconciliazione degli invii non confermati,
+steering ordinato, risultato missione persistito e Chat centrale condivisa con la sidebar.
+Preservati Supervisor, MissionFlow, Context Engine, ModelRouter e gate candidate/oracle/reviewer.
+OpenCode/DeepSeek ha implementato lo streaming in un worktree isolato ed eseguito una
+revisione indipendente; le successive revisioni del diff sono APPROVE.
+
+**Accettazione Chat installata PASS nei due host:** richiesta nella webview → lettura
+source e streaming → richiesta naturale di modifica → missione completata/promossa,
+candidate e oracle PASS, reviewer APPROVE, handoff persistiti e follow-up accodato completato.
+Verificati Stop durante missione al checkpoint sicuro e durante generazione, Riprendi
+sugli stessi identificativi e riavvio backend senza revocare lo Stop. Il motore termina
+con la Chat editor chiusa; riaprirla recupera risultato e diff. Cambio sessione provato nei
+due host. La standalone usa il proprio engine embedded, con dati/profilo isolati.
+Evidenze e screenshot finali sono in `docs/evidence/nlcode/session-runtime-20261104/`.
+
+Regressione ampia: **1389 PASS** (esclusi i file di test dedicati alla GUI PySide6 legacy,
+fuori intervento). Matrici pertinenti: **108 PASS**, **26 PASS** sul ripristino/MCP;
+dopo gli ultimi checkpoint specialisti, **39 PASS** su team/sessioni/resume e **26 PASS**
+su affidabilità/repair/team. TypeScript, controller e webview PASS; revisione indipendente
+finale **APPROVE**. La suite ampia precede queste ultime correzioni, coperte dalle matrici mirate.
+Il comando di regressione usa Git Bash nel PATH per i test shell e `--basetemp` sotto
+`.workspace/temp`, senza scrivere nei dati utente.
+
+Corretti i difetti realmente osservati: subprocess pytest senza stdin MCP ereditato,
+opzioni native Ollama rispettate da CrewAI (prova HTTP e contesto reale 8192 token),
+compattazione che scartava evidenze, Stop erroneamente classificato errore, istruzioni
+prose/no-tools scambiate per modifiche, XML tool grezzo presentato come risposta,
+percorsi diff JSON spezzati, stato terminale della vecchia missione accettato dopo Resume
+e doppia conversazione Main creata da host Chat concorrenti. La riconciliazione preserva
+diff e attività aperti e scarta history/diff tardivi appartenenti a un’altra sessione.
+Stop di una missione non ancora acquisita, opzioni e reset task in Resume sono transazionali.
+Stop viene controllato anche fra architect e auditor, conservando gli handoff prodotti.
+
+Il payload locale e la VSIX condividono l’implementazione aggiornata. Riavvio/reload
+necessario per processi già aperti. Restano pendenti scaling Windows reale, prove hardware
+non pertinenti e rigenerazione/pubblicazione di ZIP/Setup, non richiesta in questa sessione.
+La matrice e gli scenari di fault non ripetuti dalla UI installata sono indicati in
+`docs/evidence/nlcode/session-runtime-20261104/verification.json`. Nessuna nuova
+dichiarazione 1.0 STABLE.
+
+> I checkpoint successivi sono storici; lo stato attuale è quello sopra.
 
 **Checkpoint autonomia Chat 3 novembre 2026.** Chat accetta ora un messaggio naturale di lavoro (“aggiungi…”, “correggi…”, “implementa…”): quando `allowExecution` e i permessi WRITE/EXECUTE del progetto sono attivi, l’engine crea automaticamente una missione verificata, assegna la squadra specialistica di fallback se non ne esiste una configurata e la esegue col normale Supervisor (analisi, staging, verifiche, reviewer, recovery). La risposta Chat riporta la missione e il frontend avvia il monitoraggio, quindi l’esito verificato compare nel transcript. Domande e richieste di piano documentale non avviano missioni; `/apply`, `/runplan`, `/mission` e `/team` restano disponibili per controllo esplicito ma non sono più necessari. Verifiche: suite completa **1410 passed** e standalone acceptance PASS con estensione aggiornata; i test coprono intento naturale, non-trigger delle domande, team automatico e coda FIFO/reorder. **Prova reale**: messaggio naturale → missione #1 completata e promossa con 8 handoff e 2 verification run su modello Ollama reale, senza comandi interni (evidenza `docs/evidence/nlcode/real-autochat-20261103.json`).
 

@@ -1,0 +1,22 @@
+{
+  "host": "insiders",
+  "scratch": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\session-ui-insiders-sessions-1793800205047",
+  "checks": [
+    {
+      "label": "current VSIX installed in isolated profile",
+      "detail": "granite4.2:3b",
+      "passed": true
+    },
+    {
+      "label": "real editor Chat webview connected",
+      "passed": true
+    },
+    {
+      "label": "session drawer creates and switches conversations without submitting or resuming work",
+      "passed": true
+    }
+  ],
+  "started_at": "2026-11-04T13:50:05.047Z",
+  "model": "granite4.2:3b",
+  "finished_at": "2026-11-04T13:50:22.358Z"
+}

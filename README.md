@@ -94,6 +94,13 @@ intelligence are integrated. The supported interfaces are the NL Coder VS Code e
 NL Code Code - OSS workbench; both use the same Python engine. The PySide6 GUI remains in the
 repository as a legacy interface and is excluded from normal development and acceptance.
 
+The editor Chat and compact sidebar share a durable session runtime. Messages sent during work
+enter the backend queue; **Intervieni sul lavoro** sends ordered steering, and **Stop/Riprendi**
+control the saved turn and its mission. Reconnection preserves an explicit Stop. Real provider
+streaming, specialist activity, verification results and file diffs appear in the conversation;
+the engine saves mission results even when Chat is closed. See
+[Chat and sessions](docs/CHAT_AND_SESSIONS.md) for contracts and recovery behaviour.
+
 Baseline at the 2 November 2026 checkpoint: the Python suite passes (1387 tests at the previous
 checkpoint, see `docs/CURRENT_STATE.md` for the final count). Recent work fixed the Team Architect
 -> specialist execution path, restored the tools each agent stage is promised, enforced the mission
@@ -121,9 +128,10 @@ implemented and tested. See `docs/CURRENT_STATE.md` for what is verified and wha
 
 Remaining declared gaps: the repair branch has not yet been exercised with a real model when the
 candidate itself introduces the failure (deterministic seam plus a real pre-existing red test are
-verified); the standalone payload references the repository engine (`engineRoot`) instead of
-embedding an independent runtime; a full team mission has not yet been run from the installed
-standalone UI. No release claim is made until the acceptance gates in
+verified). The local standalone payload now embeds one independent engine/runtime, and a real
+team mission from its installed Chat has passed candidate/oracle verification, reviewer approval
+and promotion. Windows DPI scaling still needs manual acceptance. The 4 November update does not
+republish the existing release archives. No new release claim is made until the acceptance gates in
 `docs/08_ACCEPTANCE_GATES.md` and the release requirements in `docs/PRODUCT_BACKLOG.md` pass.
 
 ## Requirements

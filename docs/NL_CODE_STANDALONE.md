@@ -8,6 +8,13 @@ commands, NL Chat, and clean process shutdown. macOS/Linux packages are not publ
 available until built and validated on those systems. Evidence:
 `docs/evidence/nlcode/standalone-acceptance-terminal-20261102.json`.
 
+**Local update, 4 November 2026:** the editor Chat and sidebar use the same session runtime and
+VSIX. Acceptance runs the installed extension against the payload's embedded engine, with isolated
+project/data/profile and a dynamically discovered Ollama model. It covers a real promoted mission,
+candidate/oracle checks, specialist handoffs, queued follow-up, Stop/Resume and backend reconnection.
+The unpacked local payload is updated; existing ZIP/Setup release assets are unchanged. Actual
+Windows DPI scaling remains a manual gate; screenshots exercise 1100 and 750 pixel layouts.
+
 ## Purpose
 
 NL Code is the standalone Windows IDE shell for NL Coding Agent. It is a **code-oss application**,

@@ -1,0 +1,17 @@
+{
+  "source_commit": "5f718a8920eda4b3eaba7bf9f419e15df7421616",
+  "engine_files_compared": 146,
+  "vsix_sha256": "b8db882d98315f18ad5e3d80c4c467d5bf3d92eda2c2308f2258e206a577c731",
+  "installed": {
+    "standalone": {
+      "files_compared": 11,
+      "extension": "K:\\AI\\NL Coding Agent\\.workspace\\dist\\NL Code\\data\\extensions\\nlcodingagent.nl-coding-agent-0.7.2"
+    },
+    "insiders": {
+      "files_compared": 11,
+      "extension": "C:\\Users\\Nicola\\.vscode-insiders\\extensions\\nlcodingagent.nl-coding-agent-0.7.2"
+    }
+  },
+  "workbench_binary_rebuilt": false,
+  "release_archives_rebuilt": false
+}

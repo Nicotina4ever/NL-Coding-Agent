@@ -1,0 +1,118 @@
+{
+  "verified_at": "2026-11-04T14:21:58.191948+00:00",
+  "source_commit": "5f718a8920eda4b3eaba7bf9f419e15df7421616",
+  "python_broad": {
+    "passed": 1389,
+    "excluded": [
+      "tests/test_chat_panel.py",
+      "tests/test_recent_ui_regressions.py",
+      "tests/test_gui*"
+    ],
+    "duration_s": 556.4,
+    "command": "python/python.exe -m pytest -q --ignore=tests/test_chat_panel.py --ignore=tests/test_recent_ui_regressions.py --ignore-glob=tests/test_gui* --basetemp=.workspace/temp/session-accepted-final-suite -p no:cacheprovider --tb=short",
+    "environment": {
+      "PATH_prefix": "C:/Program Files/Git/bin",
+      "QT_QPA_PLATFORM": "offscreen",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    },
+    "phase": "Before the final history/specialist checkpoint changes; followed by focused regression gates"
+  },
+  "final_component_matrix": {
+    "passed": 108,
+    "duration_s": 64.58,
+    "files": [
+      "tests/test_session_runtime.py",
+      "tests/test_provider_streaming.py",
+      "tests/test_chat_tools.py",
+      "tests/test_generation_params.py",
+      "tests/test_context_engine.py",
+      "tests/test_flow_resume.py",
+      "tests/test_candidate_verification.py",
+      "tests/test_candidate_verification_node.py",
+      "tests/test_mission_json_cli.py",
+      "tests/test_mcp_engine_converse.py"
+    ],
+    "phase": "After transactional session/mission control fixes, before the final metadata/specialist changes"
+  },
+  "after_history_metadata_fix": {
+    "passed": 26,
+    "duration_s": 7.86,
+    "files": [
+      "tests/test_session_runtime.py",
+      "tests/test_mcp_engine_converse.py"
+    ]
+  },
+  "frontend": {
+    "typescript_noEmit": "PASS",
+    "webview": "PASS",
+    "session_controller": "PASS"
+  },
+  "independent_review": {
+    "verdict": "APPROVE",
+    "includes": [
+      "transactional Stop/Resume",
+      "generation-scoped mission outcome",
+      "atomic initial session creation",
+      "mission/message identities in restored history",
+      "history/diff cards survive reconciliation; late responses discarded",
+      "Stop checkpoints between analysis specialists"
+    ]
+  },
+  "local_fixture_generation": {
+    "num_ctx": 8192,
+    "num_predict": 2048,
+    "temperature": 0,
+    "seed": 42,
+    "inventory": "Ollama /api/tags and /api/show; prefer smallest local coder declaring tools, then other local tool-capable models",
+    "user_settings_changed": false
+  },
+  "pending": [
+    "Actual Windows DPI scaling and prolonged daily use on owner projects",
+    "Fresh installed-Chat run forcing a candidate-introduced failure and debugger repair (automated Flow repair covered; earlier real red-test evidence retained)",
+    "Hard-kill fault injection during tool/promotion from installed UI (durable uncertainty/lease/journal boundaries covered automatically)",
+    "ZIP/Setup regeneration and publication"
+  ],
+  "earlier_extended_failure": {
+    "evidence": ".workspace/temp/session-ui-standalone-1793799437959/evidence.json",
+    "reason": "Unbounded model generation exceeded acceptance deadline. Retained as failed evidence; subsequent isolated fixtures cap output."
+  },
+  "no_stable_release_claim": true,
+  "after_specialist_checkpoint_fix": {
+    "team_session_resume": {
+      "passed": 39,
+      "duration_s": 32.74,
+      "files": [
+        "tests/test_mission_team_plan.py",
+        "tests/test_flow_resume.py",
+        "tests/test_session_runtime.py"
+      ]
+    },
+    "reliability_repair_team": {
+      "passed": 26,
+      "duration_s": 52.18,
+      "files": [
+        "tests/test_execution_reliability.py",
+        "tests/test_flow_repair.py",
+        "tests/test_mission_team_plan.py"
+      ]
+    }
+  },
+  "installed_ui": {
+    "standalone": {
+      "passed": true,
+      "evidence": "standalone.json"
+    },
+    "insiders": {
+      "passed": true,
+      "evidence": "insiders.json"
+    },
+    "standalone-sessions": {
+      "passed": true,
+      "evidence": "standalone-sessions.json"
+    },
+    "insiders-sessions": {
+      "passed": true,
+      "evidence": "insiders-sessions.json"
+    }
+  }
+}

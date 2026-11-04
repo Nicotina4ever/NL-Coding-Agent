@@ -1,6 +1,52 @@
 # NL Chat: agente operativo, contesto, queue, conversazioni
 
-## Problema osservato
+## Runtime condiviso — 4 novembre 2026
+
+NL Chat usa il `SessionRuntime` del motore Python: `session_submit` accetta subito un
+messaggio con `session_id` e `request_id`; `session_snapshot`, `session_events` e
+`session_watch` ricostruiscono conversazione, coda, attività e testo parziale. Gli eventi
+versionati arrivano sul canale MCP `notifications/message`, logger `nl.session`, e sono
+recuperabili per sequenza. `nlc_converse` resta un adapter compatibile; anche la modalità
+senza tool usa lo stesso loop conversazionale.
+
+SQLite conserva turni, coda acquisita dal dispatcher, controlli, collegamento alla missione
+ed eventi. Il frontend conserva anche il payload degli invii non confermati e riusa il
+medesimo request ID dopo reload. Snapshot ed eventi vengono riconciliati senza duplicare
+i frammenti. Il dispatcher mantiene un lock fra processi e una lease; Supervisor e
+MissionFlow continuano a possedere esecuzione, staging, verifiche e promozione.
+
+- Invio durante il lavoro accoda una nuova richiesta. **Intervieni sul lavoro** aggiunge
+  uno steering ordinato, con conferma del destinatario al checkpoint; le indicazioni
+  rimangono disponibili anche a tester e reviewer. Le brevi domande di stato vengono
+  risolte dallo snapshot senza occupare un modello.
+- **Stop** ferma lo stream e richiede l’arresto della missione al checkpoint sicuro;
+  sospende anche il drain della conversazione. **Riprendi** è esplicito. La riconnessione
+  ripristina lo stato senza revocare uno Stop. Un esito tool incerto impedisce il replay.
+- Le richieste naturali di modifica autorizzate delegano al Supervisor. Allegati e un
+  handoff bounded della conversazione raggiungono la missione; il risultato finale viene
+  scritto dal motore anche senza una webview aperta. Il diff è accessibile dalla risposta.
+- Anche i comandi missione espliciti passano dal runtime quando includono la sessione;
+  i vecchi client conservano il contratto. Riprendere una missione conserva la conversazione
+  originaria, applica le opzioni autorizzate e il reset task nella medesima transazione.
+  L’esito viene associato alla generazione di dispatch corrente, evitando risultati obsoleti.
+- La Chat centrale e la vista laterale condividono controller e componenti. Conversazioni
+  e coda sono nel drawer; impostazioni avanzate, modelli e specialisti restano accessibili.
+
+I vecchi JSON vengono importati una sola volta, senza cancellare gli originali. I lavori
+senza associazione certa finiscono in **Ripresa precedente**, sospesi fino a ripresa
+esplicita. Conversazioni con lavoro attivo o accodato non si possono archiviare, eliminare
+o riavvolgere.
+
+Verifiche: suite runtime/session controller/webview, test HTTP NDJSON/SSE, e harness
+`node frontend/test/sessionUiAcceptance.cjs insiders|standalone` con profilo, progetto,
+dati e modello locale isolati. Il gate reale richiede candidate/oracle PASS, reviewer
+APPROVE, promozione e risultato persistito; compilare non soddisfa il gate.
+Il suffisso `sessions` esegue soltanto creazione/cambio conversazione senza inferenza.
+Le prove complete usano un budget di output e un seed nella fixture, senza cambiare
+le impostazioni utente. Evidenze, limiti manuali e fault test pendenti sono nel record
+`docs/evidence/nlcode/session-runtime-20261104/verification.json`.
+
+## Problema osservato (contesto storico)
 
 Il modello Qwen localmente può dichiarare «non posso leggere i file», ma riassume un README quando viene allegato. Questo **non prova** un system prompt restrittivo: il modello può inventare la propria descrizione. La Chat invoca `nlc_converse`; una missione passa da `start_mission` al Supervisor. La connessione a MCP/Ollama da sola non dimostra tool calling agentico nella Chat.
 
