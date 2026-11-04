@@ -91,6 +91,9 @@ def test_explicit_mcp_mission_is_idempotent_and_finishes_in_its_session_without_
     assert calls[0]["developer_model"] == "ollama/developer"
     assert calls[0]["reviewer_model"] == "ollama/reviewer"
     assert rt.snapshot(pid, sid)["messages"][-1]["mission_id"] == mid
+    history = asyncio.run(invoke("chat_history", session_id=sid))
+    assert history["messages"][-1]["mission_id"] == mid
+    assert history["messages"][-1]["id"] == rt.snapshot(pid, sid)["messages"][-1]["id"]
     other = services.create_chat_session(pid, "Other")["id"]
     update_mission_status(mid, "interrupted")
     rt._status(rid, "interrupted", {"reply": "Retained"})

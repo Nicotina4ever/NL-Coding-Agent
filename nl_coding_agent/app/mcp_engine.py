@@ -858,7 +858,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                 row["attachments"] = attachments
             if item.get("attachment_ids"):
                 row["attachment_ids"] = [int(value) for value in item.get("attachment_ids") or []]
-            for key in ("run_id", "model", "provider_id", "automatic"):
+            for key in ("id", "run_id", "mission_id", "status", "request_id", "steering_id", "model", "provider_id", "automatic"):
                 if item.get(key) is not None:
                     row[key] = item.get(key)
             if item.get("tool_activity"):
