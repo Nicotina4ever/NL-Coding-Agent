@@ -51,6 +51,10 @@ async function main() {
     finishHistory({ messages: [{ role: 'assistant', content: 'private A history' }], count: 1, session_id: 'A' });
     await loading;
     assert(!provider.history.some((item) => item.content === 'private A history'), 'late history cannot replace the selected session');
+    const beforeErrors=provider.posted.filter(item=>item.type==='chat').length;
+    provider.reportError(new Error('MCP error -32000: Connection closed'),'connect');
+    provider.reportError(new Error('MCP error -32000: Connection closed'),'connect');
+    assert.strictEqual(provider.posted.filter(item=>item.type==='chat').length,beforeErrors,'startup retries update connection state without flooding the conversation');
     provider.dispose();
     console.log('SESSION-CONTROLLER-TESTS-PASS');
 }

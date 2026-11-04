@@ -263,9 +263,15 @@ export function buildChatHtml(assets: WebviewAssets): string {
                         <input id="specialist-name" type="text" placeholder="agent name" aria-label="Specialist agent name">
                         <select id="specialist-provider" aria-label="Specialist agent provider"></select>
                         <select id="specialist-model" aria-label="Specialist model route"></select>
+                        <select id="specialist-runtime-role" aria-label="Ruolo nella squadra">
+                            <option value="advisor">Advisor</option><option value="architect">Architect</option>
+                            <option value="developer">Developer</option><option value="debugger">Debugger</option>
+                            <option value="reviewer">Reviewer</option><option value="auditor">Auditor</option>
+                        </select>
                         <input id="specialist-role" type="text" placeholder="specialty (e.g. security reviewer)" aria-label="Specialist role">
                     </div>
                     <textarea id="specialist-instructions" rows="3" placeholder="Specialist instructions and boundaries" aria-label="Specialist instructions"></textarea>
+                      <label class="nl-check"><input id="specialist-active" type="checkbox" checked> Usa nella squadra di questo progetto</label>
                     <div class="nl-filter-row nl-check-row">
                         <fieldset id="specialist-tools" class="nl-check-grid">
                             <legend>Tools</legend>

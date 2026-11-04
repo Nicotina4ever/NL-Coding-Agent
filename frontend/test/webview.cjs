@@ -135,6 +135,14 @@ class FakeElement {
         if (index >= 0) { this.children.splice(index, 1); }
         return child;
     }
+    querySelectorAll(selector) {
+        const all = this.children.flatMap((child) => [child, ...child.querySelectorAll('*')]);
+        return selector === '*' ? all : all.filter((child) => selector.startsWith('input') ? child.tagName === 'input' : child.tagName === selector);
+    }
+    querySelector(selector) {
+        const match = selector.match(/^option\[value="(.*)"\]$/);
+        return this.children.find((child) => match ? child.tagName === 'option' && child.value === match[1] : child.tagName === selector) || null;
+    }
     addEventListener(type, listener) {
         if (!this.listeners.has(type)) { this.listeners.set(type, []); }
         this.listeners.get(type).push(listener);
@@ -218,6 +226,12 @@ function testWebviewBehaviour() {
     const imagePaste = posted.find((message) => message.type === 'action' && message.action === 'pasteImage');
     assert(pastePrevented, 'image-only paste is intercepted by the Chat composer');
     assert(imagePaste && imagePaste.payload.imageBase64 === 'cG5n', 'clipboard image is sent to attachment ingestion');
+    for (const drop of documentListeners.get('drop')) {
+        drop({ dataTransfer: { types: ['Files'], files: [{ name: 'AGENTS.md', size: 3 }], getData: () => '' }, preventDefault() {} });
+        drop({ dataTransfer: { types: ['CodeFiles'], files: [], getData: (type) => type === 'CodeFiles' ? '["file:///K:/project/AGENTS.md"]' : '' }, preventDefault() {} });
+    }
+    assert(posted.some((message) => message.action === 'dropFile' && message.payload.name === 'AGENTS.md'), 'OS file drops upload bytes when URI data is absent');
+    assert(posted.some((message) => message.action === 'dropUris' && message.payload.uris[0] === 'file:///K:/project/AGENTS.md'), 'editor Explorer drops decode CodeFiles URIs');
     const input = get('input');
     input.value = '@calc';
     input.setSelectionRange(input.value.length, input.value.length);

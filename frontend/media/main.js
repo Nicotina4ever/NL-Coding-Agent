@@ -475,7 +475,7 @@
             option.value = item.value;
             node.appendChild(option);
         });
-        node.value = selected || '';
+        node.value = selected || (items[0] && items[0].value) || '';
     }
 
     function checkedValues(container) {
@@ -498,8 +498,10 @@
     function fillSpecialist(agent) {
         specialistNameEl.value = agent ? (agent.name || '') : '';
         specialistProviderEl.value = agent ? (agent.provider || 'ollama') : 'ollama';
-        specialistModelEl.value = agent ? (agent.model || '') : '';
+        populateModelSelect(specialistModelEl, modelChoices(specialistProviderEl.value), agent ? (agent.model || '') : '');
         specialistRoleEl.value = agent ? (agent.role || 'assistant') : 'assistant';
+        $('specialist-runtime-role').value = agent ? (agent.role_id || 'advisor') : 'advisor';
+        $('specialist-active').checked = agent ? agent.team_active === true : true;
         specialistInstructionsEl.value = agent ? (agent.instructions || '') : '';
         setCheckedValues(specialistToolsEl, agent ? (agent.tools || []) : []);
         specialistEnabledEl.checked = agent ? agent.enabled !== false : true;
@@ -891,6 +893,7 @@
         if ($('session-resume')) {
             $('session-resume').classList.toggle('hidden', !resumable || current.busyChat);
             $('session-resume').dataset.runId = resumable ? resumable.id : '';
+            $('session-resume').textContent = resumable && ['blocked', 'failed'].includes(resumable.status) ? 'Riprova riparazione' : 'Riprendi';
         }
         if (current.sessionRuns) {
             hintEl.textContent = current.busyPhase === 'stop_requested' ? 'Arresto richiesto · attendo un punto sicuro' :
@@ -1878,6 +1881,7 @@
     function hasFileDrag(event) {
         const types = event.dataTransfer && event.dataTransfer.types;
         return Boolean(types && (Array.prototype.indexOf.call(types, 'Files') >= 0 ||
+            Array.prototype.indexOf.call(types, 'CodeFiles') >= 0 || Array.prototype.indexOf.call(types, 'ResourceURLs') >= 0 ||
             Array.prototype.indexOf.call(types, 'text/uri-list') >= 0));
     }
     document.addEventListener('dragenter', function (event) {
@@ -1900,12 +1904,32 @@
         event.preventDefault();
         dragDepth = 0;
         dropOverlay.classList.add('hidden');
+        const files = Array.from(event.dataTransfer.files || []);
+        if (files.length) {
+            if (files.length > 20 || files.some(function (file) { return file.size > 25 * 1024 * 1024; }) ||
+                files.reduce(function (sum, file) { return sum + file.size; }, 0) > 100 * 1024 * 1024) {
+                showNotice('Massimo 20 file, 25 MiB per file e 100 MiB per trascinamento.');
+                return;
+            }
+            files.forEach(function (file) {
+                const reader = new FileReader();
+                reader.addEventListener('load', function () {
+                    const data = String(reader.result || '');
+                    postAction('dropFile', { name: file.name, fileBase64: data.slice(data.indexOf(',') + 1) });
+                });
+                reader.addEventListener('error', function () { showNotice('Impossibile leggere ' + file.name); });
+                reader.readAsDataURL(file);
+            });
+            return;
+        }
         let text = '';
         try {
-            text = event.dataTransfer.getData('text/uri-list') || event.dataTransfer.getData('text/plain') || '';
+            text = event.dataTransfer.getData('text/uri-list') || event.dataTransfer.getData('CodeFiles') ||
+                event.dataTransfer.getData('ResourceURLs') || event.dataTransfer.getData('text/plain') || '';
         } catch (error) {
             text = '';
         }
+        try { if (text.trim().startsWith('[')) { text = JSON.parse(text).map(String).join('\n'); } } catch (error) { showNotice('Elenco file trascinati non valido.'); return; }
         const uris = text.split(/\r?\n/).map(function (line) {
             return line.trim();
         }).filter(function (line) {
@@ -2044,6 +2068,9 @@
             provider: specialistProviderEl.value,
             model: specialistModelEl.value,
             role: specialistRoleEl.value,
+              role_id: $('specialist-runtime-role').value,
+              project_id: state && state.project && state.project.id,
+              team_active: $('specialist-active').checked,
             instructions: specialistInstructionsEl.value,
             tools: checkedValues(specialistToolsEl),
             enabled: specialistEnabledEl.checked
@@ -2228,7 +2255,7 @@
         }
         group.count += 1;
         const phases = { architect: 'Analisi', auditor: 'Controllo rischi', developer: 'Sviluppo',
-            tester: 'Verifica', reviewer: 'Revisione', debugger: 'Riparazione', scheduler: 'Attesa risorse' };
+            tester: 'Verifica', reviewer: 'Revisione', debugger: 'Riparazione', recovery: 'Riparazione automatica', scheduler: 'Attesa risorse' };
         const phase = event.type === 'mission.status' ? ({ completed: 'Completato', running: 'In esecuzione',
             failed: 'Errore', blocked: 'Richiede intervento', interrupted: 'Interrotto' }[payload.status] || payload.status) : phases[payload.source];
         if (phase) { group.heading.textContent = (payload.mission_id ? 'Missione #' + payload.mission_id + ' · ' : '') + phase; }

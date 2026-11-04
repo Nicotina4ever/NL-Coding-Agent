@@ -9,18 +9,22 @@ const repo = path.resolve(__dirname, '../..');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const host = process.argv[2] || 'standalone';
 const sessionOnly = process.argv[3] === 'sessions';
+const realProject = process.argv[3] === 'real';
+const repairReal = process.argv[3] === 'repair-real';
 const executable = host === 'standalone'
     ? path.join(repo, '.workspace/dist/NL Code/NL Code.exe')
     : path.join(process.env.LOCALAPPDATA, 'Programs/Microsoft VS Code Insiders/Code - Insiders.exe');
-const scratch = path.join(repo, '.workspace/temp', 'session-ui-' + host + (sessionOnly ? '-sessions' : '') + '-' + Date.now());
-const project = path.join(scratch, 'project');
+const scratch = path.join(repo, '.workspace/temp', 'session-ui-' + host + (sessionOnly ? '-sessions' : realProject ? '-real' : repairReal ? '-repair-real' : '') + '-' + Date.now());
+const project = realProject ? path.resolve(process.env.NL_ACCEPTANCE_PROJECT || 'K:/AI/NL_AudioLab') : path.join(scratch, 'project');
 const data = path.join(scratch, 'data');
-const engineRoot = host === 'standalone' ? path.join(path.dirname(executable), 'engine') : repo;
+const sourceEngineRoot = host === 'standalone' ? path.join(path.dirname(executable), 'engine') : repo;
+const engineRoot = repairReal ? path.join(scratch, 'engine') : sourceEngineRoot;
 const profile = host === 'standalone' ? path.join(scratch, 'portable/user-data') : path.join(scratch, 'profile');
 const extensions = path.join(scratch, 'extensions');
 const report = { host, scratch, checks: [], started_at: new Date().toISOString() };
 const env = { ...process.env, NL_DATA_DIR: data, NL_WORKSPACE_DIR: path.join(scratch, 'workspace'),
-    NL_MODELS_CONFIG: path.join(data, 'models.yaml'), NL_ENGINE_ROOT: engineRoot };
+    NL_MODELS_CONFIG: path.join(data, 'models.yaml'), NL_ENGINE_ROOT: engineRoot,
+    ...(repairReal ? { NL_ACCEPTANCE_SOURCE_ROOT: repo, NL_ACCEPTANCE_PROJECT_COPY: project } : {}) };
 delete env.ELECTRON_RUN_AS_NODE;
 delete env.VSCODE_PORTABLE;
 if (host === 'standalone') { env.VSCODE_PORTABLE = path.join(scratch, 'portable'); }
@@ -85,9 +89,10 @@ function db(query) {
     return JSON.parse(result.stdout);
 }
 async function command(text) {
+    await workbench.call('Page.bringToFront');
     await workbench.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'P', code: 'KeyP', modifiers: 10, windowsVirtualKeyCode: 80 });
     await workbench.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'P', code: 'KeyP', modifiers: 10, windowsVirtualKeyCode: 80 });
-    await sleep(500);
+    await waitFor(() => workbench.evaluate('(()=>{const widget=document.querySelector(".quick-input-widget");const input=widget?.querySelector("input");if(!input||!widget.offsetHeight)return false;input.focus();return document.activeElement===input;})()'),10000,'command palette focus');
     await workbench.call('Input.insertText', { text });
     await sleep(400);
     await workbench.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
@@ -96,7 +101,7 @@ async function command(text) {
 
 async function main() {
     assert(fs.existsSync(executable), executable);
-    for (const dir of [project, data, profile, extensions, path.join(project, 'src'), path.join(project, 'tests')]) {
+    for (const dir of [data, profile, extensions, ...(realProject ? [] : [project, path.join(project, 'src'), path.join(project, 'tests')])]) {
         fs.mkdirSync(dir, { recursive: true });
     }
     const inventory = await (await fetch('http://127.0.0.1:11434/api/tags')).json();
@@ -114,18 +119,34 @@ async function main() {
     assert(inventory.models.some((m) => m.name === model), 'an available local model is required');
     report.model = model;
     fs.writeFileSync(path.join(data, 'models.yaml'), 'providers:\n  ollama:\n    kind: ollama\n    enabled: true\n    base_url: http://127.0.0.1:11434\nroles:\n' +
-        ['chat', 'developer', 'reviewer', 'architect', 'debugger'].map((role) => '  ' + role + ':\n    model: ollama/' + model).join('\n') + '\n');
+        ['chat', 'developer', 'reviewer', 'architect', 'debugger'].map((role) => '  ' + role + ':\n    model: ollama/' + (repairReal && role === 'developer' ? 'acceptance-cloud' : model)).join('\n') + '\n');
     const seeded = spawnSync(path.join(repo, 'python/python.exe'), ['-c',
         'import sys; sys.path.insert(0,sys.argv[1]); from nl_coding_agent.models.generation_params import save_params; save_params({"num_ctx":8192,"num_predict":2048,"temperature":0,"seed":42},scope="global")', repo],
         { cwd: repo, env, encoding: 'utf8', windowsHide: true });
     assert.strictEqual(seeded.status, 0, seeded.stderr);
-    fs.writeFileSync(path.join(project, 'README.md'), '# Isolated session acceptance\nPython calculation module. Preserve add and existing tests.\n');
-    fs.writeFileSync(path.join(project, 'src/calc.py'), 'def add(a, b):\n    return a + b\n\nPROJECT_TOKEN = "SESSION-UI-742"\n');
-    fs.writeFileSync(path.join(project, 'tests/test_calc.py'), 'from src.calc import add\n\ndef test_add():\n    assert add(2, 3) == 5\n');
+    if (repairReal) {
+        const original = path.resolve(process.env.NL_ACCEPTANCE_PROJECT || 'K:/AI/NL_AudioLab');
+        fs.mkdirSync(path.join(project,'scripts'),{recursive:true});
+        for (const file of ['scripts/app.py', 'scripts/engine.py', 'AVVIO_CODEX_NL_AudioLab_DRAGON.md']) {
+            fs.copyFileSync(path.join(original, file), path.join(project, file));
+        }
+        report.original_source = path.join(original, 'scripts/app.py');
+        report.original_sha256 = require('crypto').createHash('sha256').update(fs.readFileSync(report.original_source)).digest('hex');
+        fs.writeFileSync(path.join(project, 'README.md'), '# NL AudioLab acceptance copy\nReal PySide6 desktop frontend, audio restoration, MossFormer and FRCRN. Only documentation changes; preserve all definitions.\n');
+        fs.writeFileSync(path.join(project, 'tests/test_app.py'), 'import ast\nfrom pathlib import Path\n\ndef test_paths_documented():\n    tree=ast.parse(Path("scripts/app.py").read_text(encoding="utf-8-sig"))\n    cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=="InputList")\n    method=next(n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name=="paths")\n    assert ast.get_docstring(method)=="Return the selected input paths."\n    assert any(isinstance(n,ast.Return) and isinstance(n.value,ast.ListComp) for n in method.body)\n');
+        fs.mkdirSync(engineRoot, {recursive:true});
+        fs.copyFileSync(path.join(__dirname, 'recoveryEngine.py'), path.join(engineRoot, 'nl_agent.py'));
+        fs.writeFileSync(path.join(engineRoot,'acceptance.json'),JSON.stringify({source:sourceEngineRoot,project}));
+    } else if (!realProject) {
+        fs.writeFileSync(path.join(project, 'README.md'), '# Isolated session acceptance\nPython calculation module. Preserve add and existing tests.\n');
+        fs.writeFileSync(path.join(project, 'src/calc.py'), 'def add(a, b):\n    return a + b\n\nPROJECT_TOKEN = "SESSION-UI-742"\n');
+        fs.writeFileSync(path.join(project, 'tests/test_calc.py'), 'from src.calc import add\n\ndef test_add():\n    assert add(2, 3) == 5\n');
+    }
     const settingsDir = path.join(profile, 'User');
     fs.mkdirSync(settingsDir, { recursive: true });
     fs.writeFileSync(path.join(settingsDir, 'settings.json'), JSON.stringify({
         'nlCodingAgent.engineRoot': engineRoot, 'nlCodingAgent.allowExecution': true,
+        ...(repairReal ? { 'nlCodingAgent.pythonPath': path.join(sourceEngineRoot, 'python/python.exe') } : {}),
         'nlCodingAgent.showHomeOnStartup': false,
         'chat.disableAIFeatures': true,
         'workbench.secondarySideBar.defaultVisibility': 'hidden',
@@ -220,6 +241,85 @@ async function main() {
     }
     const send = (text) => ui('(()=>{document.getElementById("input").value=' + JSON.stringify(text) +
         '; document.getElementById("composer").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true})); return true;})()');
+    if (realProject) {
+        const crypto = require('crypto');
+        const appPath = path.join(project, 'scripts/app.py');
+        const before = crypto.createHash('sha256').update(fs.readFileSync(appPath)).digest('hex');
+        const title = fs.readFileSync(appPath, 'utf8').match(/setWindowTitle\(['"]([^'"]+)['"]\)/)[1];
+        await send('Leggi scripts/app.py con gli strumenti e riporta il titolo esatto della finestra. Non modificare file.');
+        await waitFor(() => db("SELECT * FROM session_runs WHERE status='completed'").length, 180000, 'real project read');
+        assert(db("SELECT content FROM chat_messages WHERE role='assistant'").some((row) => row.content.includes(title)));
+        check('real NL_AudioLab source read and answer matches the actual file');
+        const droppedName = 'AVVIO_CODEX_NL_AudioLab_DRAGON.md';
+        const droppedText = fs.readFileSync(path.join(project, droppedName), 'utf8');
+        await ui('(()=>{const transfer=new DataTransfer();transfer.items.add(new File([' + JSON.stringify(droppedText) + '],' +
+            JSON.stringify(droppedName) + ',{type:"text/markdown"}));document.dispatchEvent(new DragEvent("drop",{bubbles:true,cancelable:true,dataTransfer:transfer}));return true;})()');
+        await waitFor(() => ui('document.body.textContent.includes(' + JSON.stringify(droppedName) + ')'), 20000, 'dropped file attachment');
+        assert(db("SELECT * FROM mission_attachments WHERE name='" + droppedName + "'").length);
+        check('OS-style File drop without URI ingested and displayed in the real composer');
+        await ui('(()=>{document.querySelector("[data-tab=agents]").click();document.getElementById("specialist-generate").click();return true;})()');
+        const enter = async () => {
+            await workbench.call('Input.dispatchKeyEvent', {type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+            await workbench.call('Input.dispatchKeyEvent', {type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+        };
+        await waitFor(() => workbench.evaluate('!!Array.from(document.querySelectorAll(".quick-input-widget")).find(w=>w.offsetHeight&&w.textContent.includes("Modelli della squadra"))'), 30000, 'team model pool');
+        await enter();
+        await waitFor(() => workbench.evaluate('!!Array.from(document.querySelectorAll(".quick-input-widget")).find(w=>w.offsetHeight&&w.textContent.includes("Team Architect model"))'), 10000, 'team analyst picker');
+        await workbench.call('Input.insertText', {text:model});
+        await sleep(300);
+        await enter();
+        const agentsPath = path.join(data, 'custom_agents.json');
+        await waitFor(() => fs.existsSync(agentsPath) && JSON.parse(fs.readFileSync(agentsPath,'utf8')).filter(a=>a.team_active).length>=5, 240000, 'generated active project team');
+        check('Generate Team created and activated all five runtime roles for the real project');
+        await ui('(()=>{document.getElementById("specialist-new").click();return true;})()');
+        const models = await ui('Array.from(document.getElementById("specialist-model").options).map(o=>o.value)');
+        for (const item of inventory.models.filter(m=>!/embed/i.test(m.name))) { assert(models.includes('ollama/'+item.name), 'detected model remains available: '+item.name); }
+        check('all detected generative local and cloud models remain selectable after team save');
+        assert.strictEqual(crypto.createHash('sha256').update(fs.readFileSync(appPath)).digest('hex'), before);
+        report.project = project; report.source_sha256 = before;
+        await capture('real-project-agents');
+        console.log('REAL-PROJECT-UI-ACCEPTANCE-PASS ' + scratch);
+        return;
+    }
+    if (repairReal) {
+        await waitFor(() => ui('document.getElementById("auto-coding").checked'),30000,'authorized automatic coding ready');
+        await send('Modifica scripts/app.py: aggiungi alla funzione InputList.paths la docstring esatta "Return the selected input paths.". Preserva tutte le classi, funzioni e il comportamento esistente. Esegui test e review.');
+        await waitFor(() => db('SELECT * FROM session_runs WHERE mission_id IS NOT NULL').length, 90000, 'real-code mission');
+        await command('View: Close Editor');
+        const mission = await waitFor(() => {
+            const row=db('SELECT * FROM missions ORDER BY id DESC LIMIT 1')[0];
+            if (row && ['blocked','failed','interrupted'].includes(row.status)) {
+                const run=db('SELECT * FROM session_runs WHERE mission_id='+row.id)[0];
+                if (run && ['blocked','failed','interrupted'].includes(run.status)) { throw new Error(JSON.stringify(row)); }
+            }
+            return row?.status==='completed' && row;
+        }, 900000, 'automatic recovery and real-code promotion');
+        report.mission=mission;
+        await waitFor(() => db("SELECT * FROM session_runs WHERE mission_id="+mission.id+" AND status='completed'").length,30000,'mission result persisted with Chat closed');
+        assert.strictEqual(mission.promotion_status,'promoted');
+        assert.strictEqual(mission.review_verdict,'APPROVE');
+        assert.strictEqual(db('SELECT count(*) AS n FROM missions')[0].n,1);
+        assert(fs.existsSync(path.join(data,'injected-internal-failure')));
+        assert(fs.existsSync(path.join(data,'injected-cloud-quota')));
+        assert(db("SELECT * FROM session_events WHERE payload_json LIKE '%Cloud non disponibile%'").length);
+        assert(db("SELECT * FROM session_events WHERE payload_json LIKE '%Riparazione automatica%'").length);
+        assert(db('SELECT * FROM verification_runs WHERE passed=1').length>=2);
+        const agents=JSON.parse(fs.readFileSync(path.join(data,'custom_agents.json'),'utf8')).filter(a=>a.team_active);
+        assert(agents.length>=7,JSON.stringify(agents));
+        assert.strictEqual(require('crypto').createHash('sha256').update(fs.readFileSync(report.original_source)).digest('hex'),report.original_sha256);
+        check('project-specific specialist team created automatically',String(agents.length));
+        check('internal failure repaired automatically on the same mission without Resume');
+        check('simulated cloud quota recovered with an actual dynamically detected local model');
+        check('real-source copy promoted after candidate/oracle PASS and reviewer APPROVE; original unchanged');
+        await waitFor(() => db("SELECT * FROM chat_messages WHERE content LIKE 'Missione #%completed%'").length,30000,'durable closed-UI result');
+        await command('NL Code: Open Chat');
+        await connectWebview();
+        await waitFor(() => ui('document.getElementById("messages").textContent.includes("Missione #1: completed")'),30000,'real-code persisted result');
+        await capture('real-code-recovered');
+        check('verified recovery result restored after Chat reopening');
+        console.log('REAL-CODE-RECOVERY-PASS '+scratch);
+        return;
+    }
     await send('Leggi il file src/calc.py con gli strumenti e dimmi il valore esatto di PROJECT_TOKEN.');
     await waitFor(() => db("SELECT * FROM session_runs WHERE status='completed'").length, 180000, 'read-only Chat turn');
     assert(db("SELECT * FROM tool_invocations WHERE tool_name IN ('read_source','read_file') AND status='completed'").length);

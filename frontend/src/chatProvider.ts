@@ -1038,7 +1038,8 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         const paths: string[] = [];
         for (const raw of uris) {
             try {
-                const uri = vscode.Uri.parse(String(raw).trim());
+                const value = String(raw).trim();
+                const uri = /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('\\\\') ? vscode.Uri.file(value) : vscode.Uri.parse(value);
                 if (uri.scheme === 'file') {
                     paths.push(uri.fsPath);
                 }
@@ -1046,7 +1047,16 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 // ignore malformed URI lines
             }
         }
+        if (!paths.length) { this.postChat('error', 'Nessun file valido nel trascinamento.'); return; }
         await this.attachPaths(paths);
+    }
+
+    async attachDroppedFile(name: string, fileBase64: string): Promise<void> {
+        const result = await this.connection.attachmentIngest({ name, fileBase64 });
+        this.attachments.push(...(result.attachments || []));
+        this.postState();
+        this.post({ type: 'navigate', tab: 'chat' });
+        if (result.errors?.length) { throw new EngineError('drop-attachment', result.errors.map((error) => error.error || String(error)).join('\n')); }
     }
 
     removeAttachment(attachmentId: number): void {
@@ -2223,13 +2233,19 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         this.busyPhase = 'team-planning';
         this.postState();
         try {
-            const settings = this.settings || await this.connection.engineSettings(false);
+            const settings = await this.connection.engineSettings(true);
             this.settings = settings;
             const available = this.modelOptions().filter((option) => option.value);
             if (!available.length) {
                 this.postChat('error', 'Probe at least one model before generating a specialist team.');
                 return;
             }
+            const pool = await vscode.window.showQuickPick(available.map((option) => ({
+                label: option.label, description: option.value, route: option.value,
+                picked: !this.isCloudRoute(option.value)
+            })), { canPickMany: true, title: 'Modelli della squadra',
+                placeHolder: 'Scegli i modelli ammessi, inclusi i cloud. Il fallback locale resta disponibile.' });
+            if (!pool?.length) { return; }
             const analyst = await vscode.window.showQuickPick(
                 available.map((option) => ({
                     label: option.label,
@@ -2247,7 +2263,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 await this.ensureCloudGrant(analyst.route);
             }
             const plan = await this.connection.teamPlan(analyst.route,
-                'Assign the Supervisor runtime roles that best fit this project. Avoid duplicate role assignments.');
+                'Assign all required execution roles and domain advisors appropriate to this project. Use only the selected model pool.', pool.map((item) => item.route));
             const roles = (plan.roles || []).filter((item) => item && item.name);
             if (!roles.length) {
                 this.postChat('error', 'The Team Architect returned no usable roles.');
@@ -2356,10 +2372,11 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         if (agent.model && agent.model.indexOf('/') === -1 && agent.provider) {
             agent.model = agent.provider + '/' + agent.model;
         }
-        const result = await this.connection.saveCustomAgent(agent);
         if (this.isCloudRoute(agent.model || '')) {
             await this.ensureCloudGrant(agent.model || '');
+            if (!this.settings?.permissions?.policy?.cloud) { throw new EngineError('cloud-route-not-authorized', 'Cloud non autorizzato per questo progetto.'); }
         }
+        const result = await this.connection.saveCustomAgent(agent);
         this.settings = await this.connection.engineSettings(false);
         this.postState();
         this.postChat('system', 'Specialist agent saved: ' + result.agent.name + '.');
@@ -2944,6 +2961,9 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                     await this.dropUris(Array.isArray(payload.uris)
                         ? (payload.uris as unknown[]).map((item) => String(item)) : []);
                     break;
+                case 'dropFile':
+                    await this.attachDroppedFile(String(payload.name || 'dropped-file.txt'), String(payload.fileBase64 || ''));
+                    break;
                 case 'removeAttachment':
                     this.removeAttachment(Number(payload.attachmentId));
                     break;
@@ -3351,7 +3371,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         this.errorMessage = detail;
         this.output.appendLine(`[${phase}-error] ${code}: ${detail}`);
         this.post({ type: 'status', state: 'error', label: phase === 'connect' ? 'Engine unavailable' : 'Action failed' });
-        this.postChat('error', detail);
+        if (phase !== 'connect') { this.postChat('error', detail); }
         this.postState();
     }
 

@@ -671,6 +671,7 @@ function contentText(payload: ToolCallPayload): string {
 export class EngineConnection {
     readonly sessionListeners = new Set<(event: SessionEvent) => void>();
     private reconnectTimer?: NodeJS.Timeout;
+    private reconnectAttempts = 0;
     private closing = false;
     private connectionGeneration = 0;
 
@@ -820,11 +821,12 @@ export class EngineConnection {
                 if (this.state === 'ready' || this.state === 'connecting') {
                     this.lastError = this.lastError || 'The NL Coding Engine process closed.';
                     this.setState('failed');
-                    if (!this.closing && !this.reconnectTimer) {
+                    if (!this.closing && !this.reconnectTimer && this.reconnectAttempts < 3) {
+                        const delay = [2000, 5000, 10000][this.reconnectAttempts++];
                         this.reconnectTimer = setTimeout(() => {
                             this.reconnectTimer = undefined;
-                            if (!this.closing) { void this.restart().catch((error) => this.log(String(error))); }
-                        }, 2000);
+                            if (!this.closing) { void this.restart(true).catch((error) => this.log(String(error))); }
+                        }, delay);
                     }
                 }
             };
@@ -840,7 +842,9 @@ export class EngineConnection {
             this.transport = transport;
             this.tools = listed.tools || [];
             this.serverInfo = client.getServerVersion() as { name?: string; version?: string } | undefined;
+            if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = undefined; }
             this.lastError = undefined;
+            this.reconnectAttempts = 0;
             this.setState('ready');
             this.log(
                 `engine ready: ${this.serverInfo?.name || 'unknown'} ${this.serverInfo?.version || ''} · ` +
@@ -887,7 +891,9 @@ export class EngineConnection {
     }
 
     /** Drop the current session and start a new one (workspace folder changed, manual retry). */
-    async restart(): Promise<void> {
+    async restart(automatic = false): Promise<void> {
+        if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = undefined; }
+        if (!automatic) { this.reconnectAttempts = 0; }
         this.closing = true;
         await this.disposeResources();
         this.closing = false;
@@ -1039,6 +1045,7 @@ export class EngineConnection {
         text?: string;
         name?: string;
         imageBase64?: string;
+        fileBase64?: string;
     }): Promise<AttachmentIngestResult> {
         const params: Record<string, unknown> = {};
         if (input.paths && input.paths.length) {
@@ -1050,6 +1057,10 @@ export class EngineConnection {
         }
         if (input.imageBase64) {
             params.image_base64 = input.imageBase64;
+        }
+        if (input.fileBase64 !== undefined) {
+            params.file_base64 = input.fileBase64;
+            params.name = input.name;
         }
         const result = await this.callJson<AttachmentIngestResult>('attachment_ingest', params, 60_000);
         if (!result || typeof result !== 'object') {
@@ -1308,7 +1319,7 @@ export class EngineConnection {
         return this.callJson<{ ok: boolean; agents: CustomAgent[] }>('custom_agents', {}, 30_000);
     }
 
-    async teamPlan(model: string, focus = ''): Promise<{
+    async teamPlan(model: string, focus = '', modelRoutes?: string[]): Promise<{
         ok: boolean; roles?: Array<Record<string, unknown>>; summary?: string;
         analyst_model?: string; fallback?: boolean; analysis_error?: string;
         resources?: Record<string, unknown>;
@@ -1323,7 +1334,7 @@ export class EngineConnection {
             dropped_roles?: Array<Record<string, unknown>>;
             remapped_roles?: Array<Record<string, unknown>>;
             tool_adjustments?: Record<string, string[]>;
-        }>('team_plan', { model, focus }, 240_000);
+        }>('team_plan', { model, focus, ...(modelRoutes ? { model_routes: modelRoutes } : {}) }, 240_000);
     }
 
     async assignSpecialistTeam(roles: Array<Record<string, unknown>>): Promise<{
