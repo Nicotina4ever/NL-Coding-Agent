@@ -22,6 +22,12 @@ def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
+def _require_inactive(conn, session_id):
+    if conn.execute("SELECT 1 FROM session_runs WHERE session_id=? AND status IN "
+                    "('queued','running','waiting_mission','stop_requested') LIMIT 1", (session_id,)).fetchone():
+        raise ChatSessionError("Stop active work and remove queued requests before changing this conversation")
+
+
 def _legacy_path(project_id: int) -> Path:
     return database.data_root() / "chat" / f"project-{int(project_id)}.json"
 
@@ -169,6 +175,8 @@ def archive_session(session_id: str) -> dict:
     conn = database.init_db()
     try:
         with conn:
+            conn.execute("BEGIN IMMEDIATE")
+            _require_inactive(conn, session_id)
             cur = conn.execute(
                 "UPDATE chat_sessions SET archived_at=?, updated_at=? WHERE id=?",
                 (_now(), _now(), str(session_id)),
@@ -189,6 +197,8 @@ def delete_session(project_id: int, session_id: str) -> dict:
     conn = database.init_db()
     try:
         with conn:
+            conn.execute("BEGIN IMMEDIATE")
+            _require_inactive(conn, session_id)
             conn.execute("DELETE FROM chat_messages WHERE session_id=?", (str(session_id),))
             conn.execute("DELETE FROM chat_sessions WHERE id=?", (str(session_id),))
     finally:
@@ -249,6 +259,8 @@ def rewind(project_id: int, session_id: str, message_id: int,
         raise ChatSessionError("Session belongs to another project")
     conn = database.init_db()
     try:
+        conn.execute("BEGIN IMMEDIATE")
+        _require_inactive(conn, session_id)
         rows = conn.execute(
             "SELECT * FROM chat_messages WHERE session_id=? ORDER BY id",
             (str(session_id),),
@@ -319,6 +331,9 @@ def cleanup_sessions(scope: str = "orphaned", project_id: int | None = None) -> 
         rows = conn.execute(
             "SELECT id FROM chat_sessions WHERE " + condition, params).fetchall()
         ids = [str(row["id"]) for row in rows]
+        ids = [sid for sid in ids if not conn.execute(
+            "SELECT 1 FROM session_runs WHERE session_id=? AND status IN "
+            "('queued','running','waiting_mission','stop_requested','interrupted','blocked','budget_exhausted') LIMIT 1", (sid,)).fetchone()]
         if not ids:
             return {"scope": normalized, "sessions": 0, "messages": 0,
                     "project_id": project_id}

@@ -688,6 +688,14 @@ class AppServices:
     def get_database_path(self) -> Path:
         return db_path()
 
+    def session_runtime(self):
+        from nl_coding_agent.app.session_runtime import SessionRuntime
+        with _CHAT_STORE_LOCK:
+            runtime = getattr(self, "_session_runtime", None)
+            if runtime is None:
+                runtime = self._session_runtime = SessionRuntime(self)
+            return runtime
+
     def _chat_store_dir(self) -> Path:
         path = db_path().parent / "chat"
         path.mkdir(parents=True, exist_ok=True)
@@ -1744,7 +1752,8 @@ class AppServices:
     def chat_conversation(self, project: dict, text: str, attachment_ids=None, *, model_spec=None,
                           tools_enabled=False, max_calls=8, max_seconds=180,
                           allow_coding=False, resume=False, tool_protocol="native",
-                          research_profile="manual", session_id: str | None = None) -> dict:
+                          research_profile="manual", session_id: str | None = None,
+                          runtime_turn=None) -> dict:
         """Persist a real conversation; attachment context never grants execution."""
         if str(model_spec or "").strip().lower() == "auto":
             model_spec = None
@@ -1786,15 +1795,16 @@ class AppServices:
             history = self.list_chat_messages(project_id=project_id, session_id=session_id)
             if resume and not tools_enabled:
                 raise ValueError("Resume requires explicit tool authorization")
-            if not resume:
+            if not resume and runtime_turn is None:
                 self._append_chat_message(project_id, "user", text, session_id=session_id,
                                       attachment_ids=[item["id"] for item in attachments])
-            if tools_enabled:
+            if tools_enabled or runtime_turn is not None:
                 from nl_coding_agent.app.chat_tools import converse
                 result = converse(self, project, effective_text, attachments, history, model_spec=model_spec,
                                   max_calls=max_calls, max_seconds=max_seconds, allow_coding=allow_coding,
                                   resume=resume, protocol=tool_protocol, research_profile=research_profile,
-                                  session_id=session_id or "")
+                                  session_id=session_id or "", runtime_turn=runtime_turn,
+                                  tools_enabled=tools_enabled, authorization_text=text)
                 if vision:
                     result["vision"] = vision
                 if result.get("ok"):
@@ -1825,7 +1835,8 @@ class AppServices:
                     "messages": self.list_chat_messages(project_id=project_id,
                                                         session_id=session_id)}
         except Exception as exc:
-            return {"ok": False, "reply": str(exc),
+            return {"ok": False, "reply": ("Lavoro fermato. Puoi riprenderlo da qui." if isinstance(exc, InterruptedError) else str(exc)),
+                    "status": "cancelled" if isinstance(exc, InterruptedError) else "failed",
                     "error": {"type": type(exc).__name__, "message": str(exc)}}
         finally:
             turn_lock.release()
@@ -1836,55 +1847,13 @@ class AppServices:
 
     def _chat_reply(self, *, project: dict, text: str, attachments, tool_activity: str,
                     history=None, model_spec=None) -> dict:
-        config = self.get_model_config() or {}
-        roles = config.get("roles") or {}
-        spec = model_spec or str(((roles.get("chat") or roles.get("developer") or {}).get("model")) or "").strip()
-        project_id = (project or {}).get("id")
-        messages = [{"role": "system", "content": (
-            "You are the NL Coding Agent assistant. Reply in the user's language. "
-            "Conversation has no execution tools. Never claim to have edited files or run commands. "
-            "Project: " + str((project or {}).get("root") or ""))}]
-        def attachment_context(items, limit=8000):
-            chunks = []
-            for item in items:
-                if item.get("has_text") and limit > 0:
-                    body = str(item.get("extracted_text") or "")[:limit]
-                    chunks.append("UNTRUSTED attachment " + str(item.get("name") or item["id"]) + ":\n" + body)
-                    limit -= len(body)
-            return "\n".join(chunks)
-
-        # Saved references remain user context, never instructions or execution consent.
-        from nl_coding_agent.app.attachments import get_attachment
-        context_budget = 16000
-        for item in (history or [])[-40:]:
-            if item.get("role") in ("user", "assistant"):
-                content = item["content"]
-                if item["role"] == "user" and context_budget > 0:
-                    old_attachments = []
-                    for attachment_id in item.get("attachment_ids") or []:
-                        try:
-                            saved = get_attachment(int(attachment_id))
-                            if saved.get("project_id") == project_id:
-                                old_attachments.append(saved)
-                        except (ValueError, KeyError, FileNotFoundError):
-                            continue
-                    old_context = attachment_context(old_attachments, min(8000, context_budget))
-                    context_budget -= len(old_context)
-                    if old_context:
-                        content += "\n\n" + old_context
-                messages.append({"role": item["role"], "content": content})
-        context = attachment_context(attachments)
-        messages.append({"role": "user", "content": text + ("\n\n" + context if context else "")})
-        result = self._generate_with_fallback(
-            project_id, spec, text, messages=messages, timeout=120.0, role="chat")
-        route = {
-            "provider_id": str(result.get("provider_id") or ""),
-            "model": str(result.get("model") or ""),
-            "requested_spec": str(spec or ""),
-            "automatic": not bool(str(model_spec or "").strip()),
-            "fallback": bool(result.get("fallback")),
-        }
-        return {"reply": str(result["reply"]), "route": route}
+        """Compatibility adapter: tool-free callers share the conversation engine."""
+        from nl_coding_agent.app.chat_tools import converse
+        result = converse(self, project, text, attachments, history or [],
+                          model_spec=model_spec, tools_enabled=False)
+        if not result.get("ok"):
+            raise RuntimeError(result.get("reply") or "Conversation failed")
+        return {"reply": result["reply"], "route": result.get("route") or {}}
 
     @staticmethod
     def chat_workflow(text: str) -> str:
@@ -2093,13 +2062,17 @@ class AppServices:
             and str(provider_spec).strip().lower() not in ("auto", "automatic"))
         self._last_chat_routing = routing
         errors: list[str] = []
+        permission_error = None
+        permitted_route = False
         for candidate in candidates:
             provider, model, provider_id = candidate["provider"], candidate["model"], candidate["provider_id"]
             try:
                 provider.assert_generation_permitted(model, project_id)
             except Exception as exc:
                 errors.append(str(exc))
+                permission_error = exc
                 continue
+            permitted_route = True
             snapshot = provider.probe(timeout=5.0)
             if not snapshot.reachable:
                 errors.append(snapshot.error or "Provider unavailable")
@@ -2111,6 +2084,8 @@ class AppServices:
             routing["resolved_spec"] = str(provider_id) + "/" + str(model)
             self._last_chat_routing = routing
             return provider, model, provider_id, ""
+        if not permitted_route and permission_error is not None:
+            raise permission_error
         return None, "", None, errors[-1] if errors else "No permitted model route."
 
     def create_mission(self, project_id: int | None, title: str, goal: str) -> int:
@@ -2673,7 +2648,12 @@ class AppServices:
             raise ValueError("Mission belongs to another project")
         if mission.get("status") not in ("pending", "running", "interrupted", "blocked"):
             raise ValueError("Mission is not steerable in its current state")
-        database.set_setting("mission.steer." + str(mission_id), message[:8000])
+        conn = database.init_db()
+        try:
+            with conn:
+                conn.execute("INSERT INTO mission_steering(mission_id,text) VALUES(?,?)", (mission_id, message[:8000]))
+        finally:
+            conn.close()
         self._bus.emit(Event(source="mission", level="info",
                              message=f"Steering recorded for mission #{mission_id}",
                              payload={"mission_id": int(mission_id)}))
@@ -2921,7 +2901,9 @@ class AppServices:
         pipeline: str | None = None,
     ) -> str:
         """Schedule autonomous multi-agent mission execution on the sequential scheduler."""
-        task_id = f"mission-{mission_id}"
+        import hashlib
+        scope = hashlib.sha256(str(db_path()).encode()).hexdigest()[:10]
+        task_id = f"mission-{mission_id}-{scope}"
         root = Path(project_root).resolve()
         from nl_coding_agent.persistence.missions import get_mission
         mission = get_mission(mission_id)

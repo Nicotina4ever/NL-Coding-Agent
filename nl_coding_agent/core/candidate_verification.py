@@ -308,6 +308,8 @@ def run_node_suite(
     try:
         proc = subprocess.run(
             "npm test",
+            stdin=subprocess.DEVNULL,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
             cwd=str(copy_root),
             env=scrubbed_env(data_dir),
             capture_output=True,
@@ -399,6 +401,8 @@ def run_suite(
     try:
         proc = subprocess.run(
             command,
+            stdin=subprocess.DEVNULL,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
             cwd=str(copy_root),
             env=scrubbed_env(data_dir),
             capture_output=True,

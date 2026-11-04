@@ -489,24 +489,25 @@ def reset_interrupted_tasks(mission_id: int) -> list[int]:
         return ids
 
 
-def reset_tasks_from(mission_id: int, task_id: int) -> list[int]:
+def reset_tasks_from(mission_id: int, task_id: int, *, connection=None) -> list[int]:
     """Reset one task and every later task to pending for an explicit retry."""
+    if connection is None:
+        with _db() as conn, conn:
+            return reset_tasks_from(mission_id, task_id, connection=conn)
     now = _now()
-    with _db() as conn:
-        rows = conn.execute(
-            "SELECT id FROM tasks WHERE mission_id=? AND id>=? ORDER BY id",
-            (int(mission_id), int(task_id)),
-        ).fetchall()
-        ids = [int(r["id"]) for r in rows]
-        if ids:
-            with conn:
-                conn.execute(
-                    "UPDATE tasks SET status='pending', last_error=NULL, "
-                    "started_at=NULL, finished_at=NULL, updated_at=? "
-                    f"WHERE id IN ({','.join('?' for _ in ids)})",
-                    (now, *ids),
-                )
-        return ids
+    rows = connection.execute(
+        "SELECT id FROM tasks WHERE mission_id=? AND id>=? ORDER BY id",
+        (int(mission_id), int(task_id)),
+    ).fetchall()
+    ids = [int(r["id"]) for r in rows]
+    if ids:
+        connection.execute(
+            "UPDATE tasks SET status='pending', last_error=NULL, "
+            "started_at=NULL, finished_at=NULL, updated_at=? "
+            f"WHERE id IN ({','.join('?' for _ in ids)})",
+            (now, *ids),
+        )
+    return ids
 
 
 def record_task_attempt(

@@ -162,6 +162,64 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 CREATE INDEX IF NOT EXISTS idx_chat_messages_session
     ON chat_messages(session_id, id);
 
+CREATE TABLE IF NOT EXISTS session_runs (
+    id TEXT PRIMARY KEY,
+    project_id INTEGER NOT NULL,
+    session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    request_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued',
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    state_json TEXT NOT NULL DEFAULT '{}',
+    result_json TEXT NOT NULL DEFAULT '{}',
+    mission_id INTEGER,
+    stop_requested INTEGER NOT NULL DEFAULT 0,
+    ordering INTEGER NOT NULL DEFAULT 0,
+    owner TEXT,
+    lease_until REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(session_id, request_id)
+);
+CREATE INDEX IF NOT EXISTS idx_session_runs_project ON session_runs(project_id, status, ordering);
+CREATE TABLE IF NOT EXISTS session_events (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    run_id TEXT,
+    type TEXT NOT NULL,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_session_events_cursor ON session_events(session_id, seq);
+CREATE TABLE IF NOT EXISTS session_controls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL REFERENCES session_runs(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    text TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    consumed_by TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS session_dispatchers (
+    project_id INTEGER PRIMARY KEY,
+    owner TEXT NOT NULL,
+    lease_until REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS session_pauses (
+    session_id TEXT PRIMARY KEY REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    reason TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS session_control_receipts (
+    control_id INTEGER NOT NULL REFERENCES session_controls(id) ON DELETE CASCADE,
+    stage TEXT NOT NULL,
+    PRIMARY KEY(control_id, stage)
+);
+CREATE TABLE IF NOT EXISTS mission_steering (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mission_id INTEGER NOT NULL REFERENCES missions(id) ON DELETE CASCADE,
+    text TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS chat_checkpoints (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id   TEXT NOT NULL,

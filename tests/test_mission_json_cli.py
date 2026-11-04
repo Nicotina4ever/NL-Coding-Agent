@@ -50,7 +50,7 @@ def test_json_cli_returns_evidence_from_real_verification(project, monkeypatch, 
     assert summary["models"] == {"developer": "ollama/chosen-dev", "reviewer": "ollama/chosen-review",
                                   "debug": "ollama/chosen-debug"}
     assert seen == ["ollama/chosen-dev", "ollama/chosen-review"]
-    evidence = json.loads(Path(summary["artifacts"]["evidence"]).read_text())
+    evidence = json.loads(Path(summary["artifacts"]["evidence"]).read_text(encoding="utf-8"))
     assert "def subtract" in evidence["result"]["mission_diff"]
     assert len(evidence["verification_runs"]) == 2
     assert "Verbose model output" in Path(summary["artifacts"]["log"]).read_text()

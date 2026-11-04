@@ -67,6 +67,42 @@ def test_ordinary_question_does_not_discover_or_invoke(chat, monkeypatch):
     assert services.list_missions(project["id"]) == []
 
 
+@pytest.mark.parametrize("text", [
+    "Scrivi una spiegazione del testing. Non modificare file e non usare strumenti.",
+    "Write an explanation of the code. Do not modify files.",
+    "Spiega questo codice, non toccare i sorgenti.",
+])
+def test_prose_or_explicit_read_only_request_cannot_start_a_mission(chat, text):
+    services, project, run = chat
+    def answer(tools):
+        assert "start_coding" not in {item["function"]["name"] for item in tools}
+        return {"content": "Spiegazione senza modifiche."}
+    result, _ = run([answer], text=text, allow_coding=True)
+    assert result["ok"]
+    assert not services.list_missions(project["id"])
+
+
+def test_scoped_no_edit_constraint_keeps_the_positive_coding_request():
+    from nl_coding_agent.app.chat_tools import explicitly_read_only, looks_like_coding_request
+    text = "Aggiungi subtract in src/calc.py. Non modificare i file di test."
+    assert not explicitly_read_only(text)
+    assert looks_like_coding_request(text)
+    assert explicitly_read_only("Analizza il progetto. Non modificare nessun file.")
+
+
+def test_explicit_no_tools_and_xml_draft_must_end_in_a_real_answer(chat):
+    services, project, run = chat
+    def xml_draft(tools):
+        assert tools == []
+        return {"content": "<tool_call><function=read_file><parameter=path>calc.py</parameter></function></tool_call>"}
+    result, provider = run([xml_draft, {"content": "Il testing verifica il comportamento del software."}],
+                           text="Scrivi una spiegazione del testing. Non usare strumenti.", allow_coding=True)
+    assert result["ok"] and "testing" in result["reply"]
+    assert "<tool_call>" not in result["reply"]
+    assert len(provider.requests) == 2
+    assert not services.list_missions(project["id"])
+
+
 def test_new_session_continuity_uses_persisted_digest(chat, monkeypatch):
     """A new Chat session continues from the persisted digest of earlier work."""
     services, project, run = chat

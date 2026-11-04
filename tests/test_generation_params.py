@@ -64,7 +64,9 @@ def test_make_llm_omits_context_until_explicitly_configured(db, monkeypatch):
                    scope="role", role="developer")
     orchestrator._make_llm("ollama/qwen3.5:9b", role="developer")
     assert recorded["temperature"] == 0.2
-    assert recorded["extra_body"] == {"options": {"top_k": 20, "num_ctx": 16384}}
+    assert recorded["top_k"] == 20
+    assert recorded["num_ctx"] == 16384
+    assert "extra_body" not in recorded
 
 
 def test_make_llm_resolves_custom_provider_route_and_keeps_project_access_gate(
@@ -128,3 +130,38 @@ def test_ollama_provider_omits_context_until_configured(db, monkeypatch):
                    scope="role", role="chat")
     provider.chat_turn("qwen3.5:9b", [{"role": "user", "content": "hi"}], [])
     assert captured["options"] == {"temperature": 0.2, "top_k": 10, "num_ctx": 32768}
+
+
+def test_crewai_ollama_context_override_reaches_the_http_request(db, monkeypatch):
+    import json
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from nl_coding_agent.agents.orchestrator import _make_llm
+    from nl_coding_agent.models import model_config_store
+    requests = []
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+        def do_POST(self):
+            requests.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
+            body = json.dumps({"model": "test", "message": {"role": "assistant", "content": "ok"},
+                               "done": True, "prompt_eval_count": 2, "eval_count": 1}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_port}"
+    monkeypatch.setattr(model_config_store, "load", lambda *a, **kw: {"providers": {"ollama": {"base_url": base}}})
+    gp.save_params({"num_ctx": 8192}, scope="global")
+    try:
+        llm = _make_llm("ollama/test", role="developer")
+        assert llm.call([{"role": "user", "content": "hi"}]) == "ok"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(3)
+    assert requests and requests[0]["options"]["num_ctx"] == 8192

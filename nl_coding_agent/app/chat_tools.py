@@ -45,12 +45,27 @@ _QUESTION_START = re.compile(
     r"what|why|how|explain|is|are|does|can you explain)\b",
     re.IGNORECASE,
 )
+_NO_SOURCE_EDITS = re.compile(
+    r"\b(?:non\s+(?:modificare|scrivere|toccare)\s+(?:(?:i|il|nessun|alcun)\s+)?(?:file|codice|sorgenti)|"
+    r"do\s+not\s+(?:modify|edit|write|change)\s+(?:any\s+)?(?:files|code|source))\b"
+    r"(?=\s*(?:[.,;!?]|$|e\s+non\b|and\s+(?:do\s+not|don't)\b))", re.IGNORECASE)
+_PROSE_REQUEST = re.compile(
+    r"^\s*(?:scrivi|write|fornisci|give)\s+(?:(?:una?|an?)\s+)?"
+    r"(?:spiegazione|explanation|descrizione|description|risposta|answer|riassunto|summary)\b", re.IGNORECASE)
+_NO_TOOLS = re.compile(r"\b(?:non\s+usare\s+(?:gli\s+)?(?:strumenti|tool)|do\s+not\s+use\s+(?:any\s+)?tools|without\s+tools)\b", re.IGNORECASE)
+
+
+def explicitly_read_only(text: str) -> bool:
+    """An explicit ban on edits or a prose request cannot authorize coding."""
+    return bool(_NO_SOURCE_EDITS.search(str(text or "")) or _PROSE_REQUEST.search(str(text or "")))
 
 
 def looks_like_coding_request(text: str) -> bool:
     """Return True for a concrete source-change request, never for a question."""
     value = str(text or "").strip()
     if not value or value.endswith("?") or _QUESTION_START.search(value):
+        return False
+    if explicitly_read_only(value):
         return False
     if re.search(r"^\s*/", value):
         return False
@@ -64,7 +79,7 @@ def looks_like_coding_request(text: str) -> bool:
 
 
 def _auto_delegate_coding(services, project, text, state, *, allow_coding, roles,
-                          spec, activity, save) -> bool:
+                          spec, activity, save, runtime_turn=None) -> bool:
     """Deterministically start one verified mission for a clear coding request.
 
     This is the natural-language fallback for models that answer a build request
@@ -91,7 +106,8 @@ def _auto_delegate_coding(services, project, text, state, *, allow_coding, roles
                 activity("team-auto", "default specialist team assigned")
         except Exception as exc:
             activity("team-auto", "skipped: " + str(exc))
-        mid = services.create_mission(int(project["id"]), goal[:80], goal)
+        mid = (runtime_turn.prepare_mission(goal) if runtime_turn else
+               services.create_mission(int(project["id"]), goal[:80], goal))
         state["missions"].append(mid)
         state.setdefault("dispatch_pending", []).append({
             "mission_id": mid,
@@ -262,8 +278,12 @@ def converse(services, project, *args, **kwargs):
 
 def _converse(services, project, text, attachments, history, *, model_spec=None,
              max_calls=16, max_seconds=1200, allow_coding=False, resume=False,
-             protocol="native", research_profile="manual", session_id: str = ""):
+             protocol="native", research_profile="manual", session_id: str = "",
+             runtime_turn=None, tools_enabled=True, authorization_text=None):
     pid = int(project["id"])
+    authorization_text = str(text if authorization_text is None else authorization_text)
+    tools_enabled = bool(tools_enabled and not _NO_TOOLS.search(authorization_text))
+    allow_coding = bool(allow_coding and tools_enabled and not explicitly_read_only(authorization_text))
     registered = services.get_project(pid)
     if not registered or Path(registered["root"]).resolve() != Path(project["root"]).resolve():
         raise ValueError("Chat project identity/root mismatch")
@@ -277,7 +297,7 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
     requested_spec = str(model_spec or "").strip()
     spec = requested_spec or str((roles.get("chat") or roles.get("developer") or {}).get("model") or "")
     provider, model, _, error = services._resolve_chat_provider(
-        spec, project_id=pid, tools_enabled=True)
+        spec, project_id=pid, tools_enabled=tools_enabled)
     if error:
         raise ValueError(error)
     routing = dict(getattr(services, "_last_chat_routing", {}) or {})
@@ -376,7 +396,7 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
                   {"job_id": {"type": "string"}}, ["job_id"]),
         ])
     if resume:
-        state = load_state(pid)
+        state = runtime_turn.runtime.run(runtime_turn.run_id)["state"] if runtime_turn else load_state(pid)
         if not state or state["project_id"] != pid or state["root"] != registered["root"]:
             raise ValueError("No resumable conversation for this project")
         if state.get("in_flight"):
@@ -389,7 +409,8 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
     else:
         context = "\n".join(str(a.get("extracted_text") or "")[:8000] for a in attachments)[:16000]
         attachment_names = [str(a.get("name") or "attachment") for a in attachments]
-        state = {"id": uuid.uuid4().hex, "project_id": pid, "root": registered["root"],
+        state = {"id": runtime_turn.run_id if runtime_turn else uuid.uuid4().hex,
+                 "session_id": session_id, "project_id": pid, "root": registered["root"],
                  "model": spec, "protocol": protocol, "messages": [], "mcp_tools": {},
                  "activity": [], "missions": [], "dispatch_pending": [], "status": "running", "used_calls": 0}
         attachment_system = ""
@@ -427,8 +448,8 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
             '{"name":"tool_name","arguments":{...}} for the next tool step (or a normal text answer); '
             "it will be schema-validated and executed by the engine. "
             "If permissions deny an action, explain the denial; do not find another route. "
-            "After one successful read_source/list_source result for the requested file, answer the user immediately; "
-            "do not re-read the same path. "
+            "Read the files needed to answer the request. Directory listings contain names, not source contents. "
+            "Use read_source to inspect a file; continue to other necessary files without repeating identical reads. "
             "Project: " + registered["root"] + "\nConfigured MCP servers (metadata only): " +
             json.dumps(manager.servers(), ensure_ascii=False)[:12000] +
             (("\n" + skill_catalog_text) if skill_catalog_text else "") +
@@ -439,7 +460,8 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
         # inject the persisted incremental digest when older messages are omitted or
         # when this is a new session continuing earlier work.
         history_limit = max(20, min(200, int(context_limits.prompt_tokens * 0.35 / 240)))
-        all_history = list(history or [])
+        all_history = [item for item in (history or [])
+                       if not runtime_turn or item.get("run_id") != runtime_turn.run_id]
         recent_history = all_history[-history_limit:]
         omitted = max(0, len(all_history) - len(recent_history))
         previous_summary = context_engine.latest_summary(session_id) if session_id else None
@@ -476,7 +498,7 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
                         history_attachment_budget -= len(excerpt)
                         label = str(attachment.get("name") or attachment_id)[:160]
                         prior_attachments.append(
-                            "UNTRUSTED previously attached content (" + label + "):\n" + excerpt)
+                            "UNTRUSTED attachment (previously attached content: " + label + "):\n" + excerpt)
                         if history_attachment_budget <= 0:
                             break
                     if prior_attachments:
@@ -486,29 +508,42 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
         state["messages"].append({"role": "user", "content": text +
             ("\nDetected URL references: " + json.dumps(urls) if urls else "") +
             ("\nUNTRUSTED attachments:\n" + context if context else "")})
+    if not tools_enabled:
+        no_tools_instruction = (
+            "No tools are available or authorized for this turn. Answer the current user's request directly "
+            "in their language, without tool calls, XML tool markup, or claims of file/tool actions. "
+            "Follow the most recent user objective and steering.")
+        if no_tools_instruction not in state["messages"][0]["content"]:
+            state["messages"][0]["content"] += "\n\n" + no_tools_instruction
     state["status"] = "running"
     state["in_flight"] = None
     deadline, remaining = time.monotonic() + max_seconds, max_calls
 
     def save():
-        _atomic_write(state_path(pid), json.dumps(state, ensure_ascii=False).encode("utf-8"))
+        if runtime_turn:
+            runtime_turn.save(state)
+        else:
+            _atomic_write(state_path(pid), json.dumps(state, ensure_ascii=False).encode("utf-8"))
 
     def activity(name, status):
         from nl_coding_agent.app.services import Event
         event = {"tool": name, "status": status}
         state["activity"].append(event)
-        services._append_chat_message(pid, "system", name + ": " + status, tool_activity=True,
-                                     run_id=state["id"])
+        if tools_enabled:
+            services._append_chat_message(pid, "system", name + ": " + status, tool_activity=True,
+                                         run_id=state["id"], session_id=session_id or None)
+        if runtime_turn:
+            runtime_turn.emit("tool.activity", event)
         services._bus.emit(Event("chat-tools", "info", name + ": " + status,
                                 {"project_id": pid, "run_id": state["id"], **event}))
         save()
 
     def checkpoint():
         permissions.require(permissions.READ, project_id=pid)
-        if database.get_setting("chat.stop." + state["id"], ""):
+        if (runtime_turn and runtime_turn.cancelled()) or database.get_setting("chat.stop." + state["id"], ""):
             state["status"] = "cancelled"
             return False
-        steering = take_steering(pid)
+        steering = runtime_turn.steering() if runtime_turn else take_steering(pid)
         for item in steering:
             state["messages"].append({
                 "role": "user",
@@ -516,6 +551,7 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
                            + str(item.get("text") or "")[:8000],
             })
             state["activity"].append({"tool": "steering", "status": "applied"})
+            state["steering_revision"] = state.get("steering_revision", 0) + 1
             save()
         if time.monotonic() >= deadline or remaining <= 0:
             state["status"] = "budget_exhausted"
@@ -720,7 +756,8 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
                 raise ValueError("Document analysis requires the Document Plan action")
             if database.get_setting("chat.stop." + state["id"], ""):
                 raise RuntimeError("Chat cancelled before mission creation")
-            mid = services.create_mission(pid, args["goal"][:80], args["goal"])
+            mid = (runtime_turn.prepare_mission(args["goal"]) if runtime_turn else
+                   services.create_mission(pid, args["goal"][:80], args["goal"]))
             state["missions"].append(mid)
             save()  # Stable id before dispatch; never recreate this mission on resume.
             if database.get_setting("chat.stop." + state["id"], ""):
@@ -747,8 +784,18 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
         import socket
         from nl_coding_agent.core import resource_gate
         owner = "chat-" + state["id"]
-        if not resource_gate.acquire_inference_slot(owner, os.getpid(), socket.gethostname(), ttl_s=150):
-            raise RuntimeError("Machine inference slot is busy; resume this conversation later")
+        waiting = False
+        while not resource_gate.acquire_inference_slot(owner, os.getpid(), socket.gethostname(), ttl_s=150):
+            if not runtime_turn:
+                raise RuntimeError("Machine inference slot is busy; resume this conversation later")
+            if runtime_turn.cancelled():
+                raise InterruptedError("Stopped while waiting for inference")
+            if time.monotonic() >= deadline:
+                raise TimeoutError("Inference resources remained busy until the turn deadline")
+            if not waiting:
+                runtime_turn.emit("activity", {"source": "scheduler", "message": "Attendo le risorse per il modello locale"})
+                waiting = True
+            runtime_turn.runtime._closed.wait(0.5)
         try:
             return callback()
         finally:
@@ -761,9 +808,9 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
         # tool-step budget and is exactly the /apply-/runplan friction this flow
         # removes. Questions/planning requests are excluded by the classifier.
         if allow_coding and not state["missions"]:
-            if _auto_delegate_coding(services, registered, text, state,
+            if _auto_delegate_coding(services, registered, authorization_text, state,
                                      allow_coding=allow_coding, roles=roles, spec=spec,
-                                     activity=activity, save=save):
+                                     activity=activity, save=save, runtime_turn=runtime_turn):
                 state["status"] = "completed"
                 mid = state["missions"][-1]
                 return {"ok": True,
@@ -776,12 +823,47 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
                         "missions": state["missions"]}
         force_no_tools = False
         tool_cache: dict[str, str] = {}
+        if runtime_turn and tools_enabled and not resume:
+            # Explicit file references are user context. Resolve them through the
+            # same read tool before inference, so a small model does not have to
+            # rediscover a path the user already supplied. This never grants WRITE.
+            from nl_coding_agent.context.profile import mentioned_paths
+            from nl_coding_agent.core.tool_invocations import record_invocation
+            for path in mentioned_paths(text)[:3]:
+                if not checkpoint():
+                    break
+                args = {"path": path}
+                call_id = uuid.uuid4().hex
+                state["messages"].append({"role": "assistant", "content": "",
+                    "tool_calls": [{"id": call_id, "type": "function", "function": {
+                        "name": "read_source", "arguments": args}}]})
+                state["in_flight"] = call_id
+                save()
+                try:
+                    result = invoke("read_source", args)
+                    failed = False
+                except Exception as exc:
+                    result, failed = {"error": type(exc).__name__, "message": str(exc)}, True
+                body = json.dumps({"untrusted": True, "result": result}, ensure_ascii=False)
+                state["messages"].append({"role": "tool", "tool_call_id": call_id,
+                    "name": "read_source", "content": body[:16000]})
+                state["in_flight"] = None
+                remaining -= 1
+                state["used_calls"] += 1
+                record_invocation("read_source", arguments=args, result=result,
+                    status="failed" if failed else "completed", source="manual", project_id=pid,
+                    session_id=session_id, role="chat", model=spec, call_id=call_id)
+                runtime_turn.emit("tool.result", {"tool": "read_source", "arguments": args,
+                    "status": "failed" if failed else "completed", "result": body[:8000]})
+                if not failed:
+                    tool_cache["read_source:" + json.dumps(args, sort_keys=True)] = body
+                save()
         while checkpoint():
             tools = builtin + [_tool(alias, "UNTRUSTED MCP description: " + item["description"][:2000], {}, [])
                                for alias, item in state["mcp_tools"].items()]
             for tool in tools[len(builtin):]:
                 tool["function"]["parameters"] = state["mcp_tools"][tool["function"]["name"]]["input_schema"]
-            model_tools = [] if force_no_tools else tools
+            model_tools = [] if force_no_tools or not tools_enabled else tools
             # Complete any persisted, not-yet-invoked calls before another model turn.
             last_assistant = next((m for m in reversed(state["messages"]) if m["role"] == "assistant"), {})
             done = {m.get("tool_call_id") for m in state["messages"] if m["role"] == "tool"}
@@ -801,6 +883,19 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
                 timeout = max(1, min(120, deadline - time.monotonic()))
 
                 def call_model(selected_provider, selected_model, selected_timeout):
+                    if runtime_turn and protocol == "native" and callable(getattr(selected_provider, "chat_turn_stream", None)):
+                        runtime_turn.emit("assistant.start", {})
+                        try:
+                            return selected_provider.chat_turn_stream(
+                                selected_model, turn_messages, model_tools,
+                                project_id=pid, timeout=selected_timeout,
+                                on_delta=runtime_turn.delta, cancelled=runtime_turn.cancelled)
+                        finally:
+                            runtime_turn.flush()
+                    if not tools_enabled and callable(getattr(selected_provider, "generate", None)):
+                        return {"role": "assistant", "content": selected_provider.generate(
+                            selected_model, text, messages=turn_messages, project_id=pid,
+                            timeout=selected_timeout)}
                     if protocol == "json":
                         instruction = {"role": "system", "content":
                             'Return ONLY JSON: {"reply":"..."} or {"tool_calls":[{"name":"tool","arguments":{}}]}. '
@@ -828,6 +923,11 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
                     try:
                         response = model_turn(lambda: call_model(provider, model, timeout))
                     except Exception as exc:
+                        if isinstance(exc, InterruptedError) or (runtime_turn and runtime_turn.cancelled()):
+                            raise InterruptedError("Generation stopped") from exc
+                        if runtime_turn:
+                            # Partial replies are durable evidence; never silently retry them.
+                            raise
                         kind = services._classify_model_error(exc)
                         cloud = bool(is_cloud_model(model) or (
                             getattr(provider, "kind", "") == "openai_compatible"
@@ -873,11 +973,13 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
                         save()
                 calls = response.get("tool_calls") or []
                 call_source = "native"
-                if not calls:
+                if not calls and tools_enabled:
                     calls = _textual_tool_calls(response.get("content"))
                     call_source = "fallback"
                 if not isinstance(calls, list) or len(calls) > 32:
                     raise ValueError("Invalid or excessive tool-call batch")
+                if calls and not tools_enabled:
+                    raise PermissionError("Tools are disabled for this turn")
                 normalized = []
                 seen_ids = {c["id"] for m in state["messages"] for c in m.get("tool_calls", [])}
                 for call in calls:
@@ -914,6 +1016,24 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
                     state["status"] = "cancelled"
                     break
                 if not normalized:
+                    revision = state.get("steering_revision", 0)
+                    if not checkpoint():
+                        break
+                    if state.get("steering_revision", 0) != revision:
+                        # An instruction received during streaming must reach a
+                        # fresh model turn before the answer is finalized.
+                        continue
+                    if re.match(r"\s*(?:```(?:xml)?\s*)?<(?:tool_call\b|function=)", message["content"], re.IGNORECASE):
+                        state["protocol_retries"] = state.get("protocol_retries", 0) + 1
+                        if state["protocol_retries"] > 2:
+                            raise ValueError("Model repeatedly emitted unsupported tool markup; select a measured tool-capable model.")
+                        state["messages"].append({"role": "system", "content": (
+                            "That XML tool request was not executed and is not an answer. "
+                            + ("Emit a native tool call or the validated JSON tool format if a tool is needed. " if tools_enabled else
+                               "Tools are disabled; do not emit any tool request. ")
+                            + "Answer the latest user request; never claim an unexecuted action.")})
+                        save()
+                        continue
                     try:
                         textual = json.loads(message["content"])
                     except ValueError:
@@ -923,9 +1043,9 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
                     if not message["content"].strip():
                         raise ValueError("Model returned no response or native tool call")
                     assigned = _auto_delegate_coding(
-                        services, registered, text, state,
+                        services, registered, authorization_text, state,
                         allow_coding=allow_coding, roles=roles, spec=spec,
-                        activity=activity, save=save)
+                        activity=activity, save=save, runtime_turn=runtime_turn)
                     if assigned:
                         message["content"] = (
                             message["content"].rstrip()
@@ -974,6 +1094,9 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
                 except Exception as exc:
                     result, failed = {"error": type(exc).__name__, "message": str(exc)}, True
                 body = json.dumps({"untrusted": True, "result": result}, ensure_ascii=False, default=str)
+                if runtime_turn:
+                    runtime_turn.emit("tool.result", {"tool": name, "status": "failed" if failed else "completed",
+                        "arguments": args, "result": body[:8000]})
                 if not failed:
                     tool_cache[signature] = body
                 try:
@@ -981,7 +1104,7 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
                     record_invocation(
                         name, arguments=args, result=result,
                         status="failed" if failed else "completed",
-                        source=call_source, project_id=pid, session_id=state["id"],
+                        source=call_source, project_id=pid, session_id=session_id or state["id"],
                         role="chat", model=spec, call_id=call.get("id"),
                         error=(str(result.get("message")) if failed else None),
                     )
@@ -995,8 +1118,8 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
                                            "get_project_context"):
                     state["messages"].append({
                         "role": "system",
-                        "content": "The requested tool result is above. Answer the user from it now; "
-                                   "do not call the same read tool again.",
+                        "content": "The tool evidence is above. Continue with other necessary resources, or answer when sufficient. "
+                                   "Directory names are not file contents. Do not repeat this identical read.",
                     })
                 state["in_flight"] = None
                 if database.get_setting("chat.stop." + state["id"], ""):
@@ -1015,6 +1138,9 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
                 "run_id": state["id"], "resumable": True,
                 "route": route,
                 "tool_trace": list(state["activity"])}
+    except InterruptedError:
+        state["status"] = "cancelled"
+        raise
     except Exception as exc:
         state["status"] = "error"
         activity("conversation", type(exc).__name__ + ": " + str(exc))
@@ -1025,14 +1151,16 @@ def _converse(services, project, text, attachments, history, *, model_spec=None,
         # machine inference lease. The existing scheduler/Supervisor still execute it.
         for pending in list(state.get("dispatch_pending", [])):
             mid = pending["mission_id"]
-            if database.get_setting("chat.stop." + state["id"], ""):
+            if (runtime_turn and runtime_turn.cancelled()) or database.get_setting("chat.stop." + state["id"], ""):
                 services.cancel_mission(mid, project_id=pid, reason="Chat cancelled before dispatch")
                 continue
             if not allow_coding:
                 activity("mission-" + str(mid), "suspended: coding authorization required")
                 continue
             try:
-                services.run_mission(mid, registered["root"], **{key: value for key, value in pending.items() if key != "mission_id"})
+                services.run_mission(mid, registered["root"],
+                    **({"on_done": runtime_turn.mission_done} if runtime_turn else {}),
+                    **{key: value for key, value in pending.items() if key != "mission_id"})
                 state["dispatch_pending"].remove(pending)
                 activity("mission-" + str(mid), "dispatched")
             except Exception as exc:

@@ -5,6 +5,19 @@ import json
 
 import pytest
 
+
+def test_tool_schema_soft_budget_does_not_discard_needed_read_evidence():
+    from nl_coding_agent.context.budget import compact_chat, _collect_sections
+    messages = [{"role": "user", "content": "Read calc.py"},
+                {"role": "assistant", "content": "", "tool_calls": [{"id": "read", "function": {
+                    "name": "read_source", "arguments": {"path": "calc.py"}}}]},
+                {"role": "tool", "name": "read_source", "tool_call_id": "read", "content": "PROJECT_TOKEN=actual-source-value"}]
+    tools = [{"type": "function", "function": {"name": "read_source", "description": "Read source", "parameters": {
+        "type": "object", "properties": {"path": {"type": "string", "description": "Path " * 100}}}}}]
+    budget = compact_chat(messages, tools, max_tokens=5000, tool_token_budget=32)
+    assert "actual-source-value" in json.dumps(budget.messages)
+    assert "wrote/patched" not in json.dumps(_collect_sections([messages]))
+
 from nl_coding_agent.context.budget import compact_chat, estimate_tokens
 from nl_coding_agent.context.engine import ContextEngine
 from nl_coding_agent.context import memory as project_memory

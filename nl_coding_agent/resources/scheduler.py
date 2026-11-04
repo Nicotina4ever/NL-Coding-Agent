@@ -36,6 +36,9 @@ class SequentialScheduler:
     def submit(self, task_id: str, fn: Callable[[], Any], label: str = "") -> ScheduledTask:
         task = ScheduledTask(id=task_id, fn=fn, label=label)
         with self._lock:
+            existing = self._tasks.get(task_id)
+            if existing and existing.status in ("pending", "running"):
+                return existing
             self._tasks[task_id] = task
         self._queue.put(task)
         return task

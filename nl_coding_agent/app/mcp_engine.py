@@ -10,6 +10,7 @@ import sys
 from contextlib import asynccontextmanager, redirect_stdout
 from functools import partial, wraps
 from pathlib import Path
+from mcp.server.fastmcp import Context
 
 _ATTACHMENT_BUDGET = 8000
 
@@ -214,6 +215,31 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
     project = dict(project)
     bound_project_id = int(project["id"])
     active = set()
+    watchers = {}
+
+    def session_runtime():
+        runtime = services.session_runtime()
+        runtime.execution_allowed = bool(allow_execution)
+        return runtime
+
+    async def pump_session_events():
+        import anyio
+        while True:
+            for key, watch in list(watchers.items()):
+                sid, cursor, client = watch
+                try:
+                    batch = await anyio.to_thread.run_sync(
+                        lambda: services.session_runtime().events(bound_project_id, sid, cursor))
+                    for event in batch["events"]:
+                        await client.send_log_message("info", event, logger="nl.session")
+                        cursor = event["seq"]
+                    if key in watchers:
+                        watchers[key] = (sid, cursor, client)
+                except (BrokenPipeError, ConnectionError):
+                    watchers.pop(key, None)
+                except Exception as exc:
+                    print("session event delivery: " + type(exc).__name__, file=sys.stderr)
+            await anyio.sleep(0.15)
 
     def require_read():
         permissions.require(permissions.READ, project_id=bound_project_id)
@@ -268,16 +294,62 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         # FastMCP opens its stdio streams BEFORE entering lifespan. The protocol
         # retains stdout; verbose engine output goes to stderr, never onto JSON-RPC.
         with redirect_stdout(sys.stderr):
-            try:
-                yield
-            finally:
-                for mission_id in list(active):
-                    services.cancel_mission(mission_id, project_id=bound_project_id,
-                                            reason="MCP client disconnected")
+            import anyio
+            async with anyio.create_task_group() as group:
+                group.start_soon(pump_session_events)
+                try:
+                    yield
+                finally:
+                    group.cancel_scope.cancel()
+                    runtime = getattr(services, "_session_runtime", None)
+                    if runtime:
+                        runtime.close()
+                    for mission_id in list(active):
+                        services.cancel_mission(mission_id, project_id=bound_project_id,
+                                                reason="MCP client disconnected")
 
     server = FastMCP("NL Coding Engine", lifespan=lifespan)
     server.tool = _threaded_tool_registration(server)
     read_only = ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+
+    @server.tool()
+    def session_submit(session_id: str, request_id: str, text: str,
+                       attachment_ids: list[int] | None = None, model_spec: str | None = None,
+                       allow_coding: bool = False, tools_enabled: bool = True) -> dict:
+        """Durably accept a session turn; returns immediately, results arrive as events."""
+        require_read()
+        if allow_coding and not allow_execution:
+            raise PermissionError("Engine execution is disabled")
+        return session_runtime().submit(bound_project_id, session_id, request_id, text,
+            attachment_ids=attachment_ids, model_spec=model_spec, allow_coding=allow_coding,
+            tools_enabled=tools_enabled)
+
+    @server.tool(annotations=read_only)
+    def session_snapshot(session_id: str) -> dict:
+        """Authoritative conversation, queue and active run state."""
+        return services.session_runtime().snapshot(bound_project_id, session_id)
+
+    @server.tool(annotations=read_only)
+    def session_events(session_id: str, after_seq: int = 0, limit: int = 200) -> dict:
+        """Replay durable session events after a cursor, including missed stream fragments."""
+        return services.session_runtime().events(bound_project_id, session_id, after_seq, limit)
+
+    @server.tool()
+    async def session_watch(session_id: str, ctx: Context, after_seq: int = 0) -> dict:
+        """Subscribe to notifications/message with logger nl.session; replay from cursor."""
+        runtime = session_runtime()
+        runtime.check(bound_project_id, session_id)
+        runtime.migrate_legacy(bound_project_id)
+        watchers[(id(ctx.session), session_id)] = (session_id, max(0, after_seq), ctx.session)
+        runtime.start(bound_project_id)
+        return {"ok": True, "session_id": session_id, "cursor": after_seq}
+
+    @server.tool()
+    def session_control(session_id: str, action: str, run_id: str | None = None,
+                        text: str = "", ids: list[str] | None = None) -> dict:
+        """Steer, stop, resume, edit, remove or reorder durable session work."""
+        return session_runtime().control(bound_project_id, session_id, action,
+            run_id=run_id, text=text, ids=ids, allow_execution=allow_execution)
 
     @server.tool(annotations=read_only)
     def project_context() -> dict:
@@ -664,6 +736,8 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         Supervisor or mission verification.
         """
         require_read()
+        if allow_coding and not allow_execution:
+            raise PermissionError("Engine execution is disabled")
         try:
             requested = int(project_id)
         except (TypeError, ValueError):
@@ -816,12 +890,14 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                             approved: bool = False) -> dict:
         """Rename a Chat session; history works in read-only mode."""
         require_read()
+        services.session_runtime().check(bound_project_id, session_id)
         return {"ok": True, "session": services.rename_chat_session(session_id, title)}
 
     @server.tool()
     def chat_session_archive(session_id: str, approved: bool = False) -> dict:
         """Archive one Chat session; history is retained and allowed in read-only mode."""
         require_read()
+        services.session_runtime().check(bound_project_id, session_id)
         return {"ok": True, "session": services.archive_chat_session(session_id)}
 
     @server.tool()
@@ -1298,7 +1374,8 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                       approved: bool = False, resume_mission_id: int | None = None,
                       architect_model: str | None = None,
                       pipeline: str = "flow",
-                      from_task_id: int | None = None) -> dict:
+                      from_task_id: int | None = None,
+                      session_id: str | None = None, request_id: str | None = None) -> dict:
         """Start/resume through the resource-gated engine only with owner-enabled execution.
 
         Exact model routes are required; this does not approve a candidate or bypass tests.
@@ -1310,6 +1387,42 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         require_execution(approved)
         if not goal.strip() or not developer_model.strip() or not reviewer_model.strip():
             raise ValueError("Objective and exact model routes are required")
+        runtime = session_runtime()
+        linked = runtime.mission_run(bound_project_id, resume_mission_id) if resume_mission_id is not None else None
+        if session_id or linked:
+            target_session = linked["session_id"] if linked else session_id
+            target = runtime.check(bound_project_id, target_session)
+            if target.get("archived_at"):
+                raise ValueError("Open an active conversation before resuming")
+            if linked and linked["status"] not in ("interrupted", "cancelled", "blocked", "budget_exhausted", "failed"):
+                raise ValueError("Mission turn is not resumable")
+            if linked and linked["state"].get("in_flight"):
+                raise ValueError("Tool outcome is uncertain; inspect its evidence before resuming")
+            if resume_mission_id is not None:
+                details = mission(resume_mission_id)
+                if details["goal"] != goal:
+                    raise ValueError("Resume preserves the original objective")
+                if details["status"] not in ("interrupted", "blocked", "failed"):
+                    raise ValueError("Mission is not resumable")
+            if from_task_id is not None:
+                if resume_mission_id is None:
+                    raise ValueError("A retry point requires a retained mission")
+            options = dict(developer_model=developer_model, reviewer_model=reviewer_model,
+                           architect_model=architect_model, pipeline=pipeline)
+            if linked:
+                runtime.control(bound_project_id, target_session, "resume", run_id=linked["id"],
+                                allow_execution=True, mission_options=options, retry_from_task_id=from_task_id)
+                run_id = linked["id"]
+            else:
+                if not request_id:
+                    raise ValueError("A client request id is required for a session mission")
+                accepted = runtime.submit(bound_project_id, target_session, request_id, goal,
+                    allow_coding=True, tools_enabled=False, mission_options=options,
+                    existing_mission_id=resume_mission_id, retry_from_task_id=from_task_id)
+                run_id = accepted["run_id"]
+            return {"mission_id": runtime.run(run_id)["mission_id"], "dispatch": "queued",
+                    "session_id": target_session, "session_run_id": run_id,
+                    "models": options}
         if resume_mission_id is not None:
             details = mission(resume_mission_id)
             if details["goal"] != goal:
@@ -1344,6 +1457,11 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         if not allow_execution or not approved:
             raise PermissionError("Cancellation requires owner-enabled execution and approval")
         mission(mission_id)
+        linked = session_runtime().mission_run(bound_project_id, mission_id)
+        if linked:
+            result = services.session_runtime().control(bound_project_id, linked["session_id"], "stop",
+                                                       run_id=linked["id"], allow_execution=True)
+            return {**result, "accepted": linked["status"] in ("queued", "running", "waiting_mission", "stop_requested")}
         return services.cancel_mission(mission_id, project_id=bound_project_id, reason="MCP cancellation")
 
     @server.resource("nl-engine://project", mime_type="application/json")

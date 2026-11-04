@@ -250,8 +250,11 @@ def _collect_sections(units: list[list[dict]]) -> dict[str, list[str]]:
                         add("issues" if re.search(r"(?i)error|fail|reject", text) else "decisions", text)
                     else:
                         add("requests", "(answer) " + text)
-                for path in paths:
-                    add("results", "wrote/patched " + path)
+                for call in message.get("tool_calls") or []:
+                    function = call.get("function") or {}
+                    if function.get("name") in _WRITE_TOOLS:
+                        for path in _tool_call_paths([{"tool_calls": [call]}]):
+                            add("results", "wrote/patched " + path)
             elif role == "tool":
                 outcome = _tool_result_outcome(message)
                 if re.search(r"(?i)error|fail|exit [1-9]", outcome):
@@ -410,6 +413,10 @@ def compact_chat(
 
     # 2. Shorten tool descriptions (parameter schemas are preserved).
     tool_list, tools_trimmed, tool_count = _trim_tools(tool_list, tool_budget, chars_per_token)
+    # Tool schemas are indivisible. Once descriptions have been shortened, their
+    # soft allocation cannot be reduced by discarding conversation evidence.
+    # The total prompt window remains the hard limit.
+    tool_budget = max(tool_budget, estimate_tokens(tool_list, chars_per_token=chars_per_token))
     if tools_trimmed:
         trimmed.append("trimmed-tool-descriptions:" + str(tool_count))
 
