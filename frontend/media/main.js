@@ -268,11 +268,16 @@
         messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
-    function renderHistory(messages) {
+    function renderHistory(messages, sessionId) {
         const nearBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 80;
         const previousScroll = messagesEl.scrollTop;
+        const sameSession = Boolean(sessionId && sessionId === historySession);
+        const cards = sameSession ? Array.from(messagesEl.children).filter(function (node) {
+            return node.classList.contains('nl-activity-card');
+        }) : [];
         clear(messagesEl);
-        activityGroups.clear();
+        if (!sameSession) { activityGroups.clear(); sessionEventIds.clear(); }
+        historySession = sessionId;
         transcript.length = 0;
         (messages || []).forEach(function (message) {
             if (message.tool_activity) { return; }
@@ -294,6 +299,7 @@
                 text: 'Cosa vuoi ottenere? Posso leggere il progetto, coinvolgere specialisti e verificare il lavoro.'
             });
         }
+        cards.forEach(function (card) { messagesEl.appendChild(card); });
         if (!nearBottom) { messagesEl.scrollTop = previousScroll; }
     }
 
@@ -2187,6 +2193,7 @@
 
     const sessionEventIds = new Set();
     const activityGroups = new Map();
+    let historySession;
     let liveText = '';
     function renderSessionEvent(event) {
         if (sessionEventIds.has(event.seq)) { return; }
@@ -2216,7 +2223,7 @@
             container.appendChild(heading);
             container.appendChild(entries);
             messagesEl.appendChild(container);
-            group = { heading: heading, entries: entries, count: 0 };
+            group = { container: container, heading: heading, entries: entries, count: 0 };
             activityGroups.set(groupId, group);
         }
         group.count += 1;
@@ -2248,6 +2255,7 @@
             const live = $('session-live');
             if (live) { live.textContent = liveText; live.classList.toggle('hidden', !liveText); }
         } else if (message.type === 'sessionDiff') {
+            if (message.session_id && message.session_id !== historySession) { return; }
             const payload = message.payload || {};
             const card = el('details', 'nl-activity-card');
             card.open = true;
@@ -2255,13 +2263,17 @@
             card.appendChild(el('pre', 'nl-output', payload.diff || payload.error || 'Nessun diff disponibile.'));
             messagesEl.appendChild(card);
         } else if (message.type === 'sessionActivity') {
+            activityGroups.forEach(function (group) {
+                if (Array.from(messagesEl.children).includes(group.container)) { messagesEl.removeChild(group.container); }
+            });
+            activityGroups.clear();
             sessionEventIds.clear();
             (message.payload || []).forEach(renderSessionEvent);
         } else if (message.type === 'history') {
             const payload = message.payload || {};
             liveText = '';
             if ($('session-live')) { $('session-live').classList.add('hidden'); }
-            renderHistory(payload.messages || []);
+            renderHistory(payload.messages || [], payload.session_id);
         } else if (message.type === 'chat') {
             append(message.role || 'system', message.text);
         } else if (message.type === 'navigate' && message.tab) {

@@ -1060,8 +1060,10 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             if (!this.currentSessionId) {
                 await this.loadSessions();
             }
+            const sid = this.currentSessionId;
             const history: ChatHistoryResult = await this.connection.chatHistory(
-                limit, undefined, this.currentSessionId);
+                limit, undefined, sid);
+            if (sid !== this.currentSessionId) { return; }
             this.history = history.messages || [];
             this.historyCount = Number(history.count || 0);
             this.historyLoaded = true;
@@ -2859,9 +2861,12 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                         await this.refreshSessionState();
                     }
                     break;
-                case 'showSessionDiff':
-                    this.post({ type: 'sessionDiff', payload: await this.connection.candidateDiff(Number(payload.missionId)) });
+                case 'showSessionDiff': {
+                    const sid = this.currentSessionId;
+                    const diff = await this.connection.candidateDiff(Number(payload.missionId));
+                    if (sid === this.currentSessionId) { this.post({ type: 'sessionDiff', payload: diff, session_id: sid }); }
                     break;
+                }
                 case 'steerChat':
                     await this.steerChat(String(payload.text || ''));
                     break;

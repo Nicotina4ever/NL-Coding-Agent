@@ -649,6 +649,20 @@ function testWebviewBehaviour() {
     send({ type: 'submissionAccepted', requestId: persistedSend.payload.requestId });
     assert(!savedState.pendingSends.some((item) => item.requestId === persistedSend.payload.requestId), 'accepted send is acknowledged');
 
+    const missionHistory = { messages: [{ id: 1, role: 'assistant', content: 'Verified', mission_id: 42 }], session_id: 'A' };
+    const activity = { seq: 901, run_id: 'run-A', type: 'mission.status', payload: { mission_id: 42, status: 'completed' } };
+    send({ type: 'history', payload: missionHistory });
+    send({ type: 'sessionActivity', payload: [activity] });
+    send({ type: 'sessionDiff', session_id: 'A', payload: { mission_id: 42, changed_paths: ['src/calc.py'], diff: '+def subtract(a,b)' } });
+    send({ type: 'history', payload: missionHistory });
+    const activityCards = () => get('messages').children.filter((node) => node.classList.contains('nl-activity-card'));
+    assert.strictEqual(activityCards().length, 2, 'history reconciliation preserves opened diff and activity');
+    send({ type: 'sessionActivity', payload: [activity] });
+    assert.strictEqual(activityCards().length, 2, 'snapshot replaces activity without duplicating cards');
+    send({ type: 'history', payload: { messages: [], session_id: 'B' } });
+    send({ type: 'sessionDiff', session_id: 'A', payload: { mission_id: 42, diff: 'late A response' } });
+    assert.strictEqual(activityCards().length, 0, 'session changes discard old cards and late diff responses');
+
     send({ type: 'state', payload: { ...state, error: 'engine is read-only' } });
     assert(!get('notice').classList.contains('hidden'), 'error notice visible');
     assert.strictEqual(get('notice').textContent, 'engine is read-only');

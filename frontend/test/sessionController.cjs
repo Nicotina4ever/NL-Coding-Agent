@@ -43,6 +43,14 @@ async function main() {
     assert.strictEqual(missions[0].sessionId, 'A', 'an explicit mission keeps the session captured before awaits');
     assert(missions[0].requestId, 'explicit mission submission carries an idempotency key');
     assert.strictEqual(provider.currentSessionId, 'B');
+    let finishHistory;
+    connection.chatHistory = () => new Promise((resolve) => { finishHistory = resolve; });
+    provider.currentSessionId = 'A';
+    const loading = provider.loadHistory();
+    provider.currentSessionId = 'B';
+    finishHistory({ messages: [{ role: 'assistant', content: 'private A history' }], count: 1, session_id: 'A' });
+    await loading;
+    assert(!provider.history.some((item) => item.content === 'private A history'), 'late history cannot replace the selected session');
     provider.dispose();
     console.log('SESSION-CONTROLLER-TESTS-PASS');
 }
