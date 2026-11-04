@@ -85,7 +85,7 @@
     let storageSelected = {};
     let selectedMissionIds = Object.create(null);
     let missionSelectionProjectId = null;
-    let chatControlsVisible = true;
+    let chatControlsVisible = false;
     let contextVisible = true;
     let missionFieldsVisible = true;
     let missionListVisible = true;
@@ -101,9 +101,10 @@
     let fileMentionResults = [];
     let fileMentionSearchQuery = null;
     let fileMentionSearchTimer = null;
+    let pendingSends = [];
 
     function persist() {
-        vscode.setState({ mode: mode, tab: tab });
+        vscode.setState({ mode: mode, tab: tab, pendingSends: pendingSends });
     }
 
     function setStatus(text, stateName) {
@@ -208,10 +209,26 @@
         if (item.model) {
             head.appendChild(el('span', 'nl-message-model', 'via ' + item.model));
         }
+        if (item.status && item.status !== 'completed') {
+            head.appendChild(el('span', 'nl-status-chip', ({ cancelled: 'Fermato', interrupted: 'Interrotto',
+                failed: 'Errore', blocked: 'Richiede intervento', budget_exhausted: 'Ripresa disponibile' })[item.status] || item.status));
+        }
         wrap.appendChild(head);
         const body = el('div', 'nl-message-body');
-        renderLinks(body, item.text);
+        const blocks = String(item.text || '').split(/```[^\n]*\n([\s\S]*?)```/g);
+        blocks.forEach(function (block, index) {
+            if (index % 2) {
+                const pre = el('pre', 'nl-code-block');
+                pre.appendChild(el('code', '', block));
+                body.appendChild(pre);
+            } else { renderLinks(body, block); }
+        });
         wrap.appendChild(body);
+        if (item.mission_id) {
+            const diff = el('button', '', 'Apri diff e file modificati');
+            diff.addEventListener('click', function () { postAction('showSessionDiff', { missionId: item.mission_id }); });
+            wrap.appendChild(diff);
+        }
         if (item.id) {
             const actions = el('div', 'nl-message-actions');
             if (item.role === 'user') {
@@ -252,9 +269,13 @@
     }
 
     function renderHistory(messages) {
+        const nearBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 80;
+        const previousScroll = messagesEl.scrollTop;
         clear(messagesEl);
+        activityGroups.clear();
         transcript.length = 0;
         (messages || []).forEach(function (message) {
+            if (message.tool_activity) { return; }
             renderMessage({
                 id: message.id,
                 role: message.role,
@@ -262,15 +283,18 @@
                 created_at: message.created_at,
                 attachments: message.attachments,
                 model: message.model || message.provider_id,
-                tool_activity: message.tool_activity
+                tool_activity: message.tool_activity,
+                mission_id: message.mission_id,
+                status: message.status
             });
         });
         if (!messages || !messages.length) {
             renderMessage({
                 role: 'system',
-                text: 'No saved conversation for this project yet. Messages are persisted by the engine.'
+                text: 'Cosa vuoi ottenere? Posso leggere il progetto, coinvolgere specialisti e verificare il lavoro.'
             });
         }
+        if (!nearBottom) { messagesEl.scrollTop = previousScroll; }
     }
 
     function postAction(action, payload) {
@@ -291,6 +315,7 @@
     function setMode(next) {
         mode = next === 'mission' ? 'mission' : 'chat';
         modeEl.value = mode;
+        if ($('mode-field')) { $('mode-field').classList.toggle('hidden', mode !== 'mission' && !chatControlsVisible); }
         missionFields.classList.toggle('hidden', mode !== 'mission' || !missionFieldsVisible);
         missionNote.classList.toggle('hidden', mode !== 'mission' || !missionFieldsVisible);
         $('mission-fields-toggle').classList.toggle('hidden', mode !== 'mission');
@@ -357,12 +382,15 @@
     function renderQueue(current) {
         clear(chatQueueEl);
         const items = current.chatQueue || [];
+        if ($('session-drawer-label')) {
+            $('session-drawer-label').textContent = 'Conversazioni' + (items.length ? ' · ' + items.length + ' in coda' : '');
+        }
         if (!items.length) {
             chatQueueEl.classList.add('hidden');
             return;
         }
         chatQueueEl.classList.remove('hidden');
-        items.forEach(function (item) {
+        items.forEach(function (item, index) {
             const row = el('div', 'nl-queue-row');
             row.appendChild(el('span', 'nl-queue-mode', item.mode || 'queue'));
             row.appendChild(el('span', 'nl-queue-text', item.text || ''));
@@ -372,6 +400,23 @@
                 postAction('removeQueueItem', { itemId: item.id });
             });
             row.appendChild(remove);
+            if ((current.sessionRuns || []).length) {
+                const edit = el('button', '', 'Modifica');
+                edit.addEventListener('click', function () { postAction('editQueueItem', { itemId: item.id }); });
+                row.appendChild(edit);
+                [-1, 1].forEach(function (direction) {
+                    const move = el('button', '', direction < 0 ? '↑' : '↓');
+                    move.disabled = index + direction < 0 || index + direction >= items.length;
+                    move.setAttribute('aria-label', direction < 0 ? 'Anticipa messaggio' : 'Posticipa messaggio');
+                    move.addEventListener('click', function () {
+                        const ids = items.map(function (entry) { return entry.id; });
+                        const other = index + direction;
+                        const previous = ids[index]; ids[index] = ids[other]; ids[other] = previous;
+                        postAction('reorderQueue', { ids: ids });
+                    });
+                    row.appendChild(move);
+                });
+            }
             chatQueueEl.appendChild(row);
         });
     }
@@ -650,8 +695,7 @@
         const payload = (current && current.accessProfile) || {};
         accessProfileEl.value = payload.profile || 'auto-review';
         accessStatusEl.textContent = payload.profile
-            ? 'applied to every agent' + (payload.auto_review_profile ? ' · auto-review: ' + payload.auto_review_profile : '') +
-              (payload.profile === 'auto-review' ? ' · deletes move to da_eliminare' : '')
+            ? 'Accesso condiviso dagli agenti del progetto'
             : 'applying Auto review to every agent';
     }
 
@@ -832,15 +876,28 @@
             ? 'Running — a new message is queued; start it with /steer to redirect at the next checkpoint.'
             : current.busyMission ? 'Mission running — messages are sent as steering; /mission waits.' : '');
         sendEl.disabled = current.busyPhase === 'attaching';
-        sendEl.textContent = mode === 'mission' ? 'Start mission' : (current.busyChat ? 'Queue' : 'Send');
+        sendEl.textContent = mode === 'mission' ? 'Start mission' : (current.busyChat ? 'Accoda' : 'Invia');
         chatStop.classList.toggle('hidden', !current.busyChat);
+        if ($('session-steer')) { $('session-steer').classList.toggle('hidden', !current.busyChat); }
+        const resumable = (current.sessionRuns || []).find(function (run) {
+            return ['interrupted', 'cancelled', 'blocked', 'budget_exhausted', 'failed'].indexOf(run.status) >= 0;
+        });
+        if ($('session-resume')) {
+            $('session-resume').classList.toggle('hidden', !resumable || current.busyChat);
+            $('session-resume').dataset.runId = resumable ? resumable.id : '';
+        }
+        if (current.sessionRuns) {
+            hintEl.textContent = current.busyPhase === 'stop_requested' ? 'Arresto richiesto · attendo un punto sicuro' :
+                current.busyChat ? 'Lavoro in corso · puoi accodare una richiesta o intervenire' :
+                resumable ? 'Lavoro conservato · ripresa disponibile' : 'Invio ↵ · Maiusc+Invio nuova riga';
+        }
     }
 
     function renderEditorContext(current) {
         clear(editorContextEl);
         const editor = current.editor;
+        editorContextEl.classList.toggle('hidden', !editor);
         if (!editor) {
-            editorContextEl.appendChild(el('span', 'nl-muted', 'No active editor context'));
             return;
         }
         const label = el('span', 'nl-editor-label');
@@ -857,8 +914,8 @@
     function renderAttachments(current) {
         clear(attachmentChipsEl);
         const attachments = current.attachments || [];
+        attachmentChipsEl.classList.toggle('hidden', !attachments.length);
         if (!attachments.length) {
-            attachmentChipsEl.appendChild(el('span', 'nl-muted', 'No attachments'));
             return;
         }
         attachments.forEach(function (attachment) {
@@ -895,7 +952,7 @@
     function renderContext(current) {
         const missionMode = mode === 'mission';
         contextStrip.classList.toggle('hidden', missionMode);
-        modelBar.classList.toggle('hidden', missionMode);
+        modelBar.classList.toggle('hidden', missionMode || !chatControlsVisible);
         missionFields.classList.toggle('hidden', !missionMode);
         missionNote.classList.toggle('hidden', !missionMode);
         if (missionMode) {
@@ -1681,7 +1738,11 @@
                     };
                 })
             });
-            postAction('sendChat', { text: text });
+            const submission = { text: text, requestId: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2),
+                sessionId: state && state.currentSessionId };
+            pendingSends.push(submission);
+            persist();
+            postAction('sendChat', submission);
         }
         inputEl.value = '';
         inputEl.focus();
@@ -1858,6 +1919,18 @@
     $('session-archive').addEventListener('click', function () { postAction('archiveChatSession', {}); });
     $('session-delete').addEventListener('click', function () { postAction('deleteChatSession', {}); });
     $('session-search').addEventListener('click', function () { postAction('searchChat', {}); });
+    if ($('session-steer')) {
+        $('session-steer').addEventListener('click', function () {
+            const text = inputEl.value.trim();
+            if (text) { postAction('steerChat', { text: text }); inputEl.value = ''; }
+            else { inputEl.focus(); }
+        });
+    }
+    if ($('session-resume')) {
+        $('session-resume').addEventListener('click', function () {
+            postAction('sessionResume', { runId: $('session-resume').dataset.runId });
+        });
+    }
     $('session-archived-toggle').addEventListener('change', function () {
         postAction('toggleArchivedSessions', {});
     });
@@ -2043,6 +2116,7 @@
     });
     $('chat-controls-toggle').addEventListener('click', function () {
         chatControlsVisible = !chatControlsVisible;
+        if ($('mode-field')) { $('mode-field').classList.toggle('hidden', mode !== 'mission' && !chatControlsVisible); }
         $('model-bar').classList.toggle('hidden', !chatControlsVisible || mode === 'mission');
         $('chat-controls-toggle').textContent = (chatControlsVisible ? '▾' : '▸') + ' model controls';
     });
@@ -2111,13 +2185,82 @@
         }
     });
 
+    const sessionEventIds = new Set();
+    const activityGroups = new Map();
+    let liveText = '';
+    function renderSessionEvent(event) {
+        if (sessionEventIds.has(event.seq)) { return; }
+        sessionEventIds.add(event.seq);
+        const payload = event.payload || {};
+        const live = $('session-live');
+        if (event.type === 'assistant.start') {
+            liveText = '';
+            if (live) { live.textContent = ''; live.classList.add('hidden'); }
+        }
+        if (event.type === 'assistant.delta' && live) {
+            liveText += String(payload.text || '');
+            live.textContent = liveText;
+            live.classList.remove('hidden');
+            return;
+        }
+        if (/^turn\.(completed|failed|cancelled|interrupted|budget_exhausted|blocked)$/.test(event.type)) {
+            if (live) { live.classList.add('hidden'); }
+        }
+        if (['activity', 'tool.result', 'steering.queued', 'steering.consumed', 'mission.status'].indexOf(event.type) < 0) { return; }
+        const groupId = event.run_id || 'mission-' + (payload.mission_id || 'current');
+        let group = activityGroups.get(groupId);
+        if (!group) {
+            const container = el('details', 'nl-activity-card nl-run-card');
+            const heading = el('summary', '', 'Attività del lavoro');
+            const entries = el('div', 'nl-run-entries');
+            container.appendChild(heading);
+            container.appendChild(entries);
+            messagesEl.appendChild(container);
+            group = { heading: heading, entries: entries, count: 0 };
+            activityGroups.set(groupId, group);
+        }
+        group.count += 1;
+        const phases = { architect: 'Analisi', auditor: 'Controllo rischi', developer: 'Sviluppo',
+            tester: 'Verifica', reviewer: 'Revisione', debugger: 'Riparazione', scheduler: 'Attesa risorse' };
+        const phase = event.type === 'mission.status' ? ({ completed: 'Completato', running: 'In esecuzione',
+            failed: 'Errore', blocked: 'Richiede intervento', interrupted: 'Interrotto' }[payload.status] || payload.status) : phases[payload.source];
+        if (phase) { group.heading.textContent = (payload.mission_id ? 'Missione #' + payload.mission_id + ' · ' : '') + phase; }
+        const card = el('details', 'nl-activity-entry');
+        const summary = el('summary', '', payload.message || payload.tool ||
+            (event.type === 'steering.consumed' ? 'Indicazione acquisita · ' + payload.stage :
+                event.type === 'steering.queued' ? 'Indicazione accodata' : 'Missione · ' + (payload.status || '')));
+        card.appendChild(summary);
+        card.appendChild(el('pre', 'nl-output', JSON.stringify(payload, null, 2)));
+        group.entries.appendChild(card);
+    }
     window.addEventListener('message', function (event) {
         const message = event.data || {};
         if (message.type === 'state') {
             state = message.payload;
             renderState();
+        } else if (message.type === 'sessionEvent') {
+            renderSessionEvent(message.payload || {});
+        } else if (message.type === 'submissionAccepted') {
+            pendingSends = pendingSends.filter(function (item) { return item.requestId !== message.requestId; });
+            persist();
+        } else if (message.type === 'sessionLive') {
+            liveText = String(message.text || '');
+            const live = $('session-live');
+            if (live) { live.textContent = liveText; live.classList.toggle('hidden', !liveText); }
+        } else if (message.type === 'sessionDiff') {
+            const payload = message.payload || {};
+            const card = el('details', 'nl-activity-card');
+            card.open = true;
+            card.appendChild(el('summary', '', 'Diff · missione #' + String(payload.mission_id || '') + ' · ' + (payload.changed_paths || []).join(', ')));
+            card.appendChild(el('pre', 'nl-output', payload.diff || payload.error || 'Nessun diff disponibile.'));
+            messagesEl.appendChild(card);
+        } else if (message.type === 'sessionActivity') {
+            sessionEventIds.clear();
+            (message.payload || []).forEach(renderSessionEvent);
         } else if (message.type === 'history') {
             const payload = message.payload || {};
+            liveText = '';
+            if ($('session-live')) { $('session-live').classList.add('hidden'); }
             renderHistory(payload.messages || []);
         } else if (message.type === 'chat') {
             append(message.role || 'system', message.text);
@@ -2151,6 +2294,11 @@
     });
 
     const saved = vscode.getState();
+    if (saved && Array.isArray(saved.pendingSends)) {
+        pendingSends = saved.pendingSends;
+        // Re-send the original request ids; SQLite acceptance is idempotent.
+        setTimeout(function () { pendingSends.forEach(function (item) { postAction('sendChat', item); }); }, 2000);
+    }
     if (saved && saved.tab && panels[saved.tab]) {
         switchTab(saved.tab);
     }

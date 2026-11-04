@@ -7,6 +7,7 @@
  * file calls the existing MCP tools and never writes engine state directly.
  */
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import {
     AttachmentInput,
@@ -31,12 +32,16 @@ import {
     ResearchFetchResult,
     StorageScanResult
 } from './backend';
+import { SessionEvent, SessionRun } from './backend';
 import { buildChatHtml } from './webview';
 
 const MAX_SELECTION_CHARS = 8000;
 const MAX_RECORDED_MESSAGES = 200;
 const POLL_INTERVAL_MS = 2000;
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'blocked', 'interrupted']);
+interface PendingSubmission {
+    sessionId: string; text: string; attachmentIds: number[]; modelSpec: string; allowCoding: boolean;
+}
 
 export interface ModelOption {
     value: string;
@@ -108,6 +113,7 @@ export interface DashboardState {
     historyCount: number;
     historyLoaded: boolean;
     error?: string;
+    sessionRuns?: SessionRun[];
 }
 
 export interface StartMissionInput {
@@ -127,6 +133,18 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'nlCodingAgent.chat';
 
     private view: vscode.WebviewView | undefined;
+    private panel?: vscode.WebviewPanel;
+    private readonly hosts = new Set<vscode.WebviewView | vscode.WebviewPanel>();
+    private sessionRuns: SessionRun[] = [];
+    private sessionCursors = new Map<string, number>();
+    private sessionRefresh?: NodeJS.Timeout;
+    private readonly sessionListener = (event: SessionEvent) => this.onSessionEvent(event);
+    private pendingSubmissions = new Map<string, string>();
+    private durableSubmissions: Record<string, PendingSubmission> = {};
+    private recoveringSubmissions = false;
+    private sessionHydrating?: string;
+    private bufferedSessionEvents: SessionEvent[] = [];
+    private sessionSnapshotChain: Promise<void> = Promise.resolve();
     private disposed = false;
     private readyAnnounced = false;
     private lastHtml: string | undefined;
@@ -187,14 +205,16 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         context?: vscode.ExtensionContext
     ) {
         this.workspaceState = context?.workspaceState;
+        this.durableSubmissions = this.workspaceState?.get<Record<string, PendingSubmission>>('nlCodingAgent.pendingSubmissions') || {};
+        this.connection.sessionListeners.add(this.sessionListener);
     }
 
     get debugState(): ChatDebugState {
-        return { resolved: Boolean(this.view), busy: this.busyChat || this.busyMission, posted: this.posted.slice() };
+        return { resolved: Boolean(this.hosts.size), busy: this.busyChat || this.busyMission, posted: this.posted.slice() };
     }
 
     get isResolved(): boolean {
-        return Boolean(this.view);
+        return Boolean(this.hosts.size);
     }
 
     get renderedHtml(): string | undefined {
@@ -207,19 +227,36 @@ export class ChatProvider implements vscode.WebviewViewProvider {
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
         this.view = webviewView;
+        this.attachHost(webviewView);
+    }
+
+    async openPanel(): Promise<void> {
+        if (this.panel) { this.panel.reveal(); return; }
+        this.panel = vscode.window.createWebviewPanel('nlCodingAgent.conversation', 'NL Chat',
+            vscode.ViewColumn.Active, { enableScripts: true, retainContextWhenHidden: true });
+        this.panel.iconPath = vscode.Uri.joinPath(this.extensionUri, 'media', 'logo.svg');
+        this.attachHost(this.panel);
+        this.panel.onDidDispose(() => { this.panel = undefined; });
+        await this.initialize();
+    }
+
+    private attachHost(webviewView: vscode.WebviewView | vscode.WebviewPanel): void {
+        this.hosts.add(webviewView);
         this.readyAnnounced = false;
         const mediaRoot = vscode.Uri.joinPath(this.extensionUri, 'media');
         webviewView.webview.options = { enableScripts: true, localResourceRoots: [mediaRoot] };
         this.lastHtml = buildChatHtml({
             scriptUri: webviewView.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, 'main.js')).toString(),
             styleUri: webviewView.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, 'style.css')).toString(),
-            cspSource: webviewView.webview.cspSource
+            cspSource: webviewView.webview.cspSource,
+            logoUri: webviewView.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, 'logo.svg')).toString()
         });
         webviewView.webview.html = this.lastHtml;
         webviewView.webview.onDidReceiveMessage((message: unknown) => {
             void this.onMessage(message);
         });
         webviewView.onDidDispose(() => {
+            this.hosts.delete(webviewView);
             if (this.view === webviewView) {
                 this.view = undefined;
             }
@@ -233,7 +270,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
 
     /** Connect, load engine state/missions/history and post the first snapshot. */
     async initialize(): Promise<void> {
-        if (!this.view || this.disposed) {
+        if (!this.hosts.size || this.disposed) {
             return;
         }
         this.post({ type: 'status', state: 'connecting', label: 'Connecting to NL Coding Engine…' });
@@ -252,6 +289,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             await this.refreshAccessProfile();
             await this.loadSessions();
             await this.loadHistory();
+            await this.watchSession();
             await this.refreshQueue(false);
             // A durable queue must also survive a client restart: drain it once the
             // connection is ready instead of leaving the user's messages stranded.
@@ -261,14 +299,8 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             if (!this.readyAnnounced) {
                 this.readyAnnounced = true;
                 this.postChat('system', [
-                    'Connected to the existing NL Coding Engine.',
-                    `Project: #${this.projectContext?.project.id}${this.projectContext?.project.name ? ' ' + this.projectContext.project.name : ''}`,
-                    `Workspace: ${this.projectContext?.project.root}`,
-                    `Execution: ${this.connection.executionAllowed ? 'missions enabled' : 'read-only'}`,
-                    `Research profile: ${this.connection.researchProfile}`,
-                    'Use @filename to attach project files; paste screenshots with Ctrl+V.',
-                    'Open Agents → Generate team or type /team for specialists; use /mission to start verified coding work.',
-                    'For dictation, choose a local model in Engine → Dictation and use the microphone button.'
+                    'Progetto pronto. Descrivi il risultato che vuoi ottenere.',
+                    'Puoi allegare file con @ o incollare uno screenshot.'
                 ].join('\n'));
             }
             this.post({ type: 'status', state: 'ready', label: this.statusLabel() });
@@ -286,17 +318,23 @@ export class ChatProvider implements vscode.WebviewViewProvider {
 
     /** One chat turn; the webview appends the user message locally until history reload. */
     async handleUserMessage(text: string, attachment?: AttachmentInput | null,
-                            queuedAttachmentIds: number[] = [], fromQueue = false): Promise<void> {
+                            queuedAttachmentIds: number[] = [], fromQueue = false,
+                            clientRequestId?: string, requestedSessionId?: string): Promise<void> {
+        let turnSessionId = requestedSessionId || this.currentSessionId;
         let message = String(text || '').trim();
         let planningOnly = false;
         if (!message) {
+            return;
+        }
+        if (this.connection.supportsSessionRuntime && /^\/steer\s+/i.test(message)) {
+            await this.steerChat(message.replace(/^\/steer\s+/i, ''));
             return;
         }
         const pendingAttachments = this.attachments.slice();
         const attachmentIds = queuedAttachmentIds.length
             ? queuedAttachmentIds.slice()
             : pendingAttachments.map((item) => item.id);
-        if (!fromQueue && (this.busyChat || this.busyMission || this.drainingQueue)) {
+        if (!this.connection.supportsSessionRuntime && !fromQueue && (this.busyChat || this.busyMission || this.drainingQueue)) {
             if (/^\/steer\s+/i.test(message)) {
                 await this.steerChat(message.replace(/^\/steer\s+/i, ''));
                 return;
@@ -466,9 +504,9 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         }
         this.busyChat = true;
         this.busyPhase = 'thinking';
-        if (this.currentSessionId) {
+        if (turnSessionId) {
             try {
-                await this.connection.checkpointCreate(this.currentSessionId, 'before-user-turn');
+                await this.connection.checkpointCreate(turnSessionId, 'before-user-turn');
             } catch (error) {
                 this.output.appendLine('[checkpoint] ' + this.errorText(error));
             }
@@ -525,13 +563,42 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 attachment.extracted_text.trim()
                 ? [attachment]
                 : [];
+            if (this.connection.supportsSessionRuntime) {
+                if (!turnSessionId) { await this.loadSessions(); turnSessionId = this.currentSessionId; }
+                if (!turnSessionId) { throw new Error('Open a conversation before sending.'); }
+                for (const item of legacyAttachments) {
+                    const ingested = await this.connection.attachmentIngest({
+                        text: item.extracted_text, name: item.name || 'editor-context.txt' });
+                    effectiveAttachmentIds.push(...(ingested.attachments || []).map((value) => value.id));
+                }
+                const submissionKey = JSON.stringify([turnSessionId, message, effectiveAttachmentIds]);
+                const requestId = clientRequestId || this.pendingSubmissions.get(submissionKey) || randomUUID();
+                this.pendingSubmissions.set(submissionKey, requestId);
+                const prepared = this.durableSubmissions[requestId] || {
+                    sessionId: turnSessionId, text: message, attachmentIds: effectiveAttachmentIds,
+                    modelSpec: this.chatModel || 'auto',
+                    allowCoding: !planningOnly && this.autoCoding && this.connection.executionAllowed
+                };
+                this.durableSubmissions[requestId] = prepared;
+                await this.workspaceState?.update('nlCodingAgent.pendingSubmissions', this.durableSubmissions);
+                await this.connection.sessionSubmit(prepared.sessionId, requestId, prepared.text,
+                    prepared.attachmentIds, prepared.modelSpec, prepared.allowCoding);
+                this.pendingSubmissions.delete(submissionKey);
+                delete this.durableSubmissions[requestId];
+                await this.workspaceState?.update('nlCodingAgent.pendingSubmissions', this.durableSubmissions);
+                this.post({ type: 'submissionAccepted', requestId });
+                this.attachments = [];
+                this.errorMessage = undefined;
+                await this.refreshSessionState();
+                return;
+            }
             const abort = new AbortController();
             this.chatAbort = abort;
             const result = await this.connection.converse(
                 context.project.id, message, legacyAttachments, this.requestTimeoutMs,
                 this.chatModel || 'auto', effectiveAttachmentIds,
                 !planningOnly && this.autoCoding && this.connection.executionAllowed,
-                abort.signal
+                abort.signal, turnSessionId
             );
             if (result.route) {
                 this.lastRoute = result.route;
@@ -579,8 +646,8 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             }
         } finally {
             this.chatAbort = undefined;
-            this.busyChat = false;
-            this.busyPhase = this.busyMission ? 'mission' : 'idle';
+            if (this.connection.supportsSessionRuntime) { await this.refreshSessionState(); }
+            else { this.busyChat = false; this.busyPhase = this.busyMission ? 'mission' : 'idle'; }
             this.postState();
             // A queued turn is dispatched only after this one is genuinely idle.
             void this.refreshQueue(true);
@@ -1028,6 +1095,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         this.currentSessionId = String(sessionId || '');
         await this.workspaceState?.update('nlCodingAgent.chatSession', this.currentSessionId);
         await this.loadHistory();
+        await this.watchSession();
         this.postState();
     }
 
@@ -1042,6 +1110,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         const result = await this.connection.chatSessionCreate(title || 'New conversation');
         await this.loadSessions(result.session.id);
         await this.loadHistory();
+        await this.watchSession();
         this.postChat('system', 'New conversation created.');
     }
 
@@ -1245,6 +1314,11 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     }
 
     async removeQueuedItem(itemId: string): Promise<void> {
+        if (this.connection.supportsSessionRuntime && this.currentSessionId) {
+            await this.connection.sessionControl(this.currentSessionId, 'remove', itemId);
+            await this.refreshSessionState();
+            return;
+        }
         await this.connection.chatQueueRemove(String(itemId));
         await this.refreshQueue(false);
         this.postChat('system', 'Queued message removed.');
@@ -1268,8 +1342,99 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             `Conversation cleanup: ${result.sessions} session(s), ${result.messages} message(s) removed.`);
     }
 
+    private async watchSession(): Promise<void> {
+        if (!this.connection.supportsSessionRuntime || !this.currentSessionId) { return; }
+        await this.recoverPendingSubmissions();
+        const sid = this.currentSessionId;
+        // Notifications replay from the last processed cursor on this connection.
+        await this.connection.sessionWatch(sid, this.sessionCursors.get(sid) || 0);
+        await this.refreshSessionState();
+    }
+
+    private async recoverPendingSubmissions(): Promise<void> {
+        if (this.recoveringSubmissions) { return; }
+        this.recoveringSubmissions = true;
+        try {
+            for (const [requestId, pending] of Object.entries(this.durableSubmissions)) {
+                try {
+                    const snapshot = await this.connection.sessionSnapshot(pending.sessionId);
+                    const accepted = snapshot.runs.some((run) => run.request_id === requestId);
+                    if (!accepted) {
+                        await this.connection.sessionSubmit(pending.sessionId, requestId, pending.text,
+                            pending.attachmentIds, pending.modelSpec, pending.allowCoding);
+                    }
+                    delete this.durableSubmissions[requestId];
+                    await this.workspaceState?.update('nlCodingAgent.pendingSubmissions', this.durableSubmissions);
+                    this.post({ type: 'submissionAccepted', requestId });
+                } catch (error) {
+                    this.output.appendLine('[pending submission retained] ' + String(error));
+                }
+            }
+        } finally { this.recoveringSubmissions = false; }
+    }
+
+    private onSessionEvent(event: SessionEvent): void {
+        if (this.sessionHydrating === event.session_id) {
+            this.bufferedSessionEvents.push(event);
+            return;
+        }
+        if (event.seq <= (this.sessionCursors.get(event.session_id) || 0)) { return; }
+        this.sessionCursors.set(event.session_id, event.seq);
+        if (event.session_id !== this.currentSessionId) { return; }
+        this.post({ type: 'sessionEvent', payload: event });
+        if (event.type.startsWith('turn.') || event.type.startsWith('mission.') || event.type === 'queue.changed') {
+            if (this.sessionRefresh) { clearTimeout(this.sessionRefresh); }
+            this.sessionRefresh = setTimeout(() => {
+                this.sessionRefresh = undefined;
+                void this.refreshSessionState().catch((error) => this.output.appendLine('[session] ' + String(error)));
+            }, 100);
+        }
+    }
+
+    private refreshSessionState(): Promise<void> {
+        const sid = this.currentSessionId;
+        const refresh = this.sessionSnapshotChain.catch(() => undefined).then(() => this.loadSessionSnapshot(sid));
+        this.sessionSnapshotChain = refresh;
+        return refresh;
+    }
+
+    private async loadSessionSnapshot(sid?: string): Promise<void> {
+        if (!this.connection.supportsSessionRuntime || !this.currentSessionId || this.connection.state !== 'ready') { return; }
+        if (!sid || sid !== this.currentSessionId) { return; }
+        this.sessionHydrating = sid;
+        try {
+        const snapshot = await this.connection.sessionSnapshot(sid);
+        if (sid !== this.currentSessionId) { return; }
+        this.sessionCursors.set(sid, snapshot.cursor);
+        this.sessionRuns = snapshot.runs;
+        const active = snapshot.runs.find((run) => ['running', 'waiting_mission', 'stop_requested'].includes(run.status));
+        this.busyChat = Boolean(active);
+        this.busyMission = Boolean(active?.mission_id);
+        this.activeMissionId = active?.mission_id;
+        this.busyPhase = active?.status || 'idle';
+        this.chatQueue = snapshot.runs.filter((run) => run.status === 'queued').reverse().map((run) => ({
+            id: run.id, text: run.payload.text, attachment_ids: run.payload.attachment_ids, mode: 'queue' as const
+        }));
+        this.history = snapshot.messages;
+        this.historyCount = snapshot.messages.length;
+        this.historyLoaded = true;
+        this.post({ type: 'history', payload: { messages: snapshot.messages, session_id: sid } });
+        this.post({ type: 'sessionActivity', payload: snapshot.activity });
+        this.post({ type: 'sessionLive', text: snapshot.live_text, session_id: sid });
+        this.postState();
+        } finally {
+            this.sessionHydrating = undefined;
+            const buffered = this.bufferedSessionEvents.splice(0).sort((a, b) => a.seq - b.seq);
+            for (const event of buffered) { this.onSessionEvent(event); }
+        }
+    }
+
     /** Read/refresh the persistent queue and optionally drain one item. */
     async refreshQueue(drain = false): Promise<void> {
+        if (this.connection.supportsSessionRuntime) {
+            await this.refreshSessionState();
+            return;
+        }
         if (!this.view) {
             return;
         }
@@ -1307,6 +1472,12 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         if (!message) {
             return;
         }
+        if (this.connection.supportsSessionRuntime && this.currentSessionId) {
+            const run = this.sessionRuns.find((item) => ['running', 'waiting_mission', 'stop_requested'].includes(item.status));
+            if (!run) { throw new Error('No active work in this conversation.'); }
+            await this.connection.sessionControl(this.currentSessionId, 'steer', run.id, message);
+            return;
+        }
         if (this.busyMission && this.activeMissionId) {
             await this.connection.missionSteer(this.activeMissionId, message);
             this.postChat('system', 'Steering queued for mission #' + this.activeMissionId +
@@ -1321,6 +1492,12 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     }
 
     async stopChat(): Promise<void> {
+        if (this.connection.supportsSessionRuntime && this.currentSessionId) {
+            const run = this.sessionRuns.find((item) => ['running', 'waiting_mission', 'stop_requested'].includes(item.status));
+            if (run) { await this.connection.sessionControl(this.currentSessionId, 'stop', run.id); }
+            await this.refreshSessionState();
+            return;
+        }
         const abort = this.chatAbort;
         try {
             const result = await this.connection.chatCancel();
@@ -1535,6 +1712,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
      * explicit modal confirmation; programmatic callers must pass confirmed=true.
      */
     async startMission(input: StartMissionInput, confirmed = false): Promise<{ missionId: number } | undefined> {
+        const targetSession = this.currentSessionId;
         if (this.busyMission) {
             this.postChat('error', 'A mission is already being started.');
             return undefined;
@@ -1575,13 +1753,19 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 goal,
                 developerModel: input.developerModel,
                 reviewerModel: input.reviewerModel,
-                resumeMissionId: input.resumeMissionId
+                resumeMissionId: input.resumeMissionId,
+                sessionId: this.connection.supportsSessionRuntime ? targetSession : undefined,
+                requestId: randomUUID()
             });
             this.activeMissionId = result.mission_id;
-            this.postChat('system', `Mission #${result.mission_id} queued by the engine (${result.dispatch || 'queued'}).`);
+            if (result.session_run_id) {
+                if (this.currentSessionId === result.session_id) { await this.watchSession(); }
+            } else {
+                this.postChat('system', `Mission #${result.mission_id} queued by the engine (${result.dispatch || 'queued'}).`);
+                this.startMonitoring(result.mission_id);
+            }
             await this.refreshMissions();
             this.postState();
-            this.startMonitoring(result.mission_id);
             return { missionId: result.mission_id };
         } catch (error) {
             this.reportError(error, 'mission');
@@ -1620,6 +1804,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
 
     /** Resume an interrupted/blocked mission with the same persisted objective. */
     async resumeMission(missionId: number, confirmed = false, fromTaskId?: number): Promise<boolean> {
+        const targetSession = this.currentSessionId;
         try {
             const detail = await this.connection.missionDetail(missionId);
             if (detail.mission.harness_version !== 2) {
@@ -1661,13 +1846,19 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 developerModel: this.missionModels.developerModel,
                 reviewerModel: this.missionModels.reviewerModel,
                 resumeMissionId: missionId,
-                fromTaskId
+                fromTaskId,
+                sessionId: this.connection.supportsSessionRuntime ? targetSession : undefined,
+                requestId: randomUUID()
             });
             this.activeMissionId = result.mission_id;
-            this.postChat('system', `Mission #${result.mission_id} resume dispatched (${result.dispatch || 'queued'}).`);
+            if (result.session_run_id) {
+                if (this.currentSessionId === result.session_id) { await this.watchSession(); }
+            } else {
+                this.postChat('system', `Mission #${result.mission_id} resume dispatched (${result.dispatch || 'queued'}).`);
+                this.startMonitoring(result.mission_id, { resumeFromInterrupted: true });
+            }
             await this.refreshMissions();
             this.postState();
-            this.startMonitoring(result.mission_id, { resumeFromInterrupted: true });
             return true;
         } catch (error) {
             this.reportError(error, 'resume');
@@ -2563,6 +2754,9 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     }
 
     private startMonitoring(missionId: number, options?: { resumeFromInterrupted?: boolean }): void {
+        if (this.connection.supportsSessionRuntime && this.sessionRuns.some((run) => run.mission_id === missionId)) {
+            return;
+        }
         if (this.monitorTimer) {
             clearInterval(this.monitorTimer);
             this.monitorTimer = undefined;
@@ -2655,7 +2849,21 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         try {
             switch (action) {
                 case 'sendChat':
-                    await this.handleUserMessage(String(payload.text || ''));
+                    await this.handleUserMessage(String(payload.text || ''), undefined, [], false,
+                        payload.requestId ? String(payload.requestId) : undefined,
+                        payload.sessionId ? String(payload.sessionId) : undefined);
+                    break;
+                case 'sessionResume':
+                    if (this.currentSessionId) {
+                        await this.connection.sessionControl(this.currentSessionId, 'resume', String(payload.runId));
+                        await this.refreshSessionState();
+                    }
+                    break;
+                case 'showSessionDiff':
+                    this.post({ type: 'sessionDiff', payload: await this.connection.candidateDiff(Number(payload.missionId)) });
+                    break;
+                case 'steerChat':
+                    await this.steerChat(String(payload.text || ''));
                     break;
                 case 'stopChat':
                     await this.stopChat();
@@ -2809,6 +3017,23 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'removeQueueItem':
                     await this.removeQueuedItem(String(payload.itemId || ''));
+                    break;
+                case 'editQueueItem': {
+                    const sid = this.currentSessionId;
+                    const row = this.chatQueue.find((item) => item.id === String(payload.itemId));
+                    if (sid && row && this.connection.supportsSessionRuntime) {
+                        const text = await vscode.window.showInputBox({ prompt: 'Modifica la richiesta in coda', value: row.text });
+                        if (text?.trim()) { await this.connection.sessionControl(sid, 'edit', row.id, text); }
+                        await this.refreshSessionState();
+                    }
+                    break;
+                }
+                case 'reorderQueue':
+                    if (this.currentSessionId && this.connection.supportsSessionRuntime) {
+                        await this.connection.sessionControl(this.currentSessionId, 'reorder', undefined, '',
+                            Array.isArray(payload.ids) ? payload.ids.map(String) : []);
+                        await this.refreshSessionState();
+                    }
                     break;
                 case 'saveProviderSettings':
                     await this.saveProviderSettings(payload);
@@ -3068,12 +3293,17 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             researchProfile: this.connection.researchProfile,
             historyCount: this.historyCount,
             historyLoaded: this.historyLoaded,
-            error: this.errorMessage
+            error: this.errorMessage,
+            sessionRuns: this.sessionRuns
         };
     }
 
     /** Re-render the webview state after a backend connection-state change. */
     notifyConnectionState(): void {
+        if (this.connection.state === 'ready' && this.currentSessionId) {
+            this.errorMessage = undefined;
+            void this.watchSession();
+        }
         this.postState();
     }
 
@@ -3103,7 +3333,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         if (this.posted.length > MAX_RECORDED_MESSAGES) {
             this.posted.shift();
         }
-        void this.view?.webview.postMessage(message);
+        for (const host of this.hosts) { void host.webview.postMessage(message); }
     }
 
     private errorText(error: unknown): string {
@@ -3122,21 +3352,27 @@ export class ChatProvider implements vscode.WebviewViewProvider {
 
     private async waitForView(timeoutMs: number): Promise<void> {
         const deadline = Date.now() + timeoutMs;
-        while (!this.view && Date.now() < deadline) {
+        while (!this.hosts.size && Date.now() < deadline) {
             await new Promise((resolve) => setTimeout(resolve, 100));
         }
     }
 
     async focusComposer(): Promise<void> {
         await this.waitForView(5000);
-        if (this.view) {
+        if (this.hosts.size) {
             await new Promise((resolve) => setTimeout(resolve, 600));
-            this.post({ type: 'focus' });
+            if (this.panel) {
+                this.panel.reveal();
+                void this.panel.webview.postMessage({ type: 'focus' });
+            } else { void this.view?.webview.postMessage({ type: 'focus' }); }
         }
     }
 
     dispose(): void {
         this.disposed = true;
+        this.connection.sessionListeners.delete(this.sessionListener);
+        if (this.sessionRefresh) { clearTimeout(this.sessionRefresh); }
+        this.panel?.dispose();
         if (this.monitorTimer) {
             clearInterval(this.monitorTimer);
             this.monitorTimer = undefined;

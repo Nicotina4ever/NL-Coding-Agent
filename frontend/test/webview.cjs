@@ -524,9 +524,9 @@ function testWebviewBehaviour() {
         'engine menu filters the model menu to the selected engine');
 
     get('chat-controls-toggle').dispatch('click', {});
-    assert(get('model-bar').classList.contains('hidden'), 'model controls collapse');
+    assert(!get('model-bar').classList.contains('hidden'), 'model controls expand from the compact default');
     get('chat-controls-toggle').dispatch('click', {});
-    assert(!get('model-bar').classList.contains('hidden'), 'model controls expand');
+    assert(get('model-bar').classList.contains('hidden'), 'model controls collapse');
     get('mission-list-toggle').dispatch('click', {});
     assert(get('mission-list').classList.contains('hidden'), 'mission list collapses');
     get('mission-list-toggle').dispatch('click', {});
@@ -633,10 +633,22 @@ function testWebviewBehaviour() {
     // Busy state keeps input available so messages can be queued or steered.
     send({ type: 'state', payload: { ...state, busyChat: true } });
     assert.strictEqual(get('send').disabled, false, 'send remains available while busy');
-    assert.strictEqual(get('send').textContent, 'Queue');
+    assert.strictEqual(get('send').textContent, 'Accoda');
     assert(get('hint').textContent.includes('/steer'), 'busy hint explains steering');
 
     // Error notice.
+    send({ type: 'sessionEvent', payload: { seq: 900, type: 'assistant.delta', payload: { text: 'partial from A' } } });
+    assert.strictEqual(get('session-live').textContent, 'partial from A', 'real deltas reach the live reply');
+    send({ type: 'history', payload: { messages: [], session_id: 'B' } });
+    assert(get('session-live').classList.contains('hidden'), 'changing session clears the previous partial reply');
+    send({ type: 'sessionLive', text: 'restored A', session_id: 'A' });
+    assert.strictEqual(get('session-live').textContent, 'restored A', 'snapshot restores missed stream fragments');
+    const persistedSend = posted.find((message) => message.action === 'sendChat');
+    assert(persistedSend && persistedSend.payload.requestId, 'each UI send carries a durable request identity');
+    assert(savedState.pendingSends.some((item) => item.requestId === persistedSend.payload.requestId), 'unacknowledged send survives reload');
+    send({ type: 'submissionAccepted', requestId: persistedSend.payload.requestId });
+    assert(!savedState.pendingSends.some((item) => item.requestId === persistedSend.payload.requestId), 'accepted send is acknowledged');
+
     send({ type: 'state', payload: { ...state, error: 'engine is read-only' } });
     assert(!get('notice').classList.contains('hidden'), 'error notice visible');
     assert.strictEqual(get('notice').textContent, 'engine is read-only');

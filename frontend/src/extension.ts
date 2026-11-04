@@ -252,8 +252,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
     };
 
     const revealChat = async (tab?: 'chat' | 'missions' | 'agents' | 'engine') => {
-        await vscode.commands.executeCommand('workbench.view.extension.nlCodingAgentChat');
-        await vscode.commands.executeCommand('nlCodingAgent.chat.focus');
+        await chat?.openPanel();
         if (tab) {
             chat?.postNavigation(tab);
         }
@@ -595,10 +594,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<NlCodi
                 try {
                     await connection?.connect();
                     await refreshWorkbench();
-                    await home?.openPanel();
+                    if (projectRoot) { await chat?.openPanel(); }
+                    else { await home?.openPanel(); }
                     await vscode.commands.executeCommand('workbench.view.explorer');
-                    await vscode.commands.executeCommand('workbench.view.extension.nlCodingAgentChat');
-                    await vscode.commands.executeCommand('nlCodingAgent.chat.focus');
+                    await chat?.focusComposer();
                 } catch (error) {
                     output?.appendLine('[startup-home] ' + String(error));
                 }

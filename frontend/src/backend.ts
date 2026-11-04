@@ -14,6 +14,23 @@ import * as path from 'path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import { LoggingMessageNotificationSchema } from '@modelcontextprotocol/sdk/types.js';
+
+export interface SessionEvent {
+    version: number; seq: number; session_id: string; run_id: string;
+    type: string; payload: Record<string, unknown>; created_at: string;
+}
+export interface SessionRun {
+    id: string; request_id: string; status: string; mission_id?: number; stop_requested: number;
+    payload: { text: string; attachment_ids?: number[] };
+    result: Record<string, unknown>;
+}
+export interface SessionSnapshot {
+    ok: boolean; session_id: string; cursor: number;
+    runs: SessionRun[]; messages: HistoryMessage[];
+    activity: SessionEvent[];
+    live_text: string;
+}
 
 const DEFAULT_TIMEOUT_MS = 1_800_000;
 const CONNECT_TIMEOUT_MS = 60_000;
@@ -652,6 +669,14 @@ function contentText(payload: ToolCallPayload): string {
  * transport escalates to SIGTERM/SIGKILL if needed.
  */
 export class EngineConnection {
+    readonly sessionListeners = new Set<(event: SessionEvent) => void>();
+    private reconnectTimer?: NodeJS.Timeout;
+    private closing = false;
+    private connectionGeneration = 0;
+
+    get supportsSessionRuntime(): boolean {
+        return this.tools.some((tool) => tool.name === 'session_submit');
+    }
     state: ConnectionState = 'idle';
     /** Notifies the provider so the webview never shows "connected" with a dead engine. */
     onStateChange?: (state: ConnectionState) => void;
@@ -747,6 +772,7 @@ export class EngineConnection {
     }
 
     private async doConnect(): Promise<void> {
+        const generation = ++this.connectionGeneration;
         if (this.state === 'closed') {
             throw new EngineError('closed', 'The engine connection has been closed.');
         }
@@ -790,17 +816,31 @@ export class EngineConnection {
                 { capabilities: {} }
             );
             client.onclose = () => {
+                if (generation !== this.connectionGeneration) { return; }
                 if (this.state === 'ready' || this.state === 'connecting') {
                     this.lastError = this.lastError || 'The NL Coding Engine process closed.';
                     this.setState('failed');
+                    if (!this.closing && !this.reconnectTimer) {
+                        this.reconnectTimer = setTimeout(() => {
+                            this.reconnectTimer = undefined;
+                            if (!this.closing) { void this.restart().catch((error) => this.log(String(error))); }
+                        }, 2000);
+                    }
                 }
             };
+            client.setNotificationHandler(LoggingMessageNotificationSchema, (notification) => {
+                if (notification.params.logger !== 'nl.session') { return; }
+                const event = notification.params.data as SessionEvent;
+                if (event?.version !== 1 || !Number.isInteger(event.seq)) { return; }
+                for (const listener of this.sessionListeners) { listener(event); }
+            });
             await client.connect(transport, { timeout: CONNECT_TIMEOUT_MS });
             const listed = await client.listTools(undefined, { timeout: LIST_TOOLS_TIMEOUT_MS });
             this.client = client;
             this.transport = transport;
             this.tools = listed.tools || [];
             this.serverInfo = client.getServerVersion() as { name?: string; version?: string } | undefined;
+            this.lastError = undefined;
             this.setState('ready');
             this.log(
                 `engine ready: ${this.serverInfo?.name || 'unknown'} ${this.serverInfo?.version || ''} · ` +
@@ -824,6 +864,7 @@ export class EngineConnection {
     }
 
     private async disposeResources(): Promise<void> {
+        ++this.connectionGeneration;
         const client = this.client;
         this.client = undefined;
         this.transport = undefined;
@@ -839,13 +880,17 @@ export class EngineConnection {
 
     /** Close the MCP session and release the Python child process. */
     async close(): Promise<void> {
+        this.closing = true;
+        if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = undefined; }
         this.setState('closed');
         await this.disposeResources();
     }
 
     /** Drop the current session and start a new one (workspace folder changed, manual retry). */
     async restart(): Promise<void> {
+        this.closing = true;
         await this.disposeResources();
+        this.closing = false;
         this.setState('idle');
         this.serverInfo = undefined;
         this.lastError = undefined;
@@ -932,7 +977,8 @@ export class EngineConnection {
         modelSpec?: string,
         attachmentIds: number[] = [],
         allowCoding = false,
-        signal?: AbortSignal
+        signal?: AbortSignal,
+        sessionId?: string
     ): Promise<ConverseResult> {
         if (!Number.isInteger(projectId) || projectId <= 0) {
             throw new EngineError('invalid-project', 'A valid project id from project_context is required.');
@@ -958,6 +1004,7 @@ export class EngineConnection {
         }
         params.max_seconds = Math.max(5, Math.min(3600,
             Math.floor((timeoutMs || this.timeoutMs) / 1000) - 5));
+        if (sessionId) { params.session_id = sessionId; }
         const result = await this.callJson<ConverseResult>('nlc_converse', params, timeoutMs || this.timeoutMs, signal);
         if (!result || ((result.ok !== true) && result.status !== 'budget_exhausted') ||
             typeof result.reply !== 'string') {
@@ -966,6 +1013,24 @@ export class EngineConnection {
             throw new EngineError('chat-failed', detail);
         }
         return result;
+    }
+
+    async sessionSubmit(sessionId: string, requestId: string, text: string, attachmentIds: number[],
+                        modelSpec: string, allowCoding: boolean): Promise<{ run_id: string; status: string }> {
+        return this.callJson('session_submit', { session_id: sessionId, request_id: requestId, text,
+            attachment_ids: attachmentIds, model_spec: modelSpec, allow_coding: allowCoding }, 30_000);
+    }
+
+    async sessionSnapshot(sessionId: string): Promise<SessionSnapshot> {
+        return this.callJson('session_snapshot', { session_id: sessionId }, 30_000);
+    }
+
+    async sessionWatch(sessionId: string, afterSeq = 0): Promise<void> {
+        await this.callJson('session_watch', { session_id: sessionId, after_seq: afterSeq }, 30_000);
+    }
+
+    async sessionControl(sessionId: string, action: string, runId?: string, text = '', ids?: string[]): Promise<void> {
+        await this.callJson('session_control', { session_id: sessionId, action, run_id: runId, text, ids }, 30_000);
     }
 
     /** Ingest explicit files (or text) through the engine attachment pipeline. */
@@ -1457,7 +1522,9 @@ export class EngineConnection {
         reviewerModel: string;
         resumeMissionId?: number;
         fromTaskId?: number;
-    }): Promise<{ mission_id: number; dispatch?: string; task_id?: string }> {
+        sessionId?: string;
+        requestId?: string;
+    }): Promise<{ mission_id: number; dispatch?: string; task_id?: string; session_id?: string; session_run_id?: string }> {
         const goal = String(input.goal || '').trim();
         if (!goal) {
             throw new EngineError('empty-goal', 'The mission objective is empty.');
@@ -1471,13 +1538,17 @@ export class EngineConnection {
             reviewer_model: input.reviewerModel,
             approved: true
         };
+        if (input.sessionId) {
+            params.session_id = input.sessionId;
+            params.request_id = input.requestId;
+        }
         if (input.resumeMissionId !== undefined) {
             params.resume_mission_id = input.resumeMissionId;
         }
         if (input.fromTaskId !== undefined) {
             params.from_task_id = input.fromTaskId;
         }
-        const result = await this.callJson<{ mission_id?: number; dispatch?: string; task_id?: string }>(
+        const result = await this.callJson<{ mission_id?: number; dispatch?: string; task_id?: string; session_id?: string; session_run_id?: string }>(
             'start_mission', params, 60_000
         );
         if (!result || typeof result.mission_id !== 'number') {

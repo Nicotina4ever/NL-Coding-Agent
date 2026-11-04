@@ -9,6 +9,7 @@
  */
 
 export interface WebviewAssets {
+    logoUri?: string;
     scriptUri: string;
     styleUri: string;
     cspSource: string;
@@ -47,7 +48,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
 <body>
     <header class="nl-header">
         <div class="nl-header-row">
-            <span class="nl-brand">NL Code</span>
+            <span class="nl-brand">${assets.logoUri ? `<img class="nl-logo" src="${escapeHtml(assets.logoUri)}" alt="">` : ''}NL Code</span>
             <span id="status" class="nl-status" role="status" aria-live="polite">Starting…</span>
         </div>
         <div class="nl-header-row nl-header-meta">
@@ -98,6 +99,9 @@ export function buildChatHtml(assets: WebviewAssets): string {
             </div>
 
             <div id="messages" class="nl-messages" role="log" aria-live="polite" aria-label="Conversation"></div>
+            <div id="session-live" class="nl-session-live hidden" aria-live="polite"></div>
+
+            <details class="nl-session-drawer"><summary id="session-drawer-label">Conversazioni</summary>
 
             <div class="nl-session-bar">
                 <select id="chat-session" aria-label="Conversation session"></select>
@@ -110,6 +114,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                 <label class="nl-check"><input id="session-archived-toggle" type="checkbox"> archived</label>
             </div>
             <div id="chat-queue" class="nl-queue" aria-label="Persistent chat queue"></div>
+            </details>
 
             <div id="drop-overlay" class="nl-drop-overlay hidden">Drop workspace files to attach them</div>
 
@@ -127,10 +132,10 @@ export function buildChatHtml(assets: WebviewAssets): string {
 
                 <div class="nl-composer-shell">
                     <div class="nl-composer-toggle-row">
-                        <button id="chat-controls-toggle" type="button" class="nl-collapse-button">▾ model controls</button>
+                        <button id="chat-controls-toggle" type="button" class="nl-collapse-button">▸ Modello e controlli</button>
                         <button id="context-toggle" type="button" class="nl-collapse-button">▾ attachments</button>
                     </div>
-                    <div id="model-bar" class="nl-model-bar">
+                    <div id="model-bar" class="nl-model-bar hidden">
                         <label class="nl-field nl-field-small">Provider
                             <select id="provider-select"></select>
                         </label>
@@ -146,7 +151,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                     </div>
 
                     <label class="nl-visually-hidden" for="input">Message NL Coder</label>
-                    <textarea id="input" rows="3" placeholder="Ask NL Coder…  Type / for commands (/mission, /steer, /fetch)"></textarea>
+                    <textarea id="input" rows="3" placeholder="Descrivi cosa vuoi ottenere nel progetto…"></textarea>
                     <div id="slash-menu" class="nl-slash-menu hidden" role="listbox" aria-label="Slash commands"></div>
 
                     <div class="nl-mission-toggle-row">
@@ -164,7 +169,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
 
                     <div class="nl-composer-actions">
                         <div class="nl-composer-left">
-                            <label class="nl-field nl-field-small">Mode
+                            <label id="mode-field" class="nl-field nl-field-small hidden">Modalità
                                 <select id="mode">
                                     <option value="chat">Chat</option>
                                     <option value="mission">Mission</option>
@@ -172,7 +177,9 @@ export function buildChatHtml(assets: WebviewAssets): string {
                             </label>
                             <span id="hint" class="nl-hint"></span>
                         </div>
-                        <button id="btn-chat-stop" type="button" class="hidden">Stop chat</button>
+                        <button id="session-steer" type="button" class="hidden">Intervieni sul lavoro</button>
+                        <button id="session-resume" type="button" class="hidden">Riprendi</button>
+                        <button id="btn-chat-stop" type="button" class="hidden">Stop</button>
                         <button id="send" type="submit">Send</button>
                     </div>
                     <div class="nl-access-bar">

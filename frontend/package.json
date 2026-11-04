@@ -38,6 +38,8 @@
     "watch": "tsc -watch -p .",
     "test:integration": "node test/integration.cjs",
     "test:webview": "node test/webview.cjs",
+    "test:session-controller": "node test/sessionController.cjs",
+    "test:session-ui": "node test/sessionUiAcceptance.cjs",
     "test:extension": "node test/runExtensionTests.cjs",
     "test:mission": "node test/runMissionTests.cjs",
     "test:team-mission": "node test/runTeamMissionTests.cjs",

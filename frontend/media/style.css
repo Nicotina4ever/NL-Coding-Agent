@@ -2,6 +2,9 @@
    follow the active theme. Brand accent: electric violet #7531FE. */
 :root {
     color-scheme: light dark;
+    --nl-violet: #7531FE;
+    --nl-magenta: #E4469B;
+    --nl-cyan: #46A3C0;
 }
 
 html,
@@ -1151,4 +1154,63 @@ body .nl-danger {
 .nl-message-actions button {
     font-size: 0.76em;
     padding: 2px 6px;
+}
+
+/* Conversation workspace shared by the editor panel and compact sidebar. */
+body {
+    font-family: var(--vscode-font-family, 'Segoe UI', sans-serif);
+    font-size: var(--vscode-font-size, 13px);
+    line-height: 1.5;
+}
+body.vscode-dark {
+    background: #111216;
+    color: #F3F4F7;
+}
+.nl-header { padding: 14px 20px 0; }
+.nl-header-row { align-items: center; }
+.nl-brand { display: inline-flex; align-items: center; gap: 10px; font-size: 15px; }
+.nl-logo { width: 30px; height: 34px; object-fit: contain; }
+.nl-header-meta { gap: 7px; margin-top: 10px; }
+.nl-tabs { margin-top: 10px; }
+.nl-main { width: 100%; max-width: 1080px; margin-inline: auto; }
+#tab-chat { padding: 12px 24px 18px; overflow: hidden; }
+.nl-messages { gap: 18px; padding: 12px 4px 20px; scroll-behavior: auto; }
+.nl-message { flex-shrink: 0; padding: 12px 16px; border-radius: 10px; }
+.nl-message-user { margin-left: 8%; background: var(--vscode-editorWidget-background, #20232B); }
+.nl-message-assistant { padding-left: 12px; border-left-color: var(--nl-cyan); }
+.nl-message-body { line-height: 1.65; font-size: 13px; }
+.nl-message-head { gap: 10px; margin-bottom: 5px; }
+.nl-message-system { font-size: 12px; padding-block: 6px; }
+.nl-composer { gap: 8px; padding-top: 8px; }
+.nl-composer-shell { border-radius: 12px; padding: 10px 12px; }
+.nl-composer-shell:focus-within { border-color: var(--nl-violet); box-shadow: none; }
+.nl-composer-shell #input { min-height: 62px; max-height: 180px; line-height: 1.55; font-size: 13px; }
+.nl-composer-actions { gap: 8px; flex-wrap: wrap; }
+#send { background: var(--nl-violet); color: #fff; border-color: transparent; padding: 7px 18px; border-radius: 7px; }
+#btn-chat-stop { border-color: var(--vscode-inputValidation-errorBorder, #E26472); }
+.nl-session-drawer { flex-shrink: 0; border-top: 1px solid var(--vscode-panel-border, #343947); padding: 6px 2px; }
+.nl-session-drawer > summary { cursor: pointer; color: var(--vscode-descriptionForeground, #B8BECA); font-size: 12px; }
+.nl-session-bar { padding: 8px 0; }
+.nl-session-live { flex-shrink: 0; max-height: 28vh; overflow: auto; padding: 10px 14px; border-left: 2px solid var(--nl-cyan); white-space: pre-wrap; overflow-wrap: anywhere; }
+.nl-activity-card { flex-shrink: 0; border: 1px solid var(--vscode-panel-border, #343947); border-radius: 8px; padding: 8px 12px; font-size: 12px; }
+.nl-activity-card summary { cursor: pointer; color: var(--vscode-descriptionForeground, #B8BECA); }
+.nl-activity-card pre { max-height: 250px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.nl-run-card > summary { color: var(--vscode-foreground, #F3F4F7); font-weight: 600; }
+.nl-run-entries { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; }
+.nl-activity-entry { border-left: 2px solid var(--vscode-panel-border, #343947); padding-left: 10px; }
+.nl-code-block { padding: 12px; background: var(--vscode-textCodeBlock-background, #181A20); border-radius: 6px; overflow: auto; line-height: 1.55; }
+.nl-code-block code { font-family: var(--vscode-editor-font-family, Consolas, monospace); white-space: pre; }
+:focus-visible { outline: 2px solid var(--vscode-focusBorder, #AB83C6); outline-offset: 2px; }
+@media (min-width: 800px) {
+    #tab-chat { padding-inline: 52px; }
+    .nl-header { padding-inline: max(24px, calc((100vw - 976px) / 2)); }
+}
+@media (max-width: 450px) {
+    .nl-header { padding: 10px 12px 0; }
+    #tab-chat { padding: 6px 10px 10px; }
+    .nl-message { padding: 8px 10px; }
+    .nl-message-user { margin-left: 0; }
+    .nl-composer-actions { align-items: center; }
+    .nl-composer-left { flex-basis: 100%; }
+    .nl-context-actions { flex-wrap: wrap; }
 }
