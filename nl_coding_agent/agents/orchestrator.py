@@ -2263,6 +2263,7 @@ class MultiAgentOrchestrator:
             architecture_notes = self._run_planned_analysis(
                 mission_id, tasks, goal,
                 {"architect": architect_model, "auditor": auditor_model},
+                control=control,
             )
             self._checkpoint(control, "after-architect")
 
@@ -2503,13 +2504,14 @@ Do not claim that changes were made. The Developer will perform them in a staged
         )
 
     def _run_planned_analysis(self, mission_id: int, tasks: list[dict], goal: str,
-                              models: dict[str, str]) -> str:
+                              models: dict[str, str], *, control=None) -> str:
         """Execute every planned read-only analysis task in order and combine its notes."""
         notes: list[str] = []
         for task in tasks:
             role = str(task.get("agent_role") or "")
             if role not in ("architect", "auditor"):
                 continue
+            self._checkpoint(control, "before-" + role)
             if task.get("status") == "completed":
                 analysis = self._analysis_notes(mission_id, role)
                 self._emit(role, "info", "Analysis recovered from persisted handoff.",
@@ -2522,11 +2524,14 @@ Do not claim that changes were made. The Developer will perform them in a staged
                     mission_id, task, goal, models.get("auditor") or models.get("developer") or "")
             else:
                 continue
+            self._checkpoint(control, "after-" + role)
             if str(analysis or "").strip():
                 label = "Architecture" if role == "architect" else "Audit"
                 notes.append(f"[{label}]\n{analysis.strip()}")
         if self._advisors:
+            self._checkpoint(control, "before-advisors")
             advisor_notes = self._run_advisory_subagents(mission_id, goal)
+            self._checkpoint(control, "after-advisors")
             if advisor_notes:
                 notes.append(advisor_notes)
         return "\n\n".join(notes)

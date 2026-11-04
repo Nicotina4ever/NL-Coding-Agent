@@ -158,6 +158,7 @@ class SupervisorMissionExecutor:
             architecture_notes = self.orchestrator._run_planned_analysis(
                 self.mission_id, self.tasks, self.goal,
                 {"architect": self.architect_model, "auditor": self.auditor_model},
+                control=self.control,
             )
             self._checkpoint("after-architect")
             self._checkpoint("before-developer")

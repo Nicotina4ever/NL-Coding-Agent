@@ -1,5 +1,6 @@
 """Proportional mission team policy and read-only analysis tools (no model calls)."""
 import json
+import pytest
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -34,6 +35,24 @@ def _project(tmp_path, monkeypatch):
 
 def _roles(plan):
     return [task["agent_role"] for task in plan]
+
+
+def test_stop_is_observed_between_read_only_specialists(tmp_path, monkeypatch):
+    from nl_coding_agent.core.run_control import RunControl, RunStopped
+    services, project, root = _project(tmp_path, monkeypatch)
+    control = RunControl()
+    orchestrator = MultiAgentOrchestrator(root, project_id=project["id"], crew_runtime=FakeCrewRuntime({}))
+    def architect(*args):
+        control.request_stop("Stop during architecture")
+        return "Retained architecture notes"
+    monkeypatch.setattr(orchestrator, "_run_architect_stage", architect)
+    monkeypatch.setattr(orchestrator, "_run_auditor_stage", lambda *args: pytest.fail("Auditor must wait for explicit Resume"))
+    try:
+        with pytest.raises(RunStopped, match="after-architect"):
+            orchestrator._run_planned_analysis(1, [{"agent_role": "architect"}, {"agent_role": "auditor"}],
+                                              "Fix module", {}, control=control)
+    finally:
+        services._db.close()
 
 
 def test_team_plan_scan_prunes_runtime_data_and_nested_repositories(tmp_path):
