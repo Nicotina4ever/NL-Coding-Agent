@@ -9,18 +9,19 @@ const repo = path.resolve(__dirname, '../..');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const host = process.argv[2] || 'standalone';
 const sessionOnly = process.argv[3] === 'sessions';
-const realProject = process.argv[3] === 'real';
+const packaged = process.argv[3] === 'packaged';
+const realProject = process.argv[3] === 'real' || packaged;
 const repairReal = process.argv[3] === 'repair-real';
-const executable = host === 'standalone'
+const executable = process.env.NL_ACCEPTANCE_EXE || (host === 'standalone'
     ? path.join(repo, '.workspace/dist/NL Code/NL Code.exe')
-    : path.join(process.env.LOCALAPPDATA, 'Programs/Microsoft VS Code Insiders/Code - Insiders.exe');
+    : path.join(process.env.LOCALAPPDATA, 'Programs/Microsoft VS Code Insiders/Code - Insiders.exe'));
 const scratch = path.join(repo, '.workspace/temp', 'session-ui-' + host + (sessionOnly ? '-sessions' : realProject ? '-real' : repairReal ? '-repair-real' : '') + '-' + Date.now());
 const project = realProject ? path.resolve(process.env.NL_ACCEPTANCE_PROJECT || 'K:/AI/NL_AudioLab') : path.join(scratch, 'project');
 const data = path.join(scratch, 'data');
 const sourceEngineRoot = host === 'standalone' ? path.join(path.dirname(executable), 'engine') : repo;
 const engineRoot = repairReal ? path.join(scratch, 'engine') : sourceEngineRoot;
 const profile = host === 'standalone' ? path.join(scratch, 'portable/user-data') : path.join(scratch, 'profile');
-const extensions = path.join(scratch, 'extensions');
+const extensions = packaged ? path.join(path.dirname(executable),'data/extensions') : path.join(scratch, 'extensions');
 const report = { host, scratch, checks: [], started_at: new Date().toISOString() };
 const env = { ...process.env, NL_DATA_DIR: data, NL_WORKSPACE_DIR: path.join(scratch, 'workspace'),
     NL_MODELS_CONFIG: path.join(data, 'models.yaml'), NL_ENGINE_ROOT: engineRoot,
@@ -154,17 +155,23 @@ async function main() {
         'window.restoreWindows': 'none', 'security.workspace.trust.enabled': false,
         'workbench.startupEditor': 'none'
     }, null, 2));
-    const vsix = path.join(repo, '.workspace/temp/session-package/NL-Coder.vsix');
+    const extensionVersion = JSON.parse(fs.readFileSync(path.join(repo,'frontend/package.json'),'utf8')).version;
+    const vsix = process.env.NL_ACCEPTANCE_VSIX || path.join(repo, '.workspace/dist/NL-Coding-Agent-'+extensionVersion+'.vsix');
     assert(fs.existsSync(vsix), 'package current extension first');
     const appDir = path.dirname(executable);
     const cli = [path.join(appDir, 'resources/app/out/cli.js'),
         ...fs.readdirSync(appDir, { withFileTypes: true }).filter((item) => item.isDirectory())
             .map((item) => path.join(appDir, item.name, 'resources/app/out/cli.js'))].find((item) => fs.existsSync(item));
     assert(cli, 'installed editor CLI is available');
+    if (packaged) {
+        assert(fs.existsSync(path.join(extensions,'nlcodingagent.nl-coding-agent-'+extensionVersion,'package.json')));
+        check('current NL extension supplied by the clean archive; no VSIX install before launch',extensionVersion);
+    } else {
     const installed = spawnSync(executable, [cli, '--install-extension', vsix, '--extensions-dir', extensions,
         '--user-data-dir', profile, '--force'], { env: { ...env, ELECTRON_RUN_AS_NODE: '1' }, encoding: 'utf8', windowsHide: true });
     assert.strictEqual(installed.status, 0, installed.stderr + installed.stdout);
     check('current VSIX installed in isolated profile', model);
+    }
     const portServer = net.createServer();
     await new Promise((resolve) => portServer.listen(0, '127.0.0.1', resolve));
     const port = portServer.address().port;

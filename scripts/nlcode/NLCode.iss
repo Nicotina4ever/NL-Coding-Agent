@@ -9,7 +9,13 @@
   #error PayloadDir define is required
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.7.2"
+  #define AppVersion "0.7.3"
+#endif
+#ifndef ModelsConfig
+  #define ModelsConfig PayloadDir + "\engine\config\models.yaml"
+#endif
+#ifndef VsixFile
+  #error VsixFile define is required
 #endif
 #ifndef OutputDir
   #define OutputDir "."
@@ -37,8 +43,9 @@ OutputBaseFilename=NL-Code-Setup
 Compression=lzma2/fast
 SolidCompression=yes
 WizardStyle=modern
-PrivilegesRequired=admin
-PrivilegesRequiredOverridesAllowed=dialog
+; Per-user release: shared all-users profiles are not shipped until standard-user
+; ACL and multi-user acceptance have passed.
+PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
@@ -58,10 +65,13 @@ SetupIconFile={#SetupIcon}
 
 [Files]
 ; Never install the payload's live data/ or setup marker; user data is external.
-Source: "{#PayloadDir}\*"; DestDir: "{app}"; Excludes: "data\*,setup-version.txt"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#PayloadDir}\*"; DestDir: "{app}"; Excludes: "data,data\*,engine\data,engine\data\*,engine\config,engine\config\*,setup-version.txt,*.log,*.lnk,__pycache__,*\__pycache__\*,*.pyc,node-compile-cache,*\node-compile-cache\*"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; The NL Coder extension is installed into the user-selected data root, matching
 ; the --extensions-dir used by the generated launcher.
-Source: "{#PayloadDir}\data\extensions\*"; DestDir: "{code:GetExtensionsDir}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#PayloadDir}\data\extensions\nlcodingagent.nl-coding-agent-{#AppVersion}\*"; DestDir: "{code:GetExtensionsDir}\nlcodingagent.nl-coding-agent-{#AppVersion}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#ModelsConfig}"; DestName: "nlcode-default-models.yaml"; Flags: dontcopy
+Source: "{#VsixFile}"; DestName: "NL-Coder.vsix"; Flags: dontcopy
+Source: "{#SourcePath}\default_settings.json"; DestName: "nlcode-default-settings.json"; Flags: dontcopy
 
 [Tasks]
 Name: "desktopicon"; Description: "Crea un collegamento sul desktop"; GroupDescription: "Collegamenti:"; Flags: unchecked
@@ -85,6 +95,109 @@ var
   DataPage: TInputDirWizardPage;
   RemoveData: Boolean;
   SavedDataDir: String;
+
+function FileAttributes(Path: String): LongWord;
+  external 'GetFileAttributesW@kernel32.dll stdcall';
+function SetEnvironment(Name, Value: String): Boolean;
+  external 'SetEnvironmentVariableW@kernel32.dll stdcall';
+
+function Canonical(Path: String): String;
+begin
+  Result := RemoveBackslashUnlessRoot(ExpandFileName(Trim(Path)));
+end;
+
+function ReparseAncestor(Path: String): Boolean;
+var
+  parent: String;
+  attrs: LongWord;
+begin
+  Result := False;
+  Path := Canonical(Path);
+  while Path <> '' do
+  begin
+    attrs := FileAttributes(Path);
+    if (attrs <> $FFFFFFFF) and ((attrs and $400) <> 0) then
+    begin
+      Result := True;
+      Exit;
+    end;
+    parent := ExtractFileDir(Path);
+    if CompareText(parent, Path) = 0 then Exit;
+    Path := parent;
+  end;
+end;
+
+function InvalidRoots(AppDir, DataDir: String): Boolean;
+var
+  appPrefix, dataPrefix: String;
+begin
+  if (Trim(AppDir) = '') or (Trim(DataDir) = '') then
+  begin
+    Result := True;
+    Exit;
+  end;
+  AppDir := Canonical(AppDir);
+  DataDir := Canonical(DataDir);
+  appPrefix := AddBackslash(AppDir);
+  dataPrefix := AddBackslash(DataDir);
+  Result := (DataDir = '') or (AppDir = '') or
+    (CompareText(DataDir, AddBackslash(ExtractFileDrive(DataDir))) = 0) or
+    (CompareText(AppDir, AddBackslash(ExtractFileDrive(AppDir))) = 0) or
+    (CompareText(Copy(dataPrefix, 1, Length(appPrefix)), appPrefix) = 0) or
+    (CompareText(Copy(appPrefix, 1, Length(dataPrefix)), dataPrefix) = 0) or
+    ReparseAncestor(AppDir) or ReparseAncestor(DataDir);
+end;
+
+function EmptyDirectory(Path: String): Boolean;
+var
+  item: TFindRec;
+begin
+  Result := not DirExists(Path);
+  if FindFirst(AddBackslash(Path) + '*', item) then
+  begin
+    Result := True;
+    try
+      repeat
+        if (item.Name <> '.') and (item.Name <> '..') then
+        begin
+          Result := False;
+          Exit;
+        end;
+      until not FindNext(item);
+    finally
+      FindClose(item);
+    end;
+  end;
+end;
+
+function ReparseBelow(Path: String): Boolean;
+var
+  item: TFindRec;
+begin
+  Result := True;
+  if FindFirst(AddBackslash(Path) + '*', item) then
+  begin
+    Result := False;
+    try
+      repeat
+        if (item.Name <> '.') and (item.Name <> '..') then
+        begin
+          if ((item.Attributes and $400) <> 0) then Result := True
+          else if ((item.Attributes and $10) <> 0) then
+            Result := ReparseBelow(AddBackslash(Path) + item.Name);
+          if Result then Exit;
+        end;
+      until not FindNext(item);
+    finally
+      FindClose(item);
+    end;
+  end;
+end;
+
+function OwnershipText(Path: String): String;
+begin
+  Result := 'NL-Code-data-v1|' + Lowercase(Canonical(Path));
+end;
 
 function ReplaceAll(const S, OldPattern, NewPattern: String): String;
 var
@@ -130,10 +243,7 @@ var
   previous: String;
   defaultDir: String;
 begin
-  if IsAdminInstallMode then
-    defaultDir := ExpandConstant('{commonappdata}\NL Code\data')
-  else
-    defaultDir := ExpandConstant('{localappdata}\NL Code\data');
+  defaultDir := ExpandConstant('{localappdata}\NL Code\data');
   defaultDir := ExpandConstant('{param:DATADIR|' + defaultDir + '}');
   DataPage := CreateInputDirPage(wpSelectDir,
     'Cartella dati NL Code',
@@ -165,14 +275,28 @@ begin
       Result := False;
       Exit;
     end;
-    if CompareText(selected, ExpandConstant('{app}')) = 0 then
+    if InvalidRoots(ExpandConstant('{app}'), selected) then
     begin
-      MsgBox('La cartella dati deve essere diversa dalla cartella di installazione.', mbError, MB_OK);
+      MsgBox('Scegli cartelle applicazione e dati separate, senza sovrapposizioni, junction o radici di disco.', mbError, MB_OK);
       Result := False;
       Exit;
     end;
     DataPage.Values[0] := selected;
   end;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  if InvalidRoots(ExpandConstant('{app}'), DataPage.Values[0]) then
+    Result := 'Cartelle applicazione/dati non valide o sovrapposte.'
+  else if DirExists(ExpandConstant('{app}')) and ReparseBelow(ExpandConstant('{app}')) then
+    Result := 'La cartella applicazione contiene junction o collegamenti non supportati.'
+  else if DirExists(DataPage.Values[0]) and ReparseBelow(DataPage.Values[0]) then
+    Result := 'La cartella dati contiene junction o collegamenti non supportati.'
+  else if DirExists(ExpandConstant('{app}\data')) and
+    not EmptyDirectory(ExpandConstant('{app}\data')) then
+    Result := 'Questa cartella contiene un profilo portable. Scegli una cartella di installazione separata.';
 end;
 
 procedure WriteText(Path, Content: String);
@@ -183,17 +307,49 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  dataDir, cacheDir, workspaceDir, modelsConfig, batch, cfg: String;
+  dataDir, cacheDir, workspaceDir, modelsConfig, batch, cfg, oldModels, oldElectron, cliArgs: String;
+  cliExit: Integer;
 begin
+  if CurStep = ssInstall then
+  begin
+    dataDir := Canonical(DataPage.Values[0]);
+    if not DirExists(dataDir) or EmptyDirectory(dataDir) then
+    begin
+      ForceDirectories(dataDir);
+      WriteText(dataDir + '\.nl-code-data-owner', OwnershipText(dataDir));
+    end;
+    modelsConfig := dataDir + '\config\models.yaml';
+    if not FileExists(modelsConfig) then
+    begin
+      ForceDirectories(dataDir + '\config');
+      oldModels := ExpandConstant('{app}\engine\config\models.yaml');
+      if not FileExists(oldModels) then
+      begin
+        ExtractTemporaryFile('nlcode-default-models.yaml');
+        oldModels := ExpandConstant('{tmp}\nlcode-default-models.yaml');
+      end;
+      if not FileCopy(oldModels, modelsConfig, True) then
+        RaiseException('Impossibile inizializzare la configurazione modelli nella cartella dati.');
+    end;
+    Exit;
+  end;
   if CurStep <> ssPostInstall then
     Exit;
-  dataDir := DataPage.Values[0];
+  dataDir := Canonical(DataPage.Values[0]);
   cacheDir := dataDir + '\cache';
   workspaceDir := dataDir + '\workspace';
-  modelsConfig := ExpandConstant('{app}\engine\config\models.yaml');
+  modelsConfig := dataDir + '\config\models.yaml';
   ForceDirectories(dataDir);
   ForceDirectories(cacheDir);
   ForceDirectories(workspaceDir);
+  if not FileExists(dataDir + '\user-data\User\settings.json') then
+  begin
+    ForceDirectories(dataDir + '\user-data\User');
+    ExtractTemporaryFile('nlcode-default-settings.json');
+    if not FileCopy(ExpandConstant('{tmp}\nlcode-default-settings.json'),
+      dataDir + '\user-data\User\settings.json', True) then
+      RaiseException('Impossibile inizializzare le impostazioni NL Code.');
+  end;
   cfg := '{"version":"' + JsonEsc('{#AppVersion}') + '",' +
          '"installDir":"' + JsonEsc(ExpandConstant('{app}')) + '",' +
          '"dataDir":"' + JsonEsc(dataDir) + '",' +
@@ -205,13 +361,14 @@ begin
   // contains an empty directory entry. Remove it so --user-data-dir and
   // --extensions-dir below are authoritative and no profile is written in the
   // application folder.
-  DelTree(ExpandConstant('{app}\data'), True, True, True);
+  RemoveDir(ExpandConstant('{app}\data'));
   batch := '@echo off' + #13#10 +
     'setlocal' + #13#10 +
     'set "NLCODE_ROOT=%~dp0"' + #13#10 +
     'set "NLCODE_ENGINE_ROOT=%~dp0engine"' + #13#10 +
     'set "NL_ENGINE_ROOT=%NLCODE_ENGINE_ROOT%"' + #13#10 +
     'set "ELECTRON_RUN_AS_NODE="' + #13#10 +
+    'set "PYTHONDONTWRITEBYTECODE=1"' + #13#10 +
     'set "NL_DATA_DIR=' + dataDir + '"' + #13#10 +
     'set "NL_WORKSPACE_DIR=' + workspaceDir + '"' + #13#10 +
     'set "NL_CACHE_DIR=' + cacheDir + '"' + #13#10 +
@@ -220,19 +377,46 @@ begin
     'if not exist "%NL_WORKSPACE_DIR%" mkdir "%NL_WORKSPACE_DIR%"' + #13#10 +
     'start "" "%~dp0NL Code.exe" --user-data-dir="' + dataDir + '\user-data" --extensions-dir="' + dataDir + '\extensions" %*' + #13#10;
   WriteText(ExpandConstant('{app}\NL Code Installed.cmd'), batch);
+  ExtractTemporaryFile('NL-Coder.vsix');
+  cliArgs := '"' + ExpandConstant('{app}\resources\app\out\cli.js') +
+    '" --install-extension "' + ExpandConstant('{tmp}\NL-Coder.vsix') +
+    '" --extensions-dir "' + GetExtensionsDir('') + '" --user-data-dir "' +
+    dataDir + '\user-data" --force';
+  oldElectron := GetEnv('ELECTRON_RUN_AS_NODE');
+  SetEnvironment('ELECTRON_RUN_AS_NODE', '1');
+  try
+    if not Exec(ExpandConstant('{app}\NL Code.exe'), cliArgs,
+      ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, cliExit) then
+      RaiseException('Impossibile registrare NL Coder.')
+    else if cliExit <> 0 then
+      RaiseException('Registrazione NL Coder fallita: ' + IntToStr(cliExit));
+  finally
+    SetEnvironment('ELECTRON_RUN_AS_NODE', oldElectron);
+  end;
 end;
 
 function InitializeUninstall(): Boolean;
 var
-  dataDir: String;
+  dataDir, registeredApp: String;
 begin
   Result := True;
   RemoveData := False;
   SavedDataDir := '';
   if RegQueryStringValue(HKA, 'Software\NL Code', 'DataDir', dataDir) then
     SavedDataDir := dataDir;
-  if SavedDataDir = '' then
+  if (SavedDataDir = '') or
+    not RegQueryStringValue(HKA, 'Software\NL Code', 'InstallDir', registeredApp) or
+    (CompareText(Canonical(registeredApp), Canonical(ExpandConstant('{app}'))) <> 0) or
+    InvalidRoots(ExpandConstant('{app}'), SavedDataDir) or
+    ReparseBelow(ExpandConstant('{app}')) or
+    (DirExists(SavedDataDir) and ReparseBelow(SavedDataDir)) then
+  begin
+    Result := False;
+    Log('Uninstall refused before file removal: installation identity or path checks failed.');
+    if not UninstallSilent then
+      MsgBox('Disinstallazione interrotta: percorsi modificati o collegamenti esterni. Controlla cartella applicazione e dati prima di riprovare.', mbError, MB_OK);
     Exit;
+  end;
   if UninstallSilent then
     RemoveData := ExpandConstant('{param:REMOVEDATA|0}') = '1'
   else
@@ -245,6 +429,7 @@ end;
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   appDir: String;
+  owner: AnsiString;
 begin
   if CurUninstallStep <> usPostUninstall then
     Exit;
@@ -253,13 +438,22 @@ begin
   // installer files; remove them explicitly so uninstall leaves no app residue.
   DeleteFile(appDir + '\install-config.json');
   DeleteFile(appDir + '\NL Code Installed.cmd');
-  DelTree(appDir + '\data', True, True, True);
-  DelTree(appDir + '\resources\app\node-compile-cache', True, True, True);
-  DelTree(appDir + '\resources', True, True, True);
+  RemoveDir(appDir + '\data');
+  RemoveDir(appDir + '\resources\app');
+  RemoveDir(appDir + '\resources');
   RemoveDir(appDir);
   if (not RemoveData) or (SavedDataDir = '') then
     Exit;
-  if CompareText(SavedDataDir, appDir) = 0 then
+  if InvalidRoots(appDir, SavedDataDir) then
     Exit;
+  if not LoadStringFromFile(SavedDataDir + '\.nl-code-data-owner', owner) or
+    (String(owner) <> OwnershipText(SavedDataDir)) or ReparseBelow(SavedDataDir) then
+  begin
+    Log('Data removal skipped: directory ownership or reparse checks failed.');
+    if not UninstallSilent then
+      MsgBox('La cartella dati e stata conservata: contiene dati preesistenti o collegamenti esterni. Percorso: ' + SavedDataDir,
+        mbInformation, MB_OK);
+    Exit;
+  end;
   DelTree(SavedDataDir, True, True, True);
 end;

@@ -22,7 +22,8 @@ Latest beta packages are published on the
 - **Windows setup** (`NL-Code-Setup.exe`) — standard Inno Setup installer/uninstaller registered in
   Windows “App e funzionalità”. During setup you freely choose the installation folder (any disk,
   spaces allowed) and a separate data folder; Desktop/Start shortcuts are optional. A per-user
-  install needs no elevation; choosing all users requests elevation. Updates reuse the previous app
+  install needs no elevation. The 0.7.3 beta installer uses per-user data; shared all-users profiles
+  remain outside the verified release scope. Updates reuse the previous app
   and data paths and never delete settings. Uninstall removes the application and its runtime
   components, keeps projects/shared models, and removes the selected data folder only when the user
   chooses to (or `/REMOVEDATA=1` in silent uninstall).

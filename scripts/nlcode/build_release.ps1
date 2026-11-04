@@ -7,7 +7,7 @@ param(
     [string]$Dist = '',
     [string]$Releases = '',
     [string]$Version = '',
-    [string]$ReleaseTag = 'v0.7.2-beta.1'
+    [string]$ReleaseTag = ''
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
@@ -18,10 +18,27 @@ if (-not $Version) {
     $Version = [string]$package.version
 }
 $payload = Join-Path $Dist 'NL Code'
-$zipSource = Join-Path $Dist 'NL-Code-0.7.2-portable-win64.zip'
+if (-not $ReleaseTag) { $ReleaseTag = 'v' + $Version + '-beta.1' }
 $vsixSource = Join-Path $Dist ('NL-Coding-Agent-' + $Version + '.vsix')
 if (-not (Test-Path (Join-Path $payload 'NL Code.exe'))) { throw "standalone payload missing: $payload" }
 if (-not (Test-Path (Join-Path $payload 'engine\python\python.exe'))) { throw 'embedded engine missing from payload' }
+$extensionName = 'nlcodingagent.nl-coding-agent-' + $Version
+$extensionRoot = Join-Path $payload ('data\extensions\' + $extensionName)
+if (-not (Test-Path (Join-Path $extensionRoot 'package.json'))) { throw 'current extension missing from payload' }
+$embedded = Get-Content (Join-Path $extensionRoot 'package.json') -Raw | ConvertFrom-Json
+$info = Get-Content (Join-Path $payload 'BUILD_INFO.json') -Raw | ConvertFrom-Json
+if ($embedded.version -ne $Version -or $info.extension -ne $extensionName) { throw 'payload version does not match requested release' }
+if (-not (Test-Path $vsixSource)) { throw "package the current VSIX first: $vsixSource" }
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$vsixArchive = [IO.Compression.ZipFile]::OpenRead($vsixSource)
+try {
+    $reader = [IO.StreamReader]::new($vsixArchive.GetEntry('extension/package.json').Open())
+    try { $vsixPackage = $reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() }
+    if ($vsixPackage.version -ne $Version) { throw 'VSIX version mismatch' }
+} finally { $vsixArchive.Dispose() }
+if ((Test-Path $Releases) -and @(Get-ChildItem -LiteralPath $Releases -Force).Count) {
+    throw "release output is not empty; preserve or stage the old release first: $Releases"
+}
 
 $windows = Join-Path $Releases 'windows'
 $extension = Join-Path $Releases 'extension'
@@ -30,11 +47,27 @@ $linux = Join-Path $Releases 'linux'
 New-Item -ItemType Directory -Force -Path $windows, $extension, $macos, $linux | Out-Null
 
 $zip = Join-Path $windows 'NL-Code-Portable.zip'
-# Build a clean portable ZIP from the verified payload, never including the
-# machine/profile data/ directory. The portable launcher creates fresh local data.
+# Defaults come from tracked source, never from the live payload's mutable config.
+$defaults = Join-Path (Split-Path $Releases -Parent) ('packaging-defaults-' + $Version)
+if (Test-Path $defaults) { throw "packaging defaults directory already exists: $defaults" }
+New-Item -ItemType Directory -Force -Path (Join-Path $defaults 'engine/config') | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $defaults 'data/user-data/User') | Out-Null
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'default_settings.json') -Destination (Join-Path $defaults 'data/user-data/User/settings.json')
+$defaultModels = Join-Path $defaults 'engine/config/models.yaml'
+$trackedModels = & git -C $repoRoot show HEAD:config/models.yaml
+if ($LASTEXITCODE -ne 0) { throw 'cannot read tracked model defaults' }
+[IO.File]::WriteAllText($defaultModels, ($trackedModels -join "`n") + "`n", [Text.UTF8Encoding]::new($false))
+# Ship the extension itself, never its machine-specific index, user profiles,
+# databases, runtime data, logs, shortcut paths or mutable engine configuration.
+$archiveEntries = @(Get-ChildItem -LiteralPath $payload -Force | Where-Object {
+    $_.Name -notin @('data', 'engine') -and $_.Extension -notin @('.log', '.lnk')
+} | ForEach-Object { $_.Name })
+$archiveEntries += @(Get-ChildItem -LiteralPath (Join-Path $payload 'engine') -Force | Where-Object {
+    $_.Name -notin @('data', 'config')
+} | ForEach-Object { 'engine/' + $_.Name })
+$archiveEntries += 'data/extensions/' + $extensionName
 $tar = Join-Path $env:WINDIR 'System32\tar.exe'
-if (Test-Path $zip) { Remove-Item $zip -Force }
-& $tar -a -c -f $zip --exclude 'data/*' -C $payload .
+& $tar -a -c -f $zip --exclude '__pycache__' --exclude '*.pyc' --exclude '*.log' --exclude 'node-compile-cache' -C $payload @archiveEntries -C $defaults 'engine/config/models.yaml' 'data/user-data/User/settings.json'
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $zip)) {
     throw "portable archive creation failed: $LASTEXITCODE"
 }
@@ -59,7 +92,7 @@ if (-not $iscc) {
 $setupExe = Join-Path $windows 'NL-Code-Setup.exe'
 $iss = Join-Path $PSScriptRoot 'NLCode.iss'
 $icon = Join-Path $payload 'resources\app\resources\win32\code.ico'
-& $iscc "/DPayloadDir=$payload" "/DAppVersion=$Version" "/DOutputDir=$windows" "/DSetupIcon=$icon" $iss
+& $iscc "/DPayloadDir=$payload" "/DAppVersion=$Version" "/DModelsConfig=$defaultModels" "/DVsixFile=$vsixSource" "/DOutputDir=$windows" "/DSetupIcon=$icon" $iss
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed: $LASTEXITCODE" }
 if (-not (Test-Path $setupExe)) { throw "installer not produced: $setupExe" }
 
@@ -91,7 +124,7 @@ $manifest = [ordered]@{
     releaseTag = $ReleaseTag
     generatedAt = (Get-Date).ToString('o')
     windows = [ordered]@{
-        status = 'verified-locally'
+        status = 'built-awaiting-acceptance'
         portable = 'windows/NL-Code-Portable.zip'
         setup = 'windows/NL-Code-Setup.exe'
         installer = 'inno-setup'

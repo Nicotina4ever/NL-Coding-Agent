@@ -1,0 +1,12 @@
+{
+  "workbench.colorTheme": "NL Code Dark",
+  "workbench.startupEditor": "none",
+  "workbench.tips.enabled": false,
+  "workbench.activityBar.location": "top",
+  "workbench.layoutControl.enabled": true,
+  "workbench.secondarySideBar.defaultVisibility": "visibleInWorkspace",
+  "window.commandCenter": true,
+  "explorer.compactFolders": false,
+  "chat.disableAIFeatures": true,
+  "telemetry.telemetryLevel": "off"
+}

@@ -9,10 +9,11 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$version = (Get-Content (Join-Path $repo 'frontend/package.json') -Raw | ConvertFrom-Json).version
 if (-not $Vsix) {
     foreach ($candidate in @(
         (Join-Path $repo '.workspace\releases\extension\NL-Coder.vsix'),
-        (Join-Path $repo '.workspace\dist\NL-Coding-Agent-0.7.2.vsix')
+        (Join-Path $repo ('.workspace\dist\NL-Coding-Agent-' + $version + '.vsix'))
     )) {
         if (Test-Path $candidate) { $Vsix = $candidate; break }
     }
