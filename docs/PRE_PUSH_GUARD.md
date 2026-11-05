@@ -89,9 +89,9 @@ scripts/audit_release_secrets.py; the guard does not duplicate regexes. It check
 Findings are redacted (SHA-256[0:12], at most 4-char prefix, length; context
 matches replaced with [REDACTED:<hash>]). Full values never appear in stdout,
 JSON, Markdown or reports. Scans are bounded (file/total bytes, commit count,
-up to 500 findings independently for staged, head and history), and reaching a
+up to 1,000 findings independently for staged, head and history), and reaching a
 bound in any one scope fails closed. The combined report can therefore contain up
-to 1,500 findings without treating separate bounded scans as one exhausted bound.
+to 3,000 findings without treating separate bounded scans as one exhausted bound.
 Markdown/docs files are still scanned
 for explicit credential patterns; review-only personal-path/entropy heuristics are
 skipped there to avoid documentation examples blocking releases (documented review
@@ -278,3 +278,9 @@ authorizes publishing; it is not a substitute for external acceptance or owner
 authorization. Real clean-machine/platform testing, external secret scanning,
 signing and owner authorization for the specific artifact/scope remain
 MANUAL-PENDING. Never print or upload a detected secret; rotate real credentials.
+
+Release 0.7.4: the bounded report budget is 1,000 findings per scope. The growing
+30-commit history exceeded the former 500-entry history report limit with review
+findings, so publication remained blocked until a complete scan. Detection rules,
+blocking classifications, redaction and fail-closed truncation are unchanged; no
+finding is suppressed by this capacity change.
