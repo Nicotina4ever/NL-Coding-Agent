@@ -1,0 +1,606 @@
+{
+  "entries": 84,
+  "bytes": 8420214731,
+  "deleted": 0,
+  "archive": "da_eliminare/cleanup-20261105-release-0.7.3",
+  "restoreManifest": "da_eliminare/cleanup-20261105-release-0.7.3/MANIFEST.json",
+  "protected": [
+    "python",
+    "data",
+    "ParcoTest",
+    "config/models.yaml",
+    "vscode",
+    ".workspace/dist/NL Code",
+    ".workspace/tools"
+  ],
+  "moves": [
+    {
+      "source": ".workspace/temp/advisor-cloud-recovery",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/advisor-cloud-recovery",
+      "bytes": 516233,
+      "files": 4,
+      "links": 3
+    },
+    {
+      "source": ".workspace/temp/bounded-cloud-final",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/bounded-cloud-final",
+      "bytes": 17154420,
+      "files": 108,
+      "links": 27
+    },
+    {
+      "source": ".workspace/temp/cloud-stream-recovery",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/cloud-stream-recovery",
+      "bytes": 1101414,
+      "files": 34,
+      "links": 2
+    },
+    {
+      "source": ".workspace/temp/connection-recovery-1793818960176",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/connection-recovery-1793818960176",
+      "bytes": 137,
+      "files": 1,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/connection-recovery-1793819013315",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/connection-recovery-1793819013315",
+      "bytes": 137,
+      "files": 1,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/connection-recovery-1793819079386",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/connection-recovery-1793819079386",
+      "bytes": 585865,
+      "files": 2,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/connection-recovery-1793819154266",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/connection-recovery-1793819154266",
+      "bytes": 585865,
+      "files": 2,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/connection-recovery-1793833560827",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/connection-recovery-1793833560827",
+      "bytes": 585865,
+      "files": 2,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/connection-recovery-1793833652852",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/connection-recovery-1793833652852",
+      "bytes": 585865,
+      "files": 2,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/connection-recovery-1793834150947",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/connection-recovery-1793834150947",
+      "bytes": 585865,
+      "files": 2,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/flow-fallback-events",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/flow-fallback-events",
+      "bytes": 3260635,
+      "files": 78,
+      "links": 12
+    },
+    {
+      "source": ".workspace/temp/real-project-cloud-drop-team-regression-2",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/real-project-cloud-drop-team-regression-2",
+      "bytes": 24105848,
+      "files": 147,
+      "links": 41
+    },
+    {
+      "source": ".workspace/temp/real-project-failed-verifier-budget-fixed",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/real-project-failed-verifier-budget-fixed",
+      "bytes": 606813,
+      "files": 6,
+      "links": 1
+    },
+    {
+      "source": ".workspace/temp/real-project-failed-verifier-diagnosis",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/real-project-failed-verifier-diagnosis",
+      "bytes": 574401,
+      "files": 7,
+      "links": 1
+    },
+    {
+      "source": ".workspace/temp/real-project-failed-verifier-diagnosis-2",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/real-project-failed-verifier-diagnosis-2",
+      "bytes": 574403,
+      "files": 7,
+      "links": 1
+    },
+    {
+      "source": ".workspace/temp/real-project-final-broad-recorded",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/real-project-final-broad-recorded",
+      "bytes": 227569015,
+      "files": 2585,
+      "links": 530
+    },
+    {
+      "source": ".workspace/temp/real-project-final-broad-suite",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/real-project-final-broad-suite",
+      "bytes": 227556791,
+      "files": 2585,
+      "links": 530
+    },
+    {
+      "source": ".workspace/temp/real-project-final-broad.log",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/real-project-final-broad.log",
+      "bytes": 3391,
+      "files": 1,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/real-project-final-matrix",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/real-project-final-matrix",
+      "bytes": 65144111,
+      "files": 609,
+      "links": 133
+    },
+    {
+      "source": ".workspace/temp/real-project-final-matrix.log",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/real-project-final-matrix.log",
+      "bytes": 1507,
+      "files": 1,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/real-project-four-regressions",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/real-project-four-regressions",
+      "bytes": 2196668,
+      "files": 18,
+      "links": 4
+    },
+    {
+      "source": ".workspace/temp/real-project-model-paths-regression",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/real-project-model-paths-regression",
+      "bytes": 18694852,
+      "files": 304,
+      "links": 41
+    },
+    {
+      "source": ".workspace/temp/real-project-recovery-tests",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/real-project-recovery-tests",
+      "bytes": 11755697,
+      "files": 150,
+      "links": 25
+    },
+    {
+      "source": ".workspace/temp/real-project-regression-initial",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/real-project-regression-initial",
+      "bytes": 21602435,
+      "files": 184,
+      "links": 44
+    },
+    {
+      "source": ".workspace/temp/real-project-regression-v2",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/real-project-regression-v2",
+      "bytes": 23798579,
+      "files": 203,
+      "links": 48
+    },
+    {
+      "source": ".workspace/temp/real-project-resume-atomic-final",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/real-project-resume-atomic-final",
+      "bytes": 17001546,
+      "files": 141,
+      "links": 32
+    },
+    {
+      "source": ".workspace/temp/real-project-six-cases",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/real-project-six-cases",
+      "bytes": 3288822,
+      "files": 30,
+      "links": 6
+    },
+    {
+      "source": ".workspace/temp/recovery-artifact-regression",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/recovery-artifact-regression",
+      "bytes": 5907370,
+      "files": 51,
+      "links": 10
+    },
+    {
+      "source": ".workspace/temp/recovery-complete-regression",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/recovery-complete-regression",
+      "bytes": 17245034,
+      "files": 363,
+      "links": 31
+    },
+    {
+      "source": ".workspace/temp/recovery-complete-regression.log",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/recovery-complete-regression.log",
+      "bytes": 2186,
+      "files": 1,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/recovery-final-focused",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/recovery-final-focused",
+      "bytes": 33916316,
+      "files": 430,
+      "links": 69
+    },
+    {
+      "source": ".workspace/temp/recovery-plainjson",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/recovery-plainjson",
+      "bytes": 516859,
+      "files": 6,
+      "links": 1
+    },
+    {
+      "source": ".workspace/temp/recovery-post-review",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/recovery-post-review",
+      "bytes": 34950653,
+      "files": 446,
+      "links": 71
+    },
+    {
+      "source": ".workspace/temp/recovery-post-review.log",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/recovery-post-review.log",
+      "bytes": 3023,
+      "files": 1,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-package",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-package",
+      "bytes": 4934525,
+      "files": 2,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-insiders-1793782197358",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-insiders-1793782197358",
+      "bytes": 939,
+      "files": 2,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-insiders-1793782216341",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-insiders-1793782216341",
+      "bytes": 18583,
+      "files": 7,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-insiders-1793782237522",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-insiders-1793782237522",
+      "bytes": 44963374,
+      "files": 3329,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-insiders-1793782467691",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-insiders-1793782467691",
+      "bytes": 49695456,
+      "files": 3341,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-insiders-1793783110287",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-insiders-1793783110287",
+      "bytes": 45545961,
+      "files": 3339,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-insiders-1793798784638",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-insiders-1793798784638",
+      "bytes": 44668334,
+      "files": 3330,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-insiders-1793800857577",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-insiders-1793800857577",
+      "bytes": 44326357,
+      "files": 3326,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-insiders-1793801827979",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-insiders-1793801827979",
+      "bytes": 44536949,
+      "files": 3329,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-insiders-real-1793817266821",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-insiders-real-1793817266821",
+      "bytes": 43942373,
+      "files": 3317,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-insiders-repair-real-1793818752780",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-insiders-repair-real-1793818752780",
+      "bytes": 17503,
+      "files": 3,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-insiders-repair-real-1793818763647",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-insiders-repair-real-1793818763647",
+      "bytes": 43131822,
+      "files": 3320,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-insiders-repair-real-1793818902142",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-insiders-repair-real-1793818902142",
+      "bytes": 43865787,
+      "files": 3321,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-insiders-repair-real-1793819093627",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-insiders-repair-real-1793819093627",
+      "bytes": 45065558,
+      "files": 3327,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-insiders-repair-real-1793833641768",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-insiders-repair-real-1793833641768",
+      "bytes": 45475408,
+      "files": 3326,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-insiders-repair-real-1793833997180",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-insiders-repair-real-1793833997180",
+      "bytes": 44390161,
+      "files": 3329,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-insiders-sessions-1793800114632",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-insiders-sessions-1793800114632",
+      "bytes": 43758518,
+      "files": 3318,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-insiders-sessions-1793800205047",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-insiders-sessions-1793800205047",
+      "bytes": 43779159,
+      "files": 3318,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-standalone-1793780973058",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-standalone-1793780973058",
+      "bytes": 16267186,
+      "files": 3197,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-standalone-1793781054669",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-standalone-1793781054669",
+      "bytes": 16861854,
+      "files": 3198,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-standalone-1793781157434",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-standalone-1793781157434",
+      "bytes": 39538412,
+      "files": 3324,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-standalone-1793781275184",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-standalone-1793781275184",
+      "bytes": 44392497,
+      "files": 3337,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-standalone-1793797136484",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-standalone-1793797136484",
+      "bytes": 38950875,
+      "files": 3328,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-standalone-1793797758428",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-standalone-1793797758428",
+      "bytes": 38661289,
+      "files": 3318,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-standalone-1793798434421",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-standalone-1793798434421",
+      "bytes": 38916414,
+      "files": 3315,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-standalone-1793799308668",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-standalone-1793799308668",
+      "bytes": 38171497,
+      "files": 3307,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-standalone-1793799437959",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-standalone-1793799437959",
+      "bytes": 42566586,
+      "files": 3315,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-standalone-1793800302352",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-standalone-1793800302352",
+      "bytes": 38548612,
+      "files": 3310,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-standalone-1793800620415",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-standalone-1793800620415",
+      "bytes": 38892221,
+      "files": 3314,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-standalone-1793801222852",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-standalone-1793801222852",
+      "bytes": 38235059,
+      "files": 3308,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-standalone-1793801644808",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-standalone-1793801644808",
+      "bytes": 38793198,
+      "files": 3314,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-standalone-real-1793834399755",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-standalone-real-1793834399755",
+      "bytes": 38157249,
+      "files": 3300,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-standalone-repair-real-1793834248111",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-standalone-repair-real-1793834248111",
+      "bytes": 38726489,
+      "files": 3320,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-standalone-sessions-1793799823419",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-standalone-sessions-1793799823419",
+      "bytes": 37936328,
+      "files": 3300,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-standalone-sessions-1793799911615",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-standalone-sessions-1793799911615",
+      "bytes": 37936997,
+      "files": 3300,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-standalone-sessions-1793800019665",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-standalone-sessions-1793800019665",
+      "bytes": 37980053,
+      "files": 3301,
+      "links": 0
+    },
+    {
+      "source": ".workspace/releases/extension",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/releases/extension",
+      "bytes": 4925905,
+      "files": 1,
+      "links": 0
+    },
+    {
+      "source": ".workspace/releases/linux",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/releases/linux",
+      "bytes": 0,
+      "files": 0,
+      "links": 0
+    },
+    {
+      "source": ".workspace/releases/macos",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/releases/macos",
+      "bytes": 0,
+      "files": 0,
+      "links": 0
+    },
+    {
+      "source": ".workspace/releases/release-manifest.json",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/releases/release-manifest.json",
+      "bytes": 741,
+      "files": 1,
+      "links": 0
+    },
+    {
+      "source": ".workspace/releases/windows",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/releases/windows",
+      "bytes": 1998419443,
+      "files": 3,
+      "links": 0
+    },
+    {
+      "source": ".pytest_cache",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.pytest_cache",
+      "bytes": 0,
+      "files": 0,
+      "links": 0
+    },
+    {
+      "source": ".workspace/dist/NL-Coding-Agent-0.7.2.vsix",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/dist/NL-Coding-Agent-0.7.2.vsix",
+      "bytes": 4925905,
+      "files": 1,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/portable-release-0.7.3",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/portable-release-0.7.3",
+      "bytes": 3272280224,
+      "files": 57437,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/installer-release-0.7.3-final",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/installer-release-0.7.3-final",
+      "bytes": 16442186,
+      "files": 3,
+      "links": 2
+    },
+    {
+      "source": ".workspace/temp/i73",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/i73",
+      "bytes": 125824007,
+      "files": 109,
+      "links": 2
+    },
+    {
+      "source": ".workspace/temp/release-0.7.3-regression",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/release-0.7.3-regression",
+      "bytes": 29904,
+      "files": 33,
+      "links": 4
+    },
+    {
+      "source": ".workspace/build/installer-syntax-0.7.3",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/build/installer-syntax-0.7.3",
+      "bytes": 6429073,
+      "files": 3,
+      "links": 0
+    },
+    {
+      "source": ".workspace/build/release-0.7.3-beta.1/artifacts/windows/NL-Code-Setup.exe",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/build/release-0.7.3-beta.1/artifacts/windows/NL-Code-Setup.exe",
+      "bytes": 915418739,
+      "files": 1,
+      "links": 0
+    },
+    {
+      "source": ".workspace/temp/session-ui-standalone-real-1793835864667",
+      "destination": "da_eliminare/cleanup-20261105-release-0.7.3/.workspace/temp/session-ui-standalone-real-1793835864667",
+      "bytes": 21890400,
+      "files": 110,
+      "links": 0
+    }
+  ]
+}

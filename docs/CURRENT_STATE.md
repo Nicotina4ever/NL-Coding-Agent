@@ -1,5 +1,31 @@
 # Stato corrente — NL Coding Agent / NL Code
 
+**Rilascio Windows 0.7.3 beta.1 — 5 novembre 2026.** Installer per utente,
+portable e VSIX rigenerati dal motore verificato. Il portable estratto, senza
+installare prima la VSIX, apre la Chat e supera lettura del progetto NL_AudioLab,
+Generate Team, inventario completo dei modelli e drop. Un solo runtime, nessun
+database o profilo personale; impostazioni iniziali determinate dal repository.
+
+Lifecycle installer **32 verifiche PASS**, incluso upgrade reale 0.7.2→0.7.3:
+preferenze modello migrate nella cartella dati scrivibile, impostazioni ed estensioni
+conservate, indice NL Coder aggiornato, file estranei preservati, rimozione dati
+solo con scelta esplicita e proprietà verificata. Junction e percorsi sovrapposti
+sono rifiutati prima di installazione/disinstallazione. **38 test packaging PASS**,
+TypeScript/webview/controller PASS e revisione indipendente **APPROVE**.
+I percorsi molto lunghi del toolchain Inno 6 restano un limite; la fixture legacy
+è stata accorciata, senza cambiare il runtime PySide6. All-users condiviso non
+viene esposto da questa beta; servono gate dedicati di ACL e multiutenza.
+
+Riordino conservativo: **84 elementi, 8.420.214.731 byte**, spostati in
+`da_eliminare/cleanup-20261105-release-0.7.3/`, senza cancellazioni. Origini,
+destinazioni e contenuti sono nel suo `MANIFEST.json`/`RAPPORTO.md`. Conservati
+runtime, dati live, `ParcoTest`, configurazione personale, sorgenti Code - OSS e
+build attiva. I vecchi pacchetti e i collaudi conclusi restano ripristinabili.
+Non è una liberazione di spazio disco: il materiale è in quarantena locale.
+
+Hash, screenshot e prove del rilascio:
+`docs/evidence/nlcode/release-0.7.3-beta.1-20261105/`.
+
 **Checkpoint recupero missione #60 — 5 novembre 2026.** Corretti lo scope che
 scambiava la directory del progetto per un file, i percorsi assoluti nelle patch,
 il riuso dello stato terminale Flow e delle verifiche fallite dopo Resume. Le

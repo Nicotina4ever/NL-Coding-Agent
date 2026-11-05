@@ -1,0 +1,38 @@
+{
+  "version": "0.7.3",
+  "releaseTag": "v0.7.3-beta.1",
+  "generatedAt": "2026-11-05T00:42:45.7688796+01:00",
+  "windows": {
+    "status": "verified-locally",
+    "portable": "windows/NL-Code-Portable.zip",
+    "setup": "windows/NL-Code-Setup.exe",
+    "installer": "inno-setup",
+    "sha256": "20e88fe6d1b303ce12aee194d802d9f9db3425ea05f938798098f0c814b55a55",
+    "bytes": 1062728847,
+    "setupSha256": "07a34c79703ab2f9bc62f0500c3b715177fa302ece4452ea550a3ce426267032",
+    "setupBytes": 915418758,
+    "installMode": "per-user"
+  },
+  "extension": {
+    "status": "verified-locally",
+    "path": "extension/NL-Coder.vsix",
+    "sha256": "b7a083daa7c93506498a2106ec26a40f0045e073f749cf42bd38ff092ff42af4",
+    "bytes": 4933891
+  },
+  "macos": {
+    "status": "not-built",
+    "reason": "requires a macOS runner and real validation"
+  },
+  "linux": {
+    "status": "not-built",
+    "reason": "requires a Linux runner and real validation"
+  },
+  "sourceCommit": "91d6b529f413362350659229641da9402c49d695",
+  "verification": {
+    "installerChecks": 32,
+    "portableUi": "PASS; extracted archive, no VSIX preinstall",
+    "packagingTests": 38,
+    "independentReview": "APPROVE",
+    "evidence": "docs/evidence/nlcode/release-0.7.3-beta.1-20261105"
+  }
+}

@@ -91,7 +91,7 @@ try {
     $initialModels += "`n# acceptance-owner-model-preferences`n"
     Set-Content -LiteralPath $config.modelsConfig -Value $initialModels -NoNewline -Encoding utf8
     $before = @(Get-Process -Name 'NL Code' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
-    $cmd = Start-Process -FilePath "$env:WINDIR\System32\cmd.exe" -ArgumentList @('/c', ('start "" "' + (Join-Path $install 'NL Code Installed.cmd') + '" & ping -n 25 127.0.0.1 >nul')) -PassThru -WindowStyle Hidden
+    $cmd = Start-Process -FilePath "$env:WINDIR\System32\cmd.exe" -ArgumentList @('/c', ('""' + (Join-Path $install 'NL Code Installed.cmd') + '""')) -PassThru -WindowStyle Hidden
     Start-Sleep -Seconds 12
     $appPath = Join-Path $install 'NL Code.exe'
     $apps = @(Get-Process -Name 'NL Code' -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $appPath })

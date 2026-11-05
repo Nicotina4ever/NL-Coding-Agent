@@ -21,7 +21,8 @@ Chiudere i residui senza riaprire il programma:
 2. Verificare manualmente scaling Windows e uso quotidiano su progetti reali. Il percorso team
    completo dalla Chat installata è ora verificato nei due host; Stop/Riprendi, riconnessione,
    coda e risultato durevole sono coperti dal runtime e dall'harness GUI del 4 novembre.
-3. Al prossimo rilascio richiesto, rigenerare ZIP/Setup dal payload aggiornato e ripetere i gate
-   di distribuzione. Il payload locale incorpora già una copia indipendente di engine e runtime;
-   gli archivi pubblicati non sono stati sostituiti da questo intervento.
+3. Il rilascio 0.7.3 beta.1 comprende ZIP/Setup/VSIX rigenerati, prova del portable estratto
+   e 32 controlli installer con upgrade dalla 0.7.2. Ripetere questi gate al prossimo rilascio.
+   Restano dedicati i gate per percorsi molto lunghi, installazione condivisa multiutente,
+   macOS e Linux; non dichiararli verificati dalla compilazione Windows.
 

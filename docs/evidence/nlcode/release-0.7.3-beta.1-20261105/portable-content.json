@@ -1,0 +1,11 @@
+{
+  "version": "0.7.3",
+  "archive": "K:\\AI\\NL Coding Agent\\.workspace\\build\\release-0.7.3-beta.1\\artifacts\\windows\\NL-Code-Portable.zip",
+  "files": 63365,
+  "forbidden_entries": [],
+  "single_python_runtime": true,
+  "current_extension_bundled": true,
+  "clean_default_settings": true,
+  "crc_check": "PASS",
+  "smoke_root": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\portable-release-0.7.3"
+}
