@@ -219,7 +219,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
 
     def session_runtime():
         runtime = services.session_runtime()
-        runtime.execution_allowed = bool(allow_execution)
+        # Execution is read dynamically from the global policy.
         return runtime
 
     async def pump_session_events():
@@ -279,15 +279,13 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         return details
 
     def require_execution(approved):
-        if not allow_execution or not approved:
-            raise PermissionError("Server is read-only or this operation was not explicitly approved")
         permissions.require(permissions.EXECUTE, project_id=bound_project_id)
         permissions.require(permissions.WRITE, project_id=bound_project_id)
 
     def require_mission_delete(approved):
-        if not approved:
-            raise PermissionError("Mission deletion requires explicit approval")
-        permissions.require(permissions.DELETE, project_id=bound_project_id)
+        # Mission deletion is an application operation, not an OS file delete.
+        # Workspace Write allows it; no second permission grant is required.
+        permissions.require(permissions.EXECUTE, project_id=bound_project_id)
 
     @asynccontextmanager
     async def lifespan(server):
@@ -318,7 +316,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                        allow_coding: bool = False, tools_enabled: bool = True) -> dict:
         """Durably accept a session turn; returns immediately, results arrive as events."""
         require_read()
-        if allow_coding and not allow_execution:
+        if allow_coding and not permissions.is_granted(permissions.EXECUTE):
             raise PermissionError("Engine execution is disabled")
         return session_runtime().submit(bound_project_id, session_id, request_id, text,
             attachment_ids=attachment_ids, model_spec=model_spec, allow_coding=allow_coding,
@@ -349,13 +347,13 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
                         text: str = "", ids: list[str] | None = None) -> dict:
         """Steer, stop, resume, edit, remove or reorder durable session work."""
         return session_runtime().control(bound_project_id, session_id, action,
-            run_id=run_id, text=text, ids=ids, allow_execution=allow_execution)
+            run_id=run_id, text=text, ids=ids, allow_execution=permissions.is_granted(permissions.EXECUTE))
 
     @server.tool(annotations=read_only)
     def project_context() -> dict:
         """Identify the one project bound to this server; never opens arbitrary paths."""
         require_read()
-        context = {"project": project, "execution_enabled": allow_execution,
+        context = {"project": project, "execution_enabled": permissions.is_granted(permissions.EXECUTE),
                    "engine": "AppServices/Supervisor", "state": "existing mission SQLite"}
         try:
             context["context_engine"] = services.context_status(bound_project_id)
@@ -442,7 +440,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         return {
             "schema_version": 1,
             "project": {"id": bound_project_id, "root": project.get("root", "")},
-            "execution_enabled": allow_execution,
+            "execution_enabled": permissions.is_granted(permissions.EXECUTE),
             "models": {
                 "config_path": str(services.get_model_config_path()),
                 "config_exists": bool(config),
@@ -534,7 +532,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
 
     @server.tool()
     def set_cloud_escalation(enabled: bool, approved: bool = False) -> dict:
-        """Persist the explicit cloud-escalation policy (default off)."""
+        """Retired endpoint; cloud follows the global access mode."""
         require_execution(approved)
         services.save_cloud_escalation(bool(enabled))
         return {"ok": True, "cloud_escalation_enabled": bool(enabled)}
@@ -549,10 +547,8 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
     @server.tool()
     def save_permission_scope(scope: str, granted: bool,
                               approved: bool = False) -> dict:
-        """Explicitly grant/revoke one project permission and return fresh policy."""
-        # Research/network is a read-only capability, not code execution. Let the
-        # owner grant NETWORK from a read-only session so pasted URLs can be fetched;
-        # write/execute/cloud still require an execution-enabled server.
+        """Retired endpoint; select a global access mode instead."""
+        # Retained wire compatibility only; the service rejects retired grants.
         if str(scope).lower() in ("read", "network", "cloud"):
             require_read()
         else:
@@ -562,13 +558,13 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
 
     @server.tool(annotations=read_only)
     def access_profile() -> dict:
-        """Read the project-wide access profile shared by every agent."""
+        """Read the global access mode shared by every project and agent."""
         require_read()
         return services.access_profile(bound_project_id)
 
     @server.tool()
     def set_access_profile(profile: str) -> dict:
-        """Apply one project-wide access profile to read/write/execute/network/cloud/delete."""
+        """Set the global access mode: read-only, workspace-write, auto-review or full-access."""
         require_read()
         return services.set_access_profile(bound_project_id, str(profile))
 
@@ -742,7 +738,7 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
         Supervisor or mission verification.
         """
         require_read()
-        if allow_coding and not allow_execution:
+        if allow_coding and not permissions.is_granted(permissions.EXECUTE):
             raise PermissionError("Engine execution is disabled")
         try:
             requested = int(project_id)
@@ -1472,8 +1468,9 @@ def create_engine_server(services, project, *, allow_execution=False, research_p
 
         Does not kill a model request or interrupt promotion. Resume is explicit.
         """
-        if not allow_execution or not approved:
-            raise PermissionError("Cancellation requires owner-enabled execution and approval")
+        # Stopping cannot authorize new effects; it remains available after a
+        # global downgrade so revocation never traps running work.
+        require_read()
         mission(mission_id)
         linked = session_runtime().mission_run(bound_project_id, mission_id)
         if linked:

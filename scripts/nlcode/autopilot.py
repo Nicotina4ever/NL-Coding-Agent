@@ -44,8 +44,8 @@ def main() -> int:
     database.init_db().close()
     project = open_project(project_root)
     services = AppServices()
-    # Auto review is project-wide; plan generation itself remains read-only.
-    services.set_access_profile(int(project["id"]), "auto-review")
+    # The selected global mode is authoritative even for automation.
+    # Running this helper never broadens permissions for other projects.
     job_root = ROOT / ".workspace" / "jobs" / (
         "autopilot-" + datetime.now().strftime("%Y%m%d-%H%M%S"))
     job_root.mkdir(parents=True, exist_ok=False)

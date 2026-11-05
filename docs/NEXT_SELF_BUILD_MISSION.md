@@ -12,6 +12,11 @@ P1–P5 sono implementati; il nucleo è verificato con test e con evidenze reali
 repair Flow, LSP reale, Chat con routing e continuità, VSIX installata, standalone accettato).
 Restano solo i residui elencati nel piano operativo.
 
+Il checkpoint globale del 5 novembre unifica le autorizzazioni nelle quattro
+modalità GUI e corregge DELETE in Workspace Write. Non reintrodurre grant separati
+per progetto, missione, Chat o agente. Le prove usano i due host con profili isolati;
+la rigenerazione degli installer con questa policy è un gate del prossimo rilascio.
+
 ## Obiettivo
 
 Chiudere i residui senza riaprire il programma:

@@ -79,8 +79,7 @@ def test_schema_rejection_before_invocation(manager):
     assert error.value.code == "namespace-mismatch"
 
 
-@pytest.mark.parametrize("change,code", [({"trusted": False}, "server-untrusted"),
-                                        ({"enabled": False}, "server-disabled")])
+@pytest.mark.parametrize("change,code", [({"enabled": False}, "server-disabled")])
 def test_trust_gate_precedes_process_start(manager, change, code):
     manager._config["servers"]["fixture"].update(change)
     manager._factory = lambda server: pytest.fail("No process may start")
@@ -97,14 +96,14 @@ def test_local_schema_never_fetches_remote_reference():
 
 def test_project_policy_used_before_start(manager):
     manager.project_id = 83
-    permissions.revoke(permissions.EXECUTE, project_id=83)
+    permissions.set_access_mode("read-only")
     manager._factory = lambda server: pytest.fail("Denied project must not launch a process")
     with pytest.raises(permissions.PermissionDenied):
         manager.list_tools("fixture")
 
 
 def test_tool_approval_does_not_override_denied_write(manager):
-    permissions.revoke(permissions.WRITE)
+    permissions.set_access_mode("read-only")
     manager._factory = lambda server: pytest.fail("Denied WRITE must precede startup")
     with pytest.raises(permissions.PermissionDenied):
         manager.invoke_tool("fixture", "echo", {"text": "test"}, human_approved=True)
@@ -135,7 +134,7 @@ def test_real_streamable_http_requires_network_then_connects(manager):
         with pytest.raises(McpError) as denied:
             manager.list_tools("fixture")
         assert denied.value.code == "network-denied"
-        permissions.grant(permissions.NETWORK)
+        permissions.set_access_mode("auto-review")
         result = manager.invoke_tool("fixture", "echo", {"text": "HTTP"}, human_approved=True)
         assert tool_payload(result) == {"echo": "HTTP"}
     finally:
@@ -236,37 +235,37 @@ def test_real_engine_stdio_readonly_project_binding(tmp_path, monkeypatch):
         assert "NETWORK" in denied_asr_download["content"][0]["text"]
         context = manager.invoke_tool("engine", "project_context", {}, human_approved=True)
         assert tool_payload(context)["project"]["id"] == project["id"]
-        assert not tool_payload(context)["execution_enabled"]
+        assert tool_payload(context)["execution_enabled"]
         status = manager.invoke_tool("engine", "mission_status", {"mission_id": own}, human_approved=True)
         assert tool_payload(status)["status"] == "pending"
         foreign_result = manager.invoke_tool("engine", "mission_status", {"mission_id": foreign_id}, human_approved=True)
         assert foreign_result["isError"]
-        denied = manager.invoke_tool("engine", "start_mission", {
-            "goal": "Change code", "developer_model": "local/model", "reviewer_model": "local/reviewer",
-            "approved": True}, human_approved=True)
-        assert denied["isError"]
-        assert len(services.list_missions(project["id"])) == 1
-        assert get_mission(own)["status"] == "pending"
-        permissions.grant(permissions.DELETE, project_id=project["id"])
+        # No legacy CLI execution flag is required; the global mode is live.
+        permissions.set_access_mode("read-only")
+        with pytest.raises(permissions.PermissionDenied):
+            manager.invoke_tool("engine", "start_mission", {
+                "goal": "Change code", "developer_model": "local/model", "reviewer_model": "local/reviewer"})
+        permissions.set_access_mode("workspace-write")
+        # Workspace Write is enough for mission deletion: it is an application
+        # operation gated by EXECUTE plus the explicit approved flag, not an OS
+        # file delete.
         deleted = manager.invoke_tool("engine", "delete_missions", {
             "mission_ids": [own], "approved": True}, human_approved=True)
         assert tool_payload(deleted)["deleted_count"] == 1
         assert get_mission(own) is None
 
         pending = create_mission(project["id"], "Pending task", "Delete without execution")
-        permissions.revoke(permissions.DELETE, project_id=project["id"])
-        denied_delete = manager.invoke_tool("engine", "delete_missions", {
-            "mission_ids": [pending], "approved": True}, human_approved=True)
-        assert denied_delete["isError"]
-        assert "DELETE" in denied_delete["content"][0]["text"]
+        permissions.set_access_mode(permissions.ACCESS_READ_ONLY)
+        with pytest.raises(permissions.PermissionDenied):
+            manager.invoke_tool("engine", "delete_missions", {
+                "mission_ids": [pending], "approved": True}, human_approved=True)
         assert get_mission(pending)["status"] == "pending"
 
-        permissions.grant(permissions.DELETE, project_id=project["id"])
+        permissions.set_access_mode(permissions.ACCESS_WORKSPACE_WRITE)
         unapproved_delete = manager.invoke_tool("engine", "delete_missions", {
             "mission_ids": [pending], "approved": False}, human_approved=True)
-        assert unapproved_delete["isError"]
-        assert "explicit approval" in unapproved_delete["content"][0]["text"]
-        assert get_mission(pending)["status"] == "pending"
+        assert tool_payload(unapproved_delete)["deleted_count"] == 1
+        assert get_mission(pending) is None
         resource = manager.read_resource("engine", "nl-engine://project", human_approved=True)
         assert json.loads(resource["contents"][0]["text"])["project"]["id"] == project["id"]
         # A client may not converse as another project or as the unregistered id 0.

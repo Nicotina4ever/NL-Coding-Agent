@@ -60,7 +60,7 @@
     "settings.unavailable": "Non disponibile",
     "settings.advanced_group": "Avanzate - self-build e autonomia",
     "settings.open_autonomy": "Apri la pagina stato autonomia…",
-    "settings.cloud_note": "L'escalation cloud resta disabilitata salvo esplicita abilitazione per il progetto. Salvare le impostazioni Avanzate non avvia mai l'autonomia.",
+    "settings.cloud_note": "Il cloud segue la modalità globale Auto Review o Full Access. Salvare le impostazioni Avanzate non avvia l'autonomia.",
     "inspector.title": "Ispettore",
     "inspector.facts": "Dati",
     "inspector.last_used": "Ultimo utilizzo: {value}",

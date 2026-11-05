@@ -54,7 +54,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
         <div class="nl-header-row nl-header-meta">
             <span id="project-badge" class="nl-chip">no project</span>
             <span id="model-badge" class="nl-chip nl-chip-soft">model: —</span>
-            <button id="exec-toggle" class="nl-chip nl-chip-button" type="button" title="Toggle mission execution for this engine session">read-only</button>
+            <span id="exec-toggle" class="nl-chip" title="Execution follows Global access">read-only</span>
         </div>
         <nav class="nl-tabs" aria-label="Sections">
             <button type="button" class="nl-tab-button active" data-tab="chat">Chat</button>
@@ -145,7 +145,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                         <label class="nl-check"><input id="auto-model" type="checkbox"> Automatic</label>
                         <button id="chat-refresh-models" type="button" title="Probe providers and refresh the model dropdown">↻ models</button>
                         <label class="nl-check" title="Let Chat delegate an explicit coding goal to a verified mission when execution is enabled">
-                            <input id="auto-coding" type="checkbox"> Auto-code
+                            <input id="auto-coding" type="checkbox" disabled hidden> Coding follows Global access
                         </label>
                         <span id="model-current" class="nl-muted"></span>
                     </div>
@@ -165,7 +165,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                             <select id="reviewer-model"></select>
                         </label>
                     </div>
-                    <p id="mission-note" class="nl-hint hidden">The mission runs through the existing Supervisor, staging and verification gates and requires explicit confirmation.</p>
+                    <p id="mission-note" class="nl-hint hidden">The mission runs through the existing Supervisor, staging and verification gates under the selected global access mode.</p>
 
                     <div class="nl-composer-actions">
                         <div class="nl-composer-left">
@@ -183,14 +183,14 @@ export function buildChatHtml(assets: WebviewAssets): string {
                         <button id="send" type="submit">Send</button>
                     </div>
                     <div class="nl-access-bar">
-                        <span class="nl-access-label">Project access</span>
-                        <select id="chat-access-profile" aria-label="Project-wide access profile">
+                        <span class="nl-access-label">Global access</span>
+                        <select id="chat-access-profile" aria-label="Global access mode">
                             <option value="read-only">Read Only</option>
                             <option value="workspace-write">Workspace Write</option>
-                            <option value="full-access">Full access</option>
-                            <option value="auto-review">Auto review</option>
+                            <option value="auto-review">Auto Review</option>
+                            <option value="full-access">Full Access</option>
                         </select>
-                        <span id="chat-access-status" class="nl-muted">applies to every agent</span>
+                        <span id="chat-access-status" class="nl-muted">one policy for every agent</span>
                     </div>
                 </div>
             </form>
@@ -287,7 +287,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                             <label class="nl-check"><input type="checkbox" value="mcp_list_tools"> mcp_list_tools</label>
                         </fieldset>
                         <button id="specialist-tools-all" type="button">Select all tools</button>
-                        <p class="nl-hint">Tools define specialist capabilities. Operational permissions are controlled once by the project-wide Access profile.</p>
+                        <p class="nl-hint">Tools define specialist capabilities. Operational permissions are controlled once by the global access mode.</p>
                         <label class="nl-check"><input id="specialist-enabled" type="checkbox"> enabled</label>
                         <button id="specialist-save" type="button">Save specialist</button>
                     </div>
@@ -371,21 +371,8 @@ export function buildChatHtml(assets: WebviewAssets): string {
                     <button id="generation-save" type="button">Save parameters</button>
                 </div>
                 </details>
-                <h3>Permissions and autonomy</h3>
-                <p class="nl-hint"><strong>Project access is controlled under the Chat composer</strong> and applies to every agent. Mission execution remains the master switch for code-changing missions. Cloud is opt-in through the project policy and explicit model selection; Auto review allows authorized cloud actions without a second block.</p>
-                <div class="nl-filter-row">
-                    <select id="permission-scope">
-                        <option value="read">read</option>
-                        <option value="write">write</option>
-                        <option value="execute">execute</option>
-                        <option value="network">network</option>
-                        <option value="cloud">cloud</option>
-                    </select>
-                    <button id="permission-grant" type="button">Grant</button>
-                    <button id="permission-revoke" type="button">Revoke</button>
-                    <label class="nl-check"><input id="cloud-policy" type="checkbox"> cloud policy</label>
-                    <button id="cloud-save" type="button">Save cloud</button>
-                </div>
+                <h3>Cloud escalation and autonomy</h3>
+                <p class="nl-hint"><strong>The single global access mode is under the Chat composer</strong> and applies to every project and agent. Cloud still requires explicit model selection; Auto Review also enables authorized network/cloud research.</p>
                 <div class="nl-filter-row">
                     <select id="autonomy-mode">
                         <option value="off">off</option>
@@ -397,7 +384,7 @@ export function buildChatHtml(assets: WebviewAssets): string {
                     <button id="autonomy-save" type="button">Save autonomy</button>
                 </div>
                 <h3>MCP servers (JSON)</h3>
-                <p class="nl-hint">MCP servers are trusted local tools. The <strong>rea</strong> reverse-engineering server is configured with a curated allowlist; discovery is read-only and tool invocation is permission-gated. JSON edits are saved through the engine.</p>
+                <p class="nl-hint">MCP servers use the global access mode. The <strong>rea</strong> reverse-engineering server uses a curated schema selection; tool invocation follows the same global policy. JSON edits are saved through the engine.</p>
                 <textarea id="mcp-json" rows="5" aria-label="MCP servers JSON"></textarea>
                 <button id="mcp-save" type="button">Save MCP</button>
                 <h3>Model capability probe</h3>

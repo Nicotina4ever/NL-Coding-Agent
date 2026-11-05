@@ -85,7 +85,7 @@ class AppResearchTests(unittest.TestCase):
     def fake_service(self, *, permission=None, review=None, known=True):
         permission = permission or PermissionStub()
         review = review or ReviewStub()
-        permissions.grant(permissions.NETWORK)
+        permissions.set_access_mode("auto-review")
         transport = FakeFetchTransport()
         registry = default_registry(known_urls=[
             KnownUrl("https://example.com/docs", "Alpha docs", "alpha known doc")]) \
@@ -122,8 +122,7 @@ class AppResearchTests(unittest.TestCase):
 
     def test_default_configured_transport_enables_general_web_search(self):
         project_id = 72
-        self.services.set_permission_scope(
-            permissions.NETWORK, True, project_id=project_id)
+        permissions.set_access_mode("auto-review")
         status = self.services.configure_research(
             fetch_transport=FakeFetchTransport(),
             http_transport=FakeSearchHttpTransport(),
@@ -141,19 +140,17 @@ class AppResearchTests(unittest.TestCase):
 
     def test_project_network_permission_grants_and_revokes_web_fetch(self):
         project_id = 71
-        self.services.set_permission_scope(
-            permissions.NETWORK, True, project_id=project_id)
+        permissions.set_access_mode("auto-review")
         for capability in (permissions.CAPABILITY_WEB_FETCH,
                            permissions.CAPABILITY_WEB_SEARCH):
-            allowed = permissions.check_capability(
+            allowed = permissions.check_access(
                 capability, context={"project_id": project_id})
             self.assertIsInstance(allowed, permissions.Allowed)
 
-        self.services.set_permission_scope(
-            permissions.NETWORK, False, project_id=project_id)
+        permissions.set_access_mode("workspace-write")
         for capability in (permissions.CAPABILITY_WEB_FETCH,
                            permissions.CAPABILITY_WEB_SEARCH):
-            denied = permissions.check_capability(
+            denied = permissions.check_access(
                 capability, context={"project_id": project_id})
             self.assertIsInstance(denied, permissions.Denied)
 
@@ -298,13 +295,13 @@ class AppResearchTests(unittest.TestCase):
         for row in rows:
             self.assertNotIn("secret", str(row["payload"]).lower())
 
-        with patch.object(permissions, "check_capability",
+        with patch.object(permissions, "check_access",
                           return_value=permissions.Denied("write", "denied by test")):
             denied = self.services.research_attach_finding(mission_id, finding_id)
         self.assertFalse(denied["ok"])
         self.assertEqual(denied["outcome"], "denied")
         self.assertEqual(service.store.list_mission_findings(mission_id), [])
-        with patch.object(permissions, "check_capability",
+        with patch.object(permissions, "check_access",
                           return_value=permissions.NeedsApproval(
                               "write", "approval required", approval_id=1)):
             pending = self.services.research_attach_finding(mission_id, finding_id)

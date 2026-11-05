@@ -545,102 +545,43 @@ class AppServices:
         return config
 
     def save_cloud_escalation(self, enabled: bool) -> dict:
-        from nl_coding_agent.models.model_config_store import set_cloud_escalation
-        config = set_cloud_escalation(bool(enabled))
-        self._bus.emit(Event(source="model_hub", level="info",
-                             message="Cloud escalation setting saved",
-                             payload={"enabled": bool(enabled)}))
-        return config
-
-    def set_permission_scope(self, scope: str, granted: bool, *,
-                             project_id: int | None = None,
-                             source: str = "gui") -> dict:
         from nl_coding_agent.core import permissions
-        scope_name = str(scope).strip().lower()
-        if bool(granted):
-            permissions.grant(scope, project_id=project_id, source=source)
-        else:
-            permissions.revoke(scope, project_id=project_id, source=source)
-        if scope_name == permissions.NETWORK:
-            decision = (
-                permissions.DECISION_ALLOW_PROJECT if project_id is not None
-                else permissions.DECISION_ALWAYS
-            ) if granted else permissions.DECISION_REVOKE
-            for capability in (
-                    permissions.CAPABILITY_WEB_FETCH,
-                    permissions.CAPABILITY_WEB_SEARCH):
-                permissions.grant_capability(
-                    capability, decision=decision, project_id=project_id,
-                    source=source)
-        self._bus.emit(Event(source="permissions", level="info",
-                             message=("Permission granted" if granted else "Permission revoked"),
-                             payload={"scope": str(scope), "project_id": project_id}))
-        return self.get_permissions(project_id)
+        permissions._retired_permission()
 
-    ACCESS_PROFILES = {
-        "read-only": {"read": True, "write": False, "execute": False,
-                      "delete": False, "network": False, "cloud": False},
-        "workspace-write": {"read": True, "write": True, "execute": True,
-                            "delete": False, "network": False, "cloud": False},
-        "full-access": {"read": True, "write": True, "execute": True,
-                        "delete": True, "network": True, "cloud": True},
-        "auto-review": {"read": True, "write": True, "execute": True,
-                        "delete": False, "network": True, "cloud": True},
-    }
-
-    def access_profile(self, project_id: int) -> dict:
-        from nl_coding_agent.persistence import database
-        from nl_coding_agent.core import auto_review
-        stored = database.get_json_setting("access.profile." + str(int(project_id)), {})
-        profile = str(stored.get("profile") or "")
-        if profile not in self.ACCESS_PROFILES:
-            profile = ""
-        return {"ok": True, "project_id": int(project_id), "profile": profile,
-                "profiles": [
-                    {"id": key, "controls": dict(value),
-                     "label": {"read-only": "Read Only",
-                               "workspace-write": "Workspace Write",
-                               "full-access": "Full access",
-                               "auto-review": "Auto review"}[key]}
-                    for key, value in self.ACCESS_PROFILES.items()],
-                "auto_review_profile": stored.get("auto_review_profile"),
-                "descriptors": auto_review.list_profiles()}
-
-    def set_access_profile(self, project_id: int, profile: str) -> dict:
-        from nl_coding_agent.persistence import database
+    def set_permission_scope(self, scope: str, granted: bool, **kwargs) -> dict:
         from nl_coding_agent.core import permissions
-        name = str(profile or "").strip().lower()
-        if name not in self.ACCESS_PROFILES:
-            raise ValueError("Unknown access profile: " + repr(profile))
-        scopes = self.ACCESS_PROFILES[name]
-        for scope, granted in scopes.items():
-            if scope == permissions.NETWORK:
-                continue
-            if granted:
-                permissions.grant(scope, project_id=int(project_id), source="access-profile")
-            else:
-                permissions.revoke(scope, project_id=int(project_id), source="access-profile")
-        self.set_permission_scope(
-            permissions.NETWORK, scopes[permissions.NETWORK],
-            project_id=int(project_id), source="access-profile")
-        if name == "auto-review":
-            # Auto review explicitly authorizes cloud inference for this project;
-            # it never authorizes direct destructive delete (quarantine is used).
-            try:
-                permissions.grant_capability(
-                    permissions.CAPABILITY_MODEL_INFERENCE_CLOUD,
-                    project_id=int(project_id), decision="project",
-                    source="access-profile")
-            except Exception:
-                pass
-        database.set_json_setting("access.profile." + str(int(project_id)), {
-            "profile": name,
-            "auto_review_profile": "trusted-auto-review" if name == "auto-review" else "manual",
-        })
+        permissions._retired_permission()
+
+    def access_profile(self, project_id: int | None = None) -> dict:
+        """Return the single global access mode (project_id is informational)."""
+        from nl_coding_agent.core import permissions
+        mode = permissions.get_access_mode(persist=True)
+        return {
+            "ok": True,
+            "global": True,
+            "project_id": int(project_id) if project_id is not None else None,
+            "profile": mode,
+            "mode": mode,
+            "policy": permissions.get_policy(),
+            "profiles": [
+                {
+                    "id": item["id"],
+                    "label": item["label"],
+                    "description": item["description"],
+                    "controls": dict(item["scopes"]),
+                }
+                for item in permissions.access_mode_descriptors()
+            ],
+        }
+
+    def set_access_profile(self, project_id: int | None, profile: str) -> dict:
+        """Persist the one global access mode; project_id is ignored."""
+        from nl_coding_agent.core import permissions
+        mode = permissions.set_access_mode(str(profile or ""), source="access-profile")
         self._bus.emit(Event(source="permissions", level="info",
-                             message="Access profile saved",
-                             payload={"project_id": int(project_id), "profile": name}))
-        return self.access_profile(int(project_id))
+                             message="Global access mode saved",
+                             payload={"profile": mode, "global": True}))
+        return self.access_profile(project_id)
 
     def probe_model_capabilities(self, model: str, *, timeout: float = 90.0,
                                  allow_cloud: bool = False) -> dict:
@@ -669,7 +610,7 @@ class AppServices:
         records = probe_model_with_provider(
             provider, provider_id, model_name,
             timeout=max(5.0, min(float(timeout), 300.0)),
-            allow_cloud=bool(allow_cloud),
+            allow_cloud=self.is_cloud_escalation_enabled(),
         )
         by_name = {record.capability: record for record in records}
         quality = by_name.get("patch_quality")
@@ -815,9 +756,8 @@ class AppServices:
         return str((config.get("ollama") or {}).get("base_url") or "http://127.0.0.1:11434")
 
     def is_cloud_escalation_enabled(self) -> bool:
-        config = self.get_model_config()
-        fallback = (config.get("roles") or {}).get("fallback_cloud") or {}
-        return bool(fallback.get("enabled", False))
+        from nl_coding_agent.core import permissions
+        return permissions.is_granted(permissions.CLOUD)
 
     def get_agent_roles(self, project_id: int | None = None) -> list[dict]:
         roles = self.get_model_config().get("roles") or {}
@@ -1179,19 +1119,34 @@ class AppServices:
 
     def auto_review_check(self, project_id: int, *, capability: str = "read",
                           target_paths=(), description: str = "") -> dict:
-        """Evaluate one action with the persisted Auto review profile (no execution)."""
+        """Evaluate one action against the global access mode (no execution)."""
         from nl_coding_agent.core import auto_review, permissions
-        from nl_coding_agent.persistence import database
         capability_aliases = {
             "cloud": "model-inference-cloud",
             "network": "web-fetch",
             "network-write": "network-write",
         }
         normalized_capability = capability_aliases.get(str(capability), str(capability))
-        stored = database.get_json_setting("access.profile." + str(int(project_id)), {})
-        profile_name = str(stored.get("auto_review_profile") or "manual")
-        if profile_name not in auto_review.PROFILES:
-            profile_name = "manual"
+        mode = permissions.get_access_mode()
+        if mode == permissions.ACCESS_READ_ONLY:
+            profile_name = auto_review.PROFILE_MANUAL
+            controls = {}
+        elif mode == permissions.ACCESS_WORKSPACE_WRITE:
+            profile_name = auto_review.PROFILE_TRUSTED
+            controls = {
+                auto_review.CONTROL_EXTERNAL_NETWORK: False,
+                auto_review.CONTROL_CLOUD_LLM: False,
+            }
+        elif mode == permissions.ACCESS_AUTO_REVIEW:
+            profile_name = auto_review.PROFILE_TRUSTED
+            controls = {
+                auto_review.CONTROL_EXTERNAL_NETWORK: True,
+                auto_review.CONTROL_CLOUD_LLM: True,
+                auto_review.CONTROL_BACKGROUND: True,
+            }
+        else:
+            profile_name = auto_review.PROFILE_FULL
+            controls = {control: True for control in auto_review.CONTROLS}
         action = auto_review.ActionDescriptor(
             capability=normalized_capability,
             scope_kind=permissions.SCOPE_PROJECT,
@@ -1200,10 +1155,9 @@ class AppServices:
             description=str(description or ""),
             context={"project_id": int(project_id)},
         )
-        controls = {}
-        if profile_name == auto_review.PROFILE_TRUSTED:
-            controls[auto_review.CONTROL_CLOUD_LLM] = True
-        decision = auto_review.evaluate_action(action, profile_name, controls=controls)
+        decision = auto_review.evaluate_action(
+            action, profile_name, controls=controls,
+            capability_checker=permissions.check_access)
         return {"ok": True, "decision": {
             "outcome": decision.outcome, "reason": decision.reason,
             "reason_code": decision.reason_code, "profile": decision.profile,
@@ -1962,7 +1916,7 @@ class AppServices:
             if model and model not in specs:
                 specs.append(model)
         cloud_spec = str(fallback.get("model") or "").strip()
-        if cloud_spec and bool(fallback.get("enabled", False)) and cloud_spec not in specs:
+        if cloud_spec and self.is_cloud_escalation_enabled() and cloud_spec not in specs:
             specs.append(cloud_spec)
         candidates = []
         for spec in specs:
@@ -1984,8 +1938,6 @@ class AppServices:
             cloud = bool(is_cloud_model(model) or (
                 getattr(provider, "kind", "") == "openai_compatible"
                 and is_remote_endpoint(getattr(provider, "base_url", ""))))
-            if cloud and spec == cloud_spec and not bool(fallback.get("enabled", False)):
-                continue
             candidates.append({"provider": provider, "model": str(model),
                                "provider_id": provider_id, "spec": spec,
                                "cloud": cloud})
@@ -2183,6 +2135,8 @@ class AppServices:
         return None, "", None, errors[-1] if errors else "No permitted model route."
 
     def create_mission(self, project_id: int | None, title: str, goal: str) -> int:
+        from nl_coding_agent.core import permissions
+        permissions.require(permissions.WRITE)
         from nl_coding_agent.persistence.missions import create_mission as _create_m
         m_id = _create_m(project_id, title, goal)
         self._bus.emit(Event(
@@ -2330,6 +2284,8 @@ class AppServices:
                 "suffix": target.suffix.lower()}
 
     def save_editor_file(self, project_root, rel_path, content, *, expected_sha256=None):
+        from nl_coding_agent.core import permissions
+        permissions.require(permissions.WRITE)
         import hashlib, json
         from nl_coding_agent.persistence import database
         root, target = self._resolve_project_rel(project_root, rel_path)
@@ -2382,7 +2338,13 @@ class AppServices:
             result.update(error_code="execute-denied",
                           reason="The EXECUTE permission is not granted for this project.")
             return result
-        command = parts[0].lower()
+        if any("\x00" in part for part in parts):
+            result.update(error_code="invalid-command", reason="NUL in command argument.")
+            return result
+        if permissions.get_access_mode() == permissions.ACCESS_FULL_ACCESS:
+            result.update(allowed=True, reason="Allowed by global Full Access.")
+            return result
+        command = Path(parts[0]).stem.lower()
         if command in self._SHELL_COMMANDS or any(ch in " ".join(parts) for ch in ";|&$><"):
             result.update(error_code="shell-unsafe",
                           reason="Shell interpreters and shell metacharacters are not allowed.")
@@ -2434,7 +2396,9 @@ class AppServices:
         try:
             cwd.relative_to(root)
         except ValueError:
-            policy = {"allowed": False, "error_code": "cwd-escape",
+            from nl_coding_agent.core import permissions
+            if permissions.get_access_mode() != permissions.ACCESS_FULL_ACCESS:
+                policy = {"allowed": False, "error_code": "cwd-escape",
                       "reason": "Working directory must stay inside the open project.",
                       "argv": parts}
         audit = {"argv": parts, "allowed": policy["allowed"], "project_id": project_id}
@@ -2608,6 +2572,8 @@ class AppServices:
         return items
 
     def archive_mission(self, mission_id: int, *, project_id: int | None = None) -> dict:
+        from nl_coding_agent.core import permissions
+        permissions.require(permissions.WRITE)
         from nl_coding_agent.persistence.missions import archive_mission as _archive
         mission = _archive(mission_id, project_id=project_id)
         self._bus.emit(Event(
@@ -2619,6 +2585,8 @@ class AppServices:
         return mission
 
     def archive_missions(self, mission_ids, *, project_id: int | None = None) -> list[dict]:
+        from nl_coding_agent.core import permissions
+        permissions.require(permissions.WRITE)
         from nl_coding_agent.persistence.missions import archive_missions as _archive
         archived = _archive(mission_ids, project_id=project_id)
         self._bus.emit(Event(
@@ -2631,10 +2599,14 @@ class AppServices:
         return archived
 
     def unarchive_mission(self, mission_id: int) -> dict:
+        from nl_coding_agent.core import permissions
+        permissions.require(permissions.WRITE)
         from nl_coding_agent.persistence.missions import unarchive_mission as _unarchive
         return _unarchive(mission_id)
 
     def delete_mission(self, mission_id: int, *, project_id: int | None = None) -> dict:
+        from nl_coding_agent.core import permissions
+        permissions.require(permissions.WRITE)
         from nl_coding_agent.persistence.missions import delete_mission as _delete
         mission = _delete(mission_id, project_id=project_id)
         self._cleanup_mission_baselines([int(mission_id)])
@@ -2648,6 +2620,8 @@ class AppServices:
         return mission
 
     def delete_missions(self, mission_ids, *, project_id: int | None = None) -> list[dict]:
+        from nl_coding_agent.core import permissions
+        permissions.require(permissions.WRITE)
         from nl_coding_agent.persistence.missions import delete_missions as _delete
         deleted = _delete(mission_ids, project_id=project_id)
         self._cleanup_mission_baselines([int(item["id"]) for item in deleted])
@@ -2996,6 +2970,8 @@ class AppServices:
         recovery_overrides: dict | None = None,
     ) -> str:
         """Schedule autonomous multi-agent mission execution on the sequential scheduler."""
+        from nl_coding_agent.core import permissions
+        permissions.require(permissions.EXECUTE)
         import hashlib
         scope = hashlib.sha256(str(db_path()).encode()).hexdigest()[:10]
         task_id = f"mission-{mission_id}-{scope}"
@@ -3427,9 +3403,15 @@ class AppServices:
         try:
             from nl_coding_agent.core import permissions
 
+            mode = permissions.get_access_mode(persist=True)
             return {
                 "scopes": list(permissions.SCOPES),
-                "policy": permissions.get_policy(project_id),
+                "policy": permissions.get_policy(),
+                "access_mode": mode,
+                "access_mode_label": permissions.ACCESS_MODE_LABELS[mode],
+                "access_modes": permissions.access_mode_descriptors(),
+                "global": True,
+                "legacy_grant_controls": False,
                 "cloud_escalation_enabled": self.is_cloud_escalation_enabled(),
             }
         except Exception as exc:
@@ -3604,7 +3586,7 @@ class AppServices:
             "permission_state": "checked per action",
             "permission_guidance": (
                 "URL fetch uses the built-in bounded HTTPS transport and requires the "
-                "project NETWORK permission and selected research profile; general "
+                "global Auto Review or Full Access mode; general "
                 "web search uses the permission-gated DuckDuckGo adapter"),
             "untrusted": True,
             "reason": (                       "built-in HTTPS URL fetch is available; web search uses DuckDuckGo "
@@ -3860,7 +3842,7 @@ class AppServices:
                  "project_id": project_id}
         context = {"mission_id": mission_id, "project_id": project_id}
         try:
-            decision = permissions.check_capability(
+            decision = permissions.check_access(
                 permissions.CAPABILITY_WRITE, scope=scope, context=context)
         except Exception as exc:  # fail closed
             return None, {

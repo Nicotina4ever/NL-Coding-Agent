@@ -87,18 +87,39 @@ class SettingsPanel(QWidget):
                 tr_for(self._i18n, key, default), code)
         self._language_value.currentIndexChanged.connect(
             self._on_language_changed)
+
+        self._access_mode_combo = QComboBox()
+        self._access_mode_combo.setObjectName("accessModeCombo")
+        self._access_mode_combo.setAccessibleName("Global access mode")
+        self._access_mode_combo.setToolTip(
+            "The single permission policy for every project and agent. "
+            "Read Only, Workspace Write, Auto Review or Full Access.")
+        for mode, label in (
+                ("read-only", "Read Only"),
+                ("workspace-write", "Workspace Write"),
+                ("auto-review", "Auto Review"),
+                ("full-access", "Full Access")):
+            self._access_mode_combo.addItem(label, mode)
+        self._access_mode_combo.currentIndexChanged.connect(
+            self._on_access_mode_changed)
+
         for label_key, default, widget in (
                 ("settings.project_root", "Project root", self._project_value),
                 ("settings.database", "SQLite database", self._database_value),
                 ("settings.ollama", "Ollama base URL", self._ollama_value),
                 ("settings.models", "Model config", self._models_value),
                 ("settings.cloud", "Cloud escalation", self._cloud_value),
-                ("settings.permissions", "Permissions", self._permissions_value),
+                ("settings.permissions", "Access mode", self._access_mode_combo),
                 ("settings.language", "UI language", self._language_value)):
             label = QLabel(tr_for(self._i18n, label_key, default))
             self._form_labels.append((label, label_key, default))
             form.addRow(label, widget)
         layout.addLayout(form)
+
+        self._access_mode_help = QLabel()
+        self._access_mode_help.setWordWrap(True)
+        self._access_mode_help.setStyleSheet("color: #AB83C6; font-size: 12px;")
+        layout.addWidget(self._access_mode_help)
 
         self._provider_group = self._build_provider_group()
         layout.addWidget(self._provider_group)
@@ -136,7 +157,7 @@ class SettingsPanel(QWidget):
 
     # ------------------------------------------------------------------ provider UI
     def _build_provider_group(self) -> QGroupBox:
-        group = QGroupBox("Model providers and cloud policy")
+        group = QGroupBox("Model providers")
         form = QFormLayout()
         self._provider_combo = QComboBox()
         self._provider_combo.currentIndexChanged.connect(self._load_provider_form)
@@ -147,7 +168,7 @@ class SettingsPanel(QWidget):
         self._provider_url.setPlaceholderText("http://127.0.0.1:11434")
         form.addRow("Base URL", self._provider_url)
         self._cloud_enabled = QCheckBox("Allow explicit cloud escalation")
-        form.addRow("Cloud", self._cloud_enabled)
+        self._cloud_enabled.setVisible(False)  # Legacy widget; Global access owns cloud.
         outer = QVBoxLayout(group)
         outer.addLayout(form)
         actions = QHBoxLayout()
@@ -197,11 +218,10 @@ class SettingsPanel(QWidget):
             self._services.save_provider_settings(
                 str(provider_id), enabled=self._provider_enabled.isChecked(),
                 base_url=self._provider_url.text().strip() or None)
-            self._services.save_cloud_escalation(self._cloud_enabled.isChecked())
         except Exception as exc:
             self._provider_status.setText("Save failed: " + str(exc))
             return
-        self._provider_status.setText("Provider and cloud policy saved.")
+        self._provider_status.setText("Provider saved.")
         self.refresh()
 
     # ------------------------------------------------------------------ MCP UI
@@ -566,24 +586,52 @@ class SettingsPanel(QWidget):
     def _refresh_permissions(self):
         scopes: list[str] = []
         policy: dict = {}
+        modes: list[dict] = []
+        mode = "workspace-write"
         try:
             permissions = self._services.get_permissions(self._project_id)
             scopes = list(permissions.get("scopes") or [])
             policy = dict(permissions.get("policy") or {})
+            modes = list(permissions.get("access_modes") or [])
+            mode = str(permissions.get("access_mode") or mode)
         except Exception:
             scopes = []
             policy = {}
+        self._access_mode_combo.blockSignals(True)
+        index = self._access_mode_combo.findData(mode)
+        if index >= 0:
+            self._access_mode_combo.setCurrentIndex(index)
+        self._access_mode_combo.blockSignals(False)
+        description = next(
+            (str(item.get("description") or "") for item in modes
+             if item.get("id") == mode),
+            "One permission policy for every project and agent.")
+        self._access_mode_help.setText(description)
         if not scopes:
             self._permissions_value.setText(tr_for(
                 self._i18n, "settings.unavailable", "Unavailable"))
             return
         granted = [scope.upper() for scope in scopes if policy.get(scope)]
         denied = [scope.upper() for scope in scopes if not policy.get(scope)]
-        scope_text = "Granted: " + (", ".join(granted) or "none")
+        scope_text = "Global mode: " + mode.replace("-", " ").title()
+        scope_text += "  |  Granted: " + (", ".join(granted) or "none")
         if denied:
             scope_text += "  |  Denied: " + ", ".join(denied)
-        scope_text += "  (human/backend owned; read-only here)"
+        scope_text += "  (one policy for every project and agent)"
         self._permissions_value.setText(scope_text)
+
+    def _on_access_mode_changed(self, _index: int) -> None:
+        mode = str(self._access_mode_combo.currentData() or "")
+        if not mode:
+            return
+        try:
+            self._services.set_access_profile(None, mode)
+        except Exception as exc:
+            QMessageBox.warning(
+                self, "Access mode", "Could not save the access mode:\n" + str(exc))
+            self._refresh_permissions()
+            return
+        self._refresh_permissions()
 
     # ------------------------------------------------------------------ advanced
 

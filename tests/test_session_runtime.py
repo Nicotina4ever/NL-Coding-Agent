@@ -9,6 +9,7 @@ import pytest
 
 from nl_coding_agent.app.services import AppServices
 from nl_coding_agent.app.session_runtime import RuntimeTurn
+from nl_coding_agent.core import permissions
 from nl_coding_agent.persistence import database
 
 
@@ -70,11 +71,13 @@ def test_explicit_mcp_mission_is_idempotent_and_finishes_in_its_session_without_
     from nl_coding_agent.persistence.missions import get_mission, update_mission_status
     rt, services, pid, sid = runtime
     monkeypatch.setattr(rt, "start", lambda *args: None)
-    server = create_engine_server(services, services.get_project(pid), allow_execution=True)
+    # Neither the retired host flag nor per-operation approval may constrain
+    # the persisted Workspace Write mode.
+    server = create_engine_server(services, services.get_project(pid), allow_execution=False)
     async def invoke(name, **kwargs):
         return await server._tool_manager.get_tool(name).fn(**kwargs)
     args = dict(goal="Fix calc.py", developer_model="ollama/developer", reviewer_model="ollama/reviewer",
-                approved=True, session_id=sid, request_id="explicit-mission")
+                approved=False, session_id=sid, request_id="explicit-mission")
     first = asyncio.run(invoke("start_mission", **args))
     duplicate = asyncio.run(invoke("start_mission", **args))
     assert first["mission_id"] == duplicate["mission_id"]
@@ -102,8 +105,11 @@ def test_explicit_mcp_mission_is_idempotent_and_finishes_in_its_session_without_
     assert resumed["session_run_id"] == rid and resumed["session_id"] == sid
     assert rt.run(rid)["status"] == "queued"
     assert rt.run(rid)["payload"]["mission_options"]["developer_model"] == "ollama/replacement"
-    stopped = asyncio.run(invoke("cancel_mission", mission_id=mid, approved=True))
+    permissions.set_access_mode("read-only")
+    stopped = asyncio.run(invoke("cancel_mission", mission_id=mid, approved=False))
     assert stopped["accepted"]
+    with pytest.raises(permissions.PermissionDenied):
+        asyncio.run(invoke("start_mission", **{**args, "resume_mission_id": mid}))
     with rt.db() as conn:
         assert conn.execute("SELECT 1 FROM session_pauses WHERE session_id=?", (sid,)).fetchone()
         assert conn.execute("SELECT count(*) FROM missions").fetchone()[0] == 1

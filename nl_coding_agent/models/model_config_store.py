@@ -166,9 +166,6 @@ def update_role(role: str, **changes: Any) -> dict:
 
 
 def set_cloud_escalation(enabled: bool) -> dict:
-    if not isinstance(enabled, bool):
-        raise ModelConfigError("enabled must be a boolean")
-    config = load()
-    fallback = config.setdefault("roles", {}).setdefault("fallback_cloud", {})
-    fallback["enabled"] = enabled
-    return save(config)
+    """Retired compatibility endpoint; cloud follows the global access mode."""
+    from nl_coding_agent.core import permissions
+    permissions._retired_permission()

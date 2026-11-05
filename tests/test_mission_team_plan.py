@@ -206,8 +206,7 @@ def test_ungoverned_mission_offers_prompted_tools(tmp_path, monkeypatch):
         "from src.calc import add\n\n\ndef test_add():\n    assert add(1, 2) == 3\n",
         encoding="utf-8",
     )
-    for scope in (permissions.READ, permissions.WRITE, permissions.EXECUTE):
-        permissions.grant(scope, project_id=project["id"], source="test")
+    permissions.set_access_mode("workspace-write")
     mission_id = create_mission(
         project["id"], "Developer tool parity", "Add a subtract function to src/calc.py")
     runtime = FakeCrewRuntime({
@@ -308,8 +307,7 @@ def test_assigned_team_drives_planned_tasks_and_specialist_routes(tmp_path, monk
     })
     from nl_coding_agent.core import resource_monitor
     monkeypatch.setattr(resource_monitor, "snapshot", lambda: {"gpus": [], "ram": {}})
-    for scope in (permissions.READ, permissions.WRITE, permissions.EXECUTE):
-        permissions.grant(scope, project_id=project["id"], source="test")
+    permissions.set_access_mode("workspace-write")
     try:
         plan = services.team_plan(project["id"], "ollama/team-dev")
         persisted = services.assign_project_team(project["id"], plan["roles"])
@@ -399,8 +397,7 @@ def test_generated_team_is_project_scoped_persisted_and_used_in_mission(
         assert regenerated["updated"] == 2
         assert len(services.list_custom_agents()) == 2
 
-        for scope in (permissions.READ, permissions.WRITE, permissions.EXECUTE):
-            permissions.grant(scope, project_id=project["id"], source="test")
+        permissions.set_access_mode("workspace-write")
         mission_id = create_mission(
             project["id"], "Team execution", "Add a subtract function to src/calc.py")
         runtime = FakeCrewRuntime({

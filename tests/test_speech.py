@@ -208,7 +208,7 @@ def test_speech_download_requires_project_network_permission(tmp_path):
     try:
         with pytest.raises(permissions.PermissionDenied):
             services.speech_download_model(project["id"], "vosk-model-small-it-0.22")
-        permissions.grant(permissions.NETWORK, project_id=project["id"], source="test")
+        permissions.set_access_mode("auto-review")
         assert services.speech_download_model(
             project["id"], "vosk-model-small-it-0.22")["model_id"] == "vosk-model-small-it-0.22"
     finally:

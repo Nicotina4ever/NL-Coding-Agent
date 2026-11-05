@@ -603,6 +603,7 @@ def evaluate_action(
     profile: object = None,
     *,
     controls: dict | None = None,
+    capability_checker: Any = None,
 ) -> AutoReviewDecision:
     """Evaluate one proposed action against the capability boundary and profile.
 
@@ -648,190 +649,18 @@ def evaluate_action(
     context = dict(action.context or {})
     required = _required_controls(action)
     high_impact = action.capability in HIGH_IMPACT_CAPABILITIES
-    # Owner-scoped grant existence is checked BEFORE check_capability because the
-    # boundary may atomically consume an allow-once grant during evaluation.
-    explicit_owner_grant = (
-        _explicit_owner_grant(action, context) if high_impact else None)
-    capability_decision = permissions.check_capability(
+    capability_decision = (capability_checker or permissions.check_access)(
         action.capability, action.scope(), context)
-
-    if isinstance(capability_decision, permissions.Denied):
-        decision = _decision(
-            action, profile_id,
-            outcome=OUTCOME_DENIED,
-            reason="Denied by the capability boundary: " + capability_decision.reason,
-            reason_code="capability_denied",
-            controls=effective_controls,
-            required_controls=required,
-            independent_review_required=review_required,
-            matched_policy_id=capability_decision.policy_id,
-            approval_id=capability_decision.approval_id,
-        )
-        return _finalize(decision)
-
-    if isinstance(capability_decision, permissions.NeedsApproval):
-        decision = _decision(
-            action, profile_id,
-            outcome=OUTCOME_NEEDS_HUMAN_APPROVAL,
-            reason=("Human approval required by the capability boundary: "
-                    + capability_decision.reason),
-            reason_code="capability_needs_approval",
-            controls=effective_controls,
-            required_controls=required,
-            independent_review_required=review_required,
-            matched_policy_id=None,
-            approval_id=capability_decision.approval_id,
-        )
-        return _finalize(decision)
-
-    # Capability is Allowed. For high-impact actions the explicit owner-scoped
-    # grant must exist for the exact capability/scope (defense in depth beyond
-    # the matching performed by check_capability).
-    matched_policy_id = capability_decision.policy_id
-    if high_impact:
-        explicit = explicit_owner_grant
-        if explicit is None:
-            decision = _decision(
-                action, profile_id,
-                outcome=OUTCOME_DENIED,
-                reason=(
-                    "Denied: high-impact capability '" + action.capability
-                    + "' requires an explicit owner-scoped grant for the exact "
-                    "capability/scope; none covers this action."
-                ),
-                reason_code="high_impact_requires_owner_grant",
-                controls=effective_controls,
-                required_controls=required,
-                independent_review_required=review_required,
-                matched_policy_id=matched_policy_id,
-            )
-            return _finalize(decision)
-        matched_policy_id = int(explicit.get("id") or matched_policy_id)
-
-    disabled = [name for name in required if not effective_controls.get(name)]
-    if disabled:
-        decision = _decision(
-            action, profile_id,
-            outcome=OUTCOME_NEEDS_HUMAN_APPROVAL,
-            reason=(
-                "Human approval required because the selected profile/controls "
-                "keep disabled: " + ", ".join(disabled) + "."
-            ),
-            reason_code="control_disabled:" + ",".join(disabled),
-            controls=effective_controls,
-            required_controls=required,
-            independent_review_required=review_required,
-            matched_policy_id=matched_policy_id,
-        )
-        return _finalize(decision)
-
-    # Profile auto-authorization matrix (deterministic, no cross-enable).
-    if not effective_controls[CONTROL_TOOL_AUTO_AUTH]:
-        decision = _decision(
-            action, profile_id,
-            outcome=OUTCOME_NEEDS_HUMAN_APPROVAL,
-            reason=(
-                "The selected profile does not auto-authorize tool actions; "
-                "explicit human approval is required."
-            ),
-            reason_code="profile_requires_human_approval",
-            controls=effective_controls,
-            required_controls=required,
-            independent_review_required=review_required,
-            matched_policy_id=matched_policy_id,
-        )
-        return _finalize(decision)
-
-    profile_config = AUTONOMY_PROFILES[profile_id]
-    if action.capability in profile_config.auto_routine_capabilities:
-        code = "profile_auto_approved_routine"
-        if review_required:
-            code = "profile_auto_approved_routine_independent_review"
-        reason = (
-            "Auto-approved by profile '" + profile_id + "' for routine scoped work."
-        )
-        if review_required:
-            reason += " Independent review remains mandatory."
-        decision = _decision(
-            action, profile_id,
-            outcome=OUTCOME_AUTO_APPROVED,
-            reason=reason,
-            reason_code=code,
-            controls=effective_controls,
-            required_controls=required,
-            independent_review_required=review_required,
-            matched_policy_id=matched_policy_id,
-        )
-        return _finalize(decision)
-
-    if high_impact:
-        if not profile_config.auto_approve_high_impact_with_grant:
-            decision = _decision(
-                action, profile_id,
-                outcome=OUTCOME_NEEDS_HUMAN_APPROVAL,
-                reason=(
-                    "High-impact capability '" + action.capability
-                    + "' has an explicit owner grant but profile '" + profile_id
-                    + "' never auto-approves high-impact actions."
-                ),
-                reason_code="profile_requires_human_for_high_impact",
-                controls=effective_controls,
-                required_controls=required,
-                independent_review_required=review_required,
-                matched_policy_id=matched_policy_id,
-            )
-            return _finalize(decision)
-        decision = _decision(
-            action, profile_id,
-            outcome=OUTCOME_AUTO_APPROVED,
-            reason=(
-                "Auto-approved by profile '" + profile_id
-                + "' because an explicit owner-scoped grant covers this "
-                "high-impact capability/scope."
-            ),
-            reason_code="profile_auto_approved_high_impact_grant",
-            controls=effective_controls,
-            required_controls=required,
-            independent_review_required=review_required,
-            matched_policy_id=matched_policy_id,
-        )
-        return _finalize(decision)
-
-    if profile_config.auto_approve_medium_with_grant:
-        decision = _decision(
-            action, profile_id,
-            outcome=OUTCOME_AUTO_APPROVED,
-            reason=(
-                "Auto-approved by profile '" + profile_id
-                + "' because an explicit grant allows capability '"
-                + action.capability + "'."
-            ),
-            reason_code="profile_auto_approved_granted",
-            controls=effective_controls,
-            required_controls=required,
-            independent_review_required=review_required,
-            matched_policy_id=matched_policy_id,
-        )
-        return _finalize(decision)
-
-    decision = _decision(
+    allowed = isinstance(capability_decision, permissions.Allowed)
+    return _finalize(_decision(
         action, profile_id,
-        outcome=OUTCOME_NEEDS_HUMAN_APPROVAL,
-        reason=(
-            "Profile '" + profile_id + "' does not auto-approve capability '"
-            + action.capability + "' without a human decision."
-        ),
-        reason_code="profile_requires_human_approval",
-        controls=effective_controls,
-        required_controls=required,
+        outcome=OUTCOME_AUTO_APPROVED if allowed else OUTCOME_DENIED,
+        reason=capability_decision.reason,
+        reason_code="access_mode_allowed" if allowed else "capability_denied",
+        controls=effective_controls, required_controls=required,
         independent_review_required=review_required,
-        matched_policy_id=matched_policy_id,
-    )
-    return _finalize(decision)
-
-
-#: Convenience alias; evaluate_action is the canonical entry point.
-evaluate = evaluate_action
+        matched_policy_id=None,
+    ))
 
 
 def _finalize(decision: AutoReviewDecision) -> AutoReviewDecision:

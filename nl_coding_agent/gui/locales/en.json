@@ -60,7 +60,7 @@
     "settings.unavailable": "Unavailable",
     "settings.advanced_group": "Advanced - self-build and autonomy",
     "settings.open_autonomy": "Open autonomy status page…",
-    "settings.cloud_note": "Cloud escalation remains disabled unless explicitly enabled for a project. Saving Advanced settings never starts autonomy by itself.",
+    "settings.cloud_note": "Cloud follows the global Auto Review or Full Access mode. Saving Advanced settings never starts autonomy.",
     "inspector.title": "Inspector",
     "inspector.facts": "Facts",
     "inspector.last_used": "Last used: {value}",

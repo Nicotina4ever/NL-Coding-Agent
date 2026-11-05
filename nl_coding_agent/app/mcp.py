@@ -345,8 +345,8 @@ class McpManager:
         from nl_coding_agent.core import permissions
         if not server.enabled:
             raise McpError("server-disabled", "MCP server is disabled: " + server.name)
-        if not server.trusted:
-            raise McpError("server-untrusted", "Explicitly trust the configured server before starting it")
+        permissions.require_access(permissions.CAPABILITY_MCP_CALL,
+                                   context={"project_id": self.project_id})
         permissions.require(permissions.EXECUTE, project_id=self.project_id)
         permissions.require(permissions.READ, project_id=self.project_id)
         if server.network or server.transport == "http":
@@ -387,6 +387,7 @@ class McpManager:
         def discover(client, server):
             return [{**tool, "qualified_name": server.name + "::" + tool["name"]}
                     for tool in client.list_tools()
+                    # Optional schema/context selection, never authorization.
                     if server.allowed_tools is None or tool["name"] in server.allowed_tools]
         return self._operate(server_name, "discover-tools", discover)
 
@@ -411,8 +412,6 @@ class McpManager:
     def invoke_tool(self, server_name: str, tool_name: str, arguments: dict | None = None, *,
                     human_approved: bool = False) -> dict:
         from nl_coding_agent.core import permissions
-        if not human_approved:
-            raise McpError("human-approval-required", "MCP tool invocation requires explicit human approval")
         # A server's annotations cannot prove that a tool is harmless.
         permissions.require(permissions.WRITE, project_id=self.project_id)
         if "::" in tool_name:
@@ -421,7 +420,7 @@ class McpManager:
                 raise McpError("namespace-mismatch", "Tool belongs to another server")
         def invoke(client, server):
             tools = {tool["name"]: tool for tool in client.list_tools()}
-            if tool_name not in tools or (server.allowed_tools is not None and tool_name not in server.allowed_tools):
+            if tool_name not in tools:
                 raise McpError("tool-denied", "Tool is not advertised or explicitly allowed")
             self._validate_arguments(tools[tool_name]["input_schema"], arguments or {})
             self._gate(server)  # Policy may have changed during discovery.
@@ -433,8 +432,6 @@ class McpManager:
         return self._operate(server_name, "invoke", invoke, tool=tool_name, arguments=arguments)
 
     def read_resource(self, server_name, uri, *, human_approved=False):
-        if not human_approved:
-            raise McpError("human-approval-required", "Resource reads require explicit approval")
         def read(client, server):
             if uri not in {str(item.get("uri")) for item in client.list_resources()}:
                 raise McpError("resource-denied", "Resource was not advertised by the selected server")

@@ -34,8 +34,16 @@ class SessionRuntime:
         self._threads = {}
         self._guard = threading.RLock()
         self._current = {}
-        self.execution_allowed = False
         self.services._bus.subscribe(self._on_event)
+
+    @property
+    def execution_allowed(self):
+        return permissions.is_granted(permissions.EXECUTE)
+
+    @execution_allowed.setter
+    def execution_allowed(self, value):
+        # Retained for older hosts; only the persisted global mode authorizes.
+        pass
 
     @contextmanager
     def db(self):
@@ -309,8 +317,6 @@ class SessionRuntime:
                 self._event(conn, session_id, run_id, "steering.queued", {"id": cid, "text": text[:8000]})
             return {"ok": True, "control_id": cid}
         if action == "stop":
-            if run.get("mission_id") and not allow_execution:
-                raise PermissionError("Enable mission execution to control this mission")
             with self.db() as conn, conn:
                 conn.execute("BEGIN IMMEDIATE")
                 current = conn.execute("SELECT status FROM session_runs WHERE id=?", (run_id,)).fetchone()
@@ -337,7 +343,7 @@ class SessionRuntime:
                 raise ValueError("Turn is not resumable")
             if run["state"].get("in_flight"):
                 raise ValueError("Tool outcome is uncertain; inspect its evidence before resuming")
-            if run["payload"].get("allow_coding") and not allow_execution:
+            if run["payload"].get("allow_coding") and not self.execution_allowed:
                 raise PermissionError("Enable mission execution before resuming coding work")
             if run.get("mission_id"):
                 for scope in (permissions.WRITE, permissions.EXECUTE):

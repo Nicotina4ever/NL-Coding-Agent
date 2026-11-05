@@ -72,9 +72,11 @@ def test_tool_listing_and_gated_invocation_with_fake_transport():
     manager = mcp.McpManager(config=config, transport_factory=factory)
     listed = manager.list_tools("files")
     assert listed[0]["name"] == "read_file"
-    with pytest.raises(mcp.McpError) as approval:
-        manager.invoke_tool("files", "read_file", {"path": "x"})
-    assert approval.value.code == "human-approval-required"
+    assert manager.invoke_tool("files", "read_file", {"path": "x"})["content"][0]["text"] == "ok"
+    permissions.set_access_mode("read-only")
+    with pytest.raises(permissions.PermissionDenied):
+        manager.invoke_tool("files", "read_file", {"path": "x"}, human_approved=True)
+    permissions.set_access_mode("workspace-write")
     result = manager.invoke_tool("files", "read_file", {"path": "x"}, human_approved=True)
     assert result["content"][0]["text"] == "ok"
     assert any(payload.get("method") == "tools/call"

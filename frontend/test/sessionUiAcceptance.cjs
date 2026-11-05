@@ -9,8 +9,9 @@ const repo = path.resolve(__dirname, '../..');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const host = process.argv[2] || 'standalone';
 const sessionOnly = process.argv[3] === 'sessions';
+const permissionMode = process.argv[3] === 'permissions';
 const packaged = process.argv[3] === 'packaged';
-const realProject = process.argv[3] === 'real' || packaged;
+const realProject = process.argv[3] === 'real' || packaged || permissionMode;
 const repairReal = process.argv[3] === 'repair-real';
 const executable = process.env.NL_ACCEPTANCE_EXE || (host === 'standalone'
     ? path.join(repo, '.workspace/dist/NL Code/NL Code.exe')
@@ -18,7 +19,7 @@ const executable = process.env.NL_ACCEPTANCE_EXE || (host === 'standalone'
 const scratch = path.join(repo, '.workspace/temp', 'session-ui-' + host + (sessionOnly ? '-sessions' : realProject ? '-real' : repairReal ? '-repair-real' : '') + '-' + Date.now());
 const project = realProject ? path.resolve(process.env.NL_ACCEPTANCE_PROJECT || 'K:/AI/NL_AudioLab') : path.join(scratch, 'project');
 const data = path.join(scratch, 'data');
-const sourceEngineRoot = host === 'standalone' ? path.join(path.dirname(executable), 'engine') : repo;
+const sourceEngineRoot = process.env.NL_ACCEPTANCE_ENGINE_ROOT || (host === 'standalone' ? path.join(path.dirname(executable), 'engine') : repo);
 const engineRoot = repairReal ? path.join(scratch, 'engine') : sourceEngineRoot;
 const profile = host === 'standalone' ? path.join(scratch, 'portable/user-data') : path.join(scratch, 'profile');
 const extensions = packaged ? path.join(path.dirname(executable),'data/extensions') : path.join(scratch, 'extensions');
@@ -143,6 +144,15 @@ async function main() {
         fs.writeFileSync(path.join(project, 'src/calc.py'), 'def add(a, b):\n    return a + b\n\nPROJECT_TOKEN = "SESSION-UI-742"\n');
         fs.writeFileSync(path.join(project, 'tests/test_calc.py'), 'from src.calc import add\n\ndef test_add():\n    assert add(2, 3) == 5\n');
     }
+    if (permissionMode) {
+        const seed = spawnSync(path.join(repo, 'python/python.exe'), ['-c',
+            'import sys; sys.path.insert(0,'+JSON.stringify(repo)+'); from pathlib import Path; from nl_coding_agent.app.services import AppServices; from nl_coding_agent.persistence.missions import create_mission,update_mission_status; s=AppServices(); scratch=Path(sys.argv[1]); [(scratch/str(i)).mkdir(exist_ok=True) for i in range(5)]; [s.open_project(scratch/str(i)) for i in range(5)]; p=s.open_project(sys.argv[2]); assert p["id"]==6; mid=create_mission(6,"Fixture DELETE progetto 6","Riproduzione isolata: nessuna esecuzione sul progetto reale"); update_mission_status(mid,"interrupted"); s._db.close()',
+            scratch, project], { cwd: repo, env, encoding: 'utf8', windowsHide: true });
+        assert.strictEqual(seed.status, 0, seed.stderr);
+        report.original_source = ['README.md','scripts/app.py','pyproject.toml','AVVIO_CODEX_NL_AudioLab_DRAGON.md'].map(p=>path.join(project,p)).find(p=>fs.existsSync(p));
+        assert(report.original_source, 'real project source is available');
+        report.original_sha256 = require('crypto').createHash('sha256').update(fs.readFileSync(report.original_source)).digest('hex');
+    }
     const settingsDir = path.join(profile, 'User');
     fs.mkdirSync(settingsDir, { recursive: true });
     fs.writeFileSync(path.join(settingsDir, 'settings.json'), JSON.stringify({
@@ -153,6 +163,7 @@ async function main() {
         'workbench.secondarySideBar.defaultVisibility': 'hidden',
         ...(host === 'standalone' ? { 'workbench.colorTheme': 'NL Code Dark' } : {}),
         'window.restoreWindows': 'none', 'security.workspace.trust.enabled': false,
+        'window.dialogStyle': 'custom',
         'workbench.startupEditor': 'none'
     }, null, 2));
     const extensionVersion = JSON.parse(fs.readFileSync(path.join(repo,'frontend/package.json'),'utf8')).version;
@@ -220,6 +231,52 @@ async function main() {
     };
     await waitFor(() => ui('document.getElementById("status").textContent.includes("read-only") || document.getElementById("status").textContent.includes("missions")'), 60000, 'engine ready');
     check('real editor Chat webview connected');
+    if (permissionMode) {
+        const selectMode = async (mode) => {
+            await ui('(()=>{const e=document.getElementById("chat-access-profile");e.value='+JSON.stringify(mode)+';e.dispatchEvent(new Event("change",{bubbles:true}));return true;})()');
+            await waitFor(() => db("SELECT value FROM app_settings WHERE key='access.mode'")[0]?.value === mode,
+                15000, 'global mode persisted '+mode);
+            await waitFor(() => ui('document.getElementById("chat-access-profile").value==='+JSON.stringify(mode)), 15000, 'selector reconciled');
+            await sleep(500);
+        };
+        assert.strictEqual(db('SELECT id FROM projects WHERE id=6')[0].id, 6);
+        const modes = await ui('Array.from(document.getElementById("chat-access-profile").options).map(o=>o.value)');
+        assert.deepStrictEqual(modes, ['read-only','workspace-write','auto-review','full-access']);
+        assert(await ui('!document.getElementById("permission-grant") && !document.getElementById("cloud-policy") && document.getElementById("exec-toggle").tagName==="SPAN"'));
+        check('only four global authorization modes; no grant/cloud/execution switches');
+        for (const mode of modes) {
+            await selectMode(mode);
+            const evaluated = spawnSync(path.join(repo,'python/python.exe'),['-c',
+                'import sys; sys.path.insert(0,'+JSON.stringify(repo)+'); import json; from nl_coding_agent.core import permissions as p; print(json.dumps({"mode":p.get_access_mode(),"same":p.get_policy(6)==p.get_policy(1),"delete":p.check_capability("delete").allowed,"cloud":p.check_capability("model-inference-cloud").allowed}))'],
+                {cwd:repo,env,encoding:'utf8',windowsHide:true});
+            assert.strictEqual(evaluated.status,0,evaluated.stderr);
+            const result=JSON.parse(evaluated.stdout);
+            assert(result.same); assert.strictEqual(result.mode,mode);
+            assert.strictEqual(result.delete, mode==='full-access');
+            assert.strictEqual(result.cloud, ['auto-review','full-access'].includes(mode));
+            check('GUI mode controls every project and capability',mode);
+        }
+        await selectMode('workspace-write');
+        await ui('(()=>{document.querySelector(\'[data-tab="missions"]\').click();return true;})()');
+        await waitFor(() => ui('Array.from(document.querySelectorAll("#mission-list button")).some(b=>b.textContent==="Delete")'),15000,'mission 6 list');
+        await ui('(()=>{Array.from(document.querySelectorAll("#mission-list button")).find(b=>b.textContent==="Delete").click();return true;})()');
+        await waitFor(async () => db('SELECT id FROM missions WHERE project_id=6').length===0 ||
+            await workbench.evaluate('Array.from(document.querySelectorAll(".monaco-dialog-box .monaco-button")).some(b=>b.textContent.includes("Delete permanently"))'),15000,'delete confirmation or accepted action');
+        if (db('SELECT id FROM missions WHERE project_id=6').length) {
+            await workbench.evaluate('(()=>{Array.from(document.querySelectorAll(".monaco-dialog-box .monaco-button")).find(b=>b.textContent.includes("Delete permanently")).click();return true;})()');
+        }
+        await waitFor(() => db('SELECT id FROM missions WHERE project_id=6').length===0,15000,'DELETE project 6 completed');
+        assert.strictEqual(db("SELECT count(*) AS n FROM app_settings WHERE key LIKE 'permissions.policy.%' OR key LIKE 'access.profile.%'")[0].n,0);
+        check('Workspace Write DELETE project 6 succeeds without DELETE grant or execution flag');
+        await command('NL Code: Reconnect Backend');
+        await sleep(2000);
+        await waitFor(() => ui('document.getElementById("chat-access-profile").value==="workspace-write"'),20000,'mode after reconnect');
+        assert.strictEqual(require('crypto').createHash('sha256').update(fs.readFileSync(report.original_source)).digest('hex'),report.original_sha256);
+        check('reconnect preserves global policy; real NL_AudioLab source unchanged');
+        await capture('permissions');
+        console.log('GLOBAL-POLICY-UI-PASS '+scratch);
+        return;
+    }
     if (sessionOnly) {
         const originalSession = await waitFor(() => ui('document.getElementById("chat-session").value'),
             30000, 'initial conversation loaded');

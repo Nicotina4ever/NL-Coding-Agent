@@ -225,8 +225,7 @@ def test_completed_mission_writes_project_memory(project):
         "from src.calc import add\n\n\ndef test_add():\n    assert add(1, 2) == 3\n",
         encoding="utf-8",
     )
-    for scope in (permissions.READ, permissions.WRITE, permissions.EXECUTE):
-        permissions.grant(scope, project_id=opened["id"], source="test")
+    permissions.set_access_mode("workspace-write")
     mission_id = create_mission(opened["id"], "Remembered", "Add subtract to src/calc.py")
     runtime = FakeCrewRuntime({
         "developer": [

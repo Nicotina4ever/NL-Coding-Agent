@@ -1,38 +1,10 @@
-"""Universal permission model and cloud/network escalation enforcement.
+"""One persisted global access mode for Chat, missions, agents and tools.
 
-Single source of truth for capability permissions (SPEC-25 / NL-BP-072) and
-for the cloud-escalation gate (SPEC-15, SPEC-13A / NL-BP-076).
-
-Design rules
-------------
-* Permissions are owned by the human/backend. The model-facing tool surface
-  (nl_coding_agent.tools.crew_tools) does not import this module, so an agent
-  cannot grant itself a capability and no "request permission" tool is exposed
-  to the model.
-* Fail-closed defaults: READ/WRITE/EXECUTE are granted locally so the staged
-  developer/debugger pipeline keeps working, while DELETE/NETWORK/CLOUD are
-  denied until an explicit grant is recorded.
-* Persistence reuses the existing app_settings table (no DB migration).
-  Keys: permissions.policy.global and the optional
-  permissions.policy.project.<project_id>. The stored JSON maps contain only
-  *explicit* decisions; defaults and the global layer are merged in code.
-  A missing or malformed row therefore falls back to the deny-by-default
-  policy instead of granting anything.
-* Every grant/revoke appends one events row with source 'permissions'
-  (scope, project, actor and resulting decision; never file contents or
-  secrets).
-* No environment variable or feature flag disables these checks.
-
-Classification heuristics
--------------------------
-* A model name is cloud when it contains the token 'cloud' (Ollama marks
-  cloud models with the '-cloud' suffix, e.g. gpt-oss:120b-cloud). The name is
-  split on non-alphanumeric characters so local names such as 'cloudless' are
-  not misclassified.
-* Endpoint locality is classified separately: loopback hosts (127.0.0.0/8,
-  localhost, ::1) are local; any other non-empty endpoint is remote and
-  requires an explicit NETWORK grant. An empty/None base_url is "unknown" and
-  does not by itself trigger the network gate (a cloud model name still does).
+The four GUI modes are the sole authorization source. Legacy scoped records
+remain readable for audit, but cannot grant, deny or request authorization.
+Local inference and project work are the default; network/cloud require an
+explicit global Auto Review or Full Access selection. Integrity, isolation,
+verification and recovery checks remain independent technical gates.
 """
 from __future__ import annotations
 
@@ -73,6 +45,74 @@ DEFAULT_GRANTS: dict[str, bool] = {
 #: app_settings keys. The stored value is a JSON map of explicit scope decisions.
 GLOBAL_POLICY_KEY = "permissions.policy.global"
 PROJECT_POLICY_KEY_PREFIX = "permissions.policy.project."
+
+# --------------------------------------------------------------------------- #
+# Global access mode: the single authorization policy for the whole product.
+# --------------------------------------------------------------------------- #
+#
+# The four GUI modes are the only permission source. per-project policies and
+# capability grants are legacy compatibility data: they are ignored as soon as
+# an access mode is stored (the GUI/backend migrates the old access.profile rows
+# once, on first read).
+ACCESS_READ_ONLY = "read-only"
+ACCESS_WORKSPACE_WRITE = "workspace-write"
+ACCESS_AUTO_REVIEW = "auto-review"
+ACCESS_FULL_ACCESS = "full-access"
+ACCESS_MODES: tuple[str, ...] = (
+    ACCESS_READ_ONLY,
+    ACCESS_WORKSPACE_WRITE,
+    ACCESS_AUTO_REVIEW,
+    ACCESS_FULL_ACCESS,
+)
+DEFAULT_ACCESS_MODE = ACCESS_WORKSPACE_WRITE
+
+ACCESS_MODE_KEY = "access.mode"
+LEGACY_ACCESS_PROFILE_PREFIX = "access.profile."
+
+ACCESS_MODE_SCOPES: dict[str, dict[str, bool]] = {
+    ACCESS_READ_ONLY: {
+        READ: True, WRITE: False, EXECUTE: False,
+        DELETE: False, NETWORK: False, CLOUD: False,
+    },
+    ACCESS_WORKSPACE_WRITE: {
+        READ: True, WRITE: True, EXECUTE: True,
+        DELETE: False, NETWORK: False, CLOUD: False,
+    },
+    ACCESS_AUTO_REVIEW: {
+        READ: True, WRITE: True, EXECUTE: True,
+        DELETE: False, NETWORK: True, CLOUD: True,
+    },
+    ACCESS_FULL_ACCESS: {
+        READ: True, WRITE: True, EXECUTE: True,
+        DELETE: True, NETWORK: True, CLOUD: True,
+    },
+}
+
+ACCESS_MODE_LABELS: dict[str, str] = {
+    ACCESS_READ_ONLY: "Read Only",
+    ACCESS_WORKSPACE_WRITE: "Workspace Write",
+    ACCESS_AUTO_REVIEW: "Auto Review",
+    ACCESS_FULL_ACCESS: "Full Access",
+}
+
+ACCESS_MODE_DESCRIPTIONS: dict[str, str] = {
+    ACCESS_READ_ONLY: (
+        "Analysis only: read project files and run local inference. No file "
+        "changes, commands, missions, network or cloud access."
+    ),
+    ACCESS_WORKSPACE_WRITE: (
+        "Project work: read, write/execute inside the project and create, "
+        "modify, stop, resume or delete missions. No network or cloud access."
+    ),
+    ACCESS_AUTO_REVIEW: (
+        "Workspace work plus explicit network/cloud research and downloads. "
+        "Independent code review, integrity and regression gates still apply."
+    ),
+    ACCESS_FULL_ACCESS: (
+        "Every operation available to the current OS user, including delete, "
+        "system install, secrets, git push and release publishing."
+    ),
+}
 
 AUDIT_SOURCE = "permissions"
 DEFAULT_GRANT_SOURCE = "human"
@@ -176,15 +216,89 @@ def _parse_overrides(raw: str | None) -> dict[str, bool]:
     }
 
 
-def _effective_policy(conn, project_id: int | None = None) -> dict[str, bool]:
-    """Defaults <- global overrides <- optional per-project overrides."""
-    policy = dict(DEFAULT_GRANTS)
-    policy.update(_parse_overrides(_read_raw(conn, GLOBAL_POLICY_KEY)))
-    if project_id is not None:
-        policy.update(
-            _parse_overrides(_read_raw(conn, policy_key(project_id)))
+def normalize_access_mode(mode: object) -> str:
+    """Validate one of the four global GUI access modes."""
+    if not isinstance(mode, str) or not mode.strip():
+        raise ValueError(
+            "Unknown access mode: " + repr(mode) + "; expected one of "
+            + ", ".join(ACCESS_MODES)
         )
-    return policy
+    normalized = mode.strip().lower()
+    if normalized not in ACCESS_MODES:
+        raise ValueError(
+            "Unknown access mode: " + repr(mode) + "; expected one of "
+            + ", ".join(ACCESS_MODES)
+        )
+    return normalized
+
+
+def _parse_access_mode(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    candidate = raw.strip()
+    if candidate.startswith('"'):
+        try:
+            candidate = str(json.loads(candidate))
+        except (TypeError, ValueError):
+            return None
+    if candidate in ACCESS_MODES:
+        return candidate
+    return None
+
+
+def _legacy_access_mode(conn) -> str | None:
+    """Preserve any legacy Read Only choice during first initialization.
+
+    A former project-specific opt-in cannot broaden the new global policy.
+    Once the global key exists these rows are never consulted again.
+    """
+    try:
+        rows = conn.execute(
+            "SELECT key, value, updated_at FROM app_settings "
+            "WHERE key LIKE ? ORDER BY updated_at DESC, key DESC",
+            (LEGACY_ACCESS_PROFILE_PREFIX + "%",),
+        ).fetchall()
+    except Exception:
+        return None
+    for row in rows:
+        try:
+            data = json.loads(row["value"] or "")
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        profile = str(data.get("profile") or "").strip().lower()
+        if profile == ACCESS_READ_ONLY:
+            return ACCESS_READ_ONLY
+    return None
+
+
+def _resolve_access_mode(conn, *, persist_legacy: bool = False) -> str | None:
+    """Return the explicit global mode, migrating a legacy profile if needed."""
+    raw = _read_raw(conn, ACCESS_MODE_KEY)
+    if raw is not None:
+        # Corrupt global state must never reactivate legacy project grants.
+        return _parse_access_mode(raw) or ACCESS_READ_ONLY
+    legacy = _legacy_access_mode(conn)
+    # A former project opt-in cannot authorize cloud/system access for all
+    # projects. Preserve read-only; otherwise start at the local default.
+    legacy = ACCESS_READ_ONLY if legacy == ACCESS_READ_ONLY else DEFAULT_ACCESS_MODE
+    if persist_legacy:
+        conn.execute(
+            "INSERT INTO app_settings (key, value, updated_at) VALUES (?,?,?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+            (ACCESS_MODE_KEY, legacy, _now()),
+        )
+    return legacy
+
+
+def _effective_policy(conn, project_id: int | None = None) -> dict[str, bool]:
+    """Return the single global access-mode policy.
+
+    Project, mission, agent and capability grant rows are audit-only data.
+    No caller needs to initialize the GUI before the global policy applies.
+    """
+    return dict(ACCESS_MODE_SCOPES[_resolve_access_mode(conn)])
 
 
 def _stored_overrides(conn, project_id: int | None) -> dict[str, bool]:
@@ -235,46 +349,98 @@ def _audit(
     )
 
 
+def _audit_access_mode(conn, mode: str, source: str) -> None:
+    payload = json.dumps(
+        {
+            "action": "set_access_mode",
+            "mode": mode,
+            "source": source,
+            "policy_key": ACCESS_MODE_KEY,
+        },
+        sort_keys=True,
+    )
+    conn.execute(
+        "INSERT INTO events (source, level, message, payload) VALUES (?,?,?,?)",
+        (
+            AUDIT_SOURCE,
+            "info",
+            "Access mode set: " + mode + " [source: " + source + "]",
+            payload,
+        ),
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Public permission API (human/backend owned)
 # --------------------------------------------------------------------------- #
 
-def grant(
-    scope: str,
-    project_id: int | None = None,
-    source: str = DEFAULT_GRANT_SOURCE,
-) -> None:
-    """Explicitly grant one scope and append an audit event.
+def get_access_mode(*, persist: bool = False) -> str:
+    """Return the global access mode.
 
-    project_id=None grants globally; a project id stores an override that
-    applies only to that project. The grant is persisted immediately.
+    ``persist=True`` is used by the GUI/access-profile endpoint: it migrates the
+    local default (preserving a legacy Read Only choice) without broadening a
+    former project opt-in to every project. Checks use the same policy before
+    initialization. Malformed global state fails closed to Read Only.
     """
-    scope = normalize_scope(scope)
-    project_id = _normalize_project_id(project_id)
+    with _connection() as conn, conn:
+        if persist:
+            conn.execute("BEGIN IMMEDIATE")
+        mode = _resolve_access_mode(conn, persist_legacy=persist)
+        if mode is not None:
+            return mode
+        mode = DEFAULT_ACCESS_MODE
+        if persist:
+            conn.execute(
+                "INSERT INTO app_settings (key, value, updated_at) VALUES (?,?,?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+                (ACCESS_MODE_KEY, mode, _now()),
+            )
+        return mode
+
+
+def set_access_mode(mode: str, source: str = DEFAULT_GRANT_SOURCE) -> str:
+    """Persist one of the four global GUI access modes and audit the change."""
+    mode = normalize_access_mode(mode)
     source = _normalize_source(source)
     with _connection() as conn, conn:
         conn.execute("BEGIN IMMEDIATE")
-        overrides = _stored_overrides(conn, project_id)
-        overrides[scope] = True
-        key = _write_overrides(conn, overrides, project_id)
-        _audit(conn, key, scope, granted=True, project_id=project_id, source=source)
+        conn.execute(
+            "INSERT INTO app_settings (key, value, updated_at) VALUES (?,?,?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+            (ACCESS_MODE_KEY, mode, _now()),
+        )
+        _audit_access_mode(conn, mode, source)
+    return mode
 
 
-def revoke(
-    scope: str,
-    project_id: int | None = None,
-    source: str = DEFAULT_GRANT_SOURCE,
-) -> None:
-    """Explicitly revoke one scope and append an audit event (fail-closed)."""
-    scope = normalize_scope(scope)
-    project_id = _normalize_project_id(project_id)
-    source = _normalize_source(source)
-    with _connection() as conn, conn:
-        conn.execute("BEGIN IMMEDIATE")
-        overrides = _stored_overrides(conn, project_id)
-        overrides[scope] = False
-        key = _write_overrides(conn, overrides, project_id)
-        _audit(conn, key, scope, granted=False, project_id=project_id, source=source)
+def access_mode_descriptors() -> list[dict]:
+    """Return the four GUI modes with their scope policy and description."""
+    return [
+        {
+            "id": mode,
+            "label": ACCESS_MODE_LABELS[mode],
+            "description": ACCESS_MODE_DESCRIPTIONS[mode],
+            "scopes": dict(ACCESS_MODE_SCOPES[mode]),
+        }
+        for mode in ACCESS_MODES
+    ]
+
+
+def _retired_permission(*args, **kwargs):
+    raise PermissionDenied(
+        "Scoped grants and approvals are retired. Select one global access mode: "
+        "Read Only, Workspace Write, Auto Review or Full Access.")
+
+
+# Compatibility names fail explicitly instead of creating a second policy.
+def grant(scope, project_id=None, source=DEFAULT_GRANT_SOURCE):
+    normalize_scope(scope)
+    _retired_permission()
+
+
+def revoke(scope, project_id=None, source=DEFAULT_GRANT_SOURCE):
+    normalize_scope(scope)
+    _retired_permission()
 
 
 def is_granted(scope: str, project_id: int | None = None) -> bool:
@@ -311,8 +477,8 @@ def _denied_message(scope: str, project_id: int | None) -> str:
     where = "globally" if project_id is None else f"for project {project_id}"
     return (
         f"Permission denied: {scope_text} access is not granted {where}. "
-        f"An explicit {scope_text} grant is required; permissions are owned by "
-        f"the human/backend and cannot be granted by a model."
+        "Select Workspace Write, Auto Review or Full Access in Global access "
+        "as appropriate; models cannot change the mode."
     )
 
 
@@ -372,8 +538,8 @@ def assert_model_permitted(
     """Fail-closed model route gate used before every LLM construction.
 
     * Local loopback (non-cloud) models always pass, even with an empty policy.
-    * A cloud model requires an explicit CLOUD grant.
-    * A remote (non-loopback) endpoint requires an explicit NETWORK grant.
+    * A cloud model requires Auto Review or Full Access.
+    * A remote (non-loopback) endpoint requires Auto Review or Full Access.
     * Both checks stack for a cloud model reached through a remote endpoint.
 
     Raises PermissionDenied with the missing scope recorded on the exception;
@@ -409,50 +575,25 @@ def _model_denied_message(
     reasons: list[str] = []
     if CLOUD in missing:
         reasons.append(
-            f"cloud model {model_name!r} requires an explicit CLOUD grant"
+            f"CLOUD: model {model_name!r} requires Auto Review or Full Access"
         )
     if NETWORK in missing:
         reasons.append(
-            f"remote endpoint {base_url!r} requires an explicit NETWORK grant"
+            f"NETWORK: remote endpoint {base_url!r} requires Auto Review or Full Access"
         )
     where = "globally" if project_id is None else f"for project {project_id}"
     return (
         f"Model access denied {where}: " + "; ".join(reasons) + ". "
-        "Cloud escalation and network access are off by default and explicit "
-        "grant required; permissions are owned by the human/backend and cannot "
-        "be granted by a model."
+        "Select a global access mode that permits cloud/network access. "
+        "Models cannot change the access mode."
     )
 
 # ===========================================================================
-# Stage-7 capability taxonomy and durable scoped approvals (NL-BP-168)
+# Capability taxonomy and legacy audit compatibility
 # ===========================================================================
-#
-# Additive layer on top of the legacy scopes above. Nothing in this section
-# changes READ/WRITE/EXECUTE/DELETE/NETWORK/CLOUD policy, grant/revoke/require,
-# the app_settings persistence or assert_model_permitted(): existing deny and
-# escalation gates stay authoritative and independent.
-#
-# The capability API is the single fail-closed evaluation entry point for future
-# research/tool code:
-#
-#   decision = check_capability(capability, scope, context)
-#   if isinstance(decision, Allowed): ...
-#   elif isinstance(decision, NeedsApproval): ... durable approval id ...
-#   else: ... Denied (reason / policy id) ...
-#
-# Rules:
-# * every capability has an explicit risk class and default decision;
-# * high-impact capabilities default denied; medium capabilities require an
-#   explicit approval/grant; only the legacy-equivalent local reversible ones
-#   (read/write/execute/local model inference) default allowed;
-# * one capability never enables another (no cross-enable); project/mission
-#   scoped grants never leak to other projects/missions;
-# * deny always wins over allow;
-# * grants and pending approvals are durable SQLite rows (expiry, revocation,
-#   allow-once consumption, inspection) and append events audit rows;
-# * store failures fail closed (Denied, never Allowed).
-
-# --- capability identifiers -------------------------------------------------
+# Scope descriptors retain identity/context validation. Authorization for every
+# capability is derived exclusively from _MODE_CAPABILITIES. Historical grant
+# and approval records remain readable, without influencing current decisions.
 
 CAPABILITY_READ = "read"
 CAPABILITY_WRITE = "write"
@@ -501,7 +642,7 @@ CAPABILITIES: tuple[str, ...] = (
 #: Risk classes; high/critical capabilities are never allowed by default.
 RISK_CLASSES: tuple[str, ...] = ("low", "medium", "high", "critical")
 
-#: Default decisions used by check_capability when no grant/approval applies.
+#: Historical taxonomy defaults retained for audit compatibility only.
 DEFAULT_ALLOW = "allowed"
 DEFAULT_DENY = "denied"
 DEFAULT_APPROVAL = "approval"
@@ -1038,175 +1179,6 @@ def capability_audit_events(*, limit: int = 100) -> list[dict]:
 
 # --- durable approvals ------------------------------------------------------
 
-def request_capability(
-    capability: str,
-    scope: object = None,
-    context: dict | None = None,
-    *,
-    reason: str = "",
-    project_id: int | None = None,
-    ttl_s: int | float | None = None,
-    expires_at: object = None,
-    source: str = DEFAULT_GRANT_SOURCE,
-) -> dict:
-    """Persist one durable WAIT_APPROVAL request; never executes the capability."""
-    capability = normalize_capability(capability)
-    cap_scope = normalize_capability_scope(scope, context)
-    ctx = _normalize_context(context)
-    effective_project = _decision_project_id(cap_scope, project_id)
-    expiry = _expiry_from(ttl_s, expires_at)
-    store = _capability_store()
-    conn = store.connect()
-    try:
-        approval_id = store.insert_approval(
-            conn,
-            capability=capability,
-            scope_kind=cap_scope.kind,
-            scope_value=cap_scope.value,
-            project_id=effective_project,
-            context=ctx,
-            reason=str(reason or ""),
-            expires_at=expiry,
-            source=_normalize_source(source),
-        )
-        _capability_audit(
-            conn,
-            level="info",
-            message="Capability approval requested: " + capability,
-            kind="capability_request",
-            payload={
-                "capability": capability,
-                "approval_id": approval_id,
-                "scope_kind": cap_scope.kind,
-                "scope_value": cap_scope.value,
-                "project_id": effective_project,
-                "expires_at": expiry,
-            },
-        )
-        return {
-            "ok": True,
-            "approval_id": approval_id,
-            "status": APPROVAL_PENDING,
-            "capability": capability,
-            "scope": _scope_dict(cap_scope),
-            "project_id": effective_project,
-            "expires_at": expiry,
-            "starts_or_runs": False,
-        }
-    finally:
-        conn.close()
-
-
-def decide_capability_approval(
-    approval_id: int,
-    approved: bool,
-    *,
-    decision: str = DECISION_ALLOW_ONCE,
-    decided_by: str = DEFAULT_GRANT_SOURCE,
-    ttl_s: int | float | None = None,
-    source: str = DEFAULT_GRANT_SOURCE,
-) -> dict:
-    """Record a durable approval decision and, when approved, its scoped grant."""
-    approval_id = int(approval_id)
-    store = _capability_store()
-    conn = store.connect()
-    try:
-        approval = store.get_approval(conn, approval_id)
-        if approval is None:
-            return {"ok": False, "error": "Approval not found: " + str(approval_id)}
-        if str(approval.get("status")) != APPROVAL_PENDING:
-            return {
-                "ok": False,
-                "error": "Approval is not pending",
-                "status": approval.get("status"),
-                "approval_id": approval_id,
-            }
-        if not approved:
-            changed = store.decide_approval(
-                conn,
-                approval_id,
-                status=APPROVAL_DENIED,
-                decided_by=str(decided_by or DEFAULT_GRANT_SOURCE),
-                decision=None,
-                grant_id=None,
-            )
-            _capability_audit(
-                conn,
-                level="warning",
-                message="Capability approval denied: " + str(approval["capability"]),
-                kind="capability_decision",
-                payload={
-                    "capability": approval["capability"],
-                    "approval_id": approval_id,
-                    "status": APPROVAL_DENIED,
-                    "decided_by": str(decided_by or DEFAULT_GRANT_SOURCE),
-                },
-            )
-            return {
-                "ok": bool(changed),
-                "approval_id": approval_id,
-                "status": APPROVAL_DENIED,
-                "grant_id": None,
-            }
-        decision = normalize_decision(decision)
-        if decision not in (DECISION_ALLOW_ONCE, DECISION_ALLOW_MISSION,
-                            DECISION_ALLOW_PROJECT, DECISION_ALWAYS):
-            raise ValueError(
-                "An approved capability requires an allow decision "
-                "(allow-once/mission/project/always)"
-            )
-        scope = CapabilityScope(
-            str(approval["scope_kind"]),
-            approval.get("scope_value"),
-            approval.get("project_id"),
-        )
-        expires_at = _expiry_from(ttl_s) if ttl_s is not None else approval.get("expires_at")
-        grant_id = store.insert_grant(
-            conn,
-            capability=str(approval["capability"]),
-            scope_kind=scope.kind,
-            scope_value=scope.value,
-            project_id=approval.get("project_id"),
-            decision=decision,
-            source=_normalize_source(source),
-            context=approval.get("context") or {},
-            expires_at=expires_at,
-        )
-        changed = store.decide_approval(
-            conn,
-            approval_id,
-            status=APPROVAL_APPROVED,
-            decided_by=str(decided_by or DEFAULT_GRANT_SOURCE),
-            decision=decision,
-            grant_id=grant_id,
-        )
-        _capability_audit(
-            conn,
-            level="info",
-            message="Capability approval granted: " + str(approval["capability"]),
-            kind="capability_decision",
-            payload={
-                "capability": approval["capability"],
-                "approval_id": approval_id,
-                "grant_id": grant_id,
-                "status": APPROVAL_APPROVED,
-                "decision": decision,
-                "scope_kind": scope.kind,
-                "scope_value": scope.value,
-                "decided_by": str(decided_by or DEFAULT_GRANT_SOURCE),
-            },
-        )
-        return {
-            "ok": bool(changed),
-            "approval_id": approval_id,
-            "status": APPROVAL_APPROVED,
-            "grant_id": grant_id,
-            "decision": decision,
-            "expires_at": expires_at,
-        }
-    finally:
-        conn.close()
-
 
 def expire_capability_approvals() -> int:
     """Persist expiry for overdue pending approvals; returns the number changed."""
@@ -1219,167 +1191,6 @@ def expire_capability_approvals() -> int:
 
 
 # --- grants and revocation --------------------------------------------------
-
-def grant_capability(
-    capability: str,
-    scope: object = None,
-    *,
-    decision: str = DECISION_ALLOW_ONCE,
-    project_id: int | None = None,
-    expires_at: object = None,
-    ttl_s: int | float | None = None,
-    source: str = DEFAULT_GRANT_SOURCE,
-    context: dict | None = None,
-) -> dict:
-    """Persist one scoped capability decision (human/backend only).
-
-    decision='revoke' is accepted as a convenience and revokes the matching
-    active grants instead of inserting a new allow/deny row.
-    """
-    capability = normalize_capability(capability)
-    decision = normalize_decision(decision)
-    cap_scope = normalize_capability_scope(scope, context)
-    ctx = _normalize_context(context)
-    effective_project = _decision_project_id(cap_scope, project_id)
-    if decision == DECISION_REVOKE:
-        revoked = _revoke_capability_rows(
-            capability=capability,
-            scope=cap_scope if scope is not None else None,
-            project_id=effective_project,
-            source=source,
-        )
-        return {
-            "ok": True,
-            "capability": capability,
-            "revoked": revoked,
-            "decision": DECISION_REVOKE,
-            "starts_or_runs": False,
-        }
-    if (decision in (DECISION_ALLOW_PROJECT, DECISION_ALLOW_MISSION)
-            and not ctx and scope is None and project_id is None):
-        raise ValueError(
-            "project/mission decisions require an explicit scope or id"
-        )
-    if decision == DECISION_ALLOW_PROJECT and effective_project is None:
-        raise ValueError("project decision requires project_id")
-    if decision == DECISION_ALLOW_MISSION:
-        mission_value = (
-            cap_scope.value if cap_scope.kind == SCOPE_MISSION else ctx.get("mission_id")
-        )
-        if mission_value is None:
-            raise ValueError("mission decision requires a mission scope/value")
-    # Project/mission decisions are persisted on their own scope kind so they can
-    # never widen into the generic default (project wildcard) scope.
-    if decision == DECISION_ALLOW_PROJECT:
-        cap_scope = CapabilityScope(
-            SCOPE_PROJECT, str(effective_project), effective_project)
-    elif decision == DECISION_ALLOW_MISSION:
-        try:
-            mission_int = int(mission_value)
-        except (TypeError, ValueError):
-            raise ValueError("mission decision requires a numeric mission id") from None
-        cap_scope = CapabilityScope(
-            SCOPE_MISSION, str(mission_int), effective_project)
-    expiry = _expiry_from(ttl_s, expires_at)
-    store = _capability_store()
-    conn = store.connect()
-    try:
-        grant_id = store.insert_grant(
-            conn,
-            capability=capability,
-            scope_kind=cap_scope.kind,
-            scope_value=cap_scope.value,
-            project_id=effective_project,
-            decision=decision,
-            source=_normalize_source(source),
-            context=ctx,
-            expires_at=expiry,
-        )
-        _capability_audit(
-            conn,
-            level="warning" if decision == DECISION_DENY else "info",
-            message="Capability " + decision + ": " + capability,
-            kind="capability_grant",
-            payload={
-                "capability": capability,
-                "grant_id": grant_id,
-                "decision": decision,
-                "scope_kind": cap_scope.kind,
-                "scope_value": cap_scope.value,
-                "project_id": effective_project,
-                "expires_at": expiry,
-                "source": _normalize_source(source),
-            },
-        )
-        return {
-            "ok": True,
-            "grant_id": grant_id,
-            "capability": capability,
-            "decision": decision,
-            "scope": _scope_dict(cap_scope),
-            "project_id": effective_project,
-            "expires_at": expiry,
-            "starts_or_runs": False,
-        }
-    finally:
-        conn.close()
-
-
-def _revoke_capability_rows(
-    *,
-    capability: str,
-    scope: CapabilityScope | None = None,
-    project_id: int | None = None,
-    source: str = DEFAULT_GRANT_SOURCE,
-) -> int:
-    store = _capability_store()
-    conn = store.connect()
-    try:
-        rows = store.revoke_grants(
-            conn,
-            capability=capability,
-            scope_kind=scope.kind if scope is not None else None,
-            scope_value=scope.value if scope is not None else None,
-            project_id=project_id,
-        )
-        for row in rows:
-            _capability_audit(
-                conn,
-                level="warning",
-                message="Capability revoked: " + capability + " (grant #" + str(row["id"]) + ")",
-                kind="capability_revoke",
-                payload={
-                    "capability": capability,
-                    "grant_id": row["id"],
-                    "scope_kind": row.get("scope_kind"),
-                    "scope_value": row.get("scope_value"),
-                    "project_id": row.get("project_id"),
-                    "source": _normalize_source(source),
-                },
-            )
-        return len(rows)
-    finally:
-        conn.close()
-
-
-def revoke_capability(
-    capability: str,
-    scope: object = None,
-    *,
-    project_id: int | None = None,
-    source: str = DEFAULT_GRANT_SOURCE,
-) -> dict:
-    """Revoke matching active grants (durable, audited). Returns the count."""
-    capability = normalize_capability(capability)
-    cap_scope = normalize_capability_scope(scope) if scope is not None else None
-    effective_project = _decision_project_id(cap_scope, project_id) if cap_scope else _normalize_project_id(project_id)
-    revoked = _revoke_capability_rows(
-        capability=capability,
-        scope=cap_scope,
-        project_id=effective_project,
-        source=source,
-    )
-    return {"ok": True, "capability": capability, "revoked": revoked}
 
 
 # --- fail-closed evaluation -------------------------------------------------
@@ -1405,146 +1216,105 @@ def _match_latest(rows: list[dict], scope: CapabilityScope, context: dict) -> di
     return sorted(matching, key=lambda row: int(row.get("id") or 0))[-1]
 
 
-def check_capability(
+_MODE_CAPABILITIES: dict[str, frozenset[str]] = {
+    ACCESS_READ_ONLY: frozenset({
+        CAPABILITY_READ,
+        CAPABILITY_MODEL_INFERENCE_LOCAL,
+        # Dictation is local user input, available in every conversation mode.
+        CAPABILITY_MICROPHONE,
+    }),
+    ACCESS_WORKSPACE_WRITE: frozenset({
+        CAPABILITY_READ,
+        CAPABILITY_WRITE,
+        CAPABILITY_EXECUTE,
+        CAPABILITY_MODEL_INFERENCE_LOCAL,
+        CAPABILITY_INSTALL_PRIVATE,
+        CAPABILITY_GIT_COMMIT,
+        CAPABILITY_MCP_CALL,
+        CAPABILITY_MICROPHONE,
+    }),
+    ACCESS_AUTO_REVIEW: frozenset({
+        CAPABILITY_READ,
+        CAPABILITY_WRITE,
+        CAPABILITY_EXECUTE,
+        CAPABILITY_MODEL_INFERENCE_LOCAL,
+        CAPABILITY_MODEL_INFERENCE_CLOUD,
+        CAPABILITY_INSTALL_PRIVATE,
+        CAPABILITY_GIT_COMMIT,
+        CAPABILITY_WEB_SEARCH,
+        CAPABILITY_WEB_FETCH,
+        CAPABILITY_BROWSER_INTERACT,
+        CAPABILITY_DOWNLOAD,
+        CAPABILITY_OPEN_EXTERNAL_PROJECT,
+        CAPABILITY_NETWORK_WRITE,
+        CAPABILITY_MCP_CALL,
+        CAPABILITY_MICROPHONE,
+    }),
+    ACCESS_FULL_ACCESS: frozenset(CAPABILITIES),
+}
+
+
+def check_access(
     capability: str,
     scope: object = None,
     context: dict | None = None,
 ) -> CapabilityDecision:
-    """Single fail-closed capability evaluation used by future tool/research code.
+    """Evaluate a capability against the single global access mode.
 
-    Order of precedence: explicit deny > scoped allow/allow-once (durable) >
-    durable pending/denied approvals > capability default. Any store error is
-    reported as Denied (never Allowed); unknown capability/scope values raise
-    ValueError so programming errors fail loudly before execution.
+    This and the compatibility alias ``check_capability`` consult no per-project,
+    per-mission, per-agent or per-capability grants. Only the four GUI modes decide.
     """
     capability = normalize_capability(capability)
     cap_scope = normalize_capability_scope(scope, context)
-    ctx = _normalize_context(context)
+    try:
+        mode = get_access_mode()
+    except Exception as exc:  # fail closed
+        return Denied(
+            capability,
+            "Fail-closed: access mode unavailable (" + str(exc) + ")",
+            scope_kind=cap_scope.kind,
+            scope_value=cap_scope.value,
+            project_id=cap_scope.project_id,
+        )
     scope_kwargs = {
         "scope_kind": cap_scope.kind,
         "scope_value": cap_scope.value,
         "project_id": cap_scope.project_id,
     }
-    store = _capability_store()
-    try:
-        conn = store.connect()
-    except Exception as exc:  # fail closed: the store is unavailable
-        return Denied(
+    if capability in _MODE_CAPABILITIES[mode]:
+        return Allowed(
             capability,
-            "Fail-closed: capability permission store unavailable (" + str(exc) + ")",
-            scope_kind=cap_scope.kind,
-            scope_value=cap_scope.value,
-            project_id=cap_scope.project_id,
-        )
-    try:
-        grants = store.fetch_grants(conn, capability, active_only=True)
-        matching = [row for row in grants if _row_scope_matches(row, cap_scope, ctx)]
-        denies = [row for row in matching if str(row.get("decision")) == DECISION_DENY]
-        if denies:
-            policy = sorted(denies, key=lambda row: int(row.get("id") or 0))[-1]
-            return Denied(
-                capability,
-                "Denied by explicit policy grant #" + str(policy.get("id")) + ".",
-                policy_id=int(policy["id"]),
-                scope_kind=cap_scope.kind,
-                scope_value=cap_scope.value,
-                project_id=cap_scope.project_id,
-            )
-        allows = [row for row in matching if str(row.get("decision")) != DECISION_DENY]
-        allows.sort(key=lambda row: (
-            -_grant_specificity(row, cap_scope),
-            int(row.get("id") or 0),
-        ))
-        for row in allows:
-            decision = str(row.get("decision"))
-            if decision == DECISION_ALLOW_ONCE:
-                if not store.consume_grant(conn, int(row["id"])):
-                    continue
-                _capability_audit(
-                    conn,
-                    level="info",
-                    message="Capability allow-once consumed: " + capability,
-                    kind="capability_consume",
-                    payload={
-                        "capability": capability,
-                        "grant_id": int(row["id"]),
-                        "scope_kind": row.get("scope_kind"),
-                        "scope_value": row.get("scope_value"),
-                    },
-                )
-                return Allowed(
-                    capability,
-                    "Allowed once by policy grant #" + str(row.get("id")) + ".",
-                    policy_id=int(row["id"]),
-                    **scope_kwargs,
-                )
-            return Allowed(
-                capability,
-                "Allowed by " + decision + " policy grant #" + str(row.get("id")) + ".",
-                policy_id=int(row["id"]),
-                **scope_kwargs,
-            )
-        approvals = store.fetch_approvals(
-            conn, capability, statuses=(APPROVAL_PENDING, APPROVAL_DENIED),
-        )
-        pending = [
-            row for row in approvals
-            if str(row.get("status")) == APPROVAL_PENDING
-            and _row_scope_matches(row, cap_scope, ctx)
-        ]
-        if pending:
-            latest = sorted(pending, key=lambda row: int(row.get("id") or 0))[-1]
-            return NeedsApproval(
-                capability,
-                "Durable approval #" + str(latest.get("id"))
-                + " is pending for this capability/scope.",
-                approval_id=int(latest["id"]),
-                **scope_kwargs,
-            )
-        denied_approvals = [
-            row for row in approvals
-            if str(row.get("status")) == APPROVAL_DENIED
-            and _row_scope_matches(row, cap_scope, ctx)
-        ]
-        if denied_approvals:
-            latest = sorted(denied_approvals, key=lambda row: int(row.get("id") or 0))[-1]
-            return Denied(
-                capability,
-                "Durable approval #" + str(latest.get("id")) + " was denied.",
-                approval_id=int(latest["id"]),
-                **scope_kwargs,
-            )
-        default = CAPABILITY_DEFAULTS[capability]
-        risk = CAPABILITY_RISK[capability]
-        if default == DEFAULT_ALLOW:
-            return Allowed(
-                capability,
-                "Default allow for " + capability + " (" + risk + " risk).",
-                **scope_kwargs,
-            )
-        if default == DEFAULT_APPROVAL:
-            return NeedsApproval(
-                capability,
-                "Explicit approval required for " + capability
-                + " (" + risk + " risk); request a durable approval.",
-                **scope_kwargs,
-            )
-        return Denied(
-            capability,
-            "Default deny for " + capability + " (" + risk
-            + " risk); request an explicit approval or grant.",
+            "Allowed by access mode " + repr(mode) + ".",
             **scope_kwargs,
         )
-    except Exception as exc:  # noqa: BLE001 - fail closed, never allow on error
-        return Denied(
-            capability,
-            "Fail-closed: capability evaluation error (" + str(exc) + ")",
-            scope_kind=cap_scope.kind,
-            scope_value=cap_scope.value,
-            project_id=cap_scope.project_id,
+    return Denied(
+        capability,
+        "Denied by access mode " + repr(mode) + ". Select Auto Review or "
+        "Full Access if this operation should be allowed.",
+        **scope_kwargs,
+    )
+
+
+def require_access(
+    capability: str,
+    scope: object = None,
+    context: dict | None = None,
+) -> CapabilityDecision:
+    """Raise PermissionDenied unless the global access mode allows the capability."""
+    decision = check_access(capability, scope, context)
+    if not isinstance(decision, Allowed):
+        raise PermissionDenied(
+            decision.reason,
+            scope=decision.capability,
+            project_id=decision.project_id,
         )
-    finally:
-        conn.close()
+    return decision
+
+
+def check_capability(capability: str, scope: object = None,
+                     context: dict | None = None) -> CapabilityDecision:
+    """Compatibility alias; durable legacy grants never affect authorization."""
+    return check_access(capability, scope, context)
 
 
 def require_capability(
@@ -1562,3 +1332,9 @@ def require_capability(
         )
     return decision
 
+
+# Old records remain available for audit; new approvals/grants are not writable.
+request_capability = _retired_permission
+decide_capability_approval = _retired_permission
+grant_capability = _retired_permission
+revoke_capability = _retired_permission

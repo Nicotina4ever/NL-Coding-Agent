@@ -221,8 +221,7 @@ def test_followup_replays_persisted_research_attachment_and_uses_github_lookup(c
 
 def test_general_web_research_searches_then_fetches_a_page(chat, monkeypatch):
     services, project, run = chat
-    services.set_permission_scope(
-        permissions.NETWORK, True, project_id=project["id"])
+    permissions.set_access_mode("auto-review")
     observed_search = {}
 
     def search(**kwargs):
@@ -342,9 +341,9 @@ def test_project_identity_and_revocation(chat):
     foreign = {**project, "root": str(Path(project["root"]).parent)}
     result = services.chat_conversation(foreign, "Read files", tools_enabled=True, model_spec="test/model")
     assert not result["ok"] and "mismatch" in result["reply"]
-    permissions.revoke(permissions.READ, project_id=project["id"])
-    result, _ = run([call("read_source", path="calc.py")])
-    assert not result["ok"]
+    permissions.set_access_mode("read-only")
+    result, _ = run([call("read_source", path="calc.py"), {"content": "Read only still allows analysis"}])
+    assert result["ok"]
 
 
 def test_duplicate_call_ids_fail_before_any_invocation(chat):
@@ -506,27 +505,27 @@ def test_native_textual_tool_request_is_recovered_and_executed(chat):
     assert "value = 7" in tool_result["content"]
 
 
-def test_discovered_tools_need_current_explicit_allowlist(chat, monkeypatch):
+def test_discovered_tools_use_global_mode_without_an_allowlist(chat, monkeypatch):
     from nl_coding_agent.app import mcp
     services, project, run = chat
     config = {"servers": {"fixture": {"command": "never-start", "trusted": True, "allowed_tools": ["echo"]}}}
     monkeypatch.setattr(mcp, "load_mcp_config", lambda: config)
     monkeypatch.setattr(mcp.McpManager, "list_tools", lambda *a: [{"name": "echo", "qualified_name": "fixture::echo",
         "description": "Echo", "input_schema": {"type": "object"}}])
-    monkeypatch.setattr(mcp.McpManager, "invoke_tool", lambda *a, **kw: pytest.fail("Removed allowlist must deny"))
+    monkeypatch.setattr(mcp.McpManager, "invoke_tool", lambda *a, **kw: {"content": [{"type": "text", "text": "allowed by global mode"}]})
     def selected(tools):
         config["servers"]["fixture"].pop("allowed_tools")
         name = next(t["function"]["name"] for t in tools if t["function"]["name"].startswith("mcp_"))
         return call(name)
     result, provider = run([call("discover_mcp", server="fixture"), selected, {"content": "Tool denied"}])
     assert result["ok"]
-    assert "no longer explicitly allowlisted" in provider.requests[-1][0][-1]["content"]
+    assert "allowed by global mode" in provider.requests[-1][0][-1]["content"]
 
 def test_natural_language_coding_request_starts_one_mission(chat, monkeypatch):
     """A clear build request must not require /apply or /runplan."""
     services, project, run = chat
-    permissions.grant(permissions.WRITE, project_id=project["id"])
-    permissions.grant(permissions.EXECUTE, project_id=project["id"])
+    permissions.set_access_mode("workspace-write")
+    permissions.set_access_mode("workspace-write")
     started = []
     teams = []
     monkeypatch.setattr(services, "run_mission",
@@ -549,8 +548,8 @@ def test_natural_language_coding_request_starts_one_mission(chat, monkeypatch):
 
 def test_natural_language_question_does_not_start_mission(chat, monkeypatch):
     services, project, run = chat
-    permissions.grant(permissions.WRITE, project_id=project["id"])
-    permissions.grant(permissions.EXECUTE, project_id=project["id"])
+    permissions.set_access_mode("workspace-write")
+    permissions.set_access_mode("workspace-write")
     monkeypatch.setattr(services, "run_mission", lambda *a, **kw: pytest.fail("question started a mission"))
     result, _ = run([{"content": "Sette."}],
                     text="Come funziona attualmente calc.py?", allow_coding=True)

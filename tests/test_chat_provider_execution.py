@@ -141,9 +141,9 @@ def test_denied_cloud_route_is_blocked_before_probe(context, monkeypatch, kind, 
     assert calls == []
 
 
-def test_remote_named_model_requires_cloud_even_with_network_grant(context):
+def test_remote_named_model_is_blocked_by_workspace_mode(context):
     _, project, _, _ = context
-    permissions.grant(permissions.NETWORK, project_id=project["id"])
+    permissions.set_access_mode("workspace-write")
     provider = OpenAICompatibleProvider("api", "API", "https://external.invalid/v1")
     with pytest.raises(permissions.PermissionDenied):
         provider.generate("ordinary-name", "private source", project_id=project["id"])

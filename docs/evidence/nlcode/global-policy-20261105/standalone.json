@@ -1,0 +1,52 @@
+{
+  "host": "standalone",
+  "scratch": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\session-ui-standalone-real-1793880862718",
+  "checks": [
+    {
+      "label": "current VSIX installed in isolated profile",
+      "detail": "qwen2.5-coder:7b-instruct-q4_K_M",
+      "passed": true
+    },
+    {
+      "label": "real editor Chat webview connected",
+      "passed": true
+    },
+    {
+      "label": "only four global authorization modes; no grant/cloud/execution switches",
+      "passed": true
+    },
+    {
+      "label": "GUI mode controls every project and capability",
+      "detail": "read-only",
+      "passed": true
+    },
+    {
+      "label": "GUI mode controls every project and capability",
+      "detail": "workspace-write",
+      "passed": true
+    },
+    {
+      "label": "GUI mode controls every project and capability",
+      "detail": "auto-review",
+      "passed": true
+    },
+    {
+      "label": "GUI mode controls every project and capability",
+      "detail": "full-access",
+      "passed": true
+    },
+    {
+      "label": "Workspace Write DELETE project 6 succeeds without DELETE grant or execution flag",
+      "passed": true
+    },
+    {
+      "label": "reconnect preserves global policy; real NL_AudioLab source unchanged",
+      "passed": true
+    }
+  ],
+  "started_at": "2026-11-05T12:14:22.718Z",
+  "model": "qwen2.5-coder:7b-instruct-q4_K_M",
+  "original_source": "K:\\AI\\NL_AudioLab\\AVVIO_CODEX_NL_AudioLab_DRAGON.md",
+  "original_sha256": "ebf929b0bd00de8059a64d14b4f8cc1b4f686ca5dd3d075a0cd23a48a729c104",
+  "finished_at": "2026-11-05T12:14:43.651Z"
+}

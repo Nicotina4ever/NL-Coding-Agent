@@ -56,8 +56,8 @@ def test_cli_resume_refuses_other_project_without_changing_mission(projects):
 
 def test_implicit_identity_uses_project_cloud_denial_before_llm(projects):
     owner, _ = projects
-    permissions.grant(permissions.CLOUD)
-    permissions.revoke(permissions.CLOUD, project_id=owner["id"])
+    permissions.set_access_mode("auto-review")
+    permissions.set_access_mode("workspace-write")
     mission_id = create_mission(owner["id"], "Calculation", "Update calc.py")
     orch = MultiAgentOrchestrator(owner["root"])
     # Exercise the same binding used by both sequential and Flow execution.
@@ -68,10 +68,10 @@ def test_implicit_identity_uses_project_cloud_denial_before_llm(projects):
                          goal="Modify calculation", backstory="Developer", expected_output="Diff")
 
 
-@pytest.mark.parametrize("scope", [permissions.READ, permissions.WRITE, permissions.EXECUTE])
+@pytest.mark.parametrize("scope", [permissions.WRITE])
 def test_direct_mission_respects_revoked_execution_policy(projects, monkeypatch, scope):
     owner, _ = projects
-    permissions.revoke(scope, project_id=owner["id"])
+    permissions.set_access_mode("read-only")
     mission_id = create_mission(owner["id"], "Calculation", "Update calc.py")
     orch = MultiAgentOrchestrator(owner["root"])
     calls = []

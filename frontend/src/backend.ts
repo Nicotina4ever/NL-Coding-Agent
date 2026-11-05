@@ -720,14 +720,16 @@ export class EngineConnection {
         return this.serverInfo;
     }
 
+    private policyExecutionAllowed = false;
+
     /** Whether the spawned server is allowed to start/cancel missions. */
     get executionAllowed(): boolean {
-        return Boolean(this.options.allowExecution);
+        return this.policyExecutionAllowed;
     }
 
     /** Update the execution flag; call restart() to spawn the server with the new arg. */
     setAllowExecution(value: boolean): void {
-        this.options.allowExecution = Boolean(value);
+        this.policyExecutionAllowed = Boolean(value);
     }
 
     get researchProfile(): string {
@@ -788,12 +790,6 @@ export class EngineConnection {
         const location = resolveEngineLocation({ ...this.options, projectRoot: this.projectRoot });
         const env = collectEnvironment(this.options.env);
         const args = [location.nlAgentPath, 'mcp', 'serve', '--project', this.projectRoot];
-        if (this.options.allowExecution) {
-            args.push('--allow-execution');
-        }
-        const researchProfile = this.options.researchProfile === 'trusted-auto-review'
-            ? 'trusted-auto-review' : 'manual';
-        args.push('--research-profile', researchProfile);
         this.log(`starting engine: "${location.pythonPath}" ${args.join(' ')}`);
         let client: Client | undefined;
         let transport: StdioClientTransport | undefined;
@@ -967,6 +963,7 @@ export class EngineConnection {
             typeof context.project.id !== 'number' || typeof context.project.root !== 'string') {
             throw new EngineError('invalid-context', 'project_context returned an unexpected shape.');
         }
+        this.policyExecutionAllowed = Boolean(context.execution_enabled);
         return context;
     }
 

@@ -231,7 +231,7 @@ def test_plan_approval_does_not_replace_project_permissions(env):
     from nl_coding_agent.core import permissions
     _, pid, service = env
     plan_goal(service, pid, count=1)
-    permissions.revoke(permissions.WRITE, project_id=pid)
+    permissions.set_access_mode("read-only")
     result = supervisor(env).run()
     assert result["status"] == "blocked", result
     assert store.list_queue(pid) == []

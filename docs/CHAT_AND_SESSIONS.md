@@ -95,7 +95,7 @@ Il modello Qwen localmente può dichiarare «non posso leggere i file», ma rias
 - Concedere strumenti READ: lista file, lettura limitata, ricerca testo/codice, stato Git, diff, diagnostica editor, progetto, missioni, conversazioni.
 - Consentire EXECUTE/WRITE soltanto via broker, scope e autorizzazione; nessuna libertà di shell per puro prompt. Eseguire via servizi esistenti, non un secondo agente di esecuzione nascosto nella webview.
 - Registrare la **chiamata reale**, nome tool, scope, esito, durata e artifact; non includere dati segreti nei log. Modelli senza tool calling nativo devono usare una strategia validata o dare indicazione di incompatibilità, non fingersi tool-enabled.
-- Read-only significa impossibilità di scrittura/esecuzione, non di lettura. L'utente vede READ/WRITE/EXECUTE/NETWORK/CLOUD e la differenza fra grant backend e toggle sessione.
+- Read-only significa impossibilità di scrittura/esecuzione, non di lettura. L'utente sceglie una delle quattro modalità globali; i flag legacy non aggiungono autorizzazioni.
 
 ## Contesto per turno
 
@@ -127,7 +127,10 @@ Mostrare tool calls eseguite, agent role/model, file letti/creati, candidate dif
 
 ## Fallback locale/cloud (1 novembre 2026)
 
-`_resolve_chat_provider` prova prima la route richiesta. Se è locale e fallisce, può usare `fallback_cloud` solo quando la politica è abilitata e CLOUD è concesso. Se è cloud e il permesso manca, usa la route locale chat/developer. La selezione esplicita di un modello cloud nella GUI attiva il grant CLOUD di progetto; nessun modello può concederselo da solo. Il fallback cloud automatico resta disattivato finché l'owner non abilita la politica.
+`_resolve_chat_provider` prova prima la route richiesta. Le route locali rimangono prioritarie;
+quelle cloud richiedono la modalità globale Auto Review o Full Access. La selezione del modello
+non cambia i permessi e non crea grant. `fallback_cloud.enabled` legacy non blocca una route
+consentita dalla modalità; il nome del modello resta una preferenza di routing.
 
 ## Fallback operativo (1 novembre 2026, dettaglio)
 
@@ -137,19 +140,20 @@ Mostrare tool calls eseguite, agent role/model, file letti/creati, candidate dif
 - La classificazione cloud usa provider/endpoint (`openai_compatible` remoto) oltre al token nel nome del modello.
 - Cambiando modello la storia messaggi/tool resta la stessa; viene aggiunta solo una nota di sistema sul fallback, senza perdere contesto o ripetere tool completati.
 
-## Profili di accesso e team (1 novembre 2026)
+## Modalità di accesso globale e team (5 novembre 2026)
 
-- Le permission dei singoli specialisti non sono più il punto di controllo: è stato introdotto un profilo di progetto (`read-only`, `workspace-write`, `full-access`, `auto-review`) applicato a tutti gli agenti.
-- `auto-review` registra anche il profilo trusted e mantiene separati cloud/delete.
+- Le permission dei singoli specialisti non sono più il punto di controllo: esiste una sola modalità globale (`read-only`, `workspace-write`, `auto-review`, `full-access`) applicata a ogni progetto e agente.
+- `workspace-write` consente lettura/scrittura/esecuzione e le missioni (create, modify, stop, resume, delete), ma non rete/cloud/delete OS. `auto-review` aggiunge rete/cloud/download; `full-access` consente tutte le operazioni dell'utente.
+- I vecchi grant per progetto, per capability e i controlli Grant/Revoke sono ritirati: vengono sempre ignorati, anche prima di aprire la GUI e le API legacy li rifiutano.
 - `Generate team` propone specialisti usando il catalogo provider/modelli dinamico; i ruoli eseguibili dal Supervisor sono architect, developer, debugger, reviewer e auditor.
-- La squadra viene assegnata al progetto corrente: una nuova generazione aggiorna gli stessi ruoli invece di duplicarli, e la UI distingue gli specialisti attivi. Route `provider/model`, istruzioni e tools vengono applicati all'invocazione; i tools restano personalizzabili e limitati a quelli disponibili per lo stage. Project Access resta l'unica policy operativa: non esistono permessi duplicati per specialista.
+- La squadra viene assegnata al progetto corrente: una nuova generazione aggiorna gli stessi ruoli invece di duplicarli, e la UI distingue gli specialisti attivi. Route `provider/model`, istruzioni e tools vengono applicati all'invocazione; i tools restano personalizzabili e limitati a quelli disponibili per lo stage. La modalità globale resta l'unica policy operativa.
 - `Add llama.cpp` registra il provider OpenAI-compatible e usa `/v1/models` per il discovery quando il server è attivo.
 
 ## Gestione missioni dalla Chat
 
 - La lista missioni e il dettaglio restano nel dashboard esistente. Filtri di stato/archivio e "select filtered" permettono selezione singola o multipla per il solo progetto corrente.
 - Stop, Archive e Delete sono azioni distinte. Stop è cooperativo; Archive e Delete chiedono conferma e attendono l'arresto delle missioni running prima di procedere. Le pending e le missioni terminali sono eliminabili senza avviarle né archiviarle.
-- Eliminare missioni non richiede di abilitare l'esecuzione agentica: dopo la conferma, il Project Access globale deve concedere `DELETE`. Per una missione running resta necessario lo stop cooperativo.
+- Eliminare missioni non richiede di abilitare l'esecuzione agentica: dopo la conferma serve la modalità globale **Workspace Write** o superiore; l'operazione usa `EXECUTE`, non un file-delete OS. Per una missione running resta necessario lo stop cooperativo.
 - Archive conserva la missione; Delete rimuove record e collegamenti DB senza eliminare file del progetto. Goal e milestone vengono riallineati; lo staging resta gestito dallo Storage Manager.
 - Le operazioni batch sono transazionali e rifiutano una missione ancora running, anche in caso di race dopo la richiesta di stop.
 
@@ -185,7 +189,7 @@ ma non sono target ordinari di sviluppo/acceptance e non descrivono NL Code, che
 
 - Engine supportati dal catalogo: Faster-Whisper, Vosk, Qwen3-ASR e whisper.cpp; la disponibilità runtime è indicata per engine. I menu separano engine e relativi modelli, includendo i download disponibili nello stesso menu dei modelli.
 - Una cartella esterna con modelli ASR supportati può essere aggiunta da Engine/Speech e viene registrata in-place; i file non vengono copiati, sovrascritti o eliminati. I forced aligner non compaiono come modelli ASR.
-- I download Vosk/Faster-Whisper richiedono grant `NETWORK` e conferma; vengono salvati sotto `data/speech/models`, verificano l'archivio e non sovrascrivono/eliminano modelli.
+- I download Vosk/Faster-Whisper richiedono la modalità globale Auto Review o Full Access; vengono salvati sotto `data/speech/models`, verificano l'archivio e non sovrascrivono/eliminano modelli.
 
 ## Verifica 0.7.0
 
@@ -202,7 +206,7 @@ ma non sono target ordinari di sviluppo/acceptance e non descrivono NL Code, che
 
 ## Auto review 0.7.1
 
-- Auto review grants the project cloud-inference capability and the trusted review profile; cloud actions are not blocked by the profile.
+- Auto Review authorizes cloud inference globally; legacy per-project grants and research profiles do not add another authorization.
 - Direct delete remains denied; project deletions are moved to `da_eliminare` with a manifest.
 - Autopilot recovery is bounded by `autopilot_supervise.py`; create `STOP` in the job directory to stop before the next retry.
 

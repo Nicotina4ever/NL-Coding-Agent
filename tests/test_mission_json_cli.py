@@ -58,7 +58,7 @@ def test_json_cli_returns_evidence_from_real_verification(project, monkeypatch, 
 
 
 def test_json_cli_permission_failure_is_nonzero_and_parseable(project, capsys):
-    permissions.revoke(permissions.WRITE, project["id"])
+    permissions.set_access_mode("read-only")
     code = main(["mission", "--json", "--project", project["root"], "--goal", "Update src/calc.py"])
     summary = json.loads(capsys.readouterr().out)
     assert code != 0 and summary["status"] == "blocked"

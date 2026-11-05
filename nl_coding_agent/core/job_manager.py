@@ -7,11 +7,12 @@ argv vector runs in the project root, its output is persisted under
 
 Safety rules:
 - no shell interpolation; argv is passed directly to ``subprocess.Popen``;
-- a small executable allowlist rejects arbitrary programs;
+- Workspace Write/Auto Review use bounded project commands; Full Access accepts
+  OS-user executables without an extra allowlist;
 - PowerShell ``-Command`` and encoded commands are rejected; only a project
   script via ``-File`` is accepted;
 - commands are project-scoped, bounded by count/time/args, and require the
-  engine EXECUTE/WRITE permissions plus the caller's explicit approval.
+  global mode; legacy approval flags do not authorize or block execution.
 """
 from __future__ import annotations
 
@@ -115,12 +116,16 @@ def _check_argv(argv: list[str], root: Path) -> list[str]:
     clean = [str(item) for item in argv]
     if any(not item or "\x00" in item or len(item) > _MAX_ARG_CHARS for item in clean):
         raise JobError("Invalid argument")
+    from nl_coding_agent.core import permissions
+    permissions.require(permissions.EXECUTE)
+    if permissions.get_access_mode() == permissions.ACCESS_FULL_ACCESS:
+        return clean
     executable = Path(clean[0]).name.lower()
     if executable not in _ALLOWED:
         raise JobError("Executable is not allowlisted: " + executable)
     if executable in {"pwsh", "pwsh.exe", "powershell", "powershell.exe"}:
-        lowered = {item.lower() for item in clean[1:]}
-        if {"-command", "-c", "-encodedcommand", "-ec"} & lowered:
+        lowered = [item.lower() for item in clean]
+        if {"-command", "-c", "-encodedcommand", "-ec"} & set(lowered):
             raise JobError("PowerShell command strings are not allowed; run a project script with -File")
         if "-file" in lowered:
             index = lowered.index("-file")
@@ -128,7 +133,7 @@ def _check_argv(argv: list[str], root: Path) -> list[str]:
                 raise JobError("PowerShell -File requires an existing script")
             _project_script(root, clean[index + 1])
     if executable in {"python", "python.exe", "py", "py.exe"}:
-        lowered = [item.lower() for item in clean[1:]]
+        lowered = [item.lower() for item in clean]
         if "-c" in lowered:
             raise JobError("Python inline -c is not allowed; run a project script")
         if "-m" not in lowered:
@@ -137,7 +142,7 @@ def _check_argv(argv: list[str], root: Path) -> list[str]:
                 raise JobError("Python requires a project script")
             _project_script(root, script)
     if executable in {"node", "node.exe"}:
-        lowered = [item.lower() for item in clean[1:]]
+        lowered = [item.lower() for item in clean]
         if {"-e", "--eval"} & set(lowered):
             raise JobError("Node inline evaluation is not allowed; run a project script")
         script = next((item for item in clean[1:] if not item.startswith("-")), None)
@@ -145,7 +150,7 @@ def _check_argv(argv: list[str], root: Path) -> list[str]:
             raise JobError("Node requires a project script")
         _project_script(root, script)
     if executable in {"cmd", "cmd.exe"}:
-        lowered = [item.lower() for item in clean[1:]]
+        lowered = [item.lower() for item in clean]
         if "/c" not in lowered:
             raise JobError("cmd requires /c and a project script")
         index = lowered.index("/c")

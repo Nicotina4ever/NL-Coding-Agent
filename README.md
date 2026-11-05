@@ -227,12 +227,10 @@ is installed. Pinned upstream source findings: [external references](docs/EXTERN
 For external tools, `mcp tools --project <folder> --server <name>` discovers and
 `mcp invoke --project <folder> --server <name> --tool <name> --arguments '{}' --approve`
 invokes a configured server. Configuration is `data/mcp_servers.json` or explicit
-`--config`; entries need `trusted: true`. Stdio entries specify `command`/`args`, HTTP
-entries `transport: "http"`/`url`. Optional `allowed_tools` restricts exact tool names.
-Startup requires READ/EXECUTE; invocation also WRITE; HTTP requires NETWORK and remote
-HTTP also CLOUD. Arguments are schema-validated without fetching remote schemas.
-External servers run with OS user privileges: trust is not an OS sandbox, and their
-results remain untrusted. Model-driven automatic selection/invocation is not integrated.
+`--config`. Stdio entries specify `command`/`args`, HTTP
+entries `transport: "http"`/`url`. Optional `allowed_tools` limits schemas loaded into model context, without granting access.
+The global access mode governs startup/invocation; remote HTTP requires Auto Review or Full Access. Arguments are schema-validated without fetching remote schemas.
+External servers run with OS user privileges; their results remain untrusted. Chat can discover and invoke configured tools under the same global policy.
 
 CLI commands: `doctor`, `audit`, `work`, `status`, `roadmap`, `mission`, `mcp`,
 `selfbuild`, `supervisor`, `gui`.
@@ -254,17 +252,16 @@ code-insiders --extensionDevelopmentPath="K:\AI\NL Coding Agent\frontend" "K:\pa
 The **NL** activity-bar view has **Chat / Missions / Engine** tabs. Chat supports provider/model
 selection with an **Automatic** engine-default mode, project-scoped file attachments (picker, drag &
 drop, current file, selection, `@file` autocomplete, and pasted screenshots with Ctrl+V), visible editor context, URLs fetched
-only on explicit confirmation through the existing Research service/permissions, and engine-persisted
+under the global mode through the existing Research service, and engine-persisted
 history. Images go only to a measured Vision-capable specialist; its text handoff is marked untrusted
 for the selected Chat model and other agents. The **Engine** tab
 shows the existing model/agent/permission configuration, local ASR engine/model catalog and the
-read-only research profile/NETWORK status. Choose an ASR engine and one of its local models before
-dictation; curated downloads appear in the same model menu and require the project NETWORK grant and
-explicit confirmation. External Faster-Whisper, Vosk, Qwen3-ASR and whisper.cpp model folders are
+global access status. Choose an ASR engine and one of its local models before
+dictation; curated downloads appear in the same model menu and require Auto Review or Full Access. External Faster-Whisper, Vosk, Qwen3-ASR and whisper.cpp model folders are
 registered and reused in place, never copied.
 
 **Natural-language build:** write what you want in Chat (for example “aggiungi una funzione subtract
-a calc.py con i test”) and, when mission execution and project WRITE/EXECUTE access are enabled, Chat
+a calc.py con i test”) and, when the global mode permits project work, Chat
 starts one verified Supervisor mission automatically, with project analysis, the configured
 specialist team, candidate/oracle verification, reviewer and error recovery. The final verified
 result is posted back in the Chat transcript; `/apply`, `/runplan`, `/mission` and `/team` remain
@@ -273,11 +270,13 @@ requests never start a mission. Switch the composer
 to **Mission** (or use `/mission <objective>`) to start a real Supervisor
 mission on the opened project. Missions show progress, task/agent handoffs, candidate + oracle
 verification, reviewer verdict and the candidate or retained diff; Stop and Resume use the engine's
-existing cooperative lifecycle. Mission execution is opt-in with `nlCodingAgent.allowExecution` (each
-start/stop still asks for confirmation); without it the engine is read-only. URL fetch uses the
-built-in bounded HTTPS transport and requires the project NETWORK grant; the matching `web-fetch`
-capability follows that same Project Access scope. The Research profile still controls automatic
-approval. Web search additionally requires a configured provider. The mission planner is proportional:
+existing cooperative lifecycle. One global GUI mode governs Chat, missions, agents and tools:
+**Read Only**, **Workspace Write**, **Auto Review** or **Full Access**. Workspace Write includes
+mission creation, changes, Stop/Resume and deletion; no separate execution flag is needed.
+URL fetch uses the
+built-in bounded HTTPS transport and requires the global **Auto Review** or **Full Access** mode;
+the matching `web-fetch` capability follows the same single global policy. Independent code review
+and regression gates still apply. Web search additionally requires a configured provider. The mission planner is proportional:
 the core developer/tester/reviewer team gains
 a read-only architect for multi-file/design work and an auditor for security/audit objectives; the
 multi-agent runtime audit is in `docs/ARCHITECTURE_AND_ENGINE.md`. Commands: **Start Chat**, **Start

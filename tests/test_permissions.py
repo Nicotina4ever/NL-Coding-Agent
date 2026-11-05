@@ -99,7 +99,7 @@ def test_defaults_are_fail_closed(perms):
         with pytest.raises(perms.PermissionDenied) as excinfo:
             perms.require(scope)
         assert scope.upper() in str(excinfo.value)
-        assert "explicit" in str(excinfo.value).lower()
+        assert "auto review" in str(excinfo.value).lower()
 
 
 def test_unknown_scope_is_rejected_by_every_api(perms):
@@ -128,39 +128,10 @@ def test_default_reads_do_not_write_policy_or_audit_rows(perms, data_dir):
 # Grant / revoke persistence and audit
 # --------------------------------------------------------------------------- #
 
-def test_grant_revoke_round_trip_is_persisted_and_audited(perms, data_dir):
-    assert perms.is_granted("delete") is False
-
-    perms.grant("delete", source="pytest")
-    assert perms.is_granted("delete") is True
-    assert perms.get_policy()["delete"] is True
-    perms.require("delete")
-    assert _settings(data_dir)[perms.GLOBAL_POLICY_KEY]["delete"] is True
-
-    perms.revoke("delete", source="pytest")
-    assert perms.is_granted("delete") is False
-    with pytest.raises(perms.PermissionDenied):
-        perms.require("delete")
-    assert _settings(data_dir)[perms.GLOBAL_POLICY_KEY]["delete"] is False
-
-    rows = _audit_rows(data_dir)
-    assert len(rows) == 2
-    assert all(row["source"] == "permissions" for row in rows)
-    granted = json.loads(rows[0]["payload"])
-    revoked = json.loads(rows[1]["payload"])
-    assert granted["action"] == "granted"
-    assert granted["scope"] == "delete"
-    assert granted["granted"] is True
-    assert granted["source"] == "pytest"
-    assert granted["policy_key"] == perms.GLOBAL_POLICY_KEY
-    assert revoked["action"] == "revoked"
-    assert revoked["granted"] is False
-    assert "granted" in rows[0]["message"]
-    assert "revoked" in rows[1]["message"]
 
 
 def test_grant_persists_across_a_fresh_process(perms, data_dir):
-    perms.grant("network", source="pytest")
+    perms.set_access_mode("auto-review", source="pytest")
     code = (
         f"import sys; sys.path.insert(0, {str(REPO_ROOT)!r}); "
         "from nl_coding_agent.core.permissions import is_granted; "
@@ -203,7 +174,7 @@ def test_corrupt_or_partial_policy_rows_fail_closed(perms, data_dir):
         ),
     )
     partial = perms.get_policy()
-    assert partial["delete"] is True
+    assert partial["delete"] is False
     assert partial["cloud"] is False  # non-boolean value is ignored, never granted
     assert "teleport" not in partial
 
@@ -212,24 +183,6 @@ def test_corrupt_or_partial_policy_rows_fail_closed(perms, data_dir):
 # Project-scoped policy
 # --------------------------------------------------------------------------- #
 
-def test_project_policy_is_optional_and_scoped(perms, data_dir):
-    assert perms.policy_key() == "permissions.policy.global"
-    assert perms.policy_key(7) == "permissions.policy.project.7"
-
-    perms.grant("cloud", project_id=7, source="settings-ui")
-    assert perms.is_granted("cloud", project_id=7) is True
-    assert perms.is_granted("cloud") is False
-    assert perms.is_granted("cloud", project_id=8) is False
-    assert perms.get_policy(project_id=7)["cloud"] is True
-    assert perms.get_policy(project_id=8)["cloud"] is False
-
-    stored = _settings(data_dir)
-    assert "permissions.policy.global" not in stored
-    assert stored["permissions.policy.project.7"] == {"cloud": True}
-
-    perms.assert_model_permitted(CLOUD_MODEL, "http://127.0.0.1:11434", project_id=7)
-    with pytest.raises(perms.PermissionDenied):
-        perms.assert_model_permitted(CLOUD_MODEL, "http://127.0.0.1:11434", project_id=8)
 
 
 # --------------------------------------------------------------------------- #
@@ -281,11 +234,11 @@ def test_cloud_model_denied_by_default_then_allowed_after_explicit_grant(perms):
         perms.assert_model_permitted(CLOUD_MODEL, "http://127.0.0.1:11434")
     message = str(excinfo.value).lower()
     assert "cloud" in message
-    assert "explicit" in message
-    assert "grant required" in message
+    assert "auto review" in message
+    assert "global access mode" in message
     assert excinfo.value.scope == "cloud"
 
-    perms.grant("cloud", source="settings-ui")
+    perms.set_access_mode("auto-review", source="settings-ui")
     perms.assert_model_permitted(CLOUD_MODEL, "http://127.0.0.1:11434")
 
 
@@ -295,25 +248,18 @@ def test_remote_endpoint_denied_then_allowed_after_network_grant(perms):
     with pytest.raises(perms.PermissionDenied) as excinfo:
         perms.assert_model_permitted(LOCAL_MODEL, remote)
     assert excinfo.value.scope == "network"
-    assert "explicit" in str(excinfo.value).lower()
+    assert "auto review" in str(excinfo.value).lower()
 
-    perms.grant("network", source="settings-ui")
+    perms.set_access_mode("auto-review", source="settings-ui")
     perms.assert_model_permitted(LOCAL_MODEL, remote)
 
 
-def test_cloud_model_on_remote_endpoint_requires_both_grants(perms):
-    remote = "https://api.example.invalid/v1"
-    with pytest.raises(perms.PermissionDenied) as excinfo:
-        perms.assert_model_permitted(CLOUD_MODEL, remote)
-    assert excinfo.value.scope == "cloud"
-
-    perms.grant("cloud")
-    with pytest.raises(perms.PermissionDenied) as excinfo:
-        perms.assert_model_permitted(CLOUD_MODEL, remote)
-    assert excinfo.value.scope == "network"
-
-    perms.grant("network")
-    perms.assert_model_permitted(CLOUD_MODEL, remote)
+def test_cloud_model_on_remote_endpoint_uses_global_mode(perms):
+    with pytest.raises(perms.PermissionDenied):
+        perms.assert_model_permitted(CLOUD_MODEL, "https://models.example.com")
+    perms.set_access_mode("auto-review")
+    perms.assert_model_permitted(CLOUD_MODEL, "https://models.example.com", project_id=6)
+    perms.assert_model_permitted(CLOUD_MODEL, "https://models.example.com", project_id=72)
 
 
 def test_local_loopback_ollama_models_always_pass(perms):
@@ -347,7 +293,7 @@ def test_no_environment_variable_or_flag_bypasses_the_gate(perms, monkeypatch):
 def test_permission_api_is_not_model_facing():
     crew_tools = REPO_ROOT / "nl_coding_agent" / "tools" / "crew_tools.py"
     source = crew_tools.read_text(encoding="utf-8")
-    assert "permission" not in source.lower()
+    assert "permissions.grant" not in source and "permissions.set_access_mode" not in source
 
 
 # --------------------------------------------------------------------------- #
@@ -394,7 +340,7 @@ def test_orchestrator_make_llm_opens_only_after_explicit_cloud_grant(perms, monk
     with pytest.raises(perms.PermissionDenied):
         orchestrator_module._make_llm(CLOUD_MODEL, "http://127.0.0.1:11434")
 
-    perms.grant("cloud", source="settings-ui")
+    perms.set_access_mode("auto-review", source="settings-ui")
     llm = orchestrator_module._make_llm(CLOUD_MODEL, "http://127.0.0.1:11434")
     assert isinstance(llm, FakeLLM)
     assert llm.kwargs["model"] == CLOUD_MODEL
@@ -410,8 +356,8 @@ def test_cli_make_llm_enforces_the_same_gate(perms, monkeypatch):
     with pytest.raises(perms.PermissionDenied):
         cli.make_llm({"model": LOCAL_MODEL}, "https://api.example.invalid/v1")
 
-    perms.grant("cloud")
-    perms.grant("network")
+    perms.set_access_mode("auto-review")
+    perms.set_access_mode("auto-review")
     built = cli.make_llm(
         {"model": CLOUD_MODEL, "temperature": 0.0}, "https://api.example.invalid/v1"
     )

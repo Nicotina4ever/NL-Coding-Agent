@@ -1,0 +1,99 @@
+{
+  "date": "2026-11-05",
+  "result": "PASS",
+  "tests": {
+    "global-policy-final-suite": "1468 passed, 18 warnings in 643.56s (0:10:43)",
+    "global-policy-final-control": "53 passed in 88.10s (0:01:28)",
+    "global-policy-lifecycle": "66 passed in 24.52s",
+    "global-policy-final-focused": "148 passed in 30.68s",
+    "global-policy-regressions-fixed": "112 passed in 28.13s"
+  },
+  "frontend": {
+    "typescript": "PASS",
+    "webview": "PASS",
+    "session_controller": "PASS"
+  },
+  "review": {
+    "verdict": "APPROVE",
+    "independent_agent": "permission_review",
+    "latest_check": "MCP Stop after Read Only downgrade PASS; Start/Resume remain denied"
+  },
+  "ui": [
+    {
+      "host": "standalone",
+      "checks": 9,
+      "report": "standalone.json",
+      "project_id": 6,
+      "project": "NL_AudioLab",
+      "isolated_data": true,
+      "source_engine": "K:\\AI\\NL Coding Agent",
+      "source_file_sha256": "ebf929b0bd00de8059a64d14b4f8cc1b4f686ca5dd3d075a0cd23a48a729c104"
+    },
+    {
+      "host": "insiders",
+      "checks": 9,
+      "report": "insiders.json",
+      "project_id": 6,
+      "project": "NL_AudioLab",
+      "isolated_data": true,
+      "source_engine": "K:\\AI\\NL Coding Agent",
+      "source_file_sha256": "ebf929b0bd00de8059a64d14b4f8cc1b4f686ca5dd3d075a0cd23a48a729c104"
+    }
+  ],
+  "scope": {
+    "suite_excludes": "Dedicated legacy PySide6 GUI modules; settings compatibility covered separately",
+    "standalone_engine": "Source engine override in an isolated profile; published embedded payload/installers not rebuilt",
+    "live_project_mission": "Untouched; DELETE exercised on an isolated project #6 mission record",
+    "manual_pending": [
+      "Native Windows dialog interaction and display scaling not certified by the CDP fixture"
+    ]
+  },
+  "source_sha256": {
+    "frontend/media/main.js": "b69c57426fbe4f7d35cabdff2aa964bd8e453f551dd41b326956e65d8cefd3c6",
+    "frontend/package.json": "f80ed7f855e03b694f37a1dd0c8621b9ddc0d5c72a5f12eabbfcb8dc00d60b5c",
+    "frontend/src/backend.ts": "2d22876fce2b780c97d86f990b334cd33776e0a264e49b6e5959f01267ccdf9b",
+    "frontend/src/chatProvider.ts": "1ed3c7b1be3ffd9fefe1a7c60c1ff6a0d360f24cce01360f054ab8e9e5988f3b",
+    "frontend/src/webview.ts": "96c0559c8533d51da9144b4ce4e8a92c28425397f3ade07ab0fddc9200213c18",
+    "frontend/test/extension.test.cjs": "280388de4332dff8509c389792c99954fa5048ae7683939b2cccfdd6574a2d23",
+    "frontend/test/sessionUiAcceptance.cjs": "1a7b5af9e045862a806d97d7a0c2af57623c74de5bd50619761f0e1699629f12",
+    "frontend/test/webview.cjs": "f64369893d39fcca35f4e3a5731e457d2a1b3c4cbbc98adcbe07b84974b798c2",
+    "nl_coding_agent/app/chat_tools.py": "2d4746f16587467c696d0e26c7f5735bf8f4f22c7fc7e35df44b162345ca61bf",
+    "nl_coding_agent/app/mcp.py": "1c50111e1588015c11c5a5b88fad8bb794e2f84cd88b05df8925196514ec33cd",
+    "nl_coding_agent/app/mcp_engine.py": "49226980c7aec71ef7db06d796b0db337b826f0abcc70b5a10f509720d246c7c",
+    "nl_coding_agent/app/services.py": "91e8f744f229cc3e9772eeec5c087e6a63c732266001a08fc1838a8d6959ec1c",
+    "nl_coding_agent/app/session_runtime.py": "d584ba2be88b52b11c4dcddd5678822963129a1f31abcfa327657d08d525b19a",
+    "nl_coding_agent/core/auto_review.py": "d9e0ebac30e4b00f8c9fa96ac5727838535d6e15e4fa7389f27f019b4db60182",
+    "nl_coding_agent/core/job_manager.py": "54c99a02dfb2cfdf46fbd84ac534646d17d9521fe2a24375969f521af84e999f",
+    "nl_coding_agent/core/permissions.py": "0b7fc80f9f8a31a759a551e2506f0e39aa4692c86961f11038904ef7da3e8847",
+    "nl_coding_agent/gui/locales/en.json": "b80f40549bd0032fac6c0aa7ac8399bbd40477bab665267f451318c4fa062126",
+    "nl_coding_agent/gui/locales/it.json": "d8c8c752daaf0913cdc4ca37ddeaaed8f93c381d6b449dc014baa26c2a6fbdf9",
+    "nl_coding_agent/gui/widgets/settings_panel.py": "2a605dcdf39bdc393579c89aaa509a90fa4651c781b31ef500fd872cac46da27",
+    "nl_coding_agent/models/model_config_store.py": "93ea0a4004d303e89de8e872d96e38f0e8a3197ba7c4474a4b82bc2319832428",
+    "nl_coding_agent/models/operational_probes.py": "0a2be8a8aefbb829080a3c828de92cffacc64a499f48eb5a85995f7a964f6bae",
+    "nl_coding_agent/research/service.py": "30a4546dfdb5ab0bd6b227fb4c92527eb526838d5b881298a23fd38efb719fb9",
+    "nl_coding_agent/tools/crew_tools.py": "14c54aad8d3e30158ade70f08b6306737ab6f4473e42d0d280c7fbb8cb136479",
+    "scripts/nlcode/autopilot.py": "c19bc1772d81ff865d88d7c093f5e169142b7a4617e7437c4459e614509c0225",
+    "tests/test_advisors.py": "80288543a9c259a42ab7017e6acde071e463d995bf2c96727ade8e0c6665e2b7",
+    "tests/test_app_services_research.py": "89e0c372495876d1da5e02fae55b7afc2f9b7bf5c2bf16f097428158afc4a0b5",
+    "tests/test_auto_review.py": "bcfaf3e675d40925906a18b14a1b953c26a75562d52e951026aeb0a9f74d41fa",
+    "tests/test_chat_provider_execution.py": "1fc609ccb8d5205951ec6493665e753a4fd8415c1a37cba03657e181d85297fe",
+    "tests/test_chat_tools.py": "60ee03762e82067d4530f369f5bfbb227e2e7ac0d914e0789a6491f7e0d5950e",
+    "tests/test_context_engine.py": "e7910b09be2930a59af11bbe46a7137e487bc5bf20ecc5acd2d07727e0c30527",
+    "tests/test_flow_repair.py": "7798c93868f4426a0bead19060c58608d80527ef8f25ed681d178fa6e7894f42",
+    "tests/test_gate_bd_management.py": "12d3df677655f7c318cc7667a1b1cbc9d8f3e10e463a4815630c68cd4e8a22f0",
+    "tests/test_goal_execution.py": "03cc399fcfac2b93a332335751460e499f1f67c5da712962227cd13ef506b6a1",
+    "tests/test_gui_panels.py": "286bda2a7c425424f43eefc7c20ff9bb10c635f6c0777e4d6ffd2174a5d1c0a6",
+    "tests/test_mcp_integration.py": "54a16b26c84e6d09f58432dc20d71b6a889d761f823a879908a121a4c96b0ea6",
+    "tests/test_mcp_sdk.py": "510f87a6e95d10242f7635dc84ff99a2858503fbef71580337bc62f6217057e6",
+    "tests/test_mission_json_cli.py": "ee5d2e61d9929de27fbcdb968d11c3370aed23f94c6d9bf205bb4ba5afc6d044",
+    "tests/test_mission_project_binding.py": "ced30924b064c2b99a7df02d0ff626328aeb913c587b386ff95c5a7af860b0ed",
+    "tests/test_mission_team_plan.py": "59ad53b53b3dee04a083c32571048edadc88ea299e85c2ab31c2513db63960d7",
+    "tests/test_orchestrator_staging.py": "a541f5e409b5f7b76b7932737438bf788d0b72c202c579a6fe51142c5682639d",
+    "tests/test_permissions.py": "532c360991800304fead9f2676257a7fa0accdd5fd0f9a9c052162cecaff748d",
+    "tests/test_permissions_taxonomy.py": "a2fc43a91cb9a6ecfa30d75756d0f0e2219924ccce6cebdded79e29d3d3b2908",
+    "tests/test_session_runtime.py": "f998305281cf623cdaa3f29a28ef7f76f46f4c647427162d4715f3f06a03b902",
+    "tests/test_speech.py": "f58a8269ccff912723aa64ff5360815fa9abafcdf7c6208c4d7d549bf7f5727f",
+    "tests/test_supervisor_core.py": "610edf8cb94ec737634439916fe3e1b8de3b23807e8d22649a5bbfa235275923",
+    "tests/test_access_mode.py": "723597869f14da9a4721a9b75bd9712ef5daa7bcd56abe02a99e5e113f5d5074"
+  }
+}

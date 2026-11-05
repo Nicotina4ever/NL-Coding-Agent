@@ -163,7 +163,6 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     private busyPhase = 'idle';
     private chatModel = '';
     private providerFilter = '';
-    private autoCoding = false;
     private missionModels = { developerModel: '', reviewerModel: '' };
     private attachments: AttachmentView[] = [];
     private history: HistoryMessage[] = [];
@@ -278,10 +277,6 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             const savedModel = this.workspaceState?.get<string>('nlCodingAgent.chatModel');
             if (typeof savedModel === 'string') {
                 this.chatModel = savedModel;
-            }
-            const savedAutoCoding = this.workspaceState?.get<boolean>('nlCodingAgent.autoCoding');
-            if (typeof savedAutoCoding === 'boolean') {
-                this.autoCoding = savedAutoCoding;
             }
             this.setupEditorTracking();
             await this.refreshAll(true);
@@ -543,8 +538,8 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                             }
                         } else {
                             const guidance = page.outcome === 'needs_approval'
-                                ? ' Select Trusted auto-review in Engine Settings if you want project-authorized fetches without manual approval.'
-                                : ' Enable NETWORK in Project Access; the web-fetch capability follows that same project grant.';
+                                ? ' Check the selected Global access mode.'
+                                : ' Select Auto Review or Full Access in Global access; the same mode governs research for every project.';
                             this.postChat('system',
                                 `URL fetch was not completed for ${url}: ` +
                                 (page.reason || page.outcome || 'permission or network policy denied') +
@@ -553,7 +548,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                     } catch (error) {
                         this.postChat('system',
                             `URL fetch failed for ${url}: ` + this.errorText(error) +
-                            ' Enable NETWORK in Project Access and select Trusted auto-review if approval is required.');
+                            ' Select Auto Review or Full Access in Global access.');
                     }
                 }
                 this.busyPhase = 'thinking';
@@ -577,7 +572,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 const prepared = this.durableSubmissions[requestId] || {
                     sessionId: turnSessionId, text: message, attachmentIds: effectiveAttachmentIds,
                     modelSpec: this.chatModel || 'auto',
-                    allowCoding: !planningOnly && this.autoCoding && this.connection.executionAllowed
+                    allowCoding: !planningOnly && this.connection.executionAllowed
                 };
                 this.durableSubmissions[requestId] = prepared;
                 await this.workspaceState?.update('nlCodingAgent.pendingSubmissions', this.durableSubmissions);
@@ -597,7 +592,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             const result = await this.connection.converse(
                 context.project.id, message, legacyAttachments, this.requestTimeoutMs,
                 this.chatModel || 'auto', effectiveAttachmentIds,
-                !planningOnly && this.autoCoding && this.connection.executionAllowed,
+                !planningOnly && this.connection.executionAllowed,
                 abort.signal, turnSessionId
             );
             if (result.route) {
@@ -657,11 +652,8 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     async refreshAccessProfile(): Promise<void> {
         try {
             let profile = await this.connection.accessProfile() as Record<string, unknown>;
-            if (!profile.profile) {
-                await this.connection.setAccessProfile('auto-review');
-                profile = await this.connection.accessProfile() as Record<string, unknown>;
-            }
             this.accessProfile = profile;
+            this.connection.setAllowExecution(profile.profile !== 'read-only');
             this.postState();
         } catch (error) {
             this.output.appendLine('[access-profile] ' + this.errorText(error));
@@ -678,7 +670,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             this.accessProfile = await this.connection.accessProfile() as Record<string, unknown>;
             await this.refreshAll(false);
             this.postChat('system',
-                'Project access profile applied to every agent: ' + name);
+                'Global access mode applied to every project and agent: ' + name);
         } catch (error) {
             this.reportError(error, 'access-profile');
         }
@@ -715,7 +707,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             return;
         }
         if (!this.settings?.permissions.policy.network) {
-            this.postChat('error', 'Grant project NETWORK permission in the Engine settings before downloading an ASR model.');
+            this.postChat('error', 'Select Auto Review or Full Access in Global access before downloading an ASR model.');
             return;
         }
         const choice = await vscode.window.showWarningMessage(
@@ -1533,26 +1525,14 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         if (!target) {
             return undefined;
         }
-        const networkGranted = Boolean(this.settings?.permissions.policy.network);
+        await this.refreshAccessProfile();
+        const networkGranted = ['auto-review', 'full-access'].includes(String(this.accessProfile?.profile));
         if (!networkGranted) {
             this.postChat('error',
-                'Research fetch requires NETWORK access for this project. Enable it in Project Access; the web-fetch capability is granted and revoked with that project permission.');
+                'Research fetch requires Auto Review or Full Access in Global access.');
             return undefined;
         }
-        if (!confirmed) {
-            const approved = await vscode.window.showWarningMessage(
-                'Fetch this external page?',
-                {
-                    modal: true,
-                    detail: `${target}\n\nThe request goes through the existing Research service and permission boundary. ` +
-                        `Research profile: ${this.connection.researchProfile}. Page content is UNTRUSTED and will never be executed.`
-                },
-                'Fetch page'
-            );
-            if (approved !== 'Fetch page') {
-                return undefined;
-            }
-        }
+
         this.busyPhase = 'fetching';
         this.postState();
         try {
@@ -1560,7 +1540,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             this.research = result;
             if (!result.ok) {
                 const approvalGuidance = result.outcome === 'needs_approval'
-                    ? ' Select Trusted auto-review in Engine Settings to let this project fetch URLs permitted by Project Access.'
+                    ? ' Check the selected Global access mode.'
                     : '';
                 this.postChat('error', 'Research fetch not completed: ' +
                     (result.reason || result.outcome || 'unknown') +
@@ -1606,7 +1586,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         this.chatModel = value;
         void this.workspaceState?.update('nlCodingAgent.chatModel', value);
         if (this.isCloudRoute(value)) {
-            void this.ensureCloudGrant(value).catch(() => undefined);
+            void this.ensureCloudGrant(value).catch((error) => this.reportError(error, 'cloud-mode'));
         }
         this.postState();
     }
@@ -1638,85 +1618,21 @@ export class ChatProvider implements vscode.WebviewViewProvider {
      * project data to a remote provider.
      */
     private async ensureCloudGrant(model: string): Promise<void> {
-        if (!this.isCloudRoute(model)) {
-            return;
-        }
-        try {
-            const current = Boolean(this.settings?.permissions?.policy?.cloud);
-            if (current) {
-                return;
-            }
-            const choice = await vscode.window.showWarningMessage(
-                'Enable CLOUD inference for this project?',
-                {
-                    modal: true,
-                    detail: 'The selected model (' + model + ') runs on a remote provider. ' +
-                        'Project context may be sent to that provider. This grants the CLOUD ' +
-                        'capability until you revoke it in Project Access.'
-                },
-                'Enable cloud'
-            );
-            if (choice !== 'Enable cloud') {
-                throw new EngineError('cloud-not-authorized',
-                    'CLOUD access was not granted; choose a local model or enable cloud explicitly.');
-            }
-            await this.connection.savePermissionScope('cloud', true);
-            await this.refreshAll(false);
-            this.postChat('system',
-                'CLOUD permission granted by explicit confirmation for the selected cloud model: ' + model);
-        } catch (error) {
-            this.output.appendLine('[cloud-grant] ' + this.errorText(error));
-            this.postChat('error',
-                'Could not activate CLOUD for ' + model + ': ' + this.errorText(error));
-            throw error;
+        if (!this.isCloudRoute(model)) { return; }
+        await this.refreshAccessProfile();
+        if (!['auto-review', 'full-access'].includes(String(this.accessProfile?.profile))) {
+            throw new EngineError('cloud-not-authorized',
+                'Select Auto Review or Full Access in Global access to use cloud models.');
         }
     }
 
-    setAutoCoding(value: boolean): void {
-        if (value && !this.connection.executionAllowed) {
-            this.postChat('error', 'Enable mission execution before enabling automatic coding.');
-            return;
-        }
-        this.autoCoding = Boolean(value);
-        void this.workspaceState?.update('nlCodingAgent.autoCoding', this.autoCoding);
-        this.postChat('system', this.autoCoding
-            ? 'Automatic coding enabled: Chat may delegate an explicit coding goal to a verified mission.'
-            : 'Automatic coding disabled: Chat remains read-only until you start a mission.');
+    setAutoCoding(_value: boolean): void {
+        // Legacy host adapter: coding authorization follows the global mode.
         this.postState();
     }
 
-    async setResearchProfile(profile: string, confirmed = false): Promise<void> {
-        const next = profile === 'trusted-auto-review' ? 'trusted-auto-review' : 'manual';
-        if (next === this.connection.researchProfile) {
-            return;
-        }
-        if (!confirmed) {
-            const choice = await vscode.window.showWarningMessage(
-                'Change research auto-review profile?',
-                {
-                    modal: true,
-                    detail: next === 'trusted-auto-review'
-                        ? 'The engine restarts with trusted auto-review. Project NETWORK access is still required; URLs submitted in Chat and Fetch-button requests remain user-initiated, and page content is always untrusted.'
-                        : 'The engine restarts with the manual research profile: external fetches require human approval in the backend and the Fetch button will report needs_approval.'
-                },
-                'Apply profile'
-            );
-            if (choice !== 'Apply profile') {
-                return;
-            }
-        }
-        this.connection.setResearchProfile(next);
-        await vscode.workspace.getConfiguration('nlCodingAgent').update(
-            'researchProfile', next, vscode.ConfigurationTarget.Global
-        );
-        try {
-            await this.connection.restart();
-            await this.refreshAll(false);
-            this.postChat('system', `Research profile: ${next}`);
-            this.postState();
-        } catch (error) {
-            this.reportError(error, 'research');
-        }
+    async setResearchProfile(_profile: string, _confirmed = false): Promise<void> {
+        await this.refreshAccessProfile();
     }
 
     /**
@@ -1738,23 +1654,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             this.postChat('error', 'Select an exact developer and reviewer model route first.');
             return undefined;
         }
-        if (!confirmed) {
-            const approved = await this.confirm(
-                'Start a real coding mission?',
-                [
-                    `Objective: ${goal.slice(0, 500)}`,
-                    `Developer: ${input.developerModel}`,
-                    `Reviewer: ${input.reviewerModel}`,
-                    input.resumeMissionId ? `Resume mission #${input.resumeMissionId}` : 'New mission',
-                    '',
-                    'The existing Supervisor will modify the opened project through staging, run candidate/oracle verification and require reviewer approval before promotion.'
-                ].join('\n'),
-                'Start mission'
-            );
-            if (!approved) {
-                return undefined;
-            }
-        }
+
         try {
             await this.ensureExecution();
             await this.connection.connect();
@@ -1790,18 +1690,8 @@ export class ChatProvider implements vscode.WebviewViewProvider {
 
     /** Stop a mission at the next safe checkpoint (engine-cooperative). */
     async cancelMission(missionId: number, confirmed = false): Promise<boolean> {
-        if (!confirmed) {
-            const stop = await this.confirm(
-                `Stop mission #${missionId}?`,
-                'The engine stops at the next safe checkpoint. Staged work is retained and the live project is not modified by the stop.',
-                'Stop mission'
-            );
-            if (!stop) {
-                return false;
-            }
-        }
+
         try {
-            await this.ensureExecution();
             const result = await this.connection.cancelMission(missionId);
             const accepted = result.accepted !== false;
             this.postChat('system', accepted
@@ -1833,23 +1723,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                     reviewerModel: settings.mission_defaults.reviewer_model
                 };
             }
-            if (!confirmed) {
-                const resume = await this.confirm(
-                    `Resume mission #${missionId}?`,
-                    [
-                        `Objective: ${String(detail.mission.goal || '').slice(0, 500)}`,
-                        `Developer: ${this.missionModels.developerModel}`,
-                        `Reviewer: ${this.missionModels.reviewerModel}`,
-                        fromTaskId ? `Retry from task #${fromTaskId}: that task and all later tasks are reset to pending.` : '',
-                        '',
-                        'Resume keeps the existing objective and mission row; the engine re-runs the remaining stages.'
-                    ].join('\n'),
-                    'Resume mission'
-                );
-                if (!resume) {
-                    return false;
-                }
-            }
+
             await this.ensureExecution();
             await this.connection.connect();
             const context = await this.requireBoundProject();
@@ -2019,7 +1893,6 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         if (!running.length) {
             return true;
         }
-        await this.ensureExecution();
         for (const row of running) {
             const result = await this.connection.cancelMission(Number(row.id));
             if (result.accepted === false && result.status === 'running') {
@@ -2438,17 +2311,8 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         this.postChat('system', 'Cloud escalation ' + (enabled ? 'enabled.' : 'disabled.'));
     }
 
-    async savePermission(scope: string, granted: boolean): Promise<void> {
-        const choice = await vscode.window.showWarningMessage(
-            (granted ? 'Grant ' : 'Revoke ') + scope + ' for this project?',
-            { modal: true },
-            granted ? 'Grant' : 'Revoke');
-        if (!choice) {
-            return;
-        }
-        await this.connection.savePermissionScope(scope, granted);
-        await this.refreshAll(false);
-        this.postChat('system', `Permission ${scope}: ${granted ? 'granted' : 'revoked'}.`);
+    async savePermission(_scope: string, _granted: boolean): Promise<void> {
+        throw new EngineError('retired-permission', 'Use the four Global access modes.');
     }
 
     async probeModel(model: string): Promise<void> {
@@ -2575,35 +2439,10 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    /** Toggle the --allow-execution engine session flag after an explicit warning. */
-    async toggleExecution(confirmed = false): Promise<void> {
-        const enable = !this.connection.executionAllowed;
-        if (!confirmed) {
-            const choice = await vscode.window.showWarningMessage(
-                enable ? 'Enable mission execution for this engine session?' : 'Disable mission execution?',
-                {
-                    modal: true,
-                    detail: enable
-                        ? 'The extension will restart the engine with --allow-execution. Missions may modify the opened project through the existing Supervisor, staging and reviewer gates. Each start still requires its own confirmation, and READ/WRITE/EXECUTE permissions apply.'
-                        : 'The engine restarts read-only. Stop any active mission first: replacing the engine process interrupts its in-process scheduler.'
-                },
-                enable ? 'Enable execution' : 'Disable execution'
-            );
-            if (choice !== (enable ? 'Enable execution' : 'Disable execution')) {
-                return;
-            }
-        }
-        const config = vscode.workspace.getConfiguration('nlCodingAgent');
-        await config.update('allowExecution', enable, vscode.ConfigurationTarget.Global);
-        this.connection.setAllowExecution(enable);
-        try {
-            await this.connection.restart();
-            await this.refreshAll(false);
-            this.postChat('system', enable ? 'Mission execution enabled for this session.' : 'Engine restarted read-only.');
-            this.postState();
-        } catch (error) {
-            this.reportError(error, 'execution');
-        }
+    /** Compatibility command: change the one global mode without restarting. */
+    async toggleExecution(_confirmed = false): Promise<void> {
+        // Legacy command uses the same global selector policy, without restart.
+        await this.setAccessMode(this.connection.executionAllowed ? 'read-only' : 'workspace-write');
     }
 
     /** Reload settings/missions after a reconnect or workspace change. */
@@ -2611,6 +2450,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         await this.connection.connect();
         this.projectContext = await this.connection.projectContext();
         this.settings = await this.connection.engineSettings(probeModels);
+        await this.refreshAccessProfile();
         try {
             this.generationParams = await this.connection.generationParameters(
                 this.settings.models.chat_default_spec || '', '');
@@ -2641,13 +2481,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         if (this.chatModel && !this.modelOptions().some((option) => option.value === this.chatModel)) {
             this.chatModel = '';
         }
-        if (this.workspaceState?.get<boolean>('nlCodingAgent.autoCoding') === undefined &&
-            this.connection.executionAllowed) {
-            this.autoCoding = true;
-        }
-        if (!this.connection.executionAllowed) {
-            this.autoCoding = false;
-        }
+
         this.refreshEditorContext();
         await this.refreshMissions();
         this.errorMessage = undefined;
@@ -3163,24 +2997,11 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     }
 
     private async ensureExecution(): Promise<void> {
-        if (this.connection.executionAllowed) {
-            return;
+        await this.refreshAccessProfile();
+        if (!this.connection.executionAllowed) {
+            throw new EngineError('execution-disabled',
+                'Read Only blocks mission changes. Choose Workspace Write, Auto Review or Full Access in Global access.');
         }
-        const enable = await vscode.window.showWarningMessage(
-            'Mission execution is disabled.',
-            {
-                modal: true,
-                detail: 'No mission can start/cancel while the engine is read-only. Enable --allow-execution for this engine session? Every mission start still asks for confirmation.'
-            },
-            'Enable execution'
-        );
-        if (enable !== 'Enable execution') {
-            throw new EngineError('execution-disabled', 'Mission execution is disabled. Enable it from the Engine tab first.');
-        }
-        const config = vscode.workspace.getConfiguration('nlCodingAgent');
-        await config.update('allowExecution', true, vscode.ConfigurationTarget.Global);
-        this.connection.setAllowExecution(true);
-        await this.connection.restart();
     }
 
     private async requireBoundProject(): Promise<ProjectContext> {
@@ -3284,7 +3105,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             dictating: Boolean(this.dictationSessionId),
             chatModel: this.chatModel,
             providerFilter: this.providerFilter,
-            autoCoding: this.autoCoding,
+            autoCoding: this.connection.executionAllowed,
             missionModels: this.missionModels,
             modelOptions: this.modelOptions(),
             providers: (settings?.models.providers || []).map((provider) => ({

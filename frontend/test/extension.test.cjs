@@ -111,7 +111,7 @@ async function run() {
     assert(/media\/main\.js/.test(html), 'webview script points at the extension media resource');
     for (const id of ['chat-session', 'chat-queue', 'provider-id', 'provider-kind',
         'provider-api-key-env', 'chat-controls-toggle', 'mission-fields-toggle',
-        'mission-list-toggle', 'generation-save', 'permission-grant',
+        'mission-list-toggle', 'generation-save', 'chat-access-profile',
         'autonomy-save', 'mcp-save', 'probe-run', 'storage-scan', 'storage-vacuum',
         'auto-coding', 'speech-engine', 'speech-model', 'speech-select', 'speech-refresh',
         'speech-home', 'speech-browse', 'speech-external', 'speech-engines',

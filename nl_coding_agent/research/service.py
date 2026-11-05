@@ -6,7 +6,7 @@ investigators and the local research store.
 
 Boundary contract:
   * before any network-capable operation the service calls
-    permissions.check_capability and auto_review.evaluate_action;
+    permissions.check_access and auto_review.evaluate_action;
   * normal policy outcomes are returned as explicit NeedsApproval/Denied results,
     not raised past the boundary;
   * URL fetch uses the bounded stdlib transport only after per-hop permission,
@@ -19,6 +19,7 @@ Boundary contract:
 """
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import socket
@@ -167,8 +168,10 @@ class ResearchService:
         self._http_transport = http_transport
         self._github_client = github_client
         self._huggingface_client = huggingface_client
-        self._permission_checker = permission_checker or permissions.check_capability
-        self._auto_reviewer = auto_reviewer or auto_review.evaluate_action
+        self._permission_checker = permission_checker or permissions.check_access
+        self._auto_reviewer = auto_reviewer or functools.partial(
+            auto_review.evaluate_action,
+            capability_checker=permissions.check_access)
         self.profile = str(profile or auto_review.PROFILE_MANUAL)
         self.controls = dict(controls or {})
         self._github_token = str(github_token or "").strip()

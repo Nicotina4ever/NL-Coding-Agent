@@ -1,5 +1,39 @@
 # Stato corrente — NL Coding Agent / NL Code
 
+**Checkpoint policy globale — 5 novembre 2026 (sorgenti successivi al rilascio).**
+Le sole autorizzazioni configurabili sono Read Only, Workspace Write, Auto Review e
+Full Access, persistite una volta in `access.mode` e applicate a tutti i progetti.
+Chat, SessionRuntime, missioni, specialisti, strumenti, ricerca e provider usano lo
+stesso confine; i grant per progetto/capability e i flag execution/research/cloud
+legacy non autorizzano né bloccano più le operazioni. Le API di grant ritirate
+rispondono esplicitamente senza cambiare modalità. La migrazione conserva i dati
+storici per audit, preserva Read Only e non estende un opt-in cloud di un progetto
+a tutti gli altri. Un valore globale corrotto ricade in Read Only.
+
+Workspace Write comprende creazione/modifica/Stop/Riprendi/eliminazione delle
+missioni, senza il permesso DELETE OS o approvazioni aggiuntive. Rimane la conferma
+dell'azione di eliminazione dei record. Full Access consente comandi/eseguibili
+accessibili all'utente Windows, senza le allowlist dei modi workspace. I controlli
+tecnici di staging, isolamento del candidato, hash, test/oracle/reviewer e recovery
+restano attivi. I tool già creati rivalutano la modalità prima di scrivere/eseguire;
+una revoca impedisce anche la promozione del candidato. Stop resta disponibile
+per arrestare il lavoro dopo il passaggio a Read Only; Riprendi resta vincolato alla modalità. La dettatura locale resta
+input utente anche in Read Only. L'autopilot non amplia la modalità selezionata.
+
+Prova dalla GUI reale con VSIX installata in profili isolati su Insiders e sulla
+standalone: selezione delle quattro modalità, policy condivisa con un altro progetto,
+DELETE in Workspace Write sul progetto #6 NL_AudioLab e riconnessione. Il database
+di collaudo riproduce l'identità #6 e una missione interrotta; la missione utente e i
+file del progetto reale non vengono eliminati. L'host standalone usa per questo
+collaudo il motore sorgente aggiornato; gli installer pubblicati restano quelli del
+rilascio precedente. Evidenze in `docs/evidence/nlcode/global-policy-20261105/`.
+Il reload è necessario per usare i moduli aggiornati; nessun aggiornamento a caldo.
+Verifica finale: **1468 test PASS**, nessun fallimento (18 warning di deprecazione);
+**53 test mirati PASS** dopo la correzione Stop in Read Only. TypeScript, webview e
+session controller PASS, revisione indipendente **APPROVE**. Le esclusioni della suite
+e i limiti manuali restano espliciti nel verbale.
+
+
 **Rilascio Windows 0.7.3 beta.1 — 5 novembre 2026.** Installer per utente,
 portable e VSIX rigenerati dal motore verificato. Il portable estratto, senza
 installare prima la VSIX, apre la Chat e supera lettura del progetto NL_AudioLab,
@@ -183,10 +217,10 @@ come dato non attendibile con URL e titolo persistiti nell'attachment. Per le do
 pertinenti; i risultati includono link citabili. Il motore fornisce trasporti HTTP bounded per fetch
 generico, ricerca e GitHub REST read-only (repository, README, tree); i contenuti allegati vengono
 riproposti nei follow-up Chat entro un budget e restano non attendibili. Il fetch generico usa
-controllo DNS su indirizzi privati/reservati e rivalutazione dei redirect; il permesso NETWORK di
-Project Access governa nello stesso scope ricerca e fetch. Il profilo Research resta una scelta
-distinta che governa l'auto-approvazione; la query di ricerca è inviata a Bing e i relativi
-risultati restano non fidati. La GitHub REST lookup condivide il grant NETWORK e Research approval.
+controllo DNS su indirizzi privati/reservati e rivalutazione dei redirect; la modalità globale
+**Auto Review** o **Full Access** governa ricerca e fetch. Review indipendente e gate di
+regressione restano attivi; la query di ricerca è inviata a Bing e i relativi risultati restano
+non fidati. La GitHub REST lookup segue la stessa modalità globale.
 Il pinning dell'indirizzo di connessione dopo la risoluzione DNS resta una limitazione esplicita.
 
 ### Confine delle interfacce e classificazione delle modifiche
@@ -218,10 +252,10 @@ verifica o acceptance, salvo richiesta esplicita.
 
 ### Team Supervisor e gestione missioni (2 novembre 2026)
 
-- `Generate team` salva una squadra attiva per progetto senza duplicare i ruoli supportati dal Supervisor. Le route `provider/model`, le istruzioni e i tools personalizzabili vengono applicati agli stage; Project Access resta l'unica policy dei permessi.
+- `Generate team` salva una squadra attiva per progetto senza duplicare i ruoli supportati dal Supervisor. Le route `provider/model`, le istruzioni e i tools personalizzabili vengono applicati agli stage; la modalità globale resta l'unica policy dei permessi.
 - La Chat consente selezione filtrata singola/multipla, Stop cooperativo, Archive e Delete distinti. Il backend applica le azioni in transazione; Delete riallinea Goal/milestone e riferimenti DB senza cancellare i file del progetto.
-- Delete di missioni pending/terminali richiede solo conferma e il permesso globale `DELETE` del Project Access, non l'abilitazione dell'esecuzione agentica; per una running resta obbligatorio lo stop cooperativo.
-- Verifica della correzione mission-delete: 4 test Python mirati PASS, compilazione TypeScript e test webview PASS; acceptance della VSIX installata in profilo isolato PASS per eliminazione singola e batch di missioni pending con execution disabilitato. La prova copre il server MCP read-only con `DELETE` concesso/revocato e il controller installato dopo conferma.
+- Delete di missioni pending/terminali richiede conferma e la modalità globale **Workspace Write** o superiore. L'operazione usa `EXECUTE` (non un file-delete OS) e non richiede l'abilitazione dell'esecuzione agentica; per una running resta obbligatorio lo stop cooperativo.
+- La verifica della nuova policy e di DELETE è nel checkpoint globale del 5 novembre sopra; le prove elencate di seguito appartengono al checkpoint storico precedente.
 - Verifiche: 87 test Python mirati PASS; `npm --prefix frontend run compile` e `test:webview` PASS; test extension-host VS Code PASS; la VSIX 0.7.2 corrente è stata reinstallata nel profilo Insiders. È necessario ricaricare la finestra per usare i moduli appena installati.
 - Limite di acceptance: la missione host con Ollama reale è rimasta `running` sul primo developer task senza tentativo completato prima della chiusura dell'host; non la considero una prova riuscita. Il ciclo team→persistenza→invocazione developer/tester/reviewer, modelli, istruzioni e tools è invece coperto da una missione isolata con `FakeCrewRuntime` e da test route/provider permission-gated.
 

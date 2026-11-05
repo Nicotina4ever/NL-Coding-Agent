@@ -201,9 +201,8 @@ def probe_model_with_provider(provider: Any, provider_id: str, model: str, *,
     """Measure a model through any configured provider (Ollama or compatible)."""
     if provider is None:
         raise ValueError("A provider instance is required")
-    if (not allow_cloud and provider_id == "ollama"
-            and "cloud" in str(model).lower()):
-        raise ValueError("Cloud model probes require explicit allow_cloud=True")
+    from nl_coding_agent.core import permissions
+    permissions.assert_model_permitted(model, getattr(provider, "base_url", None))
     return _run_probes(provider, str(provider_id), str(model), timeout, persist)
 
 
@@ -211,9 +210,8 @@ def probe_model(model: str, *, base_url: str = "http://127.0.0.1:11434",
                 timeout: float = 90.0, persist: bool = True,
                 allow_cloud: bool = False) -> list[CapabilityRecord]:
     """Measure tool-calling/patch/structured quality for one local Ollama model."""
-    if (not allow_cloud and ("cloud" in str(model).lower()
-                              or str(model).lower().endswith(":cloud"))):
-        raise ValueError("Cloud model probes require explicit allow_cloud=True")
+    from nl_coding_agent.core import permissions
+    permissions.assert_model_permitted(model, base_url)
     provider = OllamaProvider(base_url=base_url)
     return _run_probes(provider, "ollama", str(model), timeout, persist)
 
@@ -230,7 +228,10 @@ def probe_available_models(*, base_url: str = "http://127.0.0.1:11434",
         name = str(getattr(item, "name", "") or "")
         if not name:
             continue
-        if not allow_cloud and "cloud" in name.lower():
+        from nl_coding_agent.core import permissions
+        try:
+            permissions.assert_model_permitted(name, base_url)
+        except permissions.PermissionDenied:
             continue
         try:
             records = probe_model(name, base_url=base_url, timeout=timeout,

@@ -410,7 +410,7 @@ class PreflightTests(SupervisorTestCase):
     def test_missing_base_permission_blocks(self):
         from nl_coding_agent.core import permissions
 
-        permissions.revoke(permissions.WRITE)
+        permissions.set_access_mode("read-only")
         supervisor = self.supervisor()
         report = supervisor.preflight()
         self.assertFalse(report.ok)

@@ -559,12 +559,12 @@
                 Number(selectedAgent.project_id) === projectId) {
             status.textContent = 'Active in current project Supervisor team as '
                 + (selectedAgent.role_id || selectedAgent.role || 'specialist')
-                + '. Project Access controls all operational permissions.';
+                + '. Global access controls operational permissions for every project.';
         } else if (selectedAgent && selectedAgent.project_id != null &&
                 Number(selectedAgent.project_id) !== projectId) {
             status.textContent = 'This profile belongs to another project and is not used by the current Supervisor.';
         } else {
-            status.textContent = 'Profile only; Generate team links Supervisor specialists to this project. Project Access controls operational permissions.';
+            status.textContent = 'Profile only; Generate team links Supervisor specialists to this project. Global access controls operational permissions.';
         }
     }
 
@@ -755,7 +755,7 @@
         $('autonomy-mode').value = autonomy.mode || 'off';
         setValueIfIdle('autonomy-missions', autonomy.max_missions_per_run);
         setValueIfIdle('autonomy-attempts', autonomy.max_attempts_per_requirement);
-        $('cloud-policy').checked = Boolean(settings.models.cloud_escalation_enabled);
+
         const mcp = $('mcp-json');
         if (document.activeElement !== mcp) {
             mcp.value = JSON.stringify(current.mcpConfig || { servers: {} }, null, 2);
@@ -825,8 +825,8 @@
         populateSelect(reviewerModelEl, options, current.missionModels ? current.missionModels.reviewerModel : '');
         const auto = !current.chatModel;
         autoModelEl.checked = auto;
-        autoCodingEl.checked = Boolean(current.autoCoding);
-        autoCodingEl.disabled = !current.executionEnabled;
+        autoCodingEl.checked = Boolean(current.executionEnabled);
+        autoCodingEl.disabled = true;
 
         const providers = [{ value: '', label: 'All providers' }];
         const seenProviders = { '': true };
@@ -1395,16 +1395,6 @@
             engineContent.appendChild(el('p', 'nl-muted', 'Engine settings unavailable.'));
             return;
         }
-        const execSection = el('div', 'nl-engine-section');
-        execSection.appendChild(el('h3', '', 'Mission execution'));
-        const execRow = el('div', 'nl-actions');
-        execRow.appendChild(el('span', current.executionEnabled ? 'Execution enabled (--allow-execution)' : 'Read-only engine session'));
-        const toggle = el('button', '', current.executionEnabled ? 'Disable execution' : 'Enable execution');
-        toggle.addEventListener('click', function () { postAction('toggleExecution', {}); });
-        execRow.appendChild(toggle);
-        execSection.appendChild(execRow);
-        engineContent.appendChild(execSection);
-
         const project = el('div', 'nl-engine-section');
         project.appendChild(el('h3', '', 'Project context'));
         project.appendChild(el('div', 'nl-muted', 'Project #' + settings.project.id + ' · ' + settings.project.root));
@@ -1439,22 +1429,6 @@
 
         const researchSection = el('div', 'nl-engine-section');
         researchSection.appendChild(el('h3', '', 'Research / URL fetch'));
-        const researchRow = el('div', 'nl-field');
-        researchRow.appendChild(el('span', 'nl-muted', 'Auto-review profile'));
-        const profileSelect = el('select');
-        [{ value: 'manual', label: 'Manual (fetch reports needs_approval)' },
-         { value: 'trusted-auto-review', label: 'Trusted auto review (granted web-fetch can run)' }]
-            .forEach(function (option) {
-                const node = el('option', '', option.label);
-                node.value = option.value;
-                profileSelect.appendChild(node);
-            });
-        profileSelect.value = current.researchProfile || 'manual';
-        profileSelect.addEventListener('change', function () {
-            postAction('setResearchProfile', { profile: profileSelect.value });
-        });
-        researchRow.appendChild(profileSelect);
-        researchSection.appendChild(researchRow);
         const researchInfo = (settings.research || {});
         researchSection.appendChild(el('div', 'nl-muted',
             'Engine status: ' + (researchInfo.status || 'unknown') +
@@ -1462,9 +1436,9 @@
             ' · web search: ' + (researchInfo.network_configured ? 'configured' : 'not configured')));
         researchSection.appendChild(el('div', 'nl-muted',
             'NETWORK grant: ' + (settings.permissions.policy.network ? 'granted' : 'denied') +
-            ' · web-fetch follows the same Project Access grant'));
+            ' · follows Global access'));
         researchSection.appendChild(el('div', 'nl-muted',
-            'The selected Research profile controls automatic approval. Fetched page content is always treated as untrusted.'));
+            'Global access controls research. Fetched page content is always treated as untrusted.'));
         engineContent.appendChild(researchSection);
 
         const providers = el('div', 'nl-engine-section');
@@ -2105,15 +2079,7 @@
             num_ctx: numberOrNull('generation-context')
         });
     });
-    $('permission-grant').addEventListener('click', function () {
-        postAction('savePermission', { scope: $('permission-scope').value, granted: true });
-    });
-    $('permission-revoke').addEventListener('click', function () {
-        postAction('savePermission', { scope: $('permission-scope').value, granted: false });
-    });
-    $('cloud-save').addEventListener('click', function () {
-        postAction('saveCloudPolicy', { enabled: $('cloud-policy').checked });
-    });
+
     $('autonomy-save').addEventListener('click', function () {
         postAction('saveAutonomy', {
             mode: $('autonomy-mode').value,

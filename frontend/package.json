@@ -169,22 +169,6 @@
           "maximum": 7200,
           "description": "Timeout for one chat turn. Local models may need minutes to load and reason; long runs are expected."
         },
-        "nlCodingAgent.allowExecution": {
-          "type": "boolean",
-          "default": false,
-          "scope": "machine-overridable",
-          "markdownDescription": "Start the NL Coding Engine with `--allow-execution`, which permits mission start/cancel from this extension. Missions still require an explicit per-start confirmation and the engine's existing READ/WRITE/EXECUTE permissions. Leave disabled for a read-only assistant."
-        },
-        "nlCodingAgent.researchProfile": {
-          "type": "string",
-          "enum": [
-            "manual",
-            "trusted-auto-review"
-          ],
-          "default": "manual",
-          "scope": "machine-overridable",
-          "markdownDescription": "Research auto-review profile passed to the engine (`--research-profile`). `manual` reports needs_approval for external fetches; `trusted-auto-review` can auto-approve a granted web-fetch. Both still require the backend NETWORK and web-fetch grants; the extension never grants permissions."
-        },
         "nlCodingAgent.showHomeOnStartup": {
           "type": "boolean",
           "default": true,

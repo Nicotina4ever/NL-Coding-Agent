@@ -432,7 +432,7 @@ def test_revoked_write_permission_prevents_verified_candidate_promotion(project,
     install_fake(orch, {
         MODEL_DEVELOPER: [write_block("src/calc.py", CALC_WITH_SUB)],
         MODEL_REVIEWER: ["APPROVE\n"],
-    }, hooks={MODEL_REVIEWER: lambda: permissions.revoke(permissions.WRITE, project_id)})
+    }, hooks={MODEL_REVIEWER: lambda: permissions.set_access_mode("read-only")})
     result = orch.run_mission(mission_id)
     assert result["status"] == "blocked", result
     assert "WRITE" in result["error"]

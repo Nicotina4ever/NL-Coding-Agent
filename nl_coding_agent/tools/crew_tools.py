@@ -4,8 +4,7 @@ Model-facing file tools are scoped to the staged candidate. The additional execu
 tools are deliberately bounded: tests and a small argv allowlist (git/read-only
 inspection/python compile) with shell=False, so a model cannot turn the tool layer
 into an unrestricted shell. Research uses the existing authorized service.
-MCP discovery uses the existing local stdio client; MCP invocation remains
-human-approval-gated by that client and is never silently approved here.
+MCP discovery uses the existing local stdio client; MCP invocation uses the same persisted global access mode.
 """
 from __future__ import annotations
 
@@ -115,6 +114,8 @@ def get_project_tools(project_root: Path | str, *, read_only: bool = False,
     def write_file(path: str, content: str) -> str:
         """Create or overwrite a file relative to the project root with the given content."""
         try:
+            from nl_coding_agent.core import permissions
+            permissions.require(permissions.WRITE, project_id=project_id)
             return scoped_write_file(root, path, content)
         except Exception as e:
             return f"Error writing file '{path}': {e}"
@@ -123,6 +124,8 @@ def get_project_tools(project_root: Path | str, *, read_only: bool = False,
     def patch_file(path: str, target: str, replacement: str) -> str:
         """Replace exact snippet 'target' with 'replacement' in the specified file."""
         try:
+            from nl_coding_agent.core import permissions
+            permissions.require(permissions.WRITE, project_id=project_id)
             return scoped_patch_file(root, path, target, replacement)
         except Exception as e:
             return f"Error patching file '{path}': {e}"
@@ -210,7 +213,14 @@ def get_project_tools(project_root: Path | str, *, read_only: bool = False,
         """Run one bounded command in the staged workspace (pytest, python -m py_compile,
         git status/diff/log/show, or read-only listing/inspection). Shell metacharacters
         and arbitrary executables are rejected; shell=False is used."""
-        args = _allowed_argv(command)
+        from nl_coding_agent.core import permissions
+        permissions.require(permissions.EXECUTE, project_id=project_id)
+        if permissions.get_access_mode() == permissions.ACCESS_FULL_ACCESS:
+            args = [part.strip('"') for part in shlex.split(str(command), posix=False)]
+            if not args or any("\x00" in part for part in args):
+                raise ValueError("Invalid command arguments")
+        else:
+            args = _allowed_argv(command)
         if args is None:
             return (
                 "Command denied by the tool policy. Allowed: pytest, python -m pytest/"
@@ -225,6 +235,8 @@ def get_project_tools(project_root: Path | str, *, read_only: bool = False,
         """Run the project's detected test command inside the staged workspace and return
         the real exit code, stdout and stderr. This is a self-check; the independent
         tester still runs the candidate and oracle suites."""
+        from nl_coding_agent.core import permissions
+        permissions.require(permissions.EXECUTE, project_id=project_id)
         command = detect_test_command(root)
         result = scoped_run_command(root, command, timeout=max(1, min(int(timeout), 240)))
         return "command: " + command + "\n" + _command_result(result)

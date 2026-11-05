@@ -68,7 +68,8 @@ def test_settings_panel_is_read_only_and_tracks_project(services):
     panel.set_project({"id": 1, "root": root})
     assert panel._project_value.text() == root
     assert "opt-in" in panel._cloud_value.text()
-    assert "human/backend" in panel._permissions_value.text().lower()
+    assert "global mode" in panel._permissions_value.text().lower()
+    assert panel._access_mode_combo.count() == 4
     assert panel._autonomy_btn is not None
 
 

@@ -39,8 +39,7 @@ def advisor_env(tmp_path, monkeypatch):
     (root / "tests" / "test_calc.py").write_text(TEST, encoding="utf-8")
     services = AppServices()
     project = services.open_project(root)
-    for scope in (permissions.READ, permissions.WRITE, permissions.EXECUTE):
-        permissions.grant(scope, project_id=project["id"], source="test")
+    permissions.set_access_mode("workspace-write")
     yield services, project, root
     services._db.close()
 

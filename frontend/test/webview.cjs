@@ -59,7 +59,7 @@ function testHtml() {
         'chat-session', 'chat-queue', 'provider-edit', 'provider-save', 'role-save',
         'provider-id', 'provider-kind', 'provider-label', 'provider-api-key-env',
         'chat-controls-toggle', 'context-toggle', 'mission-fields-toggle', 'mission-list-toggle',
-        'generation-save', 'permission-grant', 'autonomy-save', 'mcp-save', 'auto-coding',
+        'generation-save', 'chat-access-profile', 'autonomy-save', 'mcp-save', 'auto-coding',
         'generation-context',
         'probe-run', 'storage-scan', 'storage-purge', 'storage-vacuum', 'storage-list',
         'storage-cleanup-orphans', 'storage-cleanup-archived', 'jobs-refresh', 'jobs-list',
@@ -493,7 +493,8 @@ function testWebviewBehaviour() {
     assert(engineText.includes('Permissions'), 'engine permissions rendered');
     assert(engineText.includes('Research / URL fetch'), 'research settings rendered');
     assert(engineText.includes('URL fetch: available'), 'built-in URL fetch availability rendered');
-    assert(engineText.includes('Trusted auto review'), 'research profile options rendered');
+    assert(!engineText.includes('Trusted auto review'), 'retired research permission selector absent');
+    assert(engineText.includes('Global access controls research'), 'research uses global mode');
     assert(engineText.includes('ollama/dev'), 'model routes rendered');
     assert(engineText.includes('dev'), 'discovered model rendered');
     assert.strictEqual(get('chat-session').children.length, 2, 'chat sessions rendered');

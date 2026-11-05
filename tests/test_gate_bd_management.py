@@ -39,8 +39,13 @@ def test_model_config_store_updates_provider_role_cloud_atomically(isolated, mon
     assert custom["api_key_env"] == "CUSTOM_API_KEY"
     store.update_role("developer", model="ollama/b", temperature=0.2)
     assert store.load()["roles"]["developer"]["model"] == "ollama/b"
-    store.set_cloud_escalation(True)
-    assert store.load()["roles"]["fallback_cloud"]["enabled"] is True
+    from nl_coding_agent.core import permissions
+    with pytest.raises(permissions.PermissionDenied):
+        store.set_cloud_escalation(True)
+    permissions.set_access_mode("auto-review")
+    assert permissions.is_granted("cloud")
+    # Retained model preferences never become another permission store.
+    assert store.load()["roles"]["fallback_cloud"]["enabled"] is False
     backups = list((isolated / "data" / "backups").glob("models-*.yaml"))
     assert backups
     with pytest.raises(store.ModelConfigError):
@@ -275,7 +280,7 @@ def test_models_panel_saves_generation_params(isolated):
     panel.shutdown()
 
 
-def test_settings_panel_persists_provider_and_cloud(isolated, monkeypatch):
+def test_settings_panel_persists_provider_and_global_access_mode(isolated, monkeypatch):
     from PySide6.QtWidgets import QApplication
     from nl_coding_agent.app.services import AppServices
     from nl_coding_agent.gui.widgets.settings_panel import SettingsPanel
@@ -291,11 +296,13 @@ def test_settings_panel_persists_provider_and_cloud(isolated, monkeypatch):
     assert panel._provider_combo.count() >= 1
     panel._provider_combo.setCurrentText("ollama")
     panel._provider_enabled.setChecked(False)
-    panel._cloud_enabled.setChecked(True)
+    panel._access_mode_combo.setCurrentIndex(panel._access_mode_combo.findData("auto-review"))
     panel._save_provider()
     from nl_coding_agent.models.model_config_store import load
     assert load()["providers"]["ollama"]["enabled"] is False
-    assert load()["roles"]["fallback_cloud"]["enabled"] is True
+    assert services.is_cloud_escalation_enabled()
+    assert services.access_profile(6)["profile"] == "auto-review"
+    assert panel._cloud_enabled.isHidden()
     assert "saved" in panel._provider_status.text().lower()
     panel.deleteLater()
 
