@@ -1,0 +1,39 @@
+{
+  "version": "0.7.4",
+  "releaseTag": "v0.7.4-beta.1",
+  "generatedAt": "2026-11-05T20:18:56.1557455+01:00",
+  "windows": {
+    "status": "verified-locally",
+    "portable": "windows/NL-Code-Portable.zip",
+    "setup": "windows/NL-Code-Setup.exe",
+    "installer": "inno-setup",
+    "sha256": "5dfd5fb64bb174632f579678a968c75f427862df69bdcd4f0137593d7b28deb9",
+    "bytes": 1062724485,
+    "setupSha256": "c07eade68908da374b285bb141b70ad490f640f7ca669158ddd24ddb38e8b476",
+    "setupBytes": 915414261
+  },
+  "extension": {
+    "status": "verified-locally",
+    "path": "extension/NL-Coder.vsix",
+    "sha256": "865818ef6b2b680089c017fb44007189a718131a98fa674c2ffcc369f73cb383"
+  },
+  "macos": {
+    "status": "not-built",
+    "reason": "requires a macOS runner and real validation"
+  },
+  "linux": {
+    "status": "not-built",
+    "reason": "requires a Linux runner and real validation"
+  },
+  "verification": {
+    "policy_checkpoint": "64084ac",
+    "ci_run": "https://github.com/Nicotina4ever/NL-Coding-Agent/actions/runs/42093213218",
+    "ci_python": "210 PASS",
+    "ci_extension": "Windows/macOS/Linux PASS",
+    "portable": "content and GUI PASS",
+    "installer": "32 PASS; upgrade 0.7.3 to 0.7.4",
+    "packaging_tests": "47 PASS",
+    "guard_tests": "20 PASS",
+    "review": "APPROVE"
+  }
+}

@@ -1,5 +1,22 @@
 # Stato corrente — NL Coding Agent / NL Code
 
+**Distribuzione 0.7.4 beta.1 verificata — 5 novembre 2026.** Copie locali Insiders e
+standalone aggiornate, con hash frontend identici e preferenze conservate. ZIP,
+Setup e VSIX rigenerati: portable estratto con motore indipendente, lettura reale,
+drop, Generate Team e catalogo modelli PASS; 149 file engine identici ai sorgenti.
+Installer: **32 PASS**, compreso upgrade 0.7.3→0.7.4. Toolchain: **47 PASS**;
+guard: **20 PASS**. GitHub: **210 test Python PASS** e VSIX su tre OS PASS.
+Corretti backend PEP 517, dipendenze CI, runner e percorsi del builder. Lo workspace
+interno è escluso dai pacchetti. Evidenze in
+`docs/evidence/nlcode/release-0.7.4-beta.1-20261105/`.
+
+Riordino: 10 voci, 6.077.452.861 byte, spostate senza cancellazioni in
+`da_eliminare/cleanup-20261105-release-0.7.4/`, con manifest delle origini.
+Nessuno spazio dichiarato liberato; runtime e dati personali rimangono conservati.
+Le finestre già aperte richiedono reload/riavvio. Restano i limiti manuali già
+registrati per scaling, hardware, percorsi molto lunghi e installazione multiutente.
+
+
 **Checkpoint policy globale — 5 novembre 2026 (sorgenti successivi al rilascio).**
 Le sole autorizzazioni configurabili sono Read Only, Workspace Write, Auto Review e
 Full Access, persistite una volta in `access.mode` e applicate a tutti i progetti.

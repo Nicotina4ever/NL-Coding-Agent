@@ -1,0 +1,12 @@
+{
+  "version": "0.7.4",
+  "archive": "K:\\AI\\NL Coding Agent\\.workspace\\build\\release-0.7.4-beta.1\\verified\\artifacts\\windows\\NL-Code-Portable.zip",
+  "extracted_to": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\p74",
+  "source_files_identical": 149,
+  "extension": [
+    "nlcodingagent.nl-coding-agent-0.7.4"
+  ],
+  "forbidden_entries": [],
+  "sha256": "5dfd5fb64bb174632f579678a968c75f427862df69bdcd4f0137593d7b28deb9",
+  "passed": true
+}

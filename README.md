@@ -237,7 +237,7 @@ CLI commands: `doctor`, `audit`, `work`, `status`, `roadmap`, `mission`, `mcp`,
 
 ## NL Coder (VS Code extension)
 
-`frontend/` is the VS Code / VS Code Insiders extension **NL Coder** (`0.7.2`, extension ID
+`frontend/` is the VS Code / VS Code Insiders extension **NL Coder** (`0.7.4`, extension ID
 `nlcodingagent.nl-coding-agent`): complete NL Chat plus real mission control over MCP. It has no models,
 missions, permissions or persistence of its own; the Python engine remains the single source of truth
 for both supported editor interfaces. The PySide6 GUI is legacy and is not part of routine acceptance.

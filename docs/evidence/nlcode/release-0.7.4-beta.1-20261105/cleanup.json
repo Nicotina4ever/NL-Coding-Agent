@@ -1,0 +1,77 @@
+{
+  "owner": "NL Code release 0.7.4",
+  "operation": "move only, no deletion",
+  "items": [
+    {
+      "source": "K:\\AI\\NL Coding Agent\\.workspace\\releases",
+      "destination": "K:\\AI\\NL Coding Agent\\da_eliminare\\cleanup-20261105-release-0.7.4\\.workspace\\releases",
+      "files": 6,
+      "bytes": 1983083134.0,
+      "reason": "Superseded release or incomplete packaging attempt; retain for owner review"
+    },
+    {
+      "source": "K:\\AI\\NL Coding Agent\\.workspace\\build\\release-0.7.4-beta.1\\artifacts",
+      "destination": "K:\\AI\\NL Coding Agent\\da_eliminare\\cleanup-20261105-release-0.7.4\\.workspace\\build\\release-0.7.4-beta.1\\artifacts",
+      "files": 1,
+      "bytes": 255139840.0,
+      "reason": "Superseded release or incomplete packaging attempt; retain for owner review"
+    },
+    {
+      "source": "K:\\AI\\NL Coding Agent\\.workspace\\build\\release-0.7.4-beta.1\\candidate",
+      "destination": "K:\\AI\\NL Coding Agent\\da_eliminare\\cleanup-20261105-release-0.7.4\\.workspace\\build\\release-0.7.4-beta.1\\candidate",
+      "files": 0,
+      "bytes": null,
+      "reason": "Superseded release or incomplete packaging attempt; retain for owner review"
+    },
+    {
+      "source": "K:\\AI\\NL Coding Agent\\.workspace\\build\\release-0.7.4-beta.1\\final",
+      "destination": "K:\\AI\\NL Coding Agent\\da_eliminare\\cleanup-20261105-release-0.7.4\\.workspace\\build\\release-0.7.4-beta.1\\final",
+      "files": 3,
+      "bytes": 547319020.0,
+      "reason": "Superseded release or incomplete packaging attempt; retain for owner review"
+    },
+    {
+      "source": "K:\\AI\\NL Coding Agent\\.workspace\\build\\release-0.7.4-beta.1\\packaging-defaults-0.7.4",
+      "destination": "K:\\AI\\NL Coding Agent\\da_eliminare\\cleanup-20261105-release-0.7.4\\.workspace\\build\\release-0.7.4-beta.1\\packaging-defaults-0.7.4",
+      "files": 2,
+      "bytes": 1260.0,
+      "reason": "Superseded release or incomplete packaging attempt; retain for owner review"
+    },
+    {
+      "source": "K:\\AI\\NL Coding Agent\\.workspace\\build\\global-policy.vsix",
+      "destination": "K:\\AI\\NL Coding Agent\\da_eliminare\\cleanup-20261105-release-0.7.4\\.workspace\\build\\global-policy.vsix",
+      "files": 1,
+      "bytes": 4931302.0,
+      "reason": "Superseded release or incomplete packaging attempt; retain for owner review"
+    },
+    {
+      "source": "K:\\AI\\NL Coding Agent\\.workspace\\build\\global-policy-final.vsix",
+      "destination": "K:\\AI\\NL Coding Agent\\da_eliminare\\cleanup-20261105-release-0.7.4\\.workspace\\build\\global-policy-final.vsix",
+      "files": 1,
+      "bytes": 4931256.0,
+      "reason": "Superseded release or incomplete packaging attempt; retain for owner review"
+    },
+    {
+      "source": "K:\\AI\\NL Coding Agent\\.workspace\\build\\global-policy-verified.vsix",
+      "destination": "K:\\AI\\NL Coding Agent\\da_eliminare\\cleanup-20261105-release-0.7.4\\.workspace\\build\\global-policy-verified.vsix",
+      "files": 1,
+      "bytes": 4931148.0,
+      "reason": "Superseded release or incomplete packaging attempt; retain for owner review"
+    },
+    {
+      "source": "K:\\AI\\NL Coding Agent\\.workspace\\build\\global-policy-complete.vsix",
+      "destination": "K:\\AI\\NL Coding Agent\\da_eliminare\\cleanup-20261105-release-0.7.4\\.workspace\\build\\global-policy-complete.vsix",
+      "files": 1,
+      "bytes": 4931141.0,
+      "reason": "Superseded release or incomplete packaging attempt; retain for owner review"
+    },
+    {
+      "source": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\p74",
+      "destination": "K:\\AI\\NL Coding Agent\\da_eliminare\\cleanup-20261105-release-0.7.4\\.workspace\\temp\\p74",
+      "files": 57436,
+      "bytes": 3272184760.0,
+      "reason": "Completed managed portable independence smoke installation; restore from archive if needed"
+    }
+  ],
+  "bytes": 6077452861.0
+}

@@ -1,0 +1,171 @@
+{
+  "kind": "windows-installer-lifecycle",
+  "date": "2026-11-05T20:32:49.4583658+01:00",
+  "setup": ".workspace/build/release-0.7.4-beta.1/verified/artifacts/windows/NL-Code-Setup.exe",
+  "previousSetup": ".workspace/releases/windows/NL-Code-Setup.exe",
+  "createdWith": "Inno Setup 6",
+  "root": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\i74",
+  "passed": true,
+  "checks": [
+    {
+      "name": "unsafe or overlapping destination rejected before install",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "unsafe or overlapping destination rejected before install",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "unsafe or overlapping destination rejected before install",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "junction target was not written",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "custom installation path with spaces",
+      "ok": true,
+      "detail": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\i74\\A B"
+    },
+    {
+      "name": "embedded engine in selected path",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "external data folder created",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "extension installed in external data",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "portable profile not created in app folder",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "configured data path recorded",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "uninstall registered in Apps",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "installed application launches",
+      "ok": true,
+      "detail": "12440,23024,23072,31760,40796,45568,50740,51916"
+    },
+    {
+      "name": "installed profile uses external data folder",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "upgrade preserves data",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "upgrade preserves installation path",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "models migrated into writable data folder",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "upgrade preserves model preferences",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "upgrade preserves editor settings",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "upgrade preserves other extensions",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "current extension installed",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "extension index registers current version",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "uninstall rejects junction before registered file removal",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "uninstall left junction target untouched",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "uninstall removes application files",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "uninstall preserves foreign app files",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "uninstall keeps personal data by default",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "uninstall removes Apps registration",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "fresh data root has ownership marker",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "explicit data removal deletes data folder",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "explicit data removal removes registered app files",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "pre-existing data directory is not claimed",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "explicit removal preserves unowned data",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

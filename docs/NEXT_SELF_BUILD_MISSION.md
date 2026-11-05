@@ -15,7 +15,7 @@ Restano solo i residui elencati nel piano operativo.
 Il checkpoint globale del 5 novembre unifica le autorizzazioni nelle quattro
 modalità GUI e corregge DELETE in Workspace Write. Non reintrodurre grant separati
 per progetto, missione, Chat o agente. Le prove usano i due host con profili isolati;
-la rigenerazione degli installer con questa policy è un gate del prossimo rilascio.
+gli installer 0.7.4 con questa policy hanno superato 32 controlli, incluso upgrade dalla 0.7.3.
 
 ## Obiettivo
 

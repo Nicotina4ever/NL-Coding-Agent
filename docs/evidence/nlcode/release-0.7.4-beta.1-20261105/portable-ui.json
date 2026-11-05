@@ -1,0 +1,36 @@
+{
+  "host": "standalone",
+  "scratch": "K:\\AI\\NL Coding Agent\\.workspace\\temp\\session-ui-standalone-real-1793906420741",
+  "checks": [
+    {
+      "label": "current NL extension supplied by the clean archive; no VSIX install before launch",
+      "detail": "0.7.4",
+      "passed": true
+    },
+    {
+      "label": "real editor Chat webview connected",
+      "passed": true
+    },
+    {
+      "label": "real NL_AudioLab source read and answer matches the actual file",
+      "passed": true
+    },
+    {
+      "label": "OS-style File drop without URI ingested and displayed in the real composer",
+      "passed": true
+    },
+    {
+      "label": "Generate Team created and activated all five runtime roles for the real project",
+      "passed": true
+    },
+    {
+      "label": "all detected generative local and cloud models remain selectable after team save",
+      "passed": true
+    }
+  ],
+  "started_at": "2026-11-05T19:20:20.741Z",
+  "model": "qwen2.5-coder:7b-instruct-q4_K_M",
+  "project": "K:\\AI\\NL_AudioLab",
+  "source_sha256": "ebf929b0bd00de8059a64d14b4f8cc1b4f686ca5dd3d075a0cd23a48a729c104",
+  "finished_at": "2026-11-05T19:22:31.844Z"
+}
