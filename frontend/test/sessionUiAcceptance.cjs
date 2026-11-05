@@ -307,10 +307,16 @@ async function main() {
         '; document.getElementById("composer").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true})); return true;})()');
     if (realProject) {
         const crypto = require('crypto');
-        const appPath = path.join(project, 'scripts/app.py');
+        const appRelative = fs.existsSync(path.join(project, 'scripts/app.py'))
+            ? 'scripts/app.py' : 'AVVIO_CODEX_NL_AudioLab_DRAGON.md';
+        const appPath = path.join(project, appRelative);
         const before = crypto.createHash('sha256').update(fs.readFileSync(appPath)).digest('hex');
-        const title = fs.readFileSync(appPath, 'utf8').match(/setWindowTitle\(['"]([^'"]+)['"]\)/)[1];
-        await send('Leggi scripts/app.py con gli strumenti e riporta il titolo esatto della finestra. Non modificare file.');
+        const source = fs.readFileSync(appPath, 'utf8');
+        const title = appRelative.endsWith('.py')
+            ? source.match(/setWindowTitle\(['"]([^'"]+)['"]\)/)[1]
+            : source.replace(/^\uFEFF/, '').split(/\r?\n/).find(line=>line.trim()).replace(/^#+\s*/, '').trim();
+        await send('Leggi ' + appRelative + ' con gli strumenti e riporta esattamente ' +
+            (appRelative.endsWith('.py') ? 'il titolo della finestra' : 'la prima riga del documento, senza i marcatori Markdown') + '. Non modificare file.');
         await waitFor(() => db("SELECT * FROM session_runs WHERE status='completed'").length, 180000, 'real project read');
         assert(db("SELECT content FROM chat_messages WHERE role='assistant'").some((row) => row.content.includes(title)));
         check('real NL_AudioLab source read and answer matches the actual file');

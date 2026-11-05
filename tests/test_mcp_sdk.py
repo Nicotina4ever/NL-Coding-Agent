@@ -164,6 +164,10 @@ def test_real_engine_stdio_readonly_project_binding(tmp_path, monkeypatch):
         spec = vscode_configuration(root)["servers"]["nl-coding-engine"]
         assert "--allow-execution" not in spec["args"]
         spec.pop("type")
+        # Exercise the real engine using the test runtime on every CI OS.
+        # The generated example points at the Windows embedded deployment;
+        # installing that runtime is covered by the Windows packaging gates.
+        spec["command"] = sys.executable
         manager = McpManager(config={"servers": {"engine": {**spec, "trusted": True, "timeout": 20}}})
         names = {t["name"] for t in manager.list_tools("engine")}
         assert {"project_context", "mission_status", "start_mission", "cancel_mission",
