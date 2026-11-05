@@ -65,7 +65,7 @@ SetupIconFile={#SetupIcon}
 
 [Files]
 ; Never install the payload's live data/ or setup marker; user data is external.
-Source: "{#PayloadDir}\*"; DestDir: "{app}"; Excludes: "data,data\*,engine\data,engine\data\*,engine\config,engine\config\*,setup-version.txt,*.log,*.lnk,__pycache__,*\__pycache__\*,*.pyc,node-compile-cache,*\node-compile-cache\*"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#PayloadDir}\*"; DestDir: "{app}"; Excludes: "data,data\*,engine\data,engine\data\*,engine\config,engine\config\*,engine\.workspace,engine\.workspace\*,setup-version.txt,*.log,*.lnk,__pycache__,*\__pycache__\*,*.pyc,node-compile-cache,*\node-compile-cache\*"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; The NL Coder extension is installed into the user-selected data root, matching
 ; the --extensions-dir used by the generated launcher.
 Source: "{#PayloadDir}\data\extensions\nlcodingagent.nl-coding-agent-{#AppVersion}\*"; DestDir: "{code:GetExtensionsDir}\nlcodingagent.nl-coding-agent-{#AppVersion}"; Flags: ignoreversion recursesubdirs createallsubdirs

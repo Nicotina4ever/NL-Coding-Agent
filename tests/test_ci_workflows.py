@@ -47,8 +47,8 @@ def test_workflow_parses_and_matrix_covers_platforms():
                             "ubuntu-arm64", "macos-arm64", "macos-intel-x64"}
     assert by_name["windows-x64"]["os"] == "windows-latest"
     assert by_name["ubuntu-x64"]["os"] == "ubuntu-latest"
-    assert by_name["macos-arm64"]["os"] == "macos-14"
-    assert by_name["macos-intel-x64"]["os"] == "macos-13"
+    assert by_name["macos-arm64"]["os"] == "macos-15"
+    assert by_name["macos-intel-x64"]["os"] == "macos-15-intel"
     assert by_name["windows-arm64"]["experimental"] is True
     assert by_name["ubuntu-arm64"]["experimental"] is True
     for entry in entries:
@@ -214,7 +214,7 @@ def test_workflow_has_reproducibility_job_reports_only():
     assert job["permissions"]["contents"] == "read"
     assert int(job["timeout-minutes"]) <= 20
     entries = job["strategy"]["matrix"]["include"]
-    assert {"ubuntu-latest", "windows-latest", "macos-14"} <= {entry["os"] for entry in entries}
+    assert {"ubuntu-latest", "windows-latest", "macos-15"} <= {entry["os"] for entry in entries}
     for entry in entries:
         assert entry["experimental"] is False
         assert entry["arch"] and entry["python_arch"]

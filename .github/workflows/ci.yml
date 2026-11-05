@@ -50,12 +50,12 @@ jobs:
             python_arch: arm64
             experimental: true
           - name: macos-arm64
-            os: macos-14
+            os: macos-15
             arch: arm64
             python_arch: arm64
             experimental: false
           - name: macos-intel-x64
-            os: macos-13
+            os: macos-15-intel
             arch: x86_64
             python_arch: x64
             experimental: false
@@ -71,8 +71,12 @@ jobs:
           python-version: "3.12"
           architecture: ${{ matrix.python_arch }}
 
+      - name: Install Linux Qt runtime libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0 libxkbcommon0
+
       - name: Install CI test dependencies (package index only; no app/runtime downloads)
-        run: python -m pip install pytest -e .
+        run: python -m pip install -e ".[mcp,test]"
 
       - name: Unit tests
         run: >
@@ -165,7 +169,7 @@ jobs:
             python_arch: x64
             experimental: false
           - name: macos-arm64
-            os: macos-14
+            os: macos-15
             arch: arm64
             python_arch: arm64
             experimental: false

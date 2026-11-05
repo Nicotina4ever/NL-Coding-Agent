@@ -13,6 +13,12 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 if (-not $Dist) { $Dist = Join-Path $repoRoot '.workspace\dist' }
 if (-not $Releases) { $Releases = Join-Path $repoRoot '.workspace\releases' }
+# Inno resolves relative defines against the .iss location, while tar resolves
+# its output against the current directory. Give both the same absolute roots.
+if (-not [IO.Path]::IsPathRooted($Dist)) { $Dist = Join-Path $repoRoot $Dist }
+if (-not [IO.Path]::IsPathRooted($Releases)) { $Releases = Join-Path $repoRoot $Releases }
+$Dist = [IO.Path]::GetFullPath($Dist)
+$Releases = [IO.Path]::GetFullPath($Releases)
 if (-not $Version) {
     $package = Get-Content (Join-Path $repoRoot 'frontend\package.json') -Raw | ConvertFrom-Json
     $Version = [string]$package.version
@@ -63,7 +69,7 @@ $archiveEntries = @(Get-ChildItem -LiteralPath $payload -Force | Where-Object {
     $_.Name -notin @('data', 'engine') -and $_.Extension -notin @('.log', '.lnk')
 } | ForEach-Object { $_.Name })
 $archiveEntries += @(Get-ChildItem -LiteralPath (Join-Path $payload 'engine') -Force | Where-Object {
-    $_.Name -notin @('data', 'config')
+    $_.Name -notin @('data', 'config', '.workspace')
 } | ForEach-Object { 'engine/' + $_.Name })
 $archiveEntries += 'data/extensions/' + $extensionName
 $tar = Join-Path $env:WINDIR 'System32\tar.exe'

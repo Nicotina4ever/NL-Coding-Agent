@@ -27,14 +27,24 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install Qt runtime libraries
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0 libxkbcommon0
       - name: Install engine dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .
-      - name: Run the engine suite
+          python -m pip install -e ".[mcp,test]"
+      - name: Run portable engine regressions
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest -q --tb=short
+        # Windows desktop/installer gates run locally or on the dedicated runner.
+        run: >-
+          python -m pytest -q --tb=short
+          tests/test_access_mode.py tests/test_permissions.py
+          tests/test_permissions_taxonomy.py tests/test_auto_review.py
+          tests/test_session_runtime.py tests/test_chat_tools.py
+          tests/test_mcp_sdk.py tests/test_mcp_integration.py
+          tests/test_app_services_research.py tests/test_model_router.py
+          tests/test_mission_project_binding.py
 
   extension:
     strategy:
@@ -67,6 +77,9 @@ jobs:
     # the GUI acceptance; register a Windows runner with this label to enable it.
     if: vars.NLCODE_WINDOWS_RUNNER == 'true'
     runs-on: [self-hosted, Windows, X64, nlcode-windows]
+    env:
+      NLCODE_RELEASE_DIR: .workspace/build/ci-${{ github.run_id }}-${{ github.run_attempt }}/releases
+      NLCODE_INSTALLER_TEST: .workspace/temp/c${{ github.run_number }}a${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v4
       - name: Ensure Inno Setup
@@ -83,12 +96,14 @@ jobs:
       - name: Build standalone with embedded engine
         shell: pwsh
         run: ./scripts/nlcode/build_nl_code.ps1 -ResyncSource -Force
+      - name: Package current extension
+        run: npm --prefix frontend run package:vsix
       - name: Assemble release packages (portable ZIP + Inno installer)
         shell: pwsh
-        run: ./scripts/nlcode/build_release.ps1
+        run: ./scripts/nlcode/build_release.ps1 -Releases $env:NLCODE_RELEASE_DIR
       - name: Verify installer lifecycle on a custom path
         shell: pwsh
-        run: ./scripts/nlcode/test_windows_installer.ps1
+        run: ./scripts/nlcode/test_windows_installer.ps1 -Setup "$env:NLCODE_RELEASE_DIR/windows/NL-Code-Setup.exe" -Root $env:NLCODE_INSTALLER_TEST
       - name: GUI acceptance (terminals, Chat, embedded engine, shutdown)
         shell: pwsh
         run: ./scripts/nlcode/accept_nl_code.ps1 -ReplyTimeoutSeconds 60
@@ -96,15 +111,15 @@ jobs:
         with:
           name: windows-standalone
           path: |
-            .workspace/releases/windows/NL-Code-Portable.zip
-            .workspace/releases/windows/NL-Code-Setup.exe
-            .workspace/releases/windows/NL-Code-Portable.zip.sha256
-            .workspace/releases/extension/NL-Coder.vsix
-            .workspace/releases/release-manifest.json
-            .workspace/evidence/windows-installer-verification.json
+            ${{ env.NLCODE_RELEASE_DIR }}/windows/NL-Code-Portable.zip
+            ${{ env.NLCODE_RELEASE_DIR }}/windows/NL-Code-Setup.exe
+            ${{ env.NLCODE_RELEASE_DIR }}/windows/NL-Code-Portable.zip.sha256
+            ${{ env.NLCODE_RELEASE_DIR }}/extension/NL-Coder.vsix
+            ${{ env.NLCODE_RELEASE_DIR }}/release-manifest.json
+            ${{ env.NLCODE_INSTALLER_TEST }}/verification.json
 
   publish:
-    needs: [extension]
+    needs: [python-suite, extension]
     if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
     runs-on: ubuntu-latest
     steps:
